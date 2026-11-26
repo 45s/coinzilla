@@ -201,64 +201,71 @@ test("RS-003-008: one canonical SELL Fill is split exactly between recovery and 
 const multiFillScenarioPositionId = "rs-multi-fill-position"
 const multiFillScenarioCycleId = "rs-multi-fill-cycle"
 
-function createMultiFillAccountingScenarioFixture({ stageCount = 2, failDurableCommit = false } = {}) {
-  const scenarioBaseAsset = new Asset({
+function createMultiFillScenarioMarket() {
+  const baseAsset = new Asset({
     id: "binance:ZRO",
     code: "ZRO",
   })
-  const scenarioQuoteAsset = new Asset({
+  const quoteAsset = new Asset({
     id: "binance:USDT",
     code: "USDT",
   })
-  const scenarioMarket = new Market({
+  const market = new Market({
     venue: "binance",
     symbol: "ZROUSDT",
-    baseAsset: scenarioBaseAsset,
-    quoteAsset: scenarioQuoteAsset,
+    baseAsset,
+    quoteAsset,
   })
+  return { baseAsset, quoteAsset, market }
+}
+
+function createMultiFillScenarioBuyPortfolio({ market, baseAsset, quoteAsset }) {
   const buyFill = new Fill({
     tradeId: "rs-multi-fill-buy-trade",
     brokerOrderId: "rs-multi-fill-buy-order",
     clientOrderId: "rs-multi-fill-buy-client",
-    market: scenarioMarket,
+    market,
     side: "BUY",
     price: new Money({
-        amount: "2",
-        asset: scenarioQuoteAsset,
-      }),
+      amount: "2",
+      asset: quoteAsset,
+    }),
     quantity: new Quantity({
-        amount: "5.01",
-        asset: scenarioBaseAsset,
-      }),
+      amount: "5.01",
+      asset: baseAsset,
+    }),
     quoteQuantity: new Money({
-        amount: "10.02",
-        asset: scenarioQuoteAsset,
-      }),
+      amount: "10.02",
+      asset: quoteAsset,
+    }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  const initialPortfolio = new Portfolio().applyFill({
+  return new Portfolio().applyFill({
     fill: buyFill,
     positionId: multiFillScenarioPositionId,
     strategyId: StrategyId.RECOVERY_SELLER,
   }).portfolio
+}
+
+function createMultiFillScenarioOrders({ market, baseAsset, quoteAsset }) {
   const openSellOrder = new CanonicalOrder({
     clientOrderId: "rs-multi-fill-sell-client",
     brokerOrderId: "rs-multi-fill-sell-order",
-    market: scenarioMarket,
+    market,
     side: "SELL",
     type: "LIMIT_MAKER",
     limitPrice: new Money({
       amount: "2",
-      asset: scenarioQuoteAsset,
+      asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
       amount: "5.01",
-      asset: scenarioBaseAsset,
+      asset: baseAsset,
     }),
     executedQuantity: new Quantity({
       amount: "0",
-      asset: scenarioBaseAsset,
+      asset: baseAsset,
     }),
     status: "OPEN",
     createdAt: 10,
@@ -268,14 +275,14 @@ function createMultiFillAccountingScenarioFixture({ stageCount = 2, failDurableC
   const terminalSellOrder = new CanonicalOrder({
     clientOrderId: openSellOrder.clientOrderId,
     brokerOrderId: openSellOrder.brokerOrderId,
-    market: scenarioMarket,
+    market,
     side: "SELL",
     type: "LIMIT_MAKER",
     limitPrice: openSellOrder.limitPrice,
     originalQuantity: openSellOrder.originalQuantity,
     executedQuantity: new Quantity({
       amount: "5.01",
-      asset: scenarioBaseAsset,
+      asset: baseAsset,
     }),
     status: "FILLED",
     createdAt: 10,
@@ -301,29 +308,39 @@ function createMultiFillAccountingScenarioFixture({ stageCount = 2, failDurableC
     orders: [terminalSellOrder],
     ownerships: [ownership],
   })
-  const canonicalFills = [
+  return {
+    openSellOrder,
+    terminalSellOrder,
+    ownership,
+    openOrderRegistry,
+    terminalOrderRegistry,
+  }
+}
+
+function createMultiFillScenarioFills({ market, baseAsset, quoteAsset, openSellOrder }) {
+  return [
     new Fill({
       tradeId: "rs-multi-fill-sell-trade-1",
       brokerOrderId: openSellOrder.brokerOrderId,
       clientOrderId: openSellOrder.clientOrderId,
-      market: scenarioMarket,
+      market,
       side: "SELL",
       price: new Money({
         amount: "2.1",
-        asset: scenarioQuoteAsset,
+        asset: quoteAsset,
       }),
       quantity: new Quantity({
         amount: "2.5",
-        asset: scenarioBaseAsset,
+        asset: baseAsset,
       }),
       quoteQuantity: new Money({
         amount: "5.25",
-        asset: scenarioQuoteAsset,
+        asset: quoteAsset,
       }),
       commissions: [new Commission({
         amount: new Money({
           amount: "0.001",
-          asset: scenarioQuoteAsset,
+          asset: quoteAsset,
         }),
       })],
       commissionStatus: "COMPLETE",
@@ -333,31 +350,34 @@ function createMultiFillAccountingScenarioFixture({ stageCount = 2, failDurableC
       tradeId: "rs-multi-fill-sell-trade-2",
       brokerOrderId: openSellOrder.brokerOrderId,
       clientOrderId: openSellOrder.clientOrderId,
-      market: scenarioMarket,
+      market,
       side: "SELL",
       price: new Money({
         amount: "2.1",
-        asset: scenarioQuoteAsset,
+        asset: quoteAsset,
       }),
       quantity: new Quantity({
         amount: "2.51",
-        asset: scenarioBaseAsset,
+        asset: baseAsset,
       }),
       quoteQuantity: new Money({
         amount: "5.271",
-        asset: scenarioQuoteAsset,
+        asset: quoteAsset,
       }),
       commissions: [new Commission({
         amount: new Money({
           amount: "0.002",
-          asset: scenarioQuoteAsset,
+          asset: quoteAsset,
         }),
       })],
       commissionStatus: "COMPLETE",
       executedAt: 13,
     }),
   ]
-  const canonicalFillAllocations = [
+}
+
+function createMultiFillScenarioAllocations({ canonicalFills, terminalOrderRegistry }) {
+  return [
     createMixedSellFillAllocation({
       fill: canonicalFills[0],
       orderRegistry: terminalOrderRegistry,
@@ -371,6 +391,14 @@ function createMultiFillAccountingScenarioFixture({ stageCount = 2, failDurableC
       legacyQuantity: "0.01",
     }),
   ]
+}
+
+function createMultiFillScenarioReconciliation({
+  openSellOrder,
+  openOrderRegistry,
+  canonicalFillAllocations,
+  stageCount,
+}) {
   let reconciliation = createMixedSellFillReconciliation({
     order: openSellOrder,
     orderRegistry: openOrderRegistry,
@@ -384,12 +412,16 @@ function createMultiFillAccountingScenarioFixture({ stageCount = 2, failDurableC
       "Each distinct canonical partial SELL Fill must be staged exactly once before terminal reconciliation.")
     reconciliation = nextReconciliation
   }
+  return reconciliation
+}
+
+function createMultiFillScenarioWorkflow({ initialPortfolio, openOrderRegistry, market, failDurableCommit }) {
   let durableCommitCount = 0
   const workflow = createRecoverySellerAccountingWorkflow({
     initialPortfolio,
     initialOrderRegistry: openOrderRegistry,
     initialLegacyPositions: [{
-      market: scenarioMarket,
+      market,
       position: createLegacyPosition({
         invested: "100",
         quantity: "50",
@@ -411,15 +443,43 @@ function createMultiFillAccountingScenarioFixture({ stageCount = 2, failDurableC
     },
   })
   return {
+    workflow,
+    durableCommitCount: () => durableCommitCount,
+  }
+}
+
+function createMultiFillAccountingScenarioFixture({ stageCount = 2, failDurableCommit = false } = {}) {
+  const assets = createMultiFillScenarioMarket()
+  const initialPortfolio = createMultiFillScenarioBuyPortfolio(assets)
+  const orders = createMultiFillScenarioOrders(assets)
+  const canonicalFills = createMultiFillScenarioFills({
+    ...assets,
+    openSellOrder: orders.openSellOrder,
+  })
+  const canonicalFillAllocations = createMultiFillScenarioAllocations({
+    canonicalFills,
+    terminalOrderRegistry: orders.terminalOrderRegistry,
+  })
+  const reconciliation = createMultiFillScenarioReconciliation({
+    openSellOrder: orders.openSellOrder,
+    openOrderRegistry: orders.openOrderRegistry,
+    canonicalFillAllocations,
+    stageCount,
+  })
+  const workflowState = createMultiFillScenarioWorkflow({
+    initialPortfolio,
+    openOrderRegistry: orders.openOrderRegistry,
+    market: assets.market,
+    failDurableCommit,
+  })
+  return {
     canonicalFills,
     canonicalFillAllocations,
-    durableCommitCount: () => durableCommitCount,
-    market: scenarioMarket,
-    openSellOrder,
-    ownership,
+    durableCommitCount: workflowState.durableCommitCount,
+    market: assets.market,
+    ...orders,
     reconciliation,
-    terminalSellOrder,
-    workflow,
+    workflow: workflowState.workflow,
   }
 }
 
