@@ -88,6 +88,12 @@ An unknown commit outcome is not a rollback. Application code must reconcile the
 
 Default unit tests are offline and deterministic. They cover BSON codec validation, OP_MSG framing and correlation, transport fragmentation/concurrency/timeouts/cleanup, URI parsing, hello/topology negotiation, SCRAM exchanges/signature verification, command mapping, provider CRUD and transaction commit/abort/unknown outcomes.
 
-The shared provider-conformance suite is the authoritative contract for CRUD/query/lifecycle behavior. Real MongoDB integration tests must be explicitly opt-in, use an isolated database name, and clean up only that isolated database after all provider connections are closed. Never use production credentials or production databases for integration tests.
+The shared provider-conformance suite is the authoritative contract for CRUD/query/lifecycle behavior. A real-server conformance suite is available in mongodb.integration.test.js and is opt-in through MONGODB_URI:
+
+```sh
+MONGODB_URI='mongodb://test-user:test-password@localhost:27017/admin?authSource=admin' pnpm --filter @coinzilla/db test
+```
+
+The integration suite creates a distinct database name for each test from the configured URI database name and an opaque test key, then drops only that generated database after the provider connection closes. The test account therefore needs permission to create and drop databases. Use a dedicated disposable MongoDB instance or test cluster, not a production database. The integration suite checks the shared CRUD/query/lifecycle contract and attempts transaction rollback; standalone topologies skip transaction verification explicitly. The deterministic unit tests remain offline and credential-free.
 
 A test suite using fake transports does not prove compatibility with a live MongoDB server. Record the exact server version, topology and authentication mode whenever real-server conformance is run.
