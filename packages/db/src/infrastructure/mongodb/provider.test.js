@@ -384,3 +384,75 @@ runDatabaseProviderConformanceTests({
     conformanceStores.delete(storageKey)
   },
 })
+
+
+test("MongoDB transactions serialize commands and wait for all transaction CRUD before commit", async () => {
+  const events = []
+  let activeCommands = 0
+  let maximumConcurrentCommands = 0
+  const { provider } = createProviderHarness({
+    topology: "replicaSet",
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.insert) {
+        activeCommands += 1
+        maximumConcurrentCommands = Math.max(maximumConcurrentCommands, activeCommands)
+        events.push(`insert-start:${body.documents[0]._id}`)
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        events.push(`insert-end:${body.documents[0]._id}`)
+        activeCommands -= 1
+        return { ok: 1, n: 1 }
+      }
+      if (body.commitTransaction) {
+        events.push("commit")
+      }
+      return { ok: 1, n: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await database.transaction(async (transaction) => {
+      await Promise.all([
+        transaction.create({ collection: "people", record: { id: "serial-1" } }),
+        transaction.create({ collection: "people", record: { id: "serial-2" } }),
+      ])
+    })
+    assert.equal(maximumConcurrentCommands, 1)
+    assert.equal(events.at(-1), "commit")
+    assert.ok(events.indexOf("insert-end:serial-1") < events.indexOf("insert-start:serial-2"))
+    assert.ok(events.indexOf("insert-end:serial-2") < events.indexOf("commit"))
+  } finally {
+    await database.close()
+  }
+})
+
+test("MongoDB transactions reject synchronous callbacks that start unawaited CRUD", async () => {
+  const events = []
+  const { provider } = createProviderHarness({
+    topology: "replicaSet",
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.insert) events.push("insert")
+      if (body.abortTransaction) events.push("abort")
+      if (body.commitTransaction) events.push("commit")
+      return { ok: 1, n: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await assert.rejects(
+      database.transaction((transaction) => {
+        transaction.create({ collection: "people", record: { id: "unawaited" } })
+        return "callback returned before CRUD settled"
+      }),
+      /asynchronous.*CRUD|await.*CRUD/i,
+    )
+    assert.deepEqual(events, ["insert", "abort"])
+  } finally {
+    await database.close()
+  }
+})
