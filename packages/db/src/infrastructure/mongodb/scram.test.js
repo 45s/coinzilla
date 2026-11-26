@@ -227,6 +227,84 @@ test("SCRAM propagates server authentication errors", async () => {
   )
 })
 
+test("SCRAM rejects missing callbacks, credentials, authentication sources, and malformed response fields", async () => {
+  await assert.rejects(
+    authenticateMongoScram({
+      command: null,
+      username: "alice",
+      password: "secret",
+    }),
+    /command callback is required/,
+  )
+  await assert.rejects(
+    authenticateMongoScram({
+      command: async () => ({ ok: 1 }),
+      username: "",
+      password: "secret",
+    }),
+    /non-empty username/,
+  )
+  await assert.rejects(
+    authenticateMongoScram({
+      command: async () => ({ ok: 1 }),
+      username: "alice",
+      password: 42,
+    }),
+    /string password/,
+  )
+  await assert.rejects(
+    authenticateMongoScram({
+      command: async () => ({ ok: 1 }),
+      username: "alice",
+      password: "secret",
+      authSource: "",
+    }),
+    /authentication source/,
+  )
+
+  const missingConversation = {
+    async command() {
+      return { ok: 1, done: false, payload: Buffer.alloc(0) }
+    },
+  }
+  await assert.rejects(
+    authenticateMongoScram({
+      command: missingConversation.command,
+      username: "alice",
+      password: "secret",
+    }),
+    /conversation identifier/,
+  )
+
+  const nonBinaryPayload = {
+    async command() {
+      return { ok: 1, conversationId: 1, done: false, payload: "not-binary" }
+    },
+  }
+  await assert.rejects(
+    authenticateMongoScram({
+      command: nonBinaryPayload.command,
+      username: "alice",
+      password: "secret",
+    }),
+    /payload must be binary/,
+  )
+
+  const completedAtStart = {
+    async command() {
+      return { ok: 1, conversationId: 1, done: true, payload: Buffer.alloc(0) }
+    },
+  }
+  await assert.rejects(
+    authenticateMongoScram({
+      command: completedAtStart.command,
+      username: "alice",
+      password: "secret",
+    }),
+    /before client proof/,
+  )
+})
+
 test("SCRAM rejects unsupported mechanisms, malformed salt, and unsafe iteration counts", async () => {
   await assert.rejects(
     authenticateMongoScram({
@@ -299,6 +377,7 @@ password })
 test("SCRAM rejects malformed server attributes, mandatory extensions, and changed conversation IDs", async () => {
   const nonce = Buffer.alloc(24, 1).toString("base64")
   for (const serverFirst of [
+    "malformed",
     `r=${nonce}servernonce,s=c2FsdA==,i=4096,m=unsupported`,
     `r=${nonce}servernonce,r=again,s=c2FsdA==,i=4096`,
     `r=${nonce}servernonce,s=,i=4096`,
@@ -315,7 +394,7 @@ test("SCRAM rejects malformed server attributes, mandatory extensions, and chang
         password: "secret",
         randomBytes: (length) => Buffer.alloc(length, 1),
       }),
-      /mandatory extension|duplicate attribute|invalid salt/i,
+      /malformed attribute|mandatory extension|duplicate attribute|invalid salt/i,
     )
   }
 
