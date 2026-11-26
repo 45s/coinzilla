@@ -46,3 +46,15 @@ The original contents are preserved in the dated snapshots linked above. No sour
 - **Consolidate** duplicate summaries and repeated rules into one owned document.
 - **Archive** completed plans and historical snapshots when provenance or evidence is useful.
 - **Delete** only when the content is redundant, superseded, has no unique evidence, and all inbound references have been checked.
+
+
+## Package roadmap consolidation — 2026-11-26
+
+The second cleanup pass reduced four high-volume package roadmaps to active priority indexes and preserved their complete prior contents as dated snapshots:
+
+- [Brokers roadmap history](archive/roadmaps/BROKERS_ROADMAP_HISTORY_2026-11-26.md) — prior 250 KB roadmap.
+- [Journal roadmap history](archive/roadmaps/JOURNAL_ROADMAP_HISTORY_2026-11-26.md) — prior 48 KB roadmap.
+- [Event Bus roadmap history](archive/roadmaps/EVENT_BUS_ROADMAP_HISTORY_2026-11-26.md) — prior 27 KB roadmap.
+- [Utils roadmap history](archive/roadmaps/UTILS_ROADMAP_HISTORY_2026-11-26.md) — prior 21 KB roadmap.
+
+No package source, public API, tests, README, domain specification, or ADR was changed. Active pages now point to canonical API/readme/source and issues; detailed delivery evidence remains in the snapshots. These snapshots are archival provenance, not current instructions or status authority.
