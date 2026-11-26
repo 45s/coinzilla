@@ -222,6 +222,85 @@ test("provider-neutral reads and writes use their distinct execution boundaries"
   }
 })
 
+
+test("database CRUD inside a transaction reuses its transaction context", async () => {
+  const calls = {
+    transactionCreate: 0,
+    transactionRead: 0,
+    standaloneCreate: 0,
+    standaloneRead: 0,
+  }
+  const provider = createProvider({
+    capabilities: {
+      transactions: {
+        callbackMode: "synchronous",
+        nestedTransactions: false,
+        multiDocument: true,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["memory"],
+      },
+    },
+  })
+  provider.execute = () => {
+    calls.standaloneCreate += 1
+  }
+  provider.withReadTransaction = (work) => {
+    calls.standaloneRead += 1
+    return work({
+      create() {},
+      readOne() {},
+      readMany() {},
+      update() {},
+      delete() {},
+    })
+  }
+  provider.withTransaction = (work) => work({
+    create() {
+      calls.transactionCreate += 1
+    },
+    readOne() {
+      calls.transactionRead += 1
+    },
+    readMany() {},
+    update() {},
+    delete() {},
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await database.create({ collection: "people", record: { id: "outside" } })
+    await database.readOne({ collection: "people", id: "outside" })
+    await database.transaction(() => {
+      database.create({ collection: "people", record: { id: "inside" } })
+      database.readOne({ collection: "people", id: "inside" })
+      assert.throws(
+        () => database.transaction(() => {}),
+        /Nested database transactions are not supported/,
+      )
+      assert.throws(
+        () => database.close(),
+        /Cannot close a database from inside its transaction callback/,
+      )
+    })
+
+    assert.deepEqual(calls, {
+      transactionCreate: 1,
+      transactionRead: 1,
+      standaloneCreate: 1,
+      standaloneRead: 1,
+    })
+  } finally {
+    await database.close()
+  }
+})
+
 test("provider composition requires atomic single-operation execution", () => {
   const provider = createProvider({
     capabilities: {
