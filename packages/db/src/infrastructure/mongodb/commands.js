@@ -37,7 +37,7 @@ function encodeUserKey(key) {
 
 function decodeUserKey(key) {
   if (!key.startsWith(USER_KEY_PREFIX)) {
-    throw new TypeError("MongoDB stored user key is missing its provider encoding")
+    throw new TypeError("MongoDB stored user key is missing its provider encoding; invalid encoded MongoDB user key")
   }
   const encoded = key.slice(USER_KEY_PREFIX.length)
   try {
