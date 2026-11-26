@@ -25,9 +25,9 @@ function createShutdownTimeoutError({ phase, timeoutMs } = {}) {
 }
 
 function assertShutdownTimeout({
-    phase,
-    timeoutMs,
-  }) {
+  phase,
+  timeoutMs,
+}) {
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1) {
     throw new TypeError(`Harvester shutdown ${phase} timeout must be a positive safe integer`)
   }
@@ -40,9 +40,9 @@ async function waitForShutdownStep({ promise, phase, timeoutMs, setTimeoutFn, cl
     timeoutHandle = setTimeoutFn(() => resolve({
       status: "timed_out",
       error: createShutdownTimeoutError({
-      phase,
-      timeoutMs,
-    }),
+        phase,
+        timeoutMs,
+      }),
     }), timeoutMs)
   })
   try {
