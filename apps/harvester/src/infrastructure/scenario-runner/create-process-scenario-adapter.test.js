@@ -418,13 +418,6 @@ test("process adapter waits for an explicit worker-ready handshake before dispat
   child.signalCode = null
   child.send = (message) => {
     messages.push(message)
-    if (message.type === "execute") {
-      queueMicrotask(() => child.emit("message", {
-        runId: "run-worker-ready",
-        ok: true,
-        output: { ready: true },
-      }))
-    }
     return true
   }
   child.kill = () => {
@@ -454,10 +447,26 @@ test("process adapter waits for an explicit worker-ready handshake before dispat
     "The parent must not dispatch scenario code before receiving the worker-ready handshake.")
 
   child.emit("message", { type: "ready" })
+  assert.equal(started, false,
+    "Worker bootstrap readiness alone must not mark production execution as Running.")
+  assert.deepEqual(messages, [{
+    type: "execute",
+    runId: "run-worker-ready",
+    strategyId: "example",
+    scenarioId: "scenario",
+    input: null,
+  }], "The parent must dispatch once after bootstrap readiness without marking the run Running yet.")
+
+  child.emit("message", { type: "started", runId: "run-worker-ready" })
+  child.emit("message", {
+    runId: "run-worker-ready",
+    ok: true,
+    output: { ready: true },
+  })
   const result = await execution
 
   assert.equal(started, true,
-    "The process adapter must signal Running only after the worker-ready handshake.")
+    "The process adapter must signal Running only after the worker confirms execution has started.")
   assert.deepEqual(messages, [{
     type: "execute",
     runId: "run-worker-ready",
