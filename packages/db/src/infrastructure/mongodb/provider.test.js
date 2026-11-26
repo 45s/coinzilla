@@ -414,6 +414,25 @@ test("MongoDB transaction facade tracks every CRUD operation", async () => {
   }
 })
 
+test("MongoDB read transaction drains and preserves failed reads", async () => {
+  const harness = createProviderHarness({
+    commandHandler: async () => {
+      throw new Error("read command failed")
+    },
+  })
+  await harness.provider.connect()
+
+  await assert.rejects(
+    harness.provider.withReadTransaction((transaction) => transaction.readOne({
+      collection: "people",
+      id: "missing",
+    })),
+    (error) => error instanceof DatabaseProviderError
+      && error.cause?.message === "read command failed",
+  )
+  await harness.provider.close()
+})
+
 test("MongoDB provider preserves callback failures when abort is rejected", async () => {
   let abortAttempts = 0
   const harness = createProviderHarness({
