@@ -1118,6 +1118,16 @@
           "path": "src/bootstrap/start-harvester.test.js",
           "name": "restores a persisted account STOP and keeps a restarted account observation-only",
           "kind": "integration"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "rejects an unprojectable account-blocker ledger before broker connection for every recovery configuration",
+          "kind": "integration"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "rejects a durable unresolved account blocker in Conservative-only mode when CG recovery is disabled",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",

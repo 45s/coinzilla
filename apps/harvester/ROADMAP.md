@@ -174,7 +174,9 @@ Integration prerequisite #1828 was addressed by merged [PR #1833](https://github
 
 ## Account-scoped STOP admission — issue #1828
 
-The confirmed account-scoped admission bypass is fixed and integrated through [PR #1833](https://github.com/45s/coinzilla/pull/1833), merge commit `3a5d6c5aa284c5f84f8c935ce9570e626bf7dc31`. All six required workflows passed on exact head `709d131b3f1b124e7f968281616e20ae7159c626`. The in-memory account block latches before durable persistence, remains fail-closed on persistence failure, deduplicates concurrent latches and is checked at the shared final submission gate. Issue #1828 remains open for broader producer, restoration and durable-resolution acceptance; this merge does not close the parent issue.
+The confirmed account-scoped admission bypass is fixed and integrated through [PR #1833](https://github.com/45s/coinzilla/pull/1833), merge commit `3a5d6c5aa284c5f84f8c935ce9570e626bf7dc31`. All six required workflows passed on exact head `709d131b3f1b124e7f968281616e20ae7159c626`. The in-memory account block latches before durable persistence, remains fail-closed on persistence failure, deduplicates concurrent latches and is checked at the shared final submission gate.
+
+A follow-up startup gap is addressed in [PR #1867](https://github.com/45s/coinzilla/pull/1867): when CG recovery and Recovery Seller are both disabled, the old non-recovery path read verified records but skipped projection, allowing a durable ACCOUNT blocker from a prior process session to be ignored. The non-recovery path now uses the same verified history projection and rejects unresolved ACCOUNT blockers before broker connection. The recovery-enabled path already rejects an orphan blocker fact outside an active process session; that was not a second bypass. The broader producer, restoration and durable-resolution matrix remains open; PR #1867 does not close #1828.
 
 ## Conservative trading correctness and exhaustive scenario coverage — issue #1763
 
