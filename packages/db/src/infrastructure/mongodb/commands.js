@@ -307,39 +307,60 @@ function createMongoRecordOperations({ command, databaseName }) {
         cause: new Error("MongoDB aggregate response omitted cursor.firstBatch"),
       })
     }
-    const records = cursor.firstBatch.map((document) => decodeStoredRecord({
-      document,
-      operation: "readMany",
-      collection,
-    }))
     let cursorId = cursor.id
-    while (!isCursorExhausted(cursorId)) {
-      const next = await runMongoCommand({
-        command,
-        operation: "readMany",
-        collection,
-        body: {
-          getMore: cursorId,
-          collection: mongoCollection,
-          batchSize: CURSOR_BATCH_SIZE,
-          $db: databaseName,
-        },
-      })
-      if (!Array.isArray(next.cursor?.nextBatch)) {
-        throw new DatabaseProviderError({
-          operation: "readMany",
-          collection,
-          cause: new Error("MongoDB getMore response omitted cursor.nextBatch"),
-        })
-      }
-      records.push(...next.cursor.nextBatch.map((document) => decodeStoredRecord({
+    const records = []
+    try {
+      records.push(...cursor.firstBatch.map((document) => decodeStoredRecord({
         document,
         operation: "readMany",
         collection,
       })))
-      cursorId = next.cursor.id
+      while (!isCursorExhausted(cursorId)) {
+        const next = await runMongoCommand({
+          command,
+          operation: "readMany",
+          collection,
+          body: {
+            getMore: cursorId,
+            collection: mongoCollection,
+            batchSize: CURSOR_BATCH_SIZE,
+            $db: databaseName,
+          },
+        })
+        if (!Array.isArray(next.cursor?.nextBatch)) {
+          throw new DatabaseProviderError({
+            operation: "readMany",
+            collection,
+            cause: new Error("MongoDB getMore response omitted cursor.nextBatch"),
+          })
+        }
+        records.push(...next.cursor.nextBatch.map((document) => decodeStoredRecord({
+          document,
+          operation: "readMany",
+          collection,
+        })))
+        cursorId = next.cursor.id
+      }
+      return records
+    } catch (error) {
+      if (!isCursorExhausted(cursorId)) {
+        try {
+          await runMongoCommand({
+            command,
+            operation: "readMany",
+            collection,
+            body: {
+              killCursors: mongoCollection,
+              cursors: [cursorId],
+              $db: databaseName,
+            },
+          })
+        } catch {
+          // Preserve the original read failure; connection cleanup owns any remaining cursor.
+        }
+      }
+      throw error
     }
-    return records
   }
 
   async function update({ collection, id, changes }) {
