@@ -177,17 +177,21 @@ async function assertClosingAuditTimeout({
   stopPromise,
 } = {}) {
   let auditStartTimeout
-  const auditDidStart = await Promise.race([
-    auditStarted.then(() => true),
+  const startOutcome = await Promise.race([
+    auditStarted.then(() => ({ status: "audit-started" })),
+    stopPromise.then(
+      () => ({ status: "shutdown-resolved-before-audit" }),
+      (error) => ({ status: "shutdown-rejected-before-audit", error }),
+    ),
     new Promise((resolve) => {
-      auditStartTimeout = setTimeout(() => resolve(false), 100)
+      auditStartTimeout = setTimeout(() => resolve({ status: "audit-start-timeout" }), 100)
     }),
   ])
   clearTimeout(auditStartTimeout)
   assert.equal(
-    auditDidStart,
-    true,
-    `CLOSING audit must start after strategy safety; observed shutdown calls: ${calls.join(" -> ")}; state: ${fixture.state.status}`,
+    startOutcome.status,
+    "audit-started",
+    `CLOSING audit must start after strategy safety; observed outcome: ${startOutcome.status}; error: ${startOutcome.error?.stack ?? "none"}; shutdown calls: ${calls.join(" -> ")}; state: ${fixture.state.status}`,
   )
   assert.equal(typeof getClosingAuditDeadline(), "function")
   assert.equal(getClosingAuditTimeoutMs(), 25)
@@ -990,9 +994,4 @@ test("keeps every shared service alive and reports incomplete shutdown when a st
   assert.equal(calls.includes("market-intake-stop"), false, "Market feeds must remain connected while strategy safety is unproven.")
   assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain connected while strategy safety is unproven.")
   assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected while strategy safety is unproven.")
-})
-
-
-nodeTest.after(() => {
-  console.log("Shutdown test active resources:", process.getActiveResourcesInfo())
 })
