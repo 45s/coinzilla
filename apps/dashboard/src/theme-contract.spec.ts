@@ -5,7 +5,7 @@ import dashboardStyles from './styles.css?raw';
 describe('dashboard theme surface contract', () => {
   it('maps feature surface aliases to the active palette tokens', () => {
     const aliases = dashboardStyles.match(
-      /html\[data-theme\]:not\(\[data-theme="current"\]\)\s*\{([^}]*)\}/,
+      /html\[data-theme\]:not\(\[data-theme="current"\]\):not\(\[data-theme="staradmin"\]\)\s*\{([^}]*)\}/,
     )?.[1];
 
     expect(aliases).toContain('--surface: var(--surface-bg);');
