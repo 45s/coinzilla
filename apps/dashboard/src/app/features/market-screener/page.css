@@ -238,7 +238,7 @@
 
 .market-table td {
   padding: 11px 13px;
-  border-bottom: 1px solid rgba(41, 54, 72, 0.65);
+  border-bottom: 1px solid var(--line);
   color: var(--text-soft);
   font-size: 10px;
 }
@@ -269,7 +269,7 @@
 }
 
 .favorite-toggle.selected {
-  color: #e6bb65;
+  color: var(--accent-yellow, #e6bb65);
 }
 
 .pair-symbol {
@@ -513,7 +513,7 @@
 
 .market-label-editor {
   position: relative;
-  color: #9aabc0;
+  color: var(--text-soft);
   font-size: 9px;
 }
 
@@ -673,7 +673,7 @@
 
 .filter-label-chip:hover {
   border-color: var(--label-color);
-  color: #e3ebf5;
+  color: var(--text);
 }
 
 .filter-label-chip.selected {
