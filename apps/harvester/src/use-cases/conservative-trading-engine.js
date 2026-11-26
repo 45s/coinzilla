@@ -3,7 +3,7 @@ import { createMarketVolatilityProtectionEligibility } from "../domain/market/cr
 import { createMarketComponentLogger } from "../application/logging/create-market-component-logger.js"
 import { linkSharedAccountOrderRegistry } from "../application/providers/account-runtime-registry.js"
 import { createPositionId } from "../domain/portfolio/position.js"
-import { normalizeSubmissionOwnership } from "../domain/orders/recovery-seller-submission-ownership.js"
+import { validateStrategySubmissionOwnership } from "../domain/orders/recovery-seller-submission-ownership.js"
 import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
 import { CanonicalOrder, Fill, Quantity } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, divideDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
@@ -1454,7 +1454,7 @@ function createPendingOrderLifecycleHandler({ state, publishDurableIntent, pause
       purpose: resolvedPurpose,
       ...(ownership?.cycleId === undefined ? {} : { cycleId: ownership.cycleId }),
     }
-    const normalizedOwnership = normalizeSubmissionOwnership({
+    const normalizedOwnership = validateStrategySubmissionOwnership({
       order,
       purpose: resolvedPurpose,
       ownership: ownershipInput,

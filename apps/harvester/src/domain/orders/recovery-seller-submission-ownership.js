@@ -60,6 +60,7 @@ function normalizeSubmissionOwnership({ order, purpose, ownership } = {}) {
     return Object.freeze({
       strategyId: StrategyId.COIN_GRABBER,
       positionId,
+      purpose,
     })
   }
 
@@ -67,6 +68,7 @@ function normalizeSubmissionOwnership({ order, purpose, ownership } = {}) {
     return Object.freeze({
       strategyId: StrategyId.RECOVERY_SELLER,
       positionId,
+      purpose,
       cycleId: requireIdentifier({
         value: ownership.cycleId,
         field: "cycleId",
