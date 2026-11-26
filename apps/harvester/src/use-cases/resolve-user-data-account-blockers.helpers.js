@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester.js"
 import {
+  hasControlCharacters,
   isAuthenticatedLocalOperatorIdentity,
   LOCAL_OPERATOR_ID_PATTERN,
 } from "../infrastructure/security/local-operator-identity.js"
@@ -45,7 +46,7 @@ export function validateAccountResolutionInput({
       !isText(resolutionReason) ||
       resolutionReason.length < 8 ||
       resolutionReason.length > 512 ||
-      /[\u0000-\u001F\u007F]/.test(resolutionReason) ||
+      hasControlCharacters(resolutionReason) ||
       causeFixed !== true) {
     throw new TypeError("Account-blocker resolution requires a unique action ID, resolution reason, and causeFixed=true")
   }
