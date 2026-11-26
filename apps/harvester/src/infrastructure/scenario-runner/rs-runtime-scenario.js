@@ -655,7 +655,31 @@ function createRuntimeScenarioOutput({ runtime, data, submittedAction }) {
   }
 }
 
-function createRuntimeScenarioExpected({ seed, pairConfig }) {
+function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
+  if (scenarioId === "RS-RUNTIME-SELL-REJECTION-001") {
+    return {
+      submissionRejected: true,
+      submittedOrderCount: 0,
+      stopFactAppended: true,
+      reservationRetained: true,
+    }
+  }
+  if (scenarioId === "RS-RUNTIME-SELL-PARTIAL-CANCEL-001") {
+    return {
+      decisionOutcome: "SUBMIT",
+      actionSide: "SELL",
+      actionQuantity: addDecimal({
+        left: seed.buyQuantity,
+        right: String(pairConfig.sellQuantity),
+      }),
+      submittedOrderCount: 1,
+      terminalOrderStatus: "CANCELED",
+      terminalCycleStatus: "UNRESOLVED",
+      terminalReconciled: true,
+      profitabilityEligible: true,
+      reservationReleased: true,
+    }
+  }
   return {
     decisionOutcome: "SUBMIT",
     actionSide: "SELL",
@@ -669,7 +693,31 @@ function createRuntimeScenarioExpected({ seed, pairConfig }) {
 }
 
 function createRuntimeScenarioAssertions({ output, expected }) {
-  return [
+  if (expected.submissionRejected === true) {
+    return [
+      createAssertion({
+        name: "production SELL submitter observes the simulated broker rejection",
+        actual: output.submissionRejected,
+        expected: true,
+      }),
+      createAssertion({
+        name: "rejected SELL does not fabricate an acknowledged order",
+        actual: output.submittedOrders.length,
+        expected: expected.submittedOrderCount,
+      }),
+      createAssertion({
+        name: "production STOP workflow appends an account-scope blocker to the run-local store",
+        actual: output.stopFactAppended,
+        expected: expected.stopFactAppended,
+      }),
+      createAssertion({
+        name: "the rejected SELL reservation remains retained pending reconciliation",
+        actual: output.reservedSellCycle !== null,
+        expected: expected.reservationRetained,
+      }),
+    ]
+  }
+  const assertions = [
     createAssertion({
       name: "production RS transition selects a SELL action",
       actual: output.decision?.outcome,
@@ -690,12 +738,43 @@ function createRuntimeScenarioAssertions({ output, expected }) {
       actual: output.submittedOrders.length,
       expected: expected.submittedOrderCount,
     }),
-    createAssertion({
+  ]
+  if (expected.terminalOrderStatus) {
+    assertions.push(
+      createAssertion({
+        name: "partial terminal SELL preserves the broker terminal status",
+        actual: output.terminalSell?.orderStatus,
+        expected: expected.terminalOrderStatus,
+      }),
+      createAssertion({
+        name: "partial terminal SELL leaves the cycle unresolved",
+        actual: output.terminalSell?.cycleState?.status,
+        expected: expected.terminalCycleStatus,
+      }),
+      createAssertion({
+        name: "partial terminal SELL is completely reconciled",
+        actual: output.terminalSell?.cycleState?.terminalReconciled,
+        expected: expected.terminalReconciled,
+      }),
+      createAssertion({
+        name: "partial terminal SELL retains profitability without closing the cycle",
+        actual: output.terminalSell?.cycleState?.profitabilityEligible,
+        expected: expected.profitabilityEligible,
+      }),
+      createAssertion({
+        name: "partial terminal SELL releases the sole-SELL reservation",
+        actual: output.reservedSellCycle === null,
+        expected: expected.reservationReleased,
+      }),
+    )
+  } else {
+    assertions.push(createAssertion({
       name: "sole SELL cycle reservation belongs to the acknowledged order",
       actual: output.reservedSellCycle?.clientOrderId === output.submittedOrders[0]?.clientOrderId,
-      expected: true,
-    }),
-  ]
+      expected: expected.reservationMatchesSubmittedOrder,
+    }))
+  }
+  return assertions
 }
 
 function createRuntimeScenarioEvaluationTrace({ runtime, effectiveInput, output }) {
@@ -754,13 +833,7 @@ function createRuntimeScenarioTrace({ runtime, effectiveInput, output, assertion
     outputs: output.submittedOrders,
     source: "createRecoverySellerOrderSubmitter",
   }
-  const assertionStep = {
-    id: "assertions-1",
-    kind: "assertion",
-    label: "Compare production execution with scenario expectations",
-    outputs: assertions,
-  }
-  return [
+  const steps = [
     inputStep,
     fillStep,
     createRuntimeScenarioEvaluationTrace({
@@ -769,17 +842,61 @@ function createRuntimeScenarioTrace({ runtime, effectiveInput, output, assertion
       output,
     }),
     brokerStep,
-    assertionStep,
   ]
+  if (output.submissionRejected) {
+    steps.push({
+      id: "stop-1",
+      kind: "safety-stop",
+      label: "Production STOP workflow appends a blocker after rejected SELL submission",
+      outputs: {
+        stopFactAppended: output.stopFactAppended,
+        reservedSellCycle: output.reservedSellCycle,
+      },
+      source: "createRecoverySellerStopWorkflow.latch",
+    })
+  }
+  if (output.terminalSell) {
+    steps.push({
+      id: "terminal-1",
+      kind: "order-lifecycle",
+      label: "Reconcile a profitable partial CANCELED SELL through production accounting",
+      inputs: {
+        orderStatus: output.terminalSell.orderStatus,
+        executedQuantity: output.terminalSell.executedQuantity,
+      },
+      outputs: {
+        cycleStatus: output.terminalSell.cycleState?.status,
+        terminalReconciled: output.terminalSell.cycleState?.terminalReconciled,
+        profitabilityEligible: output.terminalSell.profitabilityEligible,
+      },
+      source: "createRecoverySellerAccountingWorkflow.reconcileTerminalMixedSell",
+    })
+  }
+  steps.push({
+    id: "assertions-1",
+    kind: "assertion",
+    label: "Compare production execution with scenario expectations",
+    outputs: assertions,
+  })
+  return steps
 }
 
-export async function executeRecoverySellerRuntimeScenario({ runId, input, signal }) {
+export async function executeRecoverySellerRuntimeScenario({
+  runId,
+  scenarioId = "RS-RUNTIME-SELL-SUBMISSION-001",
+  input,
+  signal,
+}) {
   if (signal?.aborted) {
     throw new Error("Scenario worker was cancelled")
   }
+  const scenario = RECOVERY_SELLER_RUNTIME_SCENARIOS.find((item) => item.id === scenarioId)
+  if (!scenario) {
+    throw new TypeError(`Unsupported production Recovery Seller runtime scenario: ${scenarioId}`)
+  }
   const effectiveInput = validateScenarioInput({
-    schema: RUNTIME_FIXTURE.inputSchema,
-    defaults: RUNTIME_FIXTURE.input,
+    schema: scenario.inputSchema,
+    defaults: scenario.input,
     input,
   })
   if (compareDecimal({
@@ -790,22 +907,35 @@ export async function executeRecoverySellerRuntimeScenario({ runId, input, signa
   }
   const runtime = await createRuntimeScenarioContext({
     runId,
+    scenarioId,
   })
+  const expectRejection = scenarioId === "RS-RUNTIME-SELL-REJECTION-001"
   const execution = await executeRuntimeScenarioDispatch({
     runtime,
     effectiveInput,
+    expectRejection,
   })
   if (signal?.aborted) {
     throw new Error("Scenario worker was cancelled")
   }
+  const terminalSell = scenarioId === "RS-RUNTIME-SELL-PARTIAL-CANCEL-001"
+    ? await reconcileRuntimeScenarioPartialSell({
+        runtime,
+        execution,
+        effectiveInput,
+      })
+    : null
   const output = createRuntimeScenarioOutput({
     runtime,
     data: execution.data,
     submittedAction: execution.submittedAction,
+    submissionRejected: execution.submissionRejected,
+    terminalSell,
   })
   const expected = createRuntimeScenarioExpected({
     seed: runtime.seed,
     pairConfig: runtime.pairConfig,
+    scenarioId,
   })
   const assertions = createRuntimeScenarioAssertions({
     output,
@@ -820,8 +950,8 @@ export async function executeRecoverySellerRuntimeScenario({ runId, input, signa
   return Object.freeze({
     runId,
     strategyId: "RS",
-    fixtureId: "rs-runtime-sell-submission",
-    fixtureName: RUNTIME_FIXTURE.name,
+    scenarioId,
+    scenarioName: scenario.name,
     input: effectiveInput,
     output: Object.freeze(output),
     expected: Object.freeze(expected),
