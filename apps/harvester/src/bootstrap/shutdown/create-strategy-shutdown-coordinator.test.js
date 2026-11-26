@@ -335,7 +335,7 @@ test("bounds repeated successful safety proofs when the marker remains invalidat
       beginShutdown() {},
       waitUntilSafe: async () => {
         waitCalls += 1
-        if (waitCalls === 3) {
+        if (waitCalls === 4) {
           timeoutCallback()
         }
         return { ok: true }
@@ -355,7 +355,7 @@ test("bounds repeated successful safety proofs when the marker remains invalidat
     (error) => {
       assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN", "Repeated invalidation must fail the shared safety barrier.")
       const blocker = error.shutdownDiagnostics.strategyBlockers[0]
-      assert.equal(blocker.reason, "STRATEGY_SHUTDOWN_REEVALUATION_LIMIT_EXCEEDED:2", "The blocker must expose the bounded reproof limit.")
+      assert.equal(blocker.reason, "SHUTDOWN_SAFETY_REEVALUATION_LIMIT_EXCEEDED:2", "The blocker must expose the bounded reproof limit.")
       assert.equal(blocker.status, "BLOCKED", "Exhausting the reproof limit must remain an explicit unsafe outcome.")
       return true
     },
