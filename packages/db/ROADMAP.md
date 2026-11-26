@@ -20,27 +20,27 @@
 
 ## Dependency-free MongoDB provider — #1865
 
-**Status: In progress.** Implementation PR [#1868](https://github.com/45s/coinzilla/pull/1868) targets `develop`; [issue #1865](https://github.com/45s/coinzilla/issues/1865) owns detailed acceptance and evidence.
+**Status: Implementation complete for the verified support envelope.** PR [#1868](https://github.com/45s/coinzilla/pull/1868) is open against `develop` and ready for owner review; [issue #1865](https://github.com/45s/coinzilla/issues/1865) retains the detailed acceptance record.
 
-The infrastructure adapter uses Node.js built-ins only and currently includes native BSON encoding/decoding, OP_MSG framing and correlation, TCP/TLS transport, hello/topology negotiation, SCRAM-SHA-1/SHA-256, provider-neutral CRUD/query mapping, cursor cleanup, and replica-set/sharded transaction sessions. Standalone servers support CRUD but reject multi-document transactions. The shared provider-conformance suite and deterministic protocol/authentication/transport tests are included; opt-in live-server tests use `MONGODB_URI`.
+The infrastructure adapter uses Node.js built-ins only and includes native BSON encoding/decoding, OP_MSG framing and correlation, TCP/TLS transport, hello/topology negotiation, SCRAM-SHA-1/SHA-256, provider-neutral CRUD/query mapping, cursor cleanup, and replica-set transaction sessions. Standalone MongoDB supports CRUD but rejects multi-document transactions. Sharded/mongos detection and experimental recovery-token code exist, but sharded deployments are outside the supported contract and are not verified.
 
-**Explicit limits:** single-seed `mongodb://` only; no SRV/multi-seed discovery, pooling, topology monitoring/failover, retryable writes or compression; supported wire-version overlap 13–25; printable-ASCII SCRAM usernames and SHA-256 passwords (full SASLprep is not implemented); JSON record contract rather than arbitrary BSON; no change streams, GridFS, client-side encryption or legacy wire opcodes. Client session pooling and `endSessions` cleanup remain deferred.
+**Supported topology envelope:** single-seed `mongodb://` standalone and replica-set deployments. Replica-set multi-document transactions are verified. Sharded transactions, SRV, multi-seed discovery, pooling, topology monitoring/failover, retryable writes, compression, change streams, GridFS, client-side encryption and legacy wire opcodes are not supported guarantees. Supported wire-version overlap is 13–25. SCRAM usernames and SHA-256 passwords are restricted to printable ASCII because full SASLprep is not implemented. The public record contract is JSON-oriented, not arbitrary BSON. Client session pooling and explicit `endSessions` cleanup remain deferred.
 
-**Verification evidence (latest completed run before the current follow-up commits):**
+**Verification on feature head `6b45a99`:**
 
-- Real MongoDB 8.0 authenticated standalone: 20 integration tests, 13 passed, 0 failed, 7 skipped because standalone topology does not support multi-document transactions.
-- Real MongoDB 8.0 replica set: 20 integration tests, 15 passed, 0 failed, 5 skipped. Transaction rollback and commit tests passed. Concurrent CRUD correlation passed on both topologies.
-- The real standalone run exposed a delete-command wire-format defect: collation was placed at the command level instead of inside the delete statement. A regression assertion and implementation fix were added; both real-server jobs passed afterward.
-- DB unit tests on `ca1e386`: 399 tests, 378 passed, 0 failed. Function coverage was 99.76%, below the required 100% threshold. A further read-transaction failure-cleanup test was added on `82f55a9`; exact-head coverage is pending.
-- Strict changed-file ESLint passed on `ca1e386`. Workspace quality then failed only the maintained-Markdown spacing check in the reference strategy, MongoDB support guide and package README. Those whitespace/repeated-blank-line issues were corrected in subsequent commits; exact-head workspace quality is pending.
-- Dependency Audit, External Documentation Links, Harvester Targeted Tests and the MongoDB standalone/replica-set integration workflow passed on `ca1e386`.
-- The feature branch was synchronized with the latest `develop` using a normal merge commit; it is currently 0 commits behind.
-- Sharded topology and real server-kill interruption scenarios remain unverified. Deterministic transport tests cover partial frames, concurrent request correlation, pending-request rejection and interrupted writes.
+- DB unit suite: 400 tests, 379 passed, 0 failed, 21 skipped. Line coverage 98.68%, branch coverage 96.70%, function coverage 100%.
+- Full workspace Unit Tests workflow: passed, including `@coinzilla/db` and existing providers/packages.
+- Test Coverage workflow: passed for all packages and workspace coverage.
+- Repository Quality: passed, including zero-warning workspace ESLint, strict changed-file ESLint, JavaScript syntax, actionlint and maintained-Markdown checks.
+- Dependency Audit, External Documentation Links and Harvester Targeted Tests: passed.
+- Real MongoDB 8.0 authenticated standalone (SCRAM): 20 integration tests, 13 passed, 0 failed, 7 skipped because standalone does not support multi-document transactions.
+- Real MongoDB 8.0 replica set: 20 integration tests, 15 passed, 0 failed, 5 skipped. Atomic transaction rollback and commit passed. Concurrent CRUD request correlation passed on both topologies.
+- The standalone server exposed a real delete-command wire-format defect: collation was incorrectly placed at command level. The implementation and regression test were corrected before both real-server jobs passed.
+- The feature branch was synchronized with `develop` by a normal merge commit and was 0 commits behind at verification.
 
-**Remaining acceptance work:** reach 100% function coverage and pass the full DB unit/coverage gate on the exact final commit; rerun workspace quality after the Markdown cleanup; complete final protocol/authentication/lifecycle review; and keep sharded/TLS/connection-interruption guarantees explicitly limited to what is actually verified. No assertion or threshold has been weakened.
+**Explicitly unverified follow-ups:** live sharded/mongos behavior, TLS certificate integration, and remote server-process interruption. Deterministic transport tests cover partial frames, concurrent request correlation, pending-request rejection and interrupted writes. These follow-ups are not represented as supported guarantees. No test assertions or coverage thresholds were weakened.
 
-See [MongoDB support and limitations](./docs/mongodb.md) for the operational configuration and behavior contract.
-
+See [MongoDB support and limitations](./docs/mongodb.md) for the operational configuration, tested behavior and limitations.
 ## Active maintenance
 
 - Keep schema ownership with consuming applications; this package supplies infrastructure, not application-specific schema or trading policy.
