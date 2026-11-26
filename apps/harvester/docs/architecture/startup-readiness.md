@@ -170,3 +170,6 @@ The operator market projection now separates market-data facts, pause/ownership 
 ## Operator read-query composition
 
 The operator read use case now isolates runtime snapshot retrieval, engine market snapshot retrieval and readiness projection evaluation. Each boundary preserves its original structured error/cause; the public status and markets queries remain read-only and use the same existing engine snapshots.
+
+
+The startup diagnostic fallback logger now uses the existing logger interface and sanitizes error codes before writing them. The original startup exception remains the one propagated to lifecycle cleanup.

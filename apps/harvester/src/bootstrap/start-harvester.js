@@ -1426,6 +1426,14 @@ function getHarvesterMarketDataPairs({ startup } = {}) {
     .filter(([symbol]) => startup.marketDataSymbols.includes(symbol)))
 }
 
+function getSafeStartupErrorCode(error, fallbackCode) {
+  const code = error?.code
+  if (typeof code === "string" && /^[A-Z0-9_]{1,80}$/.test(code)) {
+    return code
+  }
+  return fallbackCode
+}
+
 async function reportHarvesterStartupFailure({ startup, resources, accountSnapshots, startupError, component, fallbackCode } = {}) {
   try {
     await runHarvesterStartupReadinessAudit({
@@ -1434,17 +1442,18 @@ async function reportHarvesterStartupFailure({ startup, resources, accountSnapsh
       accountSnapshots,
       startupFailure: {
         component,
-        code: startupError?.code ?? fallbackCode,
+        code: getSafeStartupErrorCode(startupError, fallbackCode),
       },
     })
   } catch (diagnosticError) {
-    logSystem({
-      logger: startup.logger,
+    const logger = startup.logger
+    const writer = logger?.system ?? logger?.error ?? logger?.info
+    writer?.call(logger, {
       message: "[HEALTH] Startup readiness diagnostics could not complete after the original startup failure.",
       component: "harvester-startup-readiness",
       startupComponent: component,
-      startupErrorCode: startupError?.code ?? fallbackCode,
-      diagnosticErrorCode: diagnosticError?.code ?? "READINESS_DIAGNOSTIC_FAILED",
+      startupErrorCode: getSafeStartupErrorCode(startupError, fallbackCode),
+      diagnosticErrorCode: getSafeStartupErrorCode(diagnosticError, "READINESS_DIAGNOSTIC_FAILED"),
     })
   }
 }

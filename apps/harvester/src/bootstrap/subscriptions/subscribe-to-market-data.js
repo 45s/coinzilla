@@ -395,7 +395,12 @@ function registerMarketPriceSubscription({ data,
 }
 
 function resetMarketPriceIntakeState({ marketPriceIntake, symbol } = {}) {
-  const intakeState = resetMarketPriceIntakeState({ marketPriceIntake, symbol })
+  const intakeState = marketPriceIntake.get(symbol) ?? {}
+  intakeState.hasFreshWebSocketPrice = false
+  intakeState.initialPriceSeeded = false
+  intakeState.marketPriceSourceIdentity = null
+  intakeState.latestWebSocketPriceTask = null
+  marketPriceIntake.set(symbol, intakeState)
   return intakeState
 }
 
@@ -416,12 +421,7 @@ async function subscribeToMarketPrice({
   subscriptions,
   marketPriceIntake,
 }) {
-  const intakeState = marketPriceIntake.get(symbol) ?? {}
-  intakeState.hasFreshWebSocketPrice = false
-  intakeState.initialPriceSeeded = false
-  intakeState.marketPriceSourceIdentity = null
-  intakeState.latestWebSocketPriceTask = null
-  marketPriceIntake.set(symbol, intakeState)
+  const intakeState = resetMarketPriceIntakeState({ marketPriceIntake, symbol })
   const handler = createMarketPriceHandler({
     symbol,
     pairConfig,

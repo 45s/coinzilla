@@ -5,6 +5,15 @@ import {
   mapBrokerStatusChangedData,
 } from "../../application/events/lifecycle-event-dtos.js"
 
+const INVALIDATING_USER_DATA_STATUSES = new Set([
+  "connectionClosed",
+  "recovering",
+  "recoveryFailed",
+  "terminated",
+  "rpcError",
+  "executionNormalizationFailed",
+])
+
 const UNSAFE_CONNECTION_STATUSES = new Set([
   "connectionClosed",
   "recovering",
@@ -12,6 +21,7 @@ const UNSAFE_CONNECTION_STATUSES = new Set([
   "recoveryFailed",
   "terminated",
   "rpcError",
+  "executionNormalizationFailed",
 ])
 
 function logSystem({ logger, ...data }) {
