@@ -128,9 +128,12 @@ function createProviderNeutralFacade({ database, provider }) {
   const transactionScope = new AsyncLocalStorage()
 
   function runOperation({ operation, input }) {
-    const activeTransaction = transactionScope.getStore()
-    if (activeTransaction) {
-      return activeTransaction[operation](input)
+    const activeScope = transactionScope.getStore()
+    if (activeScope) {
+      if (!activeScope.active) {
+        throw new Error("Database transaction callback has already completed")
+      }
+      return activeScope.context[operation](input)
     }
     if (READ_ONLY_OPERATIONS.has(operation)) {
       return database.readTransaction((transaction) => {
@@ -144,13 +147,13 @@ function createProviderNeutralFacade({ database, provider }) {
   return Object.freeze({
     connect: database.connect,
     close() {
-      if (transactionScope.getStore()) {
+      if (transactionScope.getStore()?.active) {
         throw new Error("Cannot close a database from inside its transaction callback")
       }
       return database.close()
     },
     transaction(work) {
-      if (transactionScope.getStore()) {
+      if (transactionScope.getStore()?.active) {
         throw new Error("Nested database transactions are not supported")
       }
       if (typeof work !== "function") {
@@ -164,7 +167,20 @@ function createProviderNeutralFacade({ database, provider }) {
           throw new TypeError("Synchronous database provider transaction callbacks must be synchronous")
         }
         const context = createTransactionFacade(transaction)
-        return transactionScope.run(context, () => work(context))
+        const scope = { context, active: true }
+        try {
+          const result = transactionScope.run(scope, () => work(context))
+          if (result && typeof result.then === "function") {
+            return Promise.resolve(result).finally(() => {
+              scope.active = false
+            })
+          }
+          scope.active = false
+          return result
+        } catch (error) {
+          scope.active = false
+          throw error
+        }
       })
     },
     create: (input) => runOperation({
