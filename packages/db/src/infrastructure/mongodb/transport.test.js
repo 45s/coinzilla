@@ -171,3 +171,22 @@ test("MongoDB transport close rejects outstanding commands and destroys the sock
   assert.equal(socket.destroyed, true)
   assert.equal(transport.state, "closed")
 })
+
+
+test("MongoDB transport close rejects an in-progress connection attempt", async () => {
+  const socket = new EventEmitter()
+  socket.destroyed = false
+  socket.destroy = function destroy() { this.destroyed = true; this.emit("close") }
+  const transport = createMongoTransport({
+    host: "localhost",
+    port: 27017,
+    connectTimeoutMS: 1_000,
+    socketTimeoutMS: 100,
+    socketFactory: () => socket,
+  })
+  const connecting = transport.connect()
+  await transport.close()
+  await assert.rejects(connecting, /closed/i)
+  assert.equal(socket.destroyed, true)
+  assert.equal(transport.state, "closed")
+})
