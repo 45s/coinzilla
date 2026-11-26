@@ -148,7 +148,7 @@ test("MongoDB readMany kills an open cursor after a failed getMore response", as
 
   await assert.rejects(
     operations.readMany({ collection: "people" }),
-    /getMore response omitted cursor.nextBatch/,
+    (error) => error.cause?.message === "MongoDB getMore response omitted cursor.nextBatch",
   )
   assert.equal(stub.calls[2].killCursors.startsWith("coinzilla_"), true)
   assert.deepEqual(stub.calls[2].cursors, [12])
