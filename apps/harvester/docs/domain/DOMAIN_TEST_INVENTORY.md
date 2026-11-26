@@ -418,9 +418,8 @@ The scenario-definition and reporting workstream is tracked in [#1797](https://g
 
 The initial inventory has 15 TEST-MAPPED, one PARTIAL, one MISSING (CON-PERSIST-003) and one UNSUPPORTED (runtime restoration) scenario. TEST-MAPPED and PARTIAL are not VERIFIED. Unmapped-test reporting is scoped to the named test set in the critical behavior registry, not every Harvester test file.
 
-
 ### Recovery Seller non-FILLED terminal SELL STOP regression
 
 - Profitable partial CANCELED and EXPIRED SELLs reconcile canonical fills first, then fail the terminal transition, durably latch account-wide STOP with `RS_TERMINAL_SELL_NOT_FILLED_STOP`, and pause the affected market.
 - Zero-fill REJECTED SELLs follow the same fail-closed path without fabricating a fill. Fully FILLED profitable SELL remains the success path.
-- Runtime scenario coverage asserts durable account STOP, unresolved cycle, and retained SELL reservation. This does not replace the independent scenario suite tracked by #1780.
+- Runtime scenario coverage asserts durable account STOP and unresolved cycle. Canonical terminal accounting releases the terminal order reservation only after all fills are reconciled. This does not replace the independent scenario suite tracked by #1780.

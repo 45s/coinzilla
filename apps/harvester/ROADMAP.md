@@ -54,5 +54,4 @@ Current scenarios use simulated infrastructure and run-local state. No real brok
 - Keep detailed implementation plans in the owning issue or scoped plan; this page is only the active priority index.
 - Never use this roadmap as authority for strategy rules, API contracts, or acceptance evidence.
 
-
 - Recovery Seller non-FILLED terminal SELLs require a durable account STOP after canonical fill reconciliation. Partial CANCELED/EXPIRED and zero-fill REJECTED outcomes remain unresolved under the account-wide STOP; canonical terminal accounting may release the terminal order reservation after all fills are reconciled. Profitable partial proceeds do not relax the STOP rule.
