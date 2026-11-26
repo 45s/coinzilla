@@ -64,7 +64,10 @@ function hasExactMarketEvidence({ context, configuredMarkets }) {
 function validateEvidenceContext({ context, configuredMarkets }) {
   if (typeof context?.runtimeSessionId !== "string" ||
       !hasSharedAccountEvidence(context) ||
-      !hasExactMarketEvidence({ context, configuredMarkets })) {
+      !hasExactMarketEvidence({
+        context,
+        configuredMarkets,
+      })) {
     throw new TypeError("Account evidence bundle must cover the exact configured markets and shared account/order evidence")
   }
 }
