@@ -76,6 +76,84 @@ errmsg: "hello failed" } } },
   )
 })
 
+test("MongoDB URI parser rejects incomplete credentials and accepts explicit false TLS", () => {
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://:secret@localhost/app"),
+    /password requires a username/,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://alice@localhost/app"),
+    /username requires a password/,
+  )
+  assert.equal(
+    parseMongoConnectionString("mongodb://localhost/app?tls=false").tls,
+    false,
+  )
+})
+
+test("MongoDB handshake validates requested mechanisms and selects server-supported SCRAM", async () => {
+  const baseHello = {
+    ok: 1,
+    minWireVersion: 13,
+    maxWireVersion: 25,
+    isWritablePrimary: true,
+  }
+  const unsupportedRequested = {
+    async command() {
+      return baseHello
+    },
+  }
+  await assert.rejects(
+    performMongoHandshake({
+      transport: unsupportedRequested,
+      username: "alice",
+      password: "secret",
+      authMechanism: "PLAIN",
+    }),
+    /Unsupported MongoDB authentication mechanism/,
+  )
+
+  const unsupportedByServer = {
+    async command() {
+      return { ...baseHello, saslSupportedMechs: ["SCRAM-SHA-1"] }
+    },
+  }
+  await assert.rejects(
+    performMongoHandshake({
+      transport: unsupportedByServer,
+      username: "alice",
+      password: "secret",
+      authMechanism: "SCRAM-SHA-256",
+    }),
+    /does not support SCRAM-SHA-256/,
+  )
+
+  for (const supported of [["SCRAM-SHA-1"], []]) {
+    const commands = []
+    const transport = {
+      async command({ body }) {
+        commands.push(body)
+        if (body.hello) {
+          return { ...baseHello, saslSupportedMechs: supported }
+        }
+        return { ok: 0, errmsg: "authentication failed" }
+      },
+    }
+    await assert.rejects(
+      performMongoHandshake({
+        transport,
+        username: "alice",
+        password: "secret",
+      }),
+      /authentication failed/,
+    )
+    assert.equal(
+      commands[1].mechanism,
+      supported.length === 0 ? "SCRAM-SHA-256" : "SCRAM-SHA-1",
+    )
+  }
+})
+
 test("MongoDB URI parser reads credentials, database, authentication source, and timeouts", () => {
   assert.deepEqual(
     parseMongoConnectionString("mongodb://alice:p%40ss@db.example:27018/app?authSource=admin&tls=true&connectTimeoutMS=4000"),
