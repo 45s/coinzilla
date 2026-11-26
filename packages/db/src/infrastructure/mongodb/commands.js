@@ -266,6 +266,330 @@ function isCursorExhausted(cursorId) {
   return cursorId === 0 || cursorId === 0n
 }
 
+async function killMongoCursor({
+  command,
+  databaseName,
+  collection,
+  mongoCollection,
+  cursorId,
+  operation,
+}) {
+  if (isCursorExhausted(cursorId)) {
+    return
+  }
+  try {
+    await runMongoCommand({
+      command,
+      operation,
+      collection,
+      body: {
+        killCursors: mongoCollection,
+        cursors: [cursorId],
+        $db: databaseName,
+      },
+    })
+  } catch {
+    // Preserve the original result or failure; connection cleanup owns any remaining cursor.
+  }
+}
+
+function requireMongoCursor({ response, operation, collection, serverOperation }) {
+  if (!response.cursor) {
+    throw new DatabaseProviderError({
+      operation,
+      collection,
+      cause: new Error(`MongoDB ${serverOperation} response omitted its cursor`),
+    })
+  }
+  if (!isValidCursorId(response.cursor.id)) {
+    throw new DatabaseProviderError({
+      operation,
+      collection,
+      cause: new Error(`MongoDB ${serverOperation} response contained an invalid cursor id`),
+    })
+  }
+  return response.cursor
+}
+
+function requireFirstBatch({ cursor, operation, collection, serverOperation }) {
+  if (!Array.isArray(cursor.firstBatch)) {
+    throw new DatabaseProviderError({
+      operation,
+      collection,
+      cause: new Error(`MongoDB ${serverOperation} response omitted cursor.firstBatch`),
+    })
+  }
+  return cursor.firstBatch
+}
+
+function decodeMongoBatch({ documents, operation, collection }) {
+  return documents.map((document) => decodeStoredRecord({
+    document,
+    operation,
+    collection,
+  }))
+}
+
+async function readNextMongoBatch({
+  command,
+  databaseName,
+  collection,
+  mongoCollection,
+  cursorId,
+}) {
+  const response = await runMongoCommand({
+    command,
+    operation: "readMany",
+    collection,
+    body: {
+      getMore: cursorId,
+      collection: mongoCollection,
+      batchSize: CURSOR_BATCH_SIZE,
+      $db: databaseName,
+    },
+  })
+  if (!Array.isArray(response.cursor?.nextBatch)) {
+    throw new DatabaseProviderError({
+      operation: "readMany",
+      collection,
+      cause: new Error("MongoDB getMore response omitted cursor.nextBatch"),
+    })
+  }
+  if (!isValidCursorId(response.cursor.id)) {
+    throw new DatabaseProviderError({
+      operation: "readMany",
+      collection,
+      cause: new Error("MongoDB getMore response contained an invalid cursor id"),
+    })
+  }
+  return {
+    cursorId: response.cursor.id,
+    records: decodeMongoBatch({
+      documents: response.cursor.nextBatch,
+      operation: "readMany",
+      collection,
+    }),
+  }
+}
+
+async function createRecord({ command, databaseName, collection, record }) {
+  validateCollectionName(collection)
+  const snapshot = JSON.parse(serializeRecord(record))
+  const mongoCollection = encodeCollectionName({ collection, databaseName })
+  await runMongoCommand({
+    command,
+    operation: "create",
+    collection,
+    body: {
+      insert: mongoCollection,
+      ordered: true,
+      $db: databaseName,
+    },
+    sequences: [{
+      identifier: "documents",
+      documents: [createStoredDocument(snapshot)],
+    }],
+  })
+  return snapshot
+}
+
+async function readOneRecord({ command, databaseName, collection, id }) {
+  validateCollectionName(collection)
+  validateRecordIdentifier(id)
+  const mongoCollection = encodeCollectionName({ collection, databaseName })
+  const response = await runMongoCommand({
+    command,
+    operation: "readOne",
+    collection,
+    body: {
+      find: mongoCollection,
+      filter: { _id: id },
+      collation: { locale: "simple" },
+      projection: { _id: 1, data: 1 },
+      limit: 1,
+      singleBatch: true,
+      $db: databaseName,
+    },
+  })
+  const cursor = requireMongoCursor({
+    response,
+    operation: "readOne",
+    collection,
+    serverOperation: "find",
+  })
+  let firstBatch
+  try {
+    firstBatch = requireFirstBatch({
+      cursor,
+      operation: "readOne",
+      collection,
+      serverOperation: "find",
+    })
+  } catch (error) {
+    await killMongoCursor({
+      command,
+      databaseName,
+      collection,
+      mongoCollection,
+      cursorId: cursor.id,
+      operation: "readOne",
+    })
+    throw error
+  }
+  await killMongoCursor({
+    command,
+    databaseName,
+    collection,
+    mongoCollection,
+    cursorId: cursor.id,
+    operation: "readOne",
+  })
+  const document = firstBatch[0]
+  return document ? decodeStoredRecord({ document, operation: "readOne", collection }) : null
+}
+
+function createReadPipeline({ query }) {
+  const normalizedQuery = normalizeReadQuery(query)
+  const pipeline = [
+    { $match: createFilter(normalizedQuery.filter) },
+    ...createSortStages(normalizedQuery.sort),
+  ]
+  if (normalizedQuery.offset > 0) {
+    pipeline.push({ $skip: normalizedQuery.offset })
+  }
+  if (normalizedQuery.limit !== undefined) {
+    pipeline.push({ $limit: normalizedQuery.limit })
+  }
+  pipeline.push({ $project: { _id: 1, data: 1 } })
+  return pipeline
+}
+
+async function readManyRecords({ command, databaseName, collection, query }) {
+  validateCollectionName(collection)
+  const mongoCollection = encodeCollectionName({ collection, databaseName })
+  const response = await runMongoCommand({
+    command,
+    operation: "readMany",
+    collection,
+    body: {
+      aggregate: mongoCollection,
+      pipeline: createReadPipeline({ query }),
+      cursor: { batchSize: CURSOR_BATCH_SIZE },
+      collation: { locale: "simple" },
+      $db: databaseName,
+    },
+  })
+  const cursor = requireMongoCursor({
+    response,
+    operation: "readMany",
+    collection,
+    serverOperation: "aggregate",
+  })
+  let firstBatch
+  try {
+    firstBatch = requireFirstBatch({
+      cursor,
+      operation: "readMany",
+      collection,
+      serverOperation: "aggregate",
+    })
+  } catch (error) {
+    await killMongoCursor({
+      command,
+      databaseName,
+      collection,
+      mongoCollection,
+      cursorId: cursor.id,
+      operation: "readMany",
+    })
+    throw error
+  }
+  let cursorId = cursor.id
+  const records = decodeMongoBatch({
+    documents: firstBatch,
+    operation: "readMany",
+    collection,
+  })
+  try {
+    while (!isCursorExhausted(cursorId)) {
+      const next = await readNextMongoBatch({
+        command,
+        databaseName,
+        collection,
+        mongoCollection,
+        cursorId,
+      })
+      cursorId = next.cursorId
+      records.push(...next.records)
+    }
+    return records
+  } catch (error) {
+    await killMongoCursor({
+      command,
+      databaseName,
+      collection,
+      mongoCollection,
+      cursorId,
+      operation: "readMany",
+    })
+    throw error
+  }
+}
+
+async function updateRecord({ command, databaseName, collection, id, changes }) {
+  validateCollectionName(collection)
+  validateRecordIdentifier(id)
+  const snapshot = JSON.parse(serializeChanges(changes))
+  if (Object.keys(snapshot).length === 0) {
+    return readOneRecord({ command, databaseName, collection, id })
+  }
+  const mongoCollection = encodeCollectionName({ collection, databaseName })
+  const set = {}
+  for (const [field, value] of Object.entries(snapshot)) {
+    const encodedKey = encodeUserKey(field)
+    set[`data.${encodedKey}`] = encodeUserValue(value)
+  }
+  const response = await runMongoCommand({
+    command,
+    operation: "update",
+    collection,
+    body: {
+      findAndModify: mongoCollection,
+      query: { _id: id },
+      update: { $set: set },
+      collation: { locale: "simple" },
+      new: true,
+      upsert: false,
+      fields: { _id: 1, data: 1 },
+      $db: databaseName,
+    },
+  })
+  return response.value ? decodeStoredRecord({
+    document: response.value,
+    operation: "update",
+    collection,
+  }) : null
+}
+
+async function deleteRecord({ command, databaseName, collection, id }) {
+  validateCollectionName(collection)
+  validateRecordIdentifier(id)
+  const mongoCollection = encodeCollectionName({ collection, databaseName })
+  const response = await runMongoCommand({
+    command,
+    operation: "delete",
+    collection,
+    body: {
+      delete: mongoCollection,
+      deletes: [{ q: { _id: id }, limit: 1 }],
+      collation: { locale: "simple" },
+      ordered: true,
+      $db: databaseName,
+    },
+  })
+  return response.n > 0
+}
+
 function createMongoRecordOperations({ command, databaseName }) {
   if (typeof command !== "function") {
     throw new TypeError("MongoDB record operations require a command function")
@@ -273,305 +597,12 @@ function createMongoRecordOperations({ command, databaseName }) {
   if (typeof databaseName !== "string" || databaseName.trim() === "") {
     throw new TypeError("MongoDB database name must be a non-empty string")
   }
-
-  async function create({ collection, record }) {
-    validateCollectionName(collection)
-    const snapshot = JSON.parse(serializeRecord(record))
-    const mongoCollection = encodeCollectionName({ collection,
-databaseName })
-    await runMongoCommand({
-      command,
-      operation: "create",
-      collection,
-      body: {
-        insert: mongoCollection,
-        ordered: true,
-        $db: databaseName,
-      },
-      sequences: [{
-        identifier: "documents",
-        documents: [createStoredDocument(snapshot)],
-      }],
-    })
-    return snapshot
-  }
-
-  async function readOne({ collection, id }) {
-    validateCollectionName(collection)
-    validateRecordIdentifier(id)
-    const mongoCollection = encodeCollectionName({ collection,
-databaseName })
-    const response = await runMongoCommand({
-      command,
-      operation: "readOne",
-      collection,
-      body: {
-        find: mongoCollection,
-        filter: { _id: id },
-        collation: { locale: "simple" },
-        projection: { _id: 1,
-data: 1 },
-        limit: 1,
-        singleBatch: true,
-        $db: databaseName,
-      },
-    })
-    if (!response.cursor) {
-      throw new DatabaseProviderError({
-        operation: "readOne",
-        collection,
-        cause: new Error("MongoDB find response omitted its cursor"),
-      })
-    }
-    const cursorId = response.cursor.id
-    if (!isValidCursorId(cursorId)) {
-      throw new DatabaseProviderError({
-        operation: "readOne",
-        collection,
-        cause: new Error("MongoDB find response contained an invalid cursor id"),
-      })
-    }
-    if (!Array.isArray(response.cursor.firstBatch)) {
-      if (!isCursorExhausted(cursorId)) {
-        try {
-          await runMongoCommand({
-            command,
-            operation: "readOne",
-            collection,
-            body: {
-              killCursors: mongoCollection,
-              cursors: [cursorId],
-              $db: databaseName,
-            },
-          })
-        } catch {
-          // Preserve the malformed-response error; connection cleanup owns any remaining cursor.
-        }
-      }
-      throw new DatabaseProviderError({
-        operation: "readOne",
-        collection,
-        cause: new Error("MongoDB find response omitted cursor.firstBatch"),
-      })
-    }
-    if (!isCursorExhausted(cursorId)) {
-      try {
-        await runMongoCommand({
-          command,
-          operation: "readOne",
-          collection,
-          body: {
-            killCursors: mongoCollection,
-            cursors: [cursorId],
-            $db: databaseName,
-          },
-        })
-      } catch {
-        // Preserve the requested read result; connection cleanup owns any remaining cursor.
-      }
-    }
-    const document = response.cursor.firstBatch[0]
-    return document ? decodeStoredRecord({ document,
-operation: "readOne",
-collection }) : null
-  }
-
-  async function readMany({ collection, query }) {
-    validateCollectionName(collection)
-    const normalizedQuery = normalizeReadQuery(query)
-    const mongoCollection = encodeCollectionName({ collection,
-databaseName })
-    const pipeline = [
-      { $match: createFilter(normalizedQuery.filter) },
-      ...createSortStages(normalizedQuery.sort),
-    ]
-    if (normalizedQuery.offset > 0) {
-      pipeline.push({ $skip: normalizedQuery.offset })
-    }
-    if (normalizedQuery.limit !== undefined) {
-      pipeline.push({ $limit: normalizedQuery.limit })
-    }
-    pipeline.push({ $project: { _id: 1,
-data: 1 } })
-
-    const response = await runMongoCommand({
-      command,
-      operation: "readMany",
-      collection,
-      body: {
-        aggregate: mongoCollection,
-        pipeline,
-        cursor: { batchSize: CURSOR_BATCH_SIZE },
-        collation: { locale: "simple" },
-        $db: databaseName,
-      },
-    })
-    const {cursor} = response
-    if (!cursor) {
-      throw new DatabaseProviderError({
-        operation: "readMany",
-        collection,
-        cause: new Error("MongoDB aggregate response omitted its cursor"),
-      })
-    }
-    let cursorId = cursor.id
-    if (!isValidCursorId(cursorId)) {
-      throw new DatabaseProviderError({
-        operation: "readMany",
-        collection,
-        cause: new Error("MongoDB aggregate response contained an invalid cursor id"),
-      })
-    }
-    if (!Array.isArray(cursor.firstBatch)) {
-      if (!isCursorExhausted(cursorId)) {
-        try {
-          await runMongoCommand({
-            command,
-            operation: "readMany",
-            collection,
-            body: {
-              killCursors: mongoCollection,
-              cursors: [cursorId],
-              $db: databaseName,
-            },
-          })
-        } catch {
-          // Preserve the malformed-response error; connection cleanup owns any remaining cursor.
-        }
-      }
-      throw new DatabaseProviderError({
-        operation: "readMany",
-        collection,
-        cause: new Error("MongoDB aggregate response omitted cursor.firstBatch"),
-      })
-    }
-    const records = []
-    try {
-      records.push(...cursor.firstBatch.map((document) => decodeStoredRecord({
-        document,
-        operation: "readMany",
-        collection,
-      })))
-      while (!isCursorExhausted(cursorId)) {
-        const next = await runMongoCommand({
-          command,
-          operation: "readMany",
-          collection,
-          body: {
-            getMore: cursorId,
-            collection: mongoCollection,
-            batchSize: CURSOR_BATCH_SIZE,
-            $db: databaseName,
-          },
-        })
-        if (!Array.isArray(next.cursor?.nextBatch)) {
-          throw new DatabaseProviderError({
-            operation: "readMany",
-            collection,
-            cause: new Error("MongoDB getMore response omitted cursor.nextBatch"),
-          })
-        }
-        if (!isValidCursorId(next.cursor.id)) {
-          throw new DatabaseProviderError({
-            operation: "readMany",
-            collection,
-            cause: new Error("MongoDB getMore response contained an invalid cursor id"),
-          })
-        }
-        cursorId = next.cursor.id
-        records.push(...next.cursor.nextBatch.map((document) => decodeStoredRecord({
-          document,
-          operation: "readMany",
-          collection,
-        })))
-      }
-      return records
-    } catch (error) {
-      if (!isCursorExhausted(cursorId)) {
-        try {
-          await runMongoCommand({
-            command,
-            operation: "readMany",
-            collection,
-            body: {
-              killCursors: mongoCollection,
-              cursors: [cursorId],
-              $db: databaseName,
-            },
-          })
-        } catch {
-          // Preserve the original read failure; connection cleanup owns any remaining cursor.
-        }
-      }
-      throw error
-    }
-  }
-
-  async function update({ collection, id, changes }) {
-    validateCollectionName(collection)
-    validateRecordIdentifier(id)
-    const snapshot = JSON.parse(serializeChanges(changes))
-    if (Object.keys(snapshot).length === 0) {
-      return readOne({ collection,
-id })
-    }
-    const mongoCollection = encodeCollectionName({ collection,
-databaseName })
-    const set = {}
-    for (const [field, value] of Object.entries(snapshot)) {
-      const encodedKey = encodeUserKey(field)
-      set[`data.${encodedKey}`] = encodeUserValue(value)
-    }
-    const response = await runMongoCommand({
-      command,
-      operation: "update",
-      collection,
-      body: {
-        findAndModify: mongoCollection,
-        query: { _id: id },
-        update: { $set: set },
-        collation: { locale: "simple" },
-        new: true,
-        upsert: false,
-        fields: { _id: 1,
-data: 1 },
-        $db: databaseName,
-      },
-    })
-    return response.value ? decodeStoredRecord({
-      document: response.value,
-      operation: "update",
-      collection,
-    }) : null
-  }
-
-  async function deleteRecord({ collection, id }) {
-    validateCollectionName(collection)
-    validateRecordIdentifier(id)
-    const mongoCollection = encodeCollectionName({ collection,
-databaseName })
-    const response = await runMongoCommand({
-      command,
-      operation: "delete",
-      collection,
-      body: {
-        delete: mongoCollection,
-        deletes: [{ q: { _id: id },
-limit: 1 }],
-        collation: { locale: "simple" },
-        ordered: true,
-        $db: databaseName,
-      },
-    })
-    return response.n > 0
-  }
-
   return Object.freeze({
-    create,
-    readOne,
-    readMany,
-    update,
-    delete: deleteRecord,
+    create: (input) => createRecord({ command, databaseName, ...input }),
+    readOne: (input) => readOneRecord({ command, databaseName, ...input }),
+    readMany: (input) => readManyRecords({ command, databaseName, ...input }),
+    update: (input) => updateRecord({ command, databaseName, ...input }),
+    delete: (input) => deleteRecord({ command, databaseName, ...input }),
   })
 }
 
