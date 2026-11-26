@@ -487,3 +487,49 @@ test("provider-neutral facade rejects transactions from an expired callback scop
     await database.close()
   }
 })
+
+test("provider-neutral facade rejects async callbacks for synchronous providers", async () => {
+  const transaction = {
+    create() {},
+    readOne() {},
+    readMany() {},
+    update() {},
+    delete() {},
+  }
+  const provider = {
+    capabilities: {
+      transactions: {
+        callbackMode: "synchronous",
+        nestedTransactions: false,
+        multiDocument: true,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["memory"],
+      },
+    },
+    connect() {},
+    close() {},
+    withTransaction(work) {
+      return work(transaction)
+    },
+    withReadTransaction(work) {
+      return work(transaction)
+    },
+    execute() {},
+  }
+  const database = createDatabase({ provider })
+  await database.connect()
+  try {
+    await assert.rejects(
+      database.transaction(async () => "unsupported"),
+      /Synchronous database provider transaction callbacks must be synchronous/,
+    )
+  } finally {
+    await database.close()
+  }
+})
