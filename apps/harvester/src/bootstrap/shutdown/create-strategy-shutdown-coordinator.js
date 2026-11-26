@@ -69,6 +69,29 @@ function resolveStrategyBlockerStatus({ error, reason, status } = {}) {
   return "FAILED"
 }
 
+function createNestedErrorSummary(error) {
+  if (!error) {
+    return null
+  }
+  const nestedErrors = Array.isArray(error.errors)
+    ? error.errors
+    : error.cause instanceof Error
+      ? [error.cause]
+      : []
+  return Object.freeze({
+    name: error.name ?? "Error",
+    code: error.code ?? null,
+    message: error.message ?? String(error),
+    errors: Object.freeze(nestedErrors.map((nestedError) => Object.freeze({
+      name: nestedError.name ?? "Error",
+      code: nestedError.code ?? null,
+      message: nestedError.message ?? String(nestedError),
+      symbol: nestedError.symbol ?? null,
+      blockers: Object.freeze([...(nestedError.blockers ?? [])]),
+    }))),
+  })
+}
+
 function createStrategyBlocker({ participant, error, reason, status } = {}) {
   const strategyId = participant?.strategyId ?? "UNKNOWN_STRATEGY"
   const blockerReason = reason ?? error?.code ?? "STRATEGY_SHUTDOWN_PARTICIPANT_FAILED"
@@ -82,6 +105,7 @@ function createStrategyBlocker({ participant, error, reason, status } = {}) {
     }),
     reason: blockerReason,
     message: error?.message ?? "Strategy shutdown participant did not prove safety",
+    cause: createNestedErrorSummary(error?.cause),
     operation: error?.operation ?? "waitUntilSafe",
     pendingOperation: error?.pendingOperation === true,
     timeoutMs: error?.timeoutMs,
