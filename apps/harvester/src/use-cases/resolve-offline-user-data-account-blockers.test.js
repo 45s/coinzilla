@@ -605,7 +605,7 @@ test("CLI returns nonzero when durable resolution is not confirmed", async () =>
   assert.equal(errors.length, 0)
 })
 
-function makePriorResolvedActionRecords({ records }) {
+function makePriorResolvedActionRecords() {
   const priorEvidenceDigest = "e".repeat(64)
   const priorBlockerId = createHash("sha256")
     .update(["ACCOUNT", "", "ACCOUNTING_INTEGRITY_FAILURE", priorEvidenceDigest].join("\0"))
@@ -651,7 +651,7 @@ async function makeStoreWithPriorResolvedAction() {
   const store = makeStore()
   const read = await store.readAll()
   const records = read.data.records.filter((record) => record.factType !== "PROCESS_STOPPED")
-  records.push(...makePriorResolvedActionRecords({ records }))
+  records.push(...makePriorResolvedActionRecords())
   store.readAll = async () => ({
     ok: true,
     data: {
