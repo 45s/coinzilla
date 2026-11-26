@@ -3,6 +3,7 @@ import test from "node:test"
 
 import { DatabaseConflictError, DatabaseProviderError } from "../../domain/errors/database-errors.js"
 import { createMongoRecordOperations } from "./commands.js"
+import { encodeOpMsg } from "./wire-protocol.js"
 
 function createCommandStub(responses = []) {
   const calls = []
@@ -215,4 +216,27 @@ test("MongoDB readMany kills an outstanding cursor when fetching a later batch f
   )
   assert.equal(stub.calls[2].killCursors, "coinzilla_cGVvcGxl")
   assert.deepEqual(stub.calls[2].cursors, [12])
+})
+
+
+test("MongoDB record serialization limits surface as input TypeErrors rather than provider failures", async () => {
+  const command = async ({ body, sequences }) => {
+    encodeOpMsg({ requestId: 1, body, sequences })
+    return { ok: 1, n: 1 }
+  }
+  const operations = createMongoRecordOperations({
+    command,
+    databaseName: "app",
+  })
+
+  await assert.rejects(
+    operations.create({
+      collection: "people",
+      record: {
+        id: "too-large",
+        payload: "x".repeat(16 * 1024 * 1024),
+      },
+    }),
+    (error) => error instanceof TypeError && /16 MiB/i.test(error.message),
+  )
 })
