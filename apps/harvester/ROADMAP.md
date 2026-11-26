@@ -2,77 +2,47 @@
 
 ## Harvester Conservative ownership and shutdown incident — issue #1856
 
-Implementation in progress in draft [PR #1858](https://github.com/45s/coinzilla/pull/1858),
-branch `fix/harvester/incident-1856-ownership-shutdown-safety`. The original issue body remains
-the durable runtime-evidence record; this entry tracks confirmed source findings and implementation.
+Tracking issue: [#1856](https://github.com/45s/coinzilla/issues/1856)  
+Implementation PR: [#1858](https://github.com/45s/coinzilla/pull/1858)  
+Feature branch: `fix/harvester/incident-1856-ownership-shutdown-safety`
 
 ### Confirmed source findings
 
-- The durable submission ownership validator was RS-only. It rejected valid CG Conservative
-  recovery SELL ownership even though both strategies share the submission-intent and order
-  registry infrastructure.
-- The local order-registration callback logged `SUBMITTED` while the canonical order was still
-  `PENDING`, before the Operational State Store intent and broker placement were confirmed.
-- A failed durable submission intent removed its local PENDING registration but did not latch a
-  market pause. Later market events could therefore re-evaluate the same SELL decision and allocate
-  fresh client order IDs.
-- Conservative strategy evaluation suppressed a new SELL when any active SELL existed, but did
-  not verify the aggregate remaining quantity of all active owned SELL orders against net sellable
-  Position inventory after base-asset commissions and `keepQuantity`.
-- The shutdown coordinator previously awaited strategy participants without a participant-level
-  deadline or an abort signal. A participant that never settled could leave shutdown waiting
-  without a terminal participant result.
-- A participant timeout aborted its signal but did not retain the underlying wait promise. A later
-  shutdown attempt could start a second `waitUntilSafe()` operation while the timed-out operation
-  remained unresolved. A deferred-promise regression now captures this retry-overlap risk; its
-  exact-head RED result is pending.
-- The shutdown handler also awaits CLOSING audit, market-intake stop, user-data drain, Journal flush,
-  operator-control stop and broker disconnect without a handler-owned phase deadline. A pending
-  CLOSING audit can therefore leave the lifecycle waiting outside the bounded strategy coordinator.
-  A deterministic deferred-promise regression now captures the CLOSING-audit timeout requirement.
-- The outer createHarvesterStop boundary also awaited durable PROCESS_STOPPED without a deadline.
-  A pending append could leave the process lock retained indefinitely after in-memory runtime shutdown.
-  A deferred-promise regression now requires a bounded durability outcome and blocks overlapping retries.
+- The durable submission ownership validator was RS-only. It rejected valid CG Conservative recovery SELL ownership even though both strategies share submission-intent and order-registry infrastructure.
+- The local order-registration callback logged `SUBMITTED` while the canonical order was still `PENDING`, before the Operational State Store intent and broker placement were confirmed.
+- A failed durable submission intent removed its local PENDING registration but did not latch a market pause. Later market events could re-evaluate the same SELL decision and allocate fresh client order IDs.
+- Conservative strategy evaluation suppressed a new SELL when any active SELL existed, but did not verify aggregate remaining quantity of active owned SELL orders against net sellable Position inventory after base-asset commissions and `keepQuantity`.
+- The strategy shutdown coordinator did not retain timed-out participant wait promises. A later shutdown attempt could start a second `waitUntilSafe()` operation while the first remained unresolved.
+- The shutdown handler and outer `createHarvesterStop` boundary awaited asynchronous work without their own bounded deadlines. A pending CLOSING audit or durable `PROCESS_STOPPED` append could leave shutdown waiting indefinitely.
 
 ### Implementation recorded on PR #1858
 
-- Introduces strict strategy-aware ownership validation: CG Position-scoped ownership and RS
-  Position/cycle-scoped ownership remain distinct; purpose, side, identifiers and cross-strategy
-  combinations are validated.
-- Carries the ownership returned by local pending-order registration into the durable submission
-  intent and subsequent outcome.
-- Latches `ORDER_INTENT_NOT_DURABLE` after a failed durable intent, removes the local unsubmitted
-  PENDING record and prevents later market ticks from creating replacement client IDs.
-- Labels local registration as `PENDING`, not `SUBMITTED`, with explicit pre-broker diagnostics.
-- Verifies aggregate owned SELL reservations, including PENDING and UNKNOWN orders, against net
-  sellable inventory after commissions and `keepQuantity`.
-- Adds bounded strategy-participant shutdown outcomes, cancellation signals, stage tracking,
-  pending-order identities, last-successful-step diagnostics and a shutdown-handler integration
-  regression for retained services.
-- Adds deterministic regression coverage that a failed recovery SELL durable-intent barrier
-  prevents its sibling BUY from reaching broker I/O. The strategy already emits SELL before BUY;
-  this is verification-only and does not change production behavior.
-- Documents the separate Operational State Store, Journal, legacy order-history and relational
-  trading-history responsibilities, plus the startup open-order audit contract and shutdown
-  milestones.
+- Shared ownership validation now covers CG Position-scoped ownership and RS Position/cycle-scoped ownership, including strategy, purpose, side and identity checks.
+- CG pending-order registration now preserves the originating Position identity and returns the exact registered ownership. Durable Journal `ORDER_SUBMISSION_REQUESTED` facts include that ownership; Operational State Store intent remains a separate durable boundary before broker placement.
+- Conflicting supplied ownership metadata is rejected before broker I/O. The registered ownership is used for subsequent durable intent/outcome processing.
+- Local order registration is reported as `PENDING`, not `SUBMITTED`. Failed intent handling remains fail-closed and prevents the sibling BUY from reaching broker I/O.
+- Conservative active SELL aggregation includes PENDING/UNKNOWN reservations and is checked against net sellable inventory after commissions and `keepQuantity`.
+- Strategy shutdown participant waits are single-flight. Timeout/abort retains the underlying operation in a shared pending map; retries cannot overlap it and safety cannot be reported while it remains pending.
+- Shutdown phases have bounded deadlines and abort signals. Pending phases are exposed in diagnostics and block overlapping retries.
+- Durable `PROCESS_STOPPED` has its own 30-second deadline and pending-append guard. Runtime completion, durable STOPPED, OS process exit and process-lock release remain distinct.
+- `JOURNAL_OPERATIONS.md` documents the separate Operational State Store, Journal, legacy order-history and relational trading-history responsibilities, startup audit/readiness distinction, shutdown phase deadlines and fail-closed durability behavior.
+
+### Verification status
+
+- RED evidence: [targeted run 45764611291](https://github.com/45s/coinzilla/actions/runs/45764611291) on test head `2937f1f` failed the new coordinator single-flight regression because a timed-out participant operation was not retained. The coordinator now tracks the active operation by strategy and reports a `PENDING` blocker.
+- The first CLOSING-audit timeout run failed in fixture setup because trading was enabled without a strategy participant; it did not reach the timeout assertion. The fixture now supplies an explicit safe participant.
+- Two Conservative shutdown safety tests failed during an intermediate refactor. That refactor was reverted; the original safety flow was restored, retaining only parameter-shape/formatting changes and removal of the redundant snapshot assignment.
+- Repository Quality failed strict lint on the earlier head. Formatting and function refactors are being completed; do not treat that earlier failure as evidence about the latest head.
+- The process-stop timeout regression, the corrected CLOSING-audit regression, the ownership conflict regression and the durable ownership DTO regression are now in the targeted suite. Exact latest-head test and lint outcomes remain unconfirmed until their workflows complete.
 
 ### Evidence boundaries and remaining work
 
-- The DOGE client IDs `...-12`, `...-14`, `...-18`, `...-20`, and `...-22` remain
-  UNKNOWN until canonical client-order-ID exchange reconciliation establishes their outcomes.
-  The incident trace does not prove acknowledgements, fills or cancellations for each ID.
-- The account-wide `readiness=BLOCKED` value is the captured unowned-order audit classification.
-  With `externalOrdersPolicy: ignore`, those orders remain external and untouched; engine
-  activation is distinct from the user-data `canTrade` gate. Required snapshot, persistence and
-  user-data readiness failures still block.
-- The relational trading-history warning is not evidence that Journal or Operational State Store
-  durability failed. PR #1855 improves diagnostics; the exact operator database cause remains
-  unconfirmed.
-- No source/test evidence currently establishes `DYNAMIC_PRICE_BAND` or
-  `OPEN_ORDER_COUNT_PER_MARKET` as a cause of this incident.
-- Targeted offline tests, integration/concurrency/restart coverage, exact-head CI verification,
-  final issue/PR checklist reconciliation and review readiness remain outstanding. Do not treat
-  this incident as operationally resolved.
+- DOGE client IDs `...-12`, `...-14`, `...-18`, `...-20`, and `...-22` remain **UNKNOWN** until canonical client-order-ID exchange reconciliation establishes each outcome. The preserved incident trace does not prove acknowledgements, fills or cancellations for each ID.
+- The duplicate DOGE BUY trade event was applied once; its repeat was classified as duplicate with zero accounting delta. This supports idempotent duplicate-event handling for that trade, but does not prove exactly-once accounting for every fill/commission path.
+- `readiness=BLOCKED` was the captured unowned-order audit classification. With `externalOrdersPolicy: ignore`, those orders remain external and untouched; engine activation is distinct from the user-data `canTrade` gate. Complete, stale and incomplete account-wide snapshot readiness gates still require exact-head tests.
+- The relational trading-history warning is not evidence that Journal or Operational State Store durability failed. PR #1855 improves diagnostics; the exact operator database cause remains unconfirmed.
+- No source/test evidence establishes `DYNAMIC_PRICE_BAND` or `OPEN_ORDER_COUNT_PER_MARKET` as a cause of this incident.
+- Remaining work: complete exact-head offline CG/RS submission and persistence tests; exactly-once fill/commission accounting; DOGE ID reconciliation where historical evidence permits; startup readiness tests; shutdown integration/concurrency/restart tests; final lint/test verification; and issue/PR acceptance-checklist reconciliation. Do not treat the incident as operationally resolved.
 
 ## Relational trading-history startup failure — issue #1854
 
