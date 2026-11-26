@@ -3,6 +3,7 @@ import { randomBytes as nativeRandomBytes } from "node:crypto"
 import { setTimeout as delay } from "node:timers/promises"
 
 import {
+  DatabaseConflictError,
   DatabaseProviderError,
   DatabaseTransactionOutcomeUnknownError,
   DatabaseTransactionUnsupportedError,
@@ -102,9 +103,6 @@ function assertProviderOptions(options) {
   if (options.username !== undefined && (typeof options.username !== "string" || options.username.length === 0)) {
     throw new TypeError("MongoDB provider username must be a non-empty string")
   }
-  if (options.username === undefined && options.password !== undefined) {
-    throw new TypeError("MongoDB provider password requires a username")
-  }
   if (options.username !== undefined && typeof options.password !== "string") {
     throw new TypeError("MongoDB provider password must be a string when username is configured")
   }
@@ -189,6 +187,7 @@ function createTransactionCommand({ transport, session }) {
     await queue
     if (firstError) throw firstError
   }
+  runSessionCommand.failure = () => firstError
   return runSessionCommand
 }
 
@@ -235,7 +234,7 @@ async function commitMongoTransaction({ transport, session }) {
         ? { ...response.writeConcernError, errorLabels: response.errorLabels }
         : response
       const error = createServerCommandError(serverFailure)
-      if (hasErrorLabel(response, "UnknownTransactionCommitResult") || ambiguous) {
+      if (response?.writeConcernError || hasErrorLabel(response, "UnknownTransactionCommitResult") || ambiguous) {
         ambiguous = true
         lastError = error
       } else {
@@ -332,6 +331,11 @@ function createTransactionRunner({ state, randomBytes }) {
             { cause: error },
           )
         }
+      }
+      if (error === command.failure()) {
+        error = error?.code === 11000 || error?.code === 11001
+          ? new DatabaseConflictError({ cause: error })
+          : new DatabaseProviderError({ operation: "transaction", cause: error })
       }
       if (session.started) {
         try {
