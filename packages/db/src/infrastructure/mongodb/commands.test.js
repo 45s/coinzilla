@@ -81,7 +81,7 @@ test("MongoDB create maps duplicate key responses to the shared conflict error",
 test("MongoDB readOne returns null or the decoded stored record", async () => {
   const stub = createCommandStub([
     { ok: 1, cursor: { id: 0, firstBatch: [] } },
-    { ok: 1, cursor: { id: 0, firstBatch: [{ data: { id: "person-1", name: "Ada" } }] } },
+    { ok: 1, cursor: { id: 0, firstBatch: [{ _id: "person-1", data: { id: "person-1", name: "Ada" } }] } },
   ])
   const operations = createMongoRecordOperations({
     command: stub.command,
@@ -100,7 +100,7 @@ test("MongoDB rejects stored documents whose decoded record has no valid identif
   const operations = createMongoRecordOperations({
     command: async () => ({
       ok: 1,
-      cursor: { firstBatch: [{ data: { name: "missing id" } }] },
+      cursor: { firstBatch: [{ _id: "record-1", data: { name: "missing id" } }] },
     }),
     databaseName: "app",
   })
@@ -117,7 +117,7 @@ test("MongoDB readMany builds exact-null filters and portable sort pagination st
     ok: 1,
     cursor: {
       id: 0,
-      firstBatch: [{ data: { id: "person-1", nickname: null } }],
+      firstBatch: [{ _id: "person-1", data: { id: "person-1", nickname: null } }],
     },
   }])
   const operations = createMongoRecordOperations({
@@ -153,6 +153,7 @@ test("MongoDB update refreshes portable sort metadata for changed JSON values", 
   const stub = createCommandStub([{
     ok: 1,
     value: {
+      _id: "person-1",
       data: {
         id: "person-1",
         rank: [1, 2],
@@ -181,7 +182,7 @@ test("MongoDB update refreshes portable sort metadata for changed JSON values", 
 test("MongoDB empty updates delegate to readOne without issuing a mutation", async () => {
   const stub = createCommandStub([{
     ok: 1,
-    cursor: { id: 0, firstBatch: [{ data: { id: "person-1" } }] },
+    cursor: { id: 0, firstBatch: [{ _id: "person-1", data: { id: "person-1" } }] },
   }])
   const operations = createMongoRecordOperations({
     command: stub.command,
@@ -237,7 +238,7 @@ test("MongoDB rejects malformed cursor responses rather than returning empty res
 
 test("MongoDB readOne closes unexpected non-exhausted single-batch cursors", async () => {
   const stub = createCommandStub([
-    { ok: 1, cursor: { id: 99, firstBatch: [{ data: { id: "person-1" } }] } },
+    { ok: 1, cursor: { id: 99, firstBatch: [{ _id: "person-1", data: { id: "person-1" } }] } },
     { ok: 1, cursorsKilled: [99] },
   ])
   const operations = createMongoRecordOperations({
@@ -323,8 +324,8 @@ test("MongoDB cleans up cursors when initial read batches are malformed", async 
 
 test("MongoDB readMany drains every cursor batch", async () => {
   const stub = createCommandStub([
-    { ok: 1, cursor: { id: 12, firstBatch: [{ data: { id: "one" } }] } },
-    { ok: 1, cursor: { id: 0, nextBatch: [{ data: { id: "two" } }] } },
+    { ok: 1, cursor: { id: 12, firstBatch: [{ _id: "one", data: { id: "one" } }] } },
+    { ok: 1, cursor: { id: 0, nextBatch: [{ _id: "two", data: { id: "two" } }] } },
   ])
   const operations = createMongoRecordOperations({
     command: stub.command,
