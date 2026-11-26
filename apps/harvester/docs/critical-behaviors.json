@@ -821,13 +821,39 @@
           "path": "src/bootstrap/create-harvester-stop.test.js",
           "name": "bounds pending durable PROCESS_STOPPED and prevents overlapping retries",
           "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "retains all shared resources and the process lock when the final EventBus flush fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "bounds a hung EventBus flush and retains the process lock without overlapping retries",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "retains the process lock when observability cleanup exceeds its deadline",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "retains the process lock when process logger close fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "exits the child process only after Journal shutdown and real process-lock release",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
       "integrationRequired": true,
       "invariants": [
         "Acquire process ownership before starting Journal/runtime; release it only after shutdown and cleanup are confirmed.",
-        "Gate BUY, cancel only current-process owned BUYs, reconcile fills/cancellations and prove recovery SELL coverage; if proof or CLOSING durability fails, retain required services and fail closed."
+        "Gate BUY, cancel only current-process owned BUYs, reconcile fills/cancellations and prove recovery SELL coverage; if proof or CLOSING durability fails, retain required services and fail closed.",
+        "Bound EventBus flush, notification close, observability cleanup, logger close and lock release; retain process ownership on any failure/timeout, and retry pending operations without overlap."
       ]
     },
     {
