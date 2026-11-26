@@ -290,7 +290,7 @@ function createMongoRecordOperations({ command, databaseName }) {
         find: mongoCollection,
         filter: { _id: id },
         collation: { locale: "simple" },
-        projection: { _id: 0, data: 1 },
+        projection: { _id: 1, data: 1 },
         limit: 1,
         singleBatch: true,
         $db: databaseName,
@@ -368,7 +368,7 @@ function createMongoRecordOperations({ command, databaseName }) {
     if (normalizedQuery.limit !== undefined) {
       pipeline.push({ $limit: normalizedQuery.limit })
     }
-    pipeline.push({ $project: { _id: 0, data: 1 } })
+    pipeline.push({ $project: { _id: 1, data: 1 } })
 
     const response = await runMongoCommand({
       command,
@@ -508,7 +508,7 @@ function createMongoRecordOperations({ command, databaseName }) {
         collation: { locale: "simple" },
         new: true,
         upsert: false,
-        fields: { _id: 0, data: 1 },
+        fields: { _id: 1, data: 1 },
         $db: databaseName,
       },
     })
