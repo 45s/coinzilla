@@ -42,6 +42,8 @@ function createRecoveryModeObservationFixture({ broker }) {
         acknowledgeRecovery: () => {
           handlers.onStatus({
             type: "reconciled",
+              subscriptionId: 17,
+              recoveryGeneration: 1,
             recoveryRequired: false,
             reconciliationRequired: false,
           })
@@ -173,6 +175,7 @@ test("identifies user-data events received during application recovery as recove
   try {
     broker.emitUserDataStatus({
       type: "recovered",
+        recoveryGeneration: 1,
       subscriptionId: 17,
       recoveryRequired: true,
       reconciliationRequired: true,
@@ -208,6 +211,8 @@ test("reconciles the in-memory order registry before reopening trading after str
           acknowledgementCount += 1
           handlers.onStatus({
             type: "reconciled",
+              subscriptionId: 17,
+              recoveryGeneration: 1,
             recoveryRequired: false,
             reconciliationRequired: false,
           })
@@ -233,6 +238,7 @@ test("reconciles the in-memory order registry before reopening trading after str
   assert.equal(result.userDataReady, true, "The runtime must be ready only after its startup account audit has completed.")
   broker.emitUserDataStatus({
     type: "recovered",
+      recoveryGeneration: 1,
     subscriptionId: 17,
     recoveryRequired: true,
     reconciliationRequired: true,
