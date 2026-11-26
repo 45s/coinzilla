@@ -32,7 +32,7 @@ function validateStoppedSession({ records, runtimeSessionId }) {
       })) {
     throw new Error("Evidence runtime session does not match the latest durable configuration/process baseline")
   }
-  const stopped = records.find((record) =>
+  const stopped = [...records].reverse().find((record) =>
     Number(record.sequence) > Number(started.sequence) &&
     record.factType === "PROCESS_STOPPED" &&
     record.runtimeSessionId === runtimeSessionId
@@ -374,6 +374,15 @@ async function runResolutionWorkflow(options) {
     causeFixed,
   })
   const state = await readVerifiedOperationalProjection(operationalStateStore)
+  const actionSuffix = `:${actionId}`
+  const actionAlreadyUsed = state.records.some((record) =>
+    record.factType === "SAFETY_BLOCKER_RESOLVED" &&
+    typeof record.data?.resolvedBy === "string" &&
+    record.data.resolvedBy.endsWith(actionSuffix)
+  )
+  if (actionAlreadyUsed) {
+    throw new Error("Operator action ID has already been used in a durable blocker resolution")
+  }
   const configuredMarkets = validateStoppedSession({
     records: state.records,
     runtimeSessionId: context.runtimeSessionId,
