@@ -13,7 +13,7 @@ function canonicalize(value) {
   return value
 }
 
-function validateAccountAudit(audit, blockerIds) {
+function validateAccountAudit(audit, blockerIds, configuredMarkets) {
   const origins = audit?.blockerOrigins
   if (audit?.status !== "READY" ||
       audit?.scope !== "ACCOUNT" ||
@@ -31,6 +31,7 @@ function validateAccountAudit(audit, blockerIds) {
       audit.auditedMarkets.length === 0 ||
       audit.auditedMarkets.some((symbol) => !isText(symbol) || !/^[A-Z0-9]{3,30}$/.test(symbol)) ||
       new Set(audit.auditedMarkets).size !== audit.auditedMarkets.length ||
+      [...audit.auditedMarkets].sort().join("\\0") !== [...configuredMarkets].sort().join("\\0") ||
       !Array.isArray(audit.blockerIds) ||
       [...audit.blockerIds].sort().join("\0") !== [...blockerIds].sort().join("\0") ||
       !Array.isArray(origins) ||
@@ -75,11 +76,16 @@ export async function resolveUserDataAccountBlockers({
   operatorId,
   actionId,
   causeFixed,
+  configuredMarkets,
 } = {}) {
   try {
     if (typeof operationalStateStore?.readAll !== "function" ||
         typeof operationalStateStore?.append !== "function" ||
-        typeof reconcileAccount !== "function") {
+        typeof reconcileAccount !== "function" ||
+        !Array.isArray(configuredMarkets) ||
+        configuredMarkets.length === 0 ||
+        configuredMarkets.some((symbol) => !isText(symbol) || !/^[A-Z0-9]{3,30}$/.test(symbol)) ||
+        new Set(configuredMarkets).size !== configuredMarkets.length) {
       throw new TypeError("Account-blocker resolution requires a durable store and authoritative reconciliation port")
     }
     if (!isText(operatorId) || !isText(actionId) || causeFixed !== true) {
@@ -96,6 +102,7 @@ export async function resolveUserDataAccountBlockers({
       blockerIds,
       operatorId,
       actionId,
+      configuredMarkets: [...configuredMarkets],
     })
     if (auditResult?.ok !== true) {
       return auditResult?.errors?.length
@@ -103,7 +110,7 @@ export async function resolveUserDataAccountBlockers({
         : toResult({ error: new Error("Authoritative account reconciliation failed") })
     }
     const audit = auditResult.data
-    validateAccountAudit(audit, blockerIds)
+    validateAccountAudit(audit, blockerIds, configuredMarkets)
     const evidenceDigest = createHash("sha256")
       .update(JSON.stringify(canonicalize({
         schemaVersion: 1,
