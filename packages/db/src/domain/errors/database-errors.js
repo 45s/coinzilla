@@ -59,3 +59,16 @@ export class DatabaseTransactionOutcomeUnknownError extends SystemCustomError {
     })
   }
 }
+
+export class DatabaseOperationOutcomeUnknownError extends SystemCustomError {
+  constructor({ operation, collection, cause } = {}) {
+    super("Database operation outcome is unknown", {
+      code: "DB_OPERATION_OUTCOME_UNKNOWN",
+      context: {
+        operation,
+        collection,
+      },
+      cause,
+    })
+  }
+}
