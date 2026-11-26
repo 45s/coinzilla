@@ -188,3 +188,54 @@ test("reports owned BUY cancellation and recovery SELL continuity for the normal
     "The normal market Pause response must clarify that only current-process-owned BUYs are canceled.",
   )
 })
+
+
+test("routes confirmed account blocker resolution and keeps the reply explicitly blocked", async () => {
+  const diagnostics = createDiagnostics()
+  const calls = []
+  const sentMessages = []
+  const interaction = {
+    failed: false,
+    applicationOperationInvoked: false,
+    applicationOperationCompleted: false,
+    stateChanged: false,
+  }
+  await executeTelegramOperatorControl({
+    action: "RESOLVE_ACCOUNT_BLOCKERS",
+    causeFixed: true,
+    userId: "123",
+    requestId: "telegram:resolve:501",
+    chatId: 123,
+    interaction,
+    operator: {
+      resolveAccountBlockers: async (request) => {
+        calls.push(request)
+        return {
+          ok: true,
+          data: {
+            resolvedBlockerIds: ["blocker-1"],
+            durableReadbackVerified: true,
+            readiness: "BLOCKED",
+            requiresControlledRestart: true,
+            runtimeStateReset: false,
+            recoverySellerStopReset: false,
+          },
+        }
+      },
+    },
+    diagnostics,
+    logStage: () => {},
+    sendMessage: async (message) => {
+      sentMessages.push(message)
+    },
+    editMessage: async () => {},
+    buildNavigationKeyboard: () => ({}),
+  })
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].causeFixed, true)
+  assert.equal(calls[0].requestId, "telegram:resolve:501")
+  assert.match(sentMessages[0].text, /Trading remains BLOCKED/)
+  assert.match(sentMessages[0].text, /Recovery Seller STOP was not changed/)
+  assert.equal(interaction.applicationOperationCompleted, true)
+})
