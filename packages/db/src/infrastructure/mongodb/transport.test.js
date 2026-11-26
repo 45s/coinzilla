@@ -138,6 +138,131 @@ test("MongoDB transport preserves socket errors and rejects every outstanding re
   assert.equal(transport.state, "closed")
 })
 
+
+test("MongoDB transport validates commands, options, pending limits, and socket backpressure", async () => {
+  assert.throws(
+    () => createMongoTransport({ host: " ", port: 27017 }),
+    /host/,
+  )
+  assert.throws(
+    () => createMongoTransport({ host: "localhost", tls: [] }),
+    /TLS options/,
+  )
+  assert.throws(
+    () => createMongoTransport({ host: "localhost", socketFactory: {} }),
+    /socketFactory/,
+  )
+
+  const { transport, socket } = createFakeTransport()
+  await assert.rejects(
+    transport.command({ body: { ping: 1 } }),
+    /not connected/,
+  )
+  await transport.connect()
+  await assert.rejects(
+    transport.command({ body: { ping: 1 }, timeoutMS: 0 }),
+    /positive safe integer/,
+  )
+
+  socket.writableLength = 64 * 1024 * 1024
+  await assert.rejects(
+    transport.command({ body: { ping: 1 } }),
+    /write buffer limit/,
+  )
+  socket.writableLength = 0
+
+  const requests = Array.from({ length: 128 }, () => transport.command({
+    body: { ping: 1 },
+    timeoutMS: 1_000,
+  }))
+  assert.equal(transport.pendingRequestCount, 128)
+  await assert.rejects(
+    transport.command({ body: { ping: 1 } }),
+    /pending request limit/,
+  )
+  await transport.close()
+  await Promise.allSettled(requests)
+})
+
+test("MongoDB transport rejects unsupported streaming responses", async () => {
+  const { transport } = createFakeTransport({
+    respond: (socket, request) => {
+      socket.emit("data", encodeOpMsg({
+        requestId: 90,
+        responseTo: request.requestId,
+        flags: 2,
+        body: { ok: 1 },
+      }))
+    },
+  })
+  await transport.connect()
+
+  await assert.rejects(
+    transport.command({ body: { ping: 1 } }),
+    /exhaust\/streaming/,
+  )
+  assert.equal(transport.pendingRequestCount, 0)
+  await transport.close()
+})
+
+test("MongoDB transport fails closed when socket writes fail", async () => {
+  const { transport, socket } = createFakeTransport()
+  await transport.connect()
+  socket.write = (_frame, callback) => {
+    callback(new Error("write failed"))
+    return false
+  }
+
+  await assert.rejects(
+    transport.command({ body: { ping: 1 } }),
+    /connection closed before command completed/,
+  )
+  assert.equal(transport.state, "closed")
+  assert.equal(transport.pendingRequestCount, 0)
+})
+
+test("MongoDB TLS transport waits for secureConnect rather than plain connect", async () => {
+  class TlsSocket extends EventEmitter {
+    setNoDelay() {}
+    write(_frame, callback) {
+      callback?.()
+      return true
+    }
+    destroy() {
+      this.emit("close")
+    }
+  }
+  const socket = new TlsSocket()
+  let socketOptions
+  const transport = createMongoTransport({
+    host: "localhost",
+    tls: { rejectUnauthorized: true },
+    socketFactory: (options) => {
+      socketOptions = options
+      queueMicrotask(() => socket.emit("secureConnect"))
+      return socket
+    },
+  })
+
+  await transport.connect()
+  assert.equal(socketOptions.tls, true)
+  assert.equal(transport.state, "connected")
+  await transport.close()
+})
+
+test("MongoDB transport handles socket end and idempotent close", async () => {
+  const { transport, socket } = createFakeTransport()
+  await transport.connect()
+  const pending = transport.command({ body: { ping: 1 } })
+  socket.emit("end")
+
+  await assert.rejects(pending, /connection closed before command completed/)
+  assert.equal(socket.destroyed, true)
+  await transport.close()
+  await transport.close()
+  assert.equal(transport.state, "closed")
+})
+
 test("MongoDB transport rejects timed-out requests and releases their correlation entries", async () => {
   const { transport } = createFakeTransport({ timeoutMS: 10 })
   await transport.connect()
