@@ -217,12 +217,12 @@ test("production RS accounting durably stops after a fully FILLED SELL misses th
     "An under-target FILLED SELL must not close the Recovery Seller cycle.")
   assert.equal(result.output.terminalSell.cycleState.terminalReconciled, true,
     "The full canonical fill and terminal order facts must reconcile before STOP is accepted.")
+  assert.equal(result.output.terminalSell.cycleState.profitabilityEligible, false,
+    "The canonical cycle state must retain the failed profitability result.")
   assert.equal(result.output.terminalSell.eventFillStaged, true,
     "The production user-data transition must stage the canonical SELL fill exactly once.")
   assert.equal(result.output.terminalSell.stagedSellFillCount, 1,
     "The complete terminal SELL fill must be staged exactly once.")
-  assert.equal(result.output.terminalSell.eventWorkflowReconciled, true,
-    "The production user-data transition must record the terminal order as reconciled.")
   assert.equal(result.output.terminalSell.eventWorkflowFailedClosed, true,
     "The terminal event must fail closed after the adverse profitability outcome.")
   assert.equal(result.output.terminalSell.stopFactAppended, true,

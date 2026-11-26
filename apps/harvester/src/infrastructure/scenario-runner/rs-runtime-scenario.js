@@ -1067,6 +1067,28 @@ function createRuntimeScenarioFilledSellFill({ runtime, terminalOrder }) {
     left: executedQuantity,
     right: sellPrice,
   })
+  const totalCostBasis = addDecimal({
+    left: runtime.seed.buyQuoteQuantity,
+    right: String(runtime.pairConfig.legacyPosition.invested),
+  })
+  const remainingQuoteProceeds = compareDecimal({
+    left: totalCostBasis,
+    right: "0.02",
+  }) > 0
+    ? "0.01"
+    : multiplyDecimal({
+        left: totalCostBasis,
+        right: "0.5",
+      })
+  const quoteCommissionAmount = compareDecimal({
+    left: quoteQuantity,
+    right: remainingQuoteProceeds,
+  }) > 0
+    ? subtractDecimal({
+        left: quoteQuantity,
+        right: remainingQuoteProceeds,
+      })
+    : "0"
   return new Fill({
     tradeId: "rs-scenario-filled-sell-fill-1",
     brokerOrderId: terminalOrder.brokerOrderId,
@@ -1089,7 +1111,7 @@ function createRuntimeScenarioFilledSellFill({ runtime, terminalOrder }) {
     commissions: [
       new Commission({
         amount: new Money({
-          amount: "600",
+          amount: quoteCommissionAmount,
           asset: runtime.quoteAsset,
         }),
       }),
@@ -1110,7 +1132,6 @@ function createRuntimeScenarioTerminalSellResult({
     orderStatus: terminalOrder.status,
     executedQuantity: terminalOrder.executedQuantity.amount,
     profitabilityEligible: result.data.profitability?.eligible === true,
-    eventWorkflowReconciled: eventState.reconciledTerminalOrderClientIds.has(terminalOrder.clientOrderId),
     eventWorkflowFailedClosed: eventResult?.ok === false,
     stopFactAppended: runtime.operationalStateStore.getRecords().some((fact) =>
       fact.factType === "SAFETY_BLOCKER_RAISED" && fact.data?.scope === "ACCOUNT"),
@@ -1732,7 +1753,7 @@ function createRuntimeScenarioTerminalTraceStep({ output }) {
       terminalReconciled: output.terminalSell.cycleState?.terminalReconciled,
       profitabilityEligible: output.terminalSell.profitabilityEligible,
       eventFillStaged: output.terminalSell.eventFillStaged,
-      eventWorkflowReconciled: output.terminalSell.eventWorkflowReconciled,
+      eventWorkflowFailedClosed: output.terminalSell.eventWorkflowFailedClosed,
     },
     source: "makeOrderEventWorkflow.processUserDataEventTransition → createRecoverySellerAccountingWorkflow.reconcileTerminalMixedSell",
   }
