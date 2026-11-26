@@ -71,6 +71,68 @@ test("MongoDB provider is usable through createDatabase on standalone servers", 
   assert.equal(transports[0].closed, true)
 })
 
+
+test("MongoDB standalone supports provider-neutral single-operation reads without sessions", async () => {
+  const { provider, calls } = createProviderHarness({
+    commandHandler: async (body) => {
+      if (body.find === "coinzilla_cGVvcGxl") {
+        return { ok: 1, cursor: { id: 0, firstBatch: [] } }
+      }
+      if (body.aggregate === "coinzilla_cGVvcGxl") {
+        return { ok: 1, cursor: { id: 0, firstBatch: [] } }
+      }
+      return { ok: 1 }
+    },
+  })
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    assert.equal(await database.readOne({
+      collection: "people",
+      id: "missing",
+    }), null)
+    assert.deepEqual(await database.readMany({
+      collection: "people",
+    }), [])
+    assert.equal(calls.length, 2)
+    assert.equal(calls.every((body) => body.lsid === undefined), true)
+  } finally {
+    await database.close()
+  }
+})
+
+test("MongoDB read transaction boundary rejects mutations and multiple logical reads", async () => {
+  const { provider } = createProviderHarness({
+    commandHandler: async (body) => {
+      if (body.find === "coinzilla_cGVvcGxl") {
+        return { ok: 1, cursor: { id: 0, firstBatch: [] } }
+      }
+      return { ok: 1, cursor: { id: 0, firstBatch: [] } }
+    },
+  })
+  await provider.connect()
+
+  try {
+    await assert.rejects(
+      provider.withReadTransaction(async (transaction) => {
+        await transaction.readOne({ collection: "people", id: "one" })
+        await transaction.readMany({ collection: "people" })
+      }),
+      /one provider-neutral read operation/,
+    )
+    await assert.rejects(
+      provider.withReadTransaction((transaction) => transaction.delete({
+        collection: "people",
+        id: "one",
+      })),
+      /cannot execute mutations/,
+    )
+  } finally {
+    await provider.close()
+  }
+})
+
 test("MongoDB provider uses one logical session across replica-set transaction commands", async () => {
   const { provider, calls } = createProviderHarness({
     topology: "replicaSet",
