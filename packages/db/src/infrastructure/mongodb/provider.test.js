@@ -488,8 +488,6 @@ function createConformanceMongoServer(store) {
         const [root, key] = path.split(".")
         if (root === "data") {
           document.data[key] = structuredClone(value)
-        } else if (root === "sortData") {
-          document.sortData[key] = structuredClone(value)
         }
       }
       return { ok: 1, value: { _id: document._id, data: structuredClone(document.data) } }
