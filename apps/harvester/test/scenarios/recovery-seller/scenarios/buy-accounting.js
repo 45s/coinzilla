@@ -1225,7 +1225,7 @@ export const recoverySellerBuyAccountingScenarios = Object.freeze([
   makeBuyCase({
     id: "RS-002-020",
     name: "the per-pair investment limit enforces exact below, equal and above boundaries",
-    status: "PARTIAL",
+    status: "TEST-MAPPED",
     subcases: [
       {
         id: "RS-002-020-A",
