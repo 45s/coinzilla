@@ -45,6 +45,7 @@ function validateTransactionCapabilities({ transactions }) {
   )
   const hasNestedTransactionDeclaration = typeof transactions?.nestedTransactions === "boolean"
   const hasMultiDocumentDeclaration = typeof transactions?.multiDocument === "boolean"
+    || transactions?.multiDocument === "topology-dependent"
 
   const hasCompatibleNesting = transactions?.callbackMode !== "synchronous"
     || transactions?.nestedTransactions !== true
