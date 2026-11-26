@@ -497,12 +497,13 @@ async function readMongoCursorRecords({
     throw error
   }
   let cursorId = cursor.id
-  const records = decodeMongoBatch({
-    documents: firstBatch,
-    operation: "readMany",
-    collection,
-  })
+  const records = []
   try {
+    records.push(...decodeMongoBatch({
+      documents: firstBatch,
+      operation: "readMany",
+      collection,
+    }))
     while (!isCursorExhausted(cursorId)) {
       const next = await readNextMongoBatch({
         command,
