@@ -29,9 +29,9 @@ function createSocket({ host, port, tlsOptions, socketFactory }) {
   }
   if (tlsOptions) {
     return tls.connect({
+      ...tlsOptions,
       host,
       port,
-      ...tlsOptions,
     })
   }
   return net.createConnection({ host, port })
@@ -66,7 +66,6 @@ export function createMongoTransport({
   let connectReject = null
   let connectTimer = null
   let receiveBuffer = Buffer.alloc(0)
-  let connectTimer = null
   let nextRequestId = 1
 
   function settleRequest(requestId, error, response) {
@@ -237,10 +236,6 @@ export function createMongoTransport({
     if (pending.size >= MAX_PENDING_REQUESTS) {
       return Promise.reject(new Error("MongoDB transport has reached its pending request limit"))
     }
-    if (socket.writableLength > MAX_SOCKET_BUFFERED_BYTES) {
-      return Promise.reject(new Error("MongoDB transport write buffer limit exceeded"))
-    }
-
     const requestId = nextRequestId
     nextRequestId = nextRequestId >= 0x7fffffff ? 1 : nextRequestId + 1
     let frame
@@ -252,6 +247,9 @@ export function createMongoTransport({
       })
     } catch (error) {
       return Promise.reject(error)
+    }
+    if ((socket.writableLength ?? 0) + frame.length > MAX_SOCKET_BUFFERED_BYTES) {
+      return Promise.reject(new Error("MongoDB transport write buffer limit exceeded"))
     }
 
     return new Promise((resolve, reject) => {
