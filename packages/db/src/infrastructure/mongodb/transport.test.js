@@ -500,7 +500,7 @@ test("MongoDB transport enforces the queued write-buffer bound before writing", 
   assert.equal(socket.writes.length, 0)
   await transport.close()
 })
-test("MongoDB transport validates options and command arguments", async () => {
+test("MongoDB transport validates options", async () => {
   const invalidOptions = [
     {
       options: { host: "" },
@@ -549,7 +549,9 @@ test("MongoDB transport validates options and command arguments", async () => {
   for (const invalid of invalidOptions) {
     assert.throws(() => createMongoTransport(invalid.options), invalid.expected)
   }
+})
 
+test("MongoDB transport validates command arguments", async () => {
   const fake = createFakeTransport()
   await fake.transport.connect()
   await assert.rejects(
