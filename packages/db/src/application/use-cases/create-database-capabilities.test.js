@@ -222,6 +222,7 @@ test("provider-neutral reads and writes use their distinct execution boundaries"
     return execute(input)
   }
   const database = createDatabase({ provider })
+  let nestedTransaction
   await database.connect()
 
   try {
@@ -300,15 +301,13 @@ id: "outside" })
 record: { id: "inside" } })
       database.readOne({ collection: "people",
 id: "inside" })
-      assert.throws(
-        () => database.transaction(() => {}),
-        /Nested database transactions are not supported/,
-      )
+      nestedTransaction = database.transaction(() => {})
       assert.throws(
         () => database.close(),
         /Cannot close a database from inside its transaction callback/,
       )
     })
+    await assert.rejects(nestedTransaction, /Nested database transactions are not supported/)
 
     assert.deepEqual(calls, {
       transactionCreate: 1,
