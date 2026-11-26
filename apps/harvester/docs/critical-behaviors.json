@@ -1398,6 +1398,11 @@
           "path": "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
           "name": "keeps Recovery Seller STOP reason with user-data provenance unresolved",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "requires the production offline market audit adapter to be injected",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "offline-only",
