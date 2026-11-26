@@ -44,7 +44,7 @@ Explicit options override URI values. Supported URI options are authSource, tls/
 
 ## BSON and record mapping
 
-The public record contract remains JSON-only. The codec supports strings, finite numbers, booleans, null, nested plain documents, dense arrays and the internal binary/date/signed-int64 forms. ObjectId values decode to their hexadecimal string representation. The provider rejects malformed lengths, truncated values, unsupported BSON element types, sparse arrays, accessors, non-plain objects, circular structures and documents above the 16 MiB BSON limit.
+The public record contract remains JSON-only. The codec supports strings, finite numbers, booleans, null, nested plain documents, dense arrays and the internal binary/date/signed-int64 forms. Document nesting is limited to 100 levels. ObjectId values decode to their hexadecimal string representation. The provider rejects malformed lengths, truncated values, unsupported BSON element types, sparse arrays, accessors, non-plain objects, circular structures and documents above the 16 MiB BSON limit.
 
 MongoDB document keys are not stored verbatim: keys are encoded with a reserved provider prefix and base64url representation. This protects user keys that begin with $ or contain dots from MongoDB field-path/operator interpretation. The collection name is encoded independently to isolate each logical collection. The provider stores the record's public id in MongoDB's internal _id and hides the storage envelope on reads.
 
@@ -58,7 +58,7 @@ The adapter maps the shared query contract to MongoDB commands and aggregation s
 - Updates are shallow top-level merges. Updating the record identifier is rejected by shared validation.
 - Duplicate MongoDB _id errors map to DatabaseConflictError; other server/transport failures map to DatabaseProviderError.
 
-The adapter drains cursor batches with getMore. A failed cursor operation is surfaced; the provider does not expose the cursor to callers.
+The adapter drains cursor batches with getMore. A failed cursor operation triggers best-effort killCursors cleanup and is surfaced; the provider does not expose the cursor to callers. Each provider read boundary accepts one logical read operation; getMore requests are internal parts of that read.
 
 ## Transaction guarantees
 
