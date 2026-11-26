@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { createScenarioWorkerMessageHandler } from "./scenario-worker-message-handler.js"
-import { runScenarioWorkerRequest } from "./scenario-worker-dispatch.js"
+import { createScenarioWorkerDispatcher } from "./scenario-worker-dispatch.js"
 
 test("worker handler aborts the matching active execution on cooperative cancel", async () => {
   const messages = []
@@ -49,9 +49,16 @@ test("worker handler aborts the matching active execution on cooperative cancel"
 test("worker dispatch refuses to start work when its AbortSignal is already aborted", async () => {
   const controller = new AbortController()
   controller.abort()
-  await assert.rejects(runScenarioWorkerRequest({
+  const dispatch = createScenarioWorkerDispatcher({
+    adapters: [{
+      strategyId: "RS",
+      execute: async () => ({ passed: true }),
+    }],
+  })
+  await assert.rejects(dispatch({
     request: {
       type: "execute",
+      runId: "run-worker-already-cancelled",
       strategyId: "RS",
       scenarioId: "RS-004-011",
       input: {},
