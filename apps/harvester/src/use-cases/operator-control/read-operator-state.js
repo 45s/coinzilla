@@ -3,18 +3,15 @@ import { authorizeOperatorActor } from "../../application/operator/authorize-ope
 import { createHarvesterReadinessReport } from "../../application/operator/create-harvester-readiness-report.js"
 import { OperatorQueryError } from "./errors/operator-query-error.js"
 
-function hasValidRuntimeMetadata({
-    snapshot,
-    runtimeState,
-  }) {
-  return snapshot !== null &&
-    typeof snapshot === "object" &&
-    !Array.isArray(snapshot) &&
-    Number.isSafeInteger(snapshot.observedAt) &&
-    typeof runtimeState === "string" &&
-    typeof snapshot.tradingEnabled === "boolean"
+function hasValidRuntimeMetadata({ snapshot, runtimeState }) {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    return false
+  }
+  if (!Number.isSafeInteger(snapshot.observedAt) || typeof runtimeState !== "string") {
+    return false
+  }
+  return typeof snapshot.tradingEnabled === "boolean"
 }
-
 function hasValidUserDataSnapshot({ userData }) {
   return userData !== null &&
     typeof userData === "object" &&
@@ -23,11 +20,9 @@ function hasValidUserDataSnapshot({ userData }) {
 
 function validateRuntimeSnapshot({ snapshot, operation }) {
   const runtimeState = snapshot?.runtimeState ?? (snapshot?.connected === true ? "RUNNING" : "UNKNOWN")
-  if (!hasValidRuntimeMetadata({
-    snapshot,
-    runtimeState,
-  }) ||
-      !hasValidUserDataSnapshot({ userData: snapshot?.userData })) {
+  const validMetadata = hasValidRuntimeMetadata({ snapshot, runtimeState })
+  const validUserData = hasValidUserDataSnapshot({ userData: snapshot?.userData })
+  if (!validMetadata || !validUserData) {
     const cause = new TypeError("Runtime snapshot must include an integer observedAt, runtime state, trading flag and user-data readiness.")
     throw new OperatorQueryError({
       message: "Harvester operator runtime snapshot is invalid",
@@ -53,10 +48,15 @@ function validateRuntimeSnapshot({ snapshot, operation }) {
       status: snapshot.userData.status ?? "UNKNOWN",
       lastEventAt: snapshot.userData.lastEventAt ?? null,
       ageMs: snapshot.userData.ageMs ?? null,
+      requiresReconciliation: snapshot.userData.requiresReconciliation === true,
+      accountingFailed: snapshot.userData.accountingFailed === true,
+      streamUnsafe: snapshot.userData.streamUnsafe === true,
+      pendingRecovery: snapshot.userData.pendingRecovery === true,
+      safetyHaltRequired: snapshot.userData.safetyHaltRequired === true,
+      retryableRecoveryFailure: snapshot.userData.retryableRecoveryFailure ?? false,
     }),
   })
 }
-
 function createMarketReadModels({ markets, readinessReport }) {
   const readinessBySymbol = new Map(readinessReport.markets.map((market) => [market.symbol, market]))
   return Object.freeze(markets.map((market) => {
@@ -88,77 +88,95 @@ function createMarketReadModels({ markets, readinessReport }) {
   }))
 }
 
+function readRuntimeSnapshot({ getRuntimeSnapshot, operation }) {
+  let source
+  try {
+    source = getRuntimeSnapshot()
+  } catch (cause) {
+    throw new OperatorQueryError({
+      message: "Harvester operator runtime snapshot could not be read",
+      code: "HARVESTER_OPERATOR_RUNTIME_SNAPSHOT_READ_FAILED",
+      cause,
+      context: { operation },
+    })
+  }
+  return validateRuntimeSnapshot({ snapshot: source, operation })
+}
+
+async function readEngineMarketSnapshots({ engine, operation }) {
+  let result
+  try {
+    result = await engine.getOperatorMarketSnapshots()
+  } catch (cause) {
+    throw new OperatorQueryError({
+      message: "Harvester operator market snapshot could not be read",
+      code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_READ_FAILED",
+      cause,
+      context: { operation },
+    })
+  }
+  if (result?.ok !== true) {
+    const cause = result?.errors?.[0] ?? result?.error
+    if (cause instanceof Error && typeof cause.code === "string") {
+      return { result }
+    }
+    throw new OperatorQueryError({
+      message: "Harvester operator market snapshot could not be read",
+      code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_READ_FAILED",
+      cause,
+      context: { operation },
+    })
+  }
+  const markets = result.data?.markets
+  if (!Array.isArray(markets)) {
+    const cause = new TypeError("Engine operator market snapshot must contain a markets array.")
+    throw new OperatorQueryError({
+      message: "Harvester operator market snapshot is invalid",
+      code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_INVALID",
+      cause,
+      context: { operation },
+    })
+  }
+  return { markets }
+}
+
+function evaluateOperatorReadinessReport({ runtime, markets, operation }) {
+  try {
+    return createHarvesterReadinessReport({
+      runtime,
+      markets,
+      readinessInputs: runtime.readinessInputs,
+      observedAt: runtime.observedAt,
+    })
+  } catch (cause) {
+    throw new OperatorQueryError({
+      message: "Harvester startup readiness report could not be evaluated",
+      code: "HARVESTER_OPERATOR_READINESS_REPORT_FAILED",
+      cause,
+      context: { operation },
+    })
+  }
+}
+
 async function readOperatorSnapshot({ engine, getRuntimeSnapshot, actor, operation }) {
   try {
     authorizeOperatorActor({ actor })
-    let runtimeSource
-    try {
-      runtimeSource = getRuntimeSnapshot()
-    } catch (cause) {
-      throw new OperatorQueryError({
-        message: "Harvester operator runtime snapshot could not be read",
-        code: "HARVESTER_OPERATOR_RUNTIME_SNAPSHOT_READ_FAILED",
-        cause,
-        context: { operation },
-      })
+    const runtime = readRuntimeSnapshot({ getRuntimeSnapshot, operation })
+    const marketRead = await readEngineMarketSnapshots({ engine, operation })
+    if (marketRead.result) {
+      return marketRead.result
     }
-    const runtime = validateRuntimeSnapshot({ snapshot: runtimeSource, 
-      operation })
-    let marketResult
-    try {
-      marketResult = await engine.getOperatorMarketSnapshots()
-    } catch (cause) {
-      throw new OperatorQueryError({
-        message: "Harvester operator market snapshot could not be read",
-        code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_READ_FAILED",
-        cause,
-        context: { operation },
-      })
-    }
-    if (marketResult?.ok !== true) {
-      const cause = marketResult?.errors?.[0] ?? marketResult?.error
-      if (cause instanceof Error && typeof cause.code === "string") {
-        return marketResult
-      }
-      throw new OperatorQueryError({
-        message: "Harvester operator market snapshot could not be read",
-        code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_READ_FAILED",
-        cause,
-        context: { operation },
-      })
-    }
-    const sourceMarkets = marketResult.data?.markets
-    if (!Array.isArray(sourceMarkets)) {
-      const cause = new TypeError("Engine operator market snapshot must contain a markets array.")
-      throw new OperatorQueryError({
-        message: "Harvester operator market snapshot is invalid",
-        code: "HARVESTER_OPERATOR_MARKET_SNAPSHOT_INVALID",
-        cause,
-        context: { operation },
-      })
-    }
-    let readinessReport
-    try {
-      readinessReport = createHarvesterReadinessReport({
-        runtime,
-        markets: sourceMarkets,
-        readinessInputs: runtime.readinessInputs,
-        observedAt: runtime.observedAt,
-      })
-    } catch (cause) {
-      throw new OperatorQueryError({
-        message: "Harvester startup readiness report could not be evaluated",
-        code: "HARVESTER_OPERATOR_READINESS_REPORT_FAILED",
-        cause,
-        context: { operation },
-      })
-    }
+    const readinessReport = evaluateOperatorReadinessReport({
+      runtime,
+      markets: marketRead.markets,
+      operation,
+    })
     return toResult({
       data: Object.freeze({
         runtime,
         readinessReport,
         markets: createMarketReadModels({
-          markets: sourceMarkets,
+          markets: marketRead.markets,
           readinessReport,
         }),
       }),
@@ -177,7 +195,6 @@ async function readOperatorSnapshot({ engine, getRuntimeSnapshot, actor, operati
     })
   }
 }
-
 function getOperatorReadinessState(status) {
   if (status === "HEALTHY") {
     return "READY"

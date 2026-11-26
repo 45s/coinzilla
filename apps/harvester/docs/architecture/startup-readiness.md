@@ -165,3 +165,8 @@ Market-price subscription setup now delegates the per-symbol intake reset to a s
 ## Engine market projection decomposition
 
 The operator market projection now separates market-data facts, pause/ownership facts, volatility facts and output shaping. The existing engine-owned blocker codes remain the source of truth for live market admission; the readiness report only projects them and adds startup-boundary diagnostics when those inputs are available.
+
+
+## Operator read-query composition
+
+The operator read use case now isolates runtime snapshot retrieval, engine market snapshot retrieval and readiness projection evaluation. Each boundary preserves its original structured error/cause; the public status and markets queries remain read-only and use the same existing engine snapshots.
