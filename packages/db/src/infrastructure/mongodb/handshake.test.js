@@ -338,3 +338,24 @@ test("MongoDB handshake rejects server wire versions newer than the implemented 
     /wire protocol version range 25-26 is not supported/i,
   )
 })
+
+
+test("MongoDB handshake rejects load-balanced servers even without a URI flag", async () => {
+  await assert.rejects(
+    performMongoHandshake({
+      transport: {
+        async command() {
+          return {
+            ok: 1,
+            minWireVersion: 13,
+            maxWireVersion: 25,
+            isWritablePrimary: true,
+            serviceId: "load-balanced-service",
+          }
+        },
+      },
+      databaseName: "app",
+    }),
+    /load-balanced topology is not supported/i,
+  )
+})
