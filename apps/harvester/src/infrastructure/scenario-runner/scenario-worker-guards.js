@@ -32,6 +32,11 @@ function createBlockedOperation({ operation, kind }) {
   }
 }
 
+function isNodeInternalParent({ identifier } = {}) {
+  return typeof identifier === "string" &&
+    (identifier.startsWith("node:internal/") || identifier.startsWith("internal/"))
+}
+
 function isWritableOpenFlags({ flags }) {
   if (typeof flags === "number") {
     const writeFlags = filesystem.constants.O_WRONLY |
@@ -48,9 +53,12 @@ function installModuleGuards() {
   if (!Module._load[GUARDED_LOAD]) {
     const originalLoad = Module._load
     const guardedLoad = function guardedScenarioModuleLoad(...loadArguments) {
-      const [request] = loadArguments
+      const [request, parent] = loadArguments
       const normalized = typeof request === "string" ? request.replace(/^node:/, "") : ""
-      if (forbiddenModules.has(normalized)) {
+      const parentIdentifier = parent?.id ?? parent?.filename
+      if (forbiddenModules.has(normalized) && !isNodeInternalParent({
+        identifier: parentIdentifier,
+      })) {
         throw new Error(`Scenario isolation policy blocked module access: ${normalized}`)
       }
       return originalLoad.apply(this, loadArguments)
@@ -64,7 +72,9 @@ function installModuleGuards() {
     Module.registerHooks({
       resolve(specifier, context, nextResolve) {
         const normalized = specifier.replace(/^node:/, "")
-        if (forbiddenModules.has(normalized)) {
+        if (forbiddenModules.has(normalized) && !isNodeInternalParent({
+          identifier: context.parentURL,
+        })) {
           throw new Error(`Scenario isolation policy blocked module access: ${normalized}`)
         }
         return nextResolve(specifier, context)
