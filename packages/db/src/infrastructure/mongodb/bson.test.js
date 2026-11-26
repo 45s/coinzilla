@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { decodeBsonDocument, encodeBsonDocument } from "./bson.js"
+import { BsonBinary, decodeBsonDocument, encodeBsonDocument } from "./bson.js"
 
 test("BSON round-trips JSON records and nested arrays without changing JSON types", () => {
   const record = {
@@ -47,6 +47,15 @@ test("BSON supports binary values and dates for protocol-internal command docume
 
   assert.deepEqual(decoded.payload, document.payload)
   assert.equal(decoded.createdAt.getTime(), document.createdAt.getTime())
+})
+
+
+test("BSON binary values preserve standard UUID subtype 4 for logical sessions", () => {
+  const binary = new BsonBinary(Buffer.from("00112233445566778899aabbccddeeff", "hex"), 4)
+  const decoded = decodeBsonDocument(encodeBsonDocument({ id: binary }))
+
+  assert.equal(decoded.id.subtype, 4)
+  assert.deepEqual(decoded.id.bytes, binary.bytes)
 })
 
 test("BSON rejects unsupported values, invalid document keys, and cyclic documents", () => {
