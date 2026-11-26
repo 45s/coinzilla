@@ -111,6 +111,7 @@ test("durably resolves account blockers only after complete account-wide evidenc
     operatorId: "operator-7",
     actionId: "action-unique-001",
     causeFixed: true,
+    configuredMarkets: ["BTCUSDT", "ETHUSDT"],
   })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
@@ -131,6 +132,7 @@ test("fails closed when cause is not fixed or account-wide evidence is incomplet
     operatorId: "operator-7",
     actionId: "action-unique-002",
     causeFixed: false,
+    configuredMarkets: ["BTCUSDT", "ETHUSDT"],
   })
   assert.equal(missingCause.ok, false)
   assert.equal(store.records.length, 6, "No resolution fact may be appended before causeFixed is explicitly true.")
@@ -144,6 +146,7 @@ test("fails closed when cause is not fixed or account-wide evidence is incomplet
     operatorId: "operator-7",
     actionId: "action-unique-003",
     causeFixed: true,
+    configuredMarkets: ["BTCUSDT", "ETHUSDT"],
   })
   assert.equal(incomplete.ok, false)
   assert.equal(store.records.length, 6, "An external open order keeps account admission blocked.")
@@ -163,6 +166,7 @@ test("fails closed when audit does not identify user-data blockers or omits one 
     operatorId: "operator-7",
     actionId: "action-unique-004",
     causeFixed: true,
+    configuredMarkets: ["BTCUSDT", "ETHUSDT"],
   })
   assert.equal(wrongOrigin.ok, false)
   assert.equal(store.records.length, 6)
