@@ -289,3 +289,65 @@ test("BSON decoder rejects truncated documents and inconsistent declared lengths
     TypeError,
   )
 })
+function createNestedBsonDocument({ depth }) {
+  let document = Buffer.from([5, 0, 0, 0, 0])
+  for (let index = 0; index < depth; index += 1) {
+    const element = Buffer.concat([Buffer.from([0x03, 0x78, 0]), document])
+    const nested = Buffer.alloc(4 + element.length + 1)
+    nested.writeInt32LE(nested.length, 0)
+    element.copy(nested, 4)
+    document = nested
+  }
+  return document
+}
+
+test("BSON encoder rejects invalid keys, circular values, non-finite numbers, and invalid dates", () => {
+  assert.throws(
+    () => encodeBsonDocument({ ["\uD800"]: 1 }),
+    /valid Unicode/,
+  )
+  const circular = {}
+  circular.self = circular
+  assert.throws(() => encodeBsonDocument(circular), /circular references/)
+  assert.throws(() => encodeBsonDocument({ value: Number.NaN }), /finite/)
+  assert.throws(() => encodeBsonDocument({ value: new Date(Number.NaN) }), /valid/)
+})
+
+test("BSON decoder rejects malformed strings, nested documents, binary values, and non-buffer input", () => {
+  const malformedCString = Buffer.from([
+    12, 0, 0, 0, 0x10, 0x78, 0x79, 0x7a, 0x31, 0x32, 0x33, 0,
+  ])
+  assert.throws(() => decodeBsonDocument(malformedCString), /cstring/)
+
+  const emptyString = Buffer.from([
+    12, 0, 0, 0, 0x02, 0x78, 0, 0, 0, 0, 0, 0,
+  ])
+  assert.throws(() => decodeBsonDocument(emptyString), /string length/)
+
+  const unterminatedString = Buffer.from([
+    14, 0, 0, 0, 0x02, 0x78, 0, 2, 0, 0, 0, 0x61, 0x62, 0,
+  ])
+  assert.throws(() => decodeBsonDocument(unterminatedString), /terminator/)
+
+  const invalidNestedLength = Buffer.from([
+    12, 0, 0, 0, 0x03, 0x78, 0, 4, 0, 0, 0, 0,
+  ])
+  assert.throws(() => decodeBsonDocument(invalidNestedLength), /document length/)
+
+  const invalidNestedTerminator = Buffer.from([
+    13, 0, 0, 0, 0x03, 0x78, 0, 5, 0, 0, 0, 1, 0,
+  ])
+  assert.throws(() => decodeBsonDocument(invalidNestedTerminator), /terminator/)
+
+  const invalidBinarySubtype = Buffer.from([
+    13, 0, 0, 0, 0x05, 0x78, 0, 0, 0, 0, 0, 5, 0,
+  ])
+  assert.throws(() => decodeBsonDocument(invalidBinarySubtype), /binary length or subtype/)
+
+  assert.throws(() => decodeBsonDocument("not a buffer"), /must be a Buffer/)
+  assert.throws(
+    () => decodeBsonDocument(createNestedBsonDocument({ depth: 101 })),
+    /nesting depth/,
+  )
+})
+
