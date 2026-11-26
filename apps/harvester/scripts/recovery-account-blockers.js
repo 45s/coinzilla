@@ -190,6 +190,10 @@ export async function runRecoveryAccountBlockerCommand({
     writeOutput(JSON.stringify({
       ok: true,
       data: {
+        operatorId: parsed.operatorId,
+        operatorAuthMethod: operatorIdentity.authMethod,
+        actionId: parsed.actionId,
+        resolutionReason: parsed.resolutionReason,
         resolvedBlockerIds: result.data.resolvedBlockerIds,
         evidenceDigest: result.data.evidenceDigest,
         durableReadbackVerified: result.data.durableReadbackVerified,
