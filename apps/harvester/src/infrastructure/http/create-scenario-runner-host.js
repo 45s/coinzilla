@@ -12,28 +12,26 @@ import { getRecoverySellerRunnerCatalog } from "../scenario-runner/rs-scenario-a
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../../../../..", import.meta.url))
 
-function readGitValue({ args }) {
-  return execFileSync("git", args, {
-    cwd: REPOSITORY_ROOT,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-  }).trim()
-}
-
-function resolveRepositoryIdentity({ sourceRevision }) {
+function createScenarioReplayProvenance({ sourceRevision, strategyRegistrations, buildProvenanceVerifier, buildProvenance }) {
   const missing = []
   const identity = {}
   let repositoryHead
   try {
-    repositoryHead = readGitValue({
-      args: ["rev-parse", "HEAD"],
-    })
-    identity.sourceTreeSha = readGitValue({
-      args: ["rev-parse", "HEAD^{tree}"],
-    })
-    const status = readGitValue({
-      args: ["status", "--porcelain"],
-    })
+    repositoryHead = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: REPOSITORY_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+    identity.sourceTreeSha = execFileSync("git", ["rev-parse", "HEAD^{tree}"], {
+      cwd: REPOSITORY_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+    const status = execFileSync("git", ["status", "--porcelain"], {
+      cwd: REPOSITORY_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
     if (status) {
       missing.push("source checkout is not clean")
     }
@@ -41,67 +39,35 @@ function resolveRepositoryIdentity({ sourceRevision }) {
     missing.push("immutable Git commit/tree and clean-checkout provenance are unavailable")
   }
   const expectedRevision = sourceRevision ?? process.env.COINZILLA_SOURCE_REVISION ?? repositoryHead
-  const validRevision = typeof expectedRevision === "string" &&
-    /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(expectedRevision)
-  if (!validRevision) {
+  if (!expectedRevision || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(expectedRevision)) {
     missing.push("full immutable source commit SHA is unavailable")
   } else if (repositoryHead && expectedRevision.toLowerCase() !== repositoryHead.toLowerCase()) {
     missing.push("supplied source revision does not match the checked-out commit")
   }
   identity.sourceCommitSha = expectedRevision ?? null
   identity.checkedOutCommitSha = repositoryHead ?? null
-  return {
-    identity,
-    missing,
-  }
-}
-
-function readDependencyLockSha({ missing }) {
   try {
-    return createHash("sha256")
+    identity.dependencyLockSha256 = createHash("sha256")
       .update(readFileSync(resolve(REPOSITORY_ROOT, "pnpm-lock.yaml")))
       .digest("hex")
   } catch {
     missing.push("dependency lockfile provenance is unavailable")
-    return null
   }
-}
-
-function resolveBuildArtifactSha({ buildProvenanceVerifier, buildProvenance }) {
-  try {
-    const artifactSha256 = buildProvenance?.artifactSha256
-    const verified = typeof buildProvenanceVerifier === "function" &&
-      buildProvenanceVerifier(buildProvenance) === true &&
-      typeof artifactSha256 === "string" &&
-      /^[a-f0-9]{64}$/i.test(artifactSha256)
-    return verified ? artifactSha256.toLowerCase() : null
-  } catch {
-    return null
-  }
-}
-
-function createScenarioReplayProvenance({
-  sourceRevision,
-  strategyRegistrations,
-  buildProvenanceVerifier,
-  buildProvenance,
-}) {
-  const { identity, missing } = resolveRepositoryIdentity({
-    sourceRevision,
-  })
-  identity.dependencyLockSha256 = readDependencyLockSha({
-    missing,
-  })
   identity.runtimeIdentity = `${process.version}|${process.platform}|${process.arch}`
   identity.scenarioRegistrySha256 = createHash("sha256")
     .update(JSON.stringify(strategyRegistrations))
     .digest("hex")
-  const buildArtifactSha256 = resolveBuildArtifactSha({
-    buildProvenanceVerifier,
-    buildProvenance,
-  })
-  if (buildArtifactSha256) {
-    identity.buildArtifactSha256 = buildArtifactSha256
+  let buildVerified = false
+  try {
+    buildVerified = typeof buildProvenanceVerifier === "function" &&
+      buildProvenanceVerifier(buildProvenance) === true &&
+      typeof buildProvenance?.artifactSha256 === "string" &&
+      /^[a-f0-9]{64}$/i.test(buildProvenance.artifactSha256)
+  } catch {
+    buildVerified = false
+  }
+  if (buildVerified) {
+    identity.buildArtifactSha256 = buildProvenance.artifactSha256.toLowerCase()
   } else {
     missing.push("verified build artifact provenance is unavailable")
   }
@@ -111,6 +77,7 @@ function createScenarioReplayProvenance({
     identity,
   }
 }
+
 function publishScenarioRunUpdate({ eventBus, run }) {
   try {
     eventBus.publish({
@@ -309,45 +276,6 @@ function resolveStrategyRegistrations({ strategyRegistrations, scenarioCatalog }
   }]
 }
 
-function canExecuteCatalogScenario({ catalog, strategyId, scenarioId }) {
-  return catalog.some((strategy) => strategy.strategyId === strategyId &&
-    strategy.scenarios.some((scenario) =>
-      scenario.id === scenarioId && scenario.executable === true))
-}
-
-function validateCatalogScenarioInput({ catalog, strategyId, scenarioId, input }) {
-  const strategy = catalog.find((item) => item.strategyId === strategyId)
-  const scenario = strategy?.scenarios.find((item) => item.id === scenarioId)
-  if (!scenario?.inputSchema) {
-    return {
-      valid: false,
-      errors: ["Scenario input schema is unavailable."],
-    }
-  }
-  return validateScenarioInput({
-    schema: scenario.inputSchema,
-    input,
-  })
-}
-
-function createRunner({ adapters, catalog, replayProvenance, eventBus }) {
-  return createScenarioRunner({
-    adapters,
-    sourceRevision: replayProvenance.identity.sourceCommitSha,
-    replayProvenance,
-    canExecuteScenario: ({ strategyId, scenarioId }) =>
-      canExecuteCatalogScenario({ catalog, strategyId, scenarioId }),
-    validateScenarioInput: ({ strategyId, scenarioId, input }) =>
-      validateCatalogScenarioInput({ catalog, strategyId, scenarioId, input }),
-    timeoutMs: 30_000,
-    maxStoredRuns: 100,
-    onUpdate: (run) => publishScenarioRunUpdate({
-      eventBus,
-      run,
-    }),
-  })
-}
-
 export function createScenarioRunnerHost({
   eventBus,
   adapters = [],
@@ -376,11 +304,34 @@ export function createScenarioRunnerHost({
     buildProvenance,
     buildProvenanceVerifier,
   })
-  const runner = createRunner({
+  const runner = createScenarioRunner({
     adapters: registeredAdapters,
-    catalog,
+    sourceRevision: replayProvenance.identity.sourceCommitSha,
     replayProvenance,
-    eventBus,
+    canExecuteScenario: ({ strategyId, scenarioId }) => catalog.some((strategy) =>
+      strategy.strategyId === strategyId &&
+      strategy.scenarios.some((scenario) =>
+        scenario.id === scenarioId && scenario.executable === true)),
+    validateScenarioInput: ({ strategyId, scenarioId, input }) => {
+      const strategy = catalog.find((item) => item.strategyId === strategyId)
+      const scenario = strategy?.scenarios.find((item) => item.id === scenarioId)
+      if (!scenario?.inputSchema) {
+        return {
+          valid: false,
+          errors: ["Scenario input schema is unavailable."],
+        }
+      }
+      return validateScenarioInput({
+        schema: scenario.inputSchema,
+        input,
+      })
+    },
+    timeoutMs: 30_000,
+    maxStoredRuns: 100,
+    onUpdate: (run) => publishScenarioRunUpdate({
+      eventBus,
+      run,
+    }),
   })
   return Object.freeze({
     runner,
