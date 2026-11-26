@@ -152,3 +152,8 @@ Market-data and candle-history startup failures trigger a best-effort readiness 
 ## User-data startup decomposition
 
 The user-data startup sequence is split into explicit read-only PREFLIGHT, trading PREFLIGHT, and deferred activation steps. The subscription owner remains unchanged, and the existing account snapshot, open-order audit, queue drain, safety assertion and user-data readiness gate retain their original order.
+
+
+## Authoritative user-data recovery
+
+The recovery-generation transition now clears `streamUnsafe` and `requiresReconciliation` only for a matching, acknowledged authoritative `reconciled` subscription generation. A transport-level `recovered` event, stale generation, accounting failure or retryable recovery failure cannot clear the application reconciliation gate.
