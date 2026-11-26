@@ -261,7 +261,13 @@ test("does not overlap a retry with a timed-out participant operation that ignor
   try {
     await assert.rejects(
       coordinator.waitUntilSafe(),
-      (error) => error.code === "STRATEGY_SHUTDOWN_PARTICIPANT_STILL_RUNNING",
+      (error) => {
+        assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN", "A retry with pending participant work must fail the shared shutdown barrier.")
+        const blocker = error.shutdownDiagnostics.strategyBlockers[0]
+        assert.equal(blocker.reason, "STRATEGY_SHUTDOWN_PARTICIPANT_STILL_RUNNING", "The blocker must identify the still-running prior participant operation.")
+        assert.equal(blocker.status, "PENDING", "An unsettled prior operation must remain explicitly pending, never safe.")
+        return true
+      },
       "A retry must fail closed while the timed-out participant operation is still pending.",
     )
   } finally {
