@@ -72,6 +72,9 @@ export function parseMongoConnectionString(connectionString) {
     "retryWrites",
     "directConnection",
   ])
+  if (url.searchParams.has("tls") && url.searchParams.has("ssl")) {
+    throw new TypeError("MongoDB URI must use tls or ssl, not both")
+  }
   const seenOptions = new Set()
   for (const key of url.searchParams.keys()) {
     if (!supportedOptions.has(key)) {
@@ -92,7 +95,7 @@ export function parseMongoConnectionString(connectionString) {
   if (url.searchParams.has("compressors") && url.searchParams.get("compressors") !== "") {
     throw new TypeError("MongoDB wire compression is not supported")
   }
-  if (url.searchParams.get("readPreference") && url.searchParams.get("readPreference") !== "primary") {
+  if (url.searchParams.has("readPreference") && url.searchParams.get("readPreference") !== "primary") {
     throw new TypeError("MongoDB provider supports primary read preference only")
   }
   if (parseBooleanOption(url.searchParams.get("retryWrites"), "retryWrites")) {
