@@ -82,7 +82,9 @@ function decodeUserValue(value) {
 }
 
 function mapMongoError({ error, operation, collection }) {
-  if (error instanceof DatabaseConflictError || error instanceof DatabaseProviderError) {
+  if (error instanceof TypeError
+    || error instanceof DatabaseConflictError
+    || error instanceof DatabaseProviderError) {
     return error
   }
   if (error?.code === 11000 || error?.code === 11001) {
