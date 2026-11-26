@@ -285,14 +285,16 @@ function createExpectedAccountingProjection({ fills }) {
   let portfolio = new Portfolio()
   let recoveryLedger = RecoveryLedger.empty({ market })
   for (const fill of fills) {
-    portfolio = portfolio.applyFill({
+    const { portfolio: updatedPortfolio } = portfolio.applyFill({
       fill,
       strategyId: StrategyId.COIN_GRABBER,
-    }).portfolio
-    recoveryLedger = recoveryLedger.applyFill({
+    })
+    portfolio = updatedPortfolio
+    const { ledger: updatedRecoveryLedger } = recoveryLedger.applyFill({
       fill,
       strategyId: StrategyId.COIN_GRABBER,
-    }).ledger
+    })
+    recoveryLedger = updatedRecoveryLedger
   }
   return {
     portfolio,
@@ -393,7 +395,10 @@ async function recordFinalFillAfterRestart({ directory, store, pending, acknowle
   })
   assert.equal(candidate.data.requiresExchangeReconciliation, true)
   assert.equal(candidate.data.restorationEnabled, false)
-  return { finalFill, fills }
+  return {
+    finalFill,
+    fills,
+  }
 }
 
 test("reopens the real append-only ledger across partial/final fills, duplicate delivery, and two unclean process restarts", async (t) => {
