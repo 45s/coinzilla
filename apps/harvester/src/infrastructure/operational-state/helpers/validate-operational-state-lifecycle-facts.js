@@ -190,6 +190,16 @@ export function validateSafetyBlockerResolvedFact({ factType, canonicalData, fac
     }
     return
   }
+  const hasOperatorMetadata = operatorFields.some((value) => value !== undefined)
+  if (!hasOperatorMetadata) {
+    if (!canonicalData.resolvedBy.startsWith("operator:")) {
+      throw new TypeError("Legacy operator-action resolution must retain its operator actor prefix")
+    }
+    return
+  }
+  if (operatorFields.some((value) => value === undefined)) {
+    throw new TypeError("Operator-action resolution metadata must be complete when any structured field is present")
+  }
   const expectedResolvedBy = `operator:${canonicalData.operatorId}:${canonicalData.actionId}`
   if (typeof canonicalData.operatorId !== "string" ||
       !/^[A-Za-z0-9][A-Za-z0-9._@-]{2,127}$/.test(canonicalData.operatorId) ||
