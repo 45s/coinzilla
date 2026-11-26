@@ -24,6 +24,7 @@ function validateStoppedSession({ records, runtimeSessionId }) {
   if (!started ||
       !baseline ||
       started.runtimeSessionId !== runtimeSessionId ||
+      baseline.runtimeSessionId !== started.runtimeSessionId ||
       started.data.configurationFingerprint !== baseline.data.fingerprint ||
       !sameStringSet({
         left: started.data.markets,
@@ -104,41 +105,58 @@ function createMarketEvidenceContext({ context, symbol }) {
   }
 }
 
-function isMarketAuditReady({
-    result,
-    reconciliation,
-    audit,
-  }) {
+function hasCompleteMarketTradeHistory({ tradeHistory, symbol }) {
+  return tradeHistory?.complete === true &&
+    tradeHistory.scope === "MARKET" &&
+    tradeHistory.marketSymbol === symbol &&
+    tradeHistory.historyRetentionFactType === "MARKET_HISTORY_COVERAGE_CONFIRMED" &&
+    Number.isSafeInteger(tradeHistory.historyStartTime) &&
+    Number.isSafeInteger(tradeHistory.historyRetentionVerifiedAt) &&
+    typeof tradeHistory.historyRetentionEvidenceDigest === "string" &&
+    /^[a-f0-9]{64}$/.test(tradeHistory.historyRetentionEvidenceDigest) &&
+    typeof tradeHistory.historyRetentionVerifiedBy === "string" &&
+    tradeHistory.historyRetentionVerifiedBy.trim() !== "" &&
+    Number.isSafeInteger(tradeHistory.fillsChecked) &&
+    Number.isSafeInteger(tradeHistory.journalFillsChecked) &&
+    tradeHistory.reconciledOwnedOrderFills === 0
+}
+
+function isMarketAuditReady({ result, reconciliation, audit, symbol }) {
   return result?.ok === true &&
     reconciliation?.ready === true &&
-    audit?.status === "READY" &&
-    audit?.targetMarketBlocked !== true &&
-    audit?.tradeHistory?.complete === true &&
+    reconciliation.status === "READY" &&
+    audit?.skipped !== true &&
+    audit?.targetMarketBlocked === false &&
+    hasCompleteMarketTradeHistory({
+      tradeHistory: audit.tradeHistory,
+      symbol,
+    }) &&
     Array.isArray(audit.unownedOpenOrders) &&
     audit.unownedOpenOrders.length === 0 &&
     Array.isArray(audit.blockedMarkets) &&
-    audit.blockedMarkets.length === 0
+    audit.blockedMarkets.length === 0 &&
+    Number.isSafeInteger(reconciliation.orderReconciliation?.reconciledOrders)
 }
 
 function validateMarketAuditEvidence({ symbol, audit, accountSnapshotSourceTime }) {
-  if (audit.accountSnapshot?.sourceTime !== accountSnapshotSourceTime ||
+  if (audit.sourceTime !== accountSnapshotSourceTime ||
       !Number.isSafeInteger(audit.balancesChecked) ||
-      audit.balancesChecked <= 0) {
-    throw new Error(`${symbol}: account balance evidence is incomplete or not from the shared snapshot`)
+      audit.balancesChecked <= 0 ||
+      !Number.isSafeInteger(audit.openOrdersChecked) ||
+      audit.openOrdersChecked < 0 ||
+      !Number.isSafeInteger(audit.reservationsChecked) ||
+      audit.reservationsChecked < 0) {
+    throw new Error(`${symbol}: account, balance, order, or reservation evidence is incomplete or stale`)
   }
 }
 
 function validateMarketAudit({ symbol, result, accountSnapshotSourceTime }) {
   const reconciliation = result?.data?.reconciliation
   const audit = reconciliation?.audit
-  if (!isMarketAuditReady({
-    result,
-    reconciliation,
-    audit,
-  })) {
+  if (!isMarketAuditReady({ result, reconciliation, audit, symbol })) {
     const cause = result?.errors?.[0]
     throw new Error(
-      `${symbol}: ${cause?.message ?? "account-wide reconciliation did not prove READY"}`,
+      `${symbol}: ${cause?.message ?? "production account/order/fill reconciliation did not prove READY"}`,
       { cause },
     )
   }
@@ -155,6 +173,8 @@ function validateMarketAudit({ symbol, result, accountSnapshotSourceTime }) {
     openOrdersChecked: audit.openOrdersChecked,
     reservationsChecked: audit.reservationsChecked,
     ownedOrderReconciliation: reconciliation.orderReconciliation,
+    unownedOpenOrders: audit.unownedOpenOrders,
+    blockedMarkets: audit.blockedMarkets,
     tradeHistory: audit.tradeHistory,
   }
 }
@@ -181,32 +201,59 @@ async function auditAllConfiguredMarkets({ context, configuredMarkets, reconcile
   return summaries
 }
 
+function validateAccountAuditSet({ configuredMarkets, marketAudits, context }) {
+  const auditedMarkets = marketAudits.map(({ symbol }) => symbol)
+  const sourceTime = context.exchange.currentAccountSnapshot.sourceTime
+  if (marketAudits.length !== configuredMarkets.length ||
+      !sameStringSet({ left: auditedMarkets, right: configuredMarkets }) ||
+      !Number.isSafeInteger(sourceTime) ||
+      marketAudits.some((audit) => audit.accountSnapshotSourceTime !== sourceTime ||
+        audit.ready !== true ||
+        !hasCompleteMarketTradeHistory({
+          tradeHistory: audit.tradeHistory,
+          symbol: audit.symbol,
+        }) ||
+        audit.unownedOpenOrders.length !== 0 ||
+        audit.blockedMarkets.length !== 0)) {
+    throw new Error("Account-wide resolution requires a complete, consistent audit for every configured market")
+  }
+}
+
 function createAccountAudit({
-  blockerIds,
+  blockers,
   configuredMarkets,
   operatorId,
   actionId,
   context,
   marketAudits,
 }) {
+  validateAccountAuditSet({
+    configuredMarkets,
+    marketAudits,
+    context,
+  })
+  const blockerIds = blockers.map(({ blockerId }) => blockerId).sort()
   return {
     status: "READY",
     scope: "ACCOUNT",
     source: "AUTHORITATIVE_ACCOUNT_RECONCILIATION",
-    allConfiguredMarketsAudited: true,
-    auditedMarkets: [...configuredMarkets],
-    openOrdersReconciled: true,
-    fillsReconciled: true,
-    balancesReconciled: true,
+    allConfiguredMarketsAudited: marketAudits.length === configuredMarkets.length,
+    auditedMarkets: marketAudits.map(({ symbol }) => symbol),
+    openOrdersReconciled: marketAudits.every(({ openOrdersChecked }) =>
+      Number.isSafeInteger(openOrdersChecked)),
+    fillsReconciled: marketAudits.every(({ tradeHistory }) =>
+      tradeHistory.complete === true && tradeHistory.reconciledOwnedOrderFills === 0),
+    balancesReconciled: marketAudits.every(({ balancesChecked }) =>
+      Number.isSafeInteger(balancesChecked) && balancesChecked > 0),
     accountingConsistent: true,
     unresolvedOwnedOrders: 0,
     unresolvedOwnedFills: 0,
     unresolvedExternalOrders: 0,
     balanceDiscrepancies: 0,
-    blockerIds: [...blockerIds],
-    blockerOrigins: blockerIds.map((blockerId) => ({
+    blockerIds,
+    blockerOrigins: blockers.map(({ blockerId, producer }) => ({
       blockerId,
-      producer: "USER_DATA_EVENT_HANDLER",
+      producer,
     })),
     reconciliationId: `offline-account-resolution:${operatorId}:${actionId}`,
     capturedAt: new Date(context.exchange.currentAccountSnapshot.sourceTime).toISOString(),
@@ -253,9 +300,8 @@ async function resolveAuditedAccountBlockers({
   marketAudits,
   resolveBlockers,
 }) {
-  const blockerIds = blockers.map(({ blockerId }) => blockerId).sort()
   const audit = createAccountAudit({
-    blockerIds,
+    blockers,
     configuredMarkets,
     operatorId,
     actionId,
