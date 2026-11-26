@@ -141,7 +141,50 @@ function updateStageDiagnostics({
   }))
 }
 
-async function runStage({ stage, operation, signal, symbol = "*", stageDiagnostics } = {}) {
+function resolveStageResult({ stage, result, symbol, stageDiagnostics } = {}) {
+  if (result?.ok === true) {
+    updateStageDiagnostics({
+      stageDiagnostics,
+      symbol,
+      stage,
+      status: "COMPLETED",
+    })
+    return []
+  }
+  const errors = Array.isArray(result?.errors) ? result.errors : []
+  updateStageDiagnostics({
+    stageDiagnostics,
+    symbol,
+    stage,
+    status: "FAILED",
+    error: errors[0] ?? new Error(`${stage} returned an unsuccessful result`),
+  })
+  return errors.length > 0
+    ? errors.map((error) => createStageBlocker({ stage, error }))
+    : [`${stage}:UNCONFIRMED`]
+}
+
+function resolveStageError({ stage, error, signal, symbol, stageDiagnostics } = {}) {
+  updateStageDiagnostics({
+    stageDiagnostics,
+    symbol,
+    stage,
+    status: signal?.aborted ? getAbortStageStatus(signal) : "FAILED",
+    error: signal?.reason ?? error,
+  })
+  if (signal?.aborted) {
+    throw signal.reason ?? error
+  }
+  return [createStageBlocker({ stage, error })]
+}
+
+async function runStage({
+  stage,
+  operation,
+  signal,
+  symbol = "*",
+  stageDiagnostics,
+} = {}) {
   updateStageDiagnostics({
     stageDiagnostics,
     symbol,
@@ -152,46 +195,66 @@ async function runStage({ stage, operation, signal, symbol = "*", stageDiagnosti
     throwIfShutdownAborted(signal)
     const result = await awaitWithShutdownSignal({ operation, signal })
     throwIfShutdownAborted(signal)
-    if (result?.ok === true) {
-      updateStageDiagnostics({
+    return resolveStageResult({
+      stage,
+      result,
+      symbol,
+      stageDiagnostics,
+    })
+  } catch (error) {
+    return resolveStageError({
+      stage,
+      error,
+      signal,
+      symbol,
+      stageDiagnostics,
+    })
+  }
+}
+
+function getUserDataDrainErrors(result) {
+  if (Array.isArray(result?.errors)) {
+    return result.errors
+  }
+  return result?.error ? [result.error] : []
+}
+
+function resolveUserDataDrainResult({ result, stage, symbol, stageDiagnostics } = {}) {
+  if (result?.ok !== false) {
+    updateStageDiagnostics({
+      stageDiagnostics,
+      symbol,
+      stage,
+      status: "COMPLETED",
+    })
+    return []
+  }
+  const errors = getUserDataDrainErrors(result)
+  updateStageDiagnostics({
     stageDiagnostics,
     symbol,
     stage,
-    status: "COMPLETED",
+    status: "FAILED",
+    error: errors[0] ?? new Error("USER_DATA_DRAIN returned an unsuccessful result"),
   })
-      return []
-    }
-    const errors = Array.isArray(result?.errors) ? result.errors : []
-    updateStageDiagnostics({
-      stageDiagnostics,
-      symbol,
-      stage,
-      status: "FAILED",
-      error: errors[0] ?? new Error(`${stage} returned an unsuccessful result`),
-    })
-    if (errors.length > 0) {
-      return errors.map((error) => createStageBlocker({
-        stage,
-        error,
-      }))
-    }
-    return [`${stage}:UNCONFIRMED`]
-  } catch (error) {
-    updateStageDiagnostics({
-      stageDiagnostics,
-      symbol,
-      stage,
-      status: signal?.aborted ? getAbortStageStatus(signal) : "FAILED",
-      error: signal?.reason ?? error,
-    })
-    if (signal?.aborted) {
-      throw signal.reason ?? error
-    }
-    return [createStageBlocker({
-      stage,
-      error,
-    })]
+  return errors.length > 0
+    ? errors.map((error) => createStageBlocker({ stage, error }))
+    : ["USER_DATA_DRAIN:UNCONFIRMED"]
+}
+
+function resolveUserDataDrainError({ error, signal, symbol, stageDiagnostics } = {}) {
+  const stage = "USER_DATA_DRAIN"
+  updateStageDiagnostics({
+    stageDiagnostics,
+    symbol,
+    stage,
+    status: signal?.aborted ? getAbortStageStatus(signal) : "FAILED",
+    error: signal?.reason ?? error,
+  })
+  if (signal?.aborted) {
+    throw signal.reason ?? error
   }
+  return [createStageBlocker({ stage, error })]
 }
 
 async function drainUserData({
@@ -209,54 +272,24 @@ async function drainUserData({
   })
   try {
     throwIfShutdownAborted(signal)
-    const result = await awaitWithShutdownSignal({ operation: drainUserDataEvents, signal })
-    throwIfShutdownAborted(signal)
-    if (result?.ok === false) {
-      const { errors: resultErrors, error: resultError } = result
-      let errors = []
-      if (Array.isArray(resultErrors)) {
-        errors = resultErrors
-      } else if (resultError) {
-        errors = [resultError]
-      }
-      const failure = errors[0] ?? new Error("USER_DATA_DRAIN returned an unsuccessful result")
-      updateStageDiagnostics({
-    stageDiagnostics,
-    symbol,
-    stage,
-    status: "FAILED",
-    error: failure,
-  })
-      if (errors.length > 0) {
-        return errors.map((error) => createStageBlocker({
-          stage: "USER_DATA_DRAIN",
-          error,
-        }))
-      }
-      return ["USER_DATA_DRAIN:UNCONFIRMED"]
-    }
-    updateStageDiagnostics({
-    stageDiagnostics,
-    symbol,
-    stage,
-    status: "COMPLETED",
-  })
-    return []
-  } catch (error) {
-    updateStageDiagnostics({
-      stageDiagnostics,
-      symbol,
-      stage,
-      status: signal?.aborted ? "ABORTED" : "FAILED",
-      error: signal?.reason ?? error,
+    const result = await awaitWithShutdownSignal({
+      operation: drainUserDataEvents,
+      signal,
     })
-    if (signal?.aborted) {
-      throw signal.reason ?? error
-    }
-    return [createStageBlocker({
-      stage: "USER_DATA_DRAIN",
+    throwIfShutdownAborted(signal)
+    return resolveUserDataDrainResult({
+      result,
+      stage,
+      symbol,
+      stageDiagnostics,
+    })
+  } catch (error) {
+    return resolveUserDataDrainError({
       error,
-    })]
+      signal,
+      symbol,
+      stageDiagnostics,
+    })
   }
 }
 
