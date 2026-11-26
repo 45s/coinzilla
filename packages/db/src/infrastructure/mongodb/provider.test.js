@@ -64,7 +64,8 @@ test("MongoDB provider is usable through createDatabase on standalone servers", 
     await assert.rejects(
       database.transaction(() => "must not run"),
       (error) => error instanceof DatabaseTransactionUnsupportedError
-        && error.code === "DB_TRANSACTION_UNSUPPORTED",
+        && error.code === "DB_TRANSACTION_UNSUPPORTED"
+        && error.context?.topology === undefined,
     )
   } finally {
     await database.close()
