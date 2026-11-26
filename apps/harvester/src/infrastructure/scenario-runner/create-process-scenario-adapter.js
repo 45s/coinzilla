@@ -484,6 +484,9 @@ function createWorkerExecutor({
       terminationGraceMs,
       maxOutputBytes,
     })
+    if (signal?.aborted) {
+      return execution.promise
+    }
     if (typeof onStarted === "function") {
       onStarted()
     }
