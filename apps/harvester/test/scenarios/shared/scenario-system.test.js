@@ -96,7 +96,7 @@ test("loads a stable scenario inventory covering all Conservative behavior categ
   const restartScenario = scenarios.find((scenario) => scenario.id === "CON-PERSIST-002")
   assert.equal(restartScenario.coverageStatus, "TEST-MAPPED", "The unsupported runtime-restoration boundary must have executable evidence.")
   assert.match(restartScenario.expectedState.runtimeRestoration, /^UNSUPPORTED:/, "Runtime restoration must remain explicitly unsupported.")
-  assert.equal(restartScenario.relatedExistingTests.length, 2, "Offline restart tests must prove the disabled-restoration boundary.")
+  assert.equal(restartScenario.relatedExistingTests.length, 3, "Offline restart tests must prove the disabled-restoration boundary and cancellation/fill race.")
   const startupHistoryScenario = scenarios.find((scenario) => scenario.id === "CON-PERSIST-003")
   assert.equal(startupHistoryScenario.coverageStatus, "TEST-MAPPED", "Prior-session startup gates must have executable evidence.")
   assert.equal(startupHistoryScenario.relatedExistingTests.length, 4, "Prior-session and account STOP-latch boundaries must have executable mappings.")

@@ -88,7 +88,12 @@ export const scenarios = [
     relatedExistingTests: [
       {
         path: "test/recovery/operational-state-crash-matrix.test.js",
-        name: "reopens the real append-only ledger across duplicate fill delivery and two unclean process restarts",
+        name: "reopens the real append-only ledger across partial/final fills, duplicate delivery, and two unclean process restarts",
+        kind: "integration",
+      },
+      {
+        path: "test/recovery/operational-state-crash-matrix.test.js",
+        name: "replays a fill that races an uncertain cancellation without losing execution evidence",
         kind: "integration",
       },
       {
