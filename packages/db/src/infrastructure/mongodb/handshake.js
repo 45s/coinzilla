@@ -28,24 +28,29 @@ function parsePositiveInteger({ value, name, fallback }) {
   return parsed
 }
 
-/** Parse the deliberately supported single-seed mongodb:// URI form. */
-export function parseMongoConnectionString(connectionString) {
+function assertMongoConnectionString({ connectionString }) {
   if (typeof connectionString !== "string" || connectionString.trim() === "") {
     throw new TypeError("MongoDB connection string must be a non-empty string")
   }
-  const normalizedConnectionString = connectionString.toLowerCase()
-  if (normalizedConnectionString.startsWith("mongodb+srv://")) {
+  const normalized = connectionString.toLowerCase()
+  if (normalized.startsWith("mongodb+srv://")) {
     throw new TypeError("mongodb+srv:// discovery is not supported; provide a mongodb:// seed URI")
   }
-  if (!normalizedConnectionString.startsWith("mongodb://")) {
+  if (!normalized.startsWith("mongodb://")) {
     throw new TypeError("MongoDB connection string must use mongodb://")
   }
+}
+
+function extractSingleSeedAuthority({ connectionString }) {
   const authority = connectionString.slice("mongodb://".length).split(/[/?#]/, 1)[0]
   const hostList = authority.slice(authority.lastIndexOf("@") + 1)
   if (hostList.includes(",")) {
     throw new TypeError("MongoDB URI must specify a single seed host")
   }
+  return authority
+}
 
+function parseMongoUrl({ connectionString }) {
   let url
   try {
     url = new URL(connectionString)
@@ -58,6 +63,10 @@ export function parseMongoConnectionString(connectionString) {
   if (url.username === "" && url.password !== "") {
     throw new TypeError("MongoDB URI password requires a username")
   }
+  return url
+}
+
+function validateMongoUriOptions({ url }) {
   const supportedOptions = new Set([
     "authSource",
     "tls",
@@ -85,12 +94,7 @@ export function parseMongoConnectionString(connectionString) {
     }
     seenOptions.add(key)
   }
-  const databaseName = decodeURIComponent(url.pathname.slice(1)) || "admin"
-  if (/[\\/\\\\."$*<>:|?]/u.test(databaseName) || databaseName.includes("\0")) {
-    throw new TypeError("MongoDB database name contains an unsupported character")
-  }
-  if (parseBooleanOption({ value: url.searchParams.get("loadBalanced"),
-name: "loadBalanced" })) {
+  if (parseBooleanOption({ value: url.searchParams.get("loadBalanced"), name: "loadBalanced" })) {
     throw new TypeError("MongoDB load-balanced topology is not supported")
   }
   if (url.searchParams.has("compressors") && url.searchParams.get("compressors") !== "") {
@@ -99,12 +103,20 @@ name: "loadBalanced" })) {
   if (url.searchParams.has("readPreference") && url.searchParams.get("readPreference") !== "primary") {
     throw new TypeError("MongoDB provider supports primary read preference only")
   }
-  if (parseBooleanOption({ value: url.searchParams.get("retryWrites"),
-name: "retryWrites" })) {
+  if (parseBooleanOption({ value: url.searchParams.get("retryWrites"), name: "retryWrites" })) {
     throw new TypeError("MongoDB retryable writes are not supported")
   }
-  const authSource = url.searchParams.get("authSource") ?? databaseName
-  const tlsValue = url.searchParams.get("tls") ?? url.searchParams.get("ssl")
+}
+
+function parseDatabaseName({ url }) {
+  const databaseName = decodeURIComponent(url.pathname.slice(1)) || "admin"
+  if (/[\\/\\\\."$*<>:|?]/u.test(databaseName) || databaseName.includes("\0")) {
+    throw new TypeError("MongoDB database name contains an unsupported character")
+  }
+  return databaseName
+}
+
+function parseCredentials({ url, authority }) {
   const userInfo = authority.includes("@") ? authority.slice(0, authority.lastIndexOf("@")) : null
   const username = url.username === "" ? undefined : decodeURIComponent(url.username)
   const hasPasswordSeparator = userInfo?.includes(":") ?? false
@@ -115,6 +127,18 @@ name: "retryWrites" })) {
   if (username !== undefined && password === undefined) {
     throw new TypeError("MongoDB URI username requires a password")
   }
+  return { username, password }
+}
+
+/** Parse the deliberately supported single-seed mongodb:// URI form. */
+export function parseMongoConnectionString(connectionString) {
+  assertMongoConnectionString({ connectionString })
+  const authority = extractSingleSeedAuthority({ connectionString })
+  const url = parseMongoUrl({ connectionString })
+  validateMongoUriOptions({ url })
+  const databaseName = parseDatabaseName({ url })
+  const credentials = parseCredentials({ url, authority })
+  const tlsValue = url.searchParams.get("tls") ?? url.searchParams.get("ssl")
   const host = url.hostname.startsWith("[") ? url.hostname.slice(1, -1) : url.hostname
   if (host === "") {
     throw new TypeError("MongoDB URI requires a host")
@@ -122,22 +146,26 @@ name: "retryWrites" })) {
   return {
     host,
     port: url.port === "" ? 27017 : Number(url.port),
-    username,
-    password,
+    ...credentials,
     databaseName,
-    authSource,
+    authSource: url.searchParams.get("authSource") ?? databaseName,
     authMechanism: url.searchParams.get("authMechanism") ?? undefined,
-    tls: parseBooleanOption({ value: tlsValue,
-name: "tls" }),
+    tls: parseBooleanOption({ value: tlsValue, name: "tls" }),
     replicaSet: url.searchParams.get("replicaSet") ?? undefined,
-    directConnection: parseBooleanOption({ value: url.searchParams.get("directConnection"),
-name: "directConnection" }),
-    connectTimeoutMS: parsePositiveInteger({ value: url.searchParams.get("connectTimeoutMS"),
-name: "connectTimeoutMS",
-fallback: 10_000 }),
-    socketTimeoutMS: parsePositiveInteger({ value: url.searchParams.get("socketTimeoutMS"),
-name: "socketTimeoutMS",
-fallback: 30_000 }),
+    directConnection: parseBooleanOption({
+      value: url.searchParams.get("directConnection"),
+      name: "directConnection",
+    }),
+    connectTimeoutMS: parsePositiveInteger({
+      value: url.searchParams.get("connectTimeoutMS"),
+      name: "connectTimeoutMS",
+      fallback: 10_000,
+    }),
+    socketTimeoutMS: parsePositiveInteger({
+      value: url.searchParams.get("socketTimeoutMS"),
+      name: "socketTimeoutMS",
+      fallback: 30_000,
+    }),
   }
 }
 
@@ -181,6 +209,87 @@ function selectAuthenticationMechanism({ requested, supported }) {
   return "SCRAM-SHA-256"
 }
 
+function createHelloCommand({ username, authSource }) {
+  const command = {
+    hello: 1,
+    helloOk: true,
+    client: {
+      driver: { name: "coinzilla-db-native", version: "1.0.0" },
+      os: { type: process.platform },
+      platform: `Node.js ${process.version}`,
+    },
+    $db: "admin",
+  }
+  if (username !== undefined) {
+    command.saslSupportedMechs = `${authSource}.${username}`
+  }
+  return command
+}
+
+function validateWireVersion({ hello }) {
+  const minWireVersion = Number(hello.minWireVersion ?? 0)
+  const maxWireVersion = Number(hello.maxWireVersion ?? 0)
+  if (!Number.isSafeInteger(minWireVersion)
+    || !Number.isSafeInteger(maxWireVersion)
+    || minWireVersion < 0
+    || maxWireVersion < 0
+    || maxWireVersion < MIN_SUPPORTED_WIRE_VERSION
+    || minWireVersion > MAX_SUPPORTED_WIRE_VERSION
+    || maxWireVersion < minWireVersion) {
+    throw new Error(
+      `MongoDB wire protocol version range ${minWireVersion}-${maxWireVersion} is not supported; supported range is ${MIN_SUPPORTED_WIRE_VERSION}-${MAX_SUPPORTED_WIRE_VERSION}`,
+    )
+  }
+  return { minWireVersion, maxWireVersion }
+}
+
+function validateTopology({ hello, replicaSet }) {
+  const topology = detectTopology(hello)
+  if (replicaSet && hello.setName !== replicaSet) {
+    throw new Error(`MongoDB server does not match requested replica set: expected ${replicaSet}, received ${hello.setName ?? "unknown"}`)
+  }
+  const writablePrimary = typeof hello.isWritablePrimary === "boolean"
+    ? hello.isWritablePrimary
+    : hello.ismaster === true
+  if (!writablePrimary && typeof hello.primary !== "string") {
+    throw new Error("MongoDB topology did not advertise a writable primary")
+  }
+  return { topology, writablePrimary }
+}
+
+async function authenticateIfConfigured({
+  transport,
+  hello,
+  username,
+  password,
+  authSource,
+  authMechanism,
+  randomBytes,
+}) {
+  if (username === undefined) {
+    return null
+  }
+  if (typeof password !== "string") {
+    throw new TypeError("MongoDB password must be a string when a username is configured")
+  }
+  const supported = Array.isArray(hello.saslSupportedMechs)
+    ? hello.saslSupportedMechs
+    : []
+  const mechanism = selectAuthenticationMechanism({
+    requested: authMechanism,
+    supported,
+  })
+  await authenticateMongoScram({
+    command: (input) => transport.command(input),
+    username,
+    password,
+    authSource,
+    mechanism,
+    randomBytes,
+  })
+  return mechanism
+}
+
 /** Run hello negotiation, topology detection and optional SCRAM authentication. */
 export async function performMongoHandshake({
   transport,
@@ -191,6 +300,44 @@ export async function performMongoHandshake({
   authMechanism,
   replicaSet,
   randomBytes,
+} = {}) {
+  if (!transport || typeof transport.command !== "function") {
+    throw new TypeError("MongoDB handshake requires a connected command transport")
+  }
+  if (typeof databaseName !== "string" || databaseName.trim() === "") {
+    throw new TypeError("MongoDB database name must be a non-empty string")
+  }
+  const hello = await transport.command({
+    body: createHelloCommand({ username, authSource }),
+  })
+  assertCommandSucceeded({ response: hello, commandName: "hello" })
+  if (hello.serviceId !== undefined) {
+    throw new Error("MongoDB load-balanced topology is not supported")
+  }
+  const { minWireVersion, maxWireVersion } = validateWireVersion({ hello })
+  const { topology, writablePrimary } = validateTopology({ hello, replicaSet })
+  const mechanism = await authenticateIfConfigured({
+    transport,
+    hello,
+    username,
+    password,
+    authSource,
+    authMechanism,
+    randomBytes,
+  })
+  return Object.freeze({
+    topology,
+    hello,
+    minWireVersion,
+    maxWireVersion,
+    primary: writablePrimary ? null : hello.primary,
+    sessionsSupported: Number.isFinite(hello.logicalSessionTimeoutMinutes)
+      && hello.logicalSessionTimeoutMinutes > 0,
+    transactionSupported: topology !== "standalone"
+      && Number.isFinite(hello.logicalSessionTimeoutMinutes)
+      && hello.logicalSessionTimeoutMinutes > 0,
+    authenticationMechanism: mechanism,
+  })
 } = {}) {
   if (!transport || typeof transport.command !== "function") {
     throw new TypeError("MongoDB handshake requires a connected command transport")
