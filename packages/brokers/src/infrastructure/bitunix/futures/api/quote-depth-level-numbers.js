@@ -169,13 +169,16 @@ export function quoteDepthLevelNumbers({ text } = {}) {
       index = keyEnd
       continue
     }
-    const quoted = quoteArrayNumbers({
+    const {
+      output: quotedOutput,
+      index: arrayEnd,
+    } = quoteArrayNumbers({
       text,
       startIndex: valueIndex,
     })
-    output.push(text.slice(cursor, valueIndex), quoted.output)
-    cursor = quoted.index
-    index = quoted.index
+    output.push(text.slice(cursor, valueIndex), quotedOutput)
+    cursor = arrayEnd
+    index = arrayEnd
   }
   return output.join("") + text.slice(cursor)
 }
