@@ -1286,6 +1286,47 @@ test("fails closed before registration or broker I/O when durable provenance met
 })
 
 
+test("rejects conflicting registered ownership before broker submission", async () => {
+  const ownership = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-original",
+    purpose: "RECOVERY_BUY",
+    cycleId: "rs-cycle-1",
+  }
+  const conflictingOwnership = {
+    ...ownership,
+    positionId: "rs-position-conflict",
+  }
+  let brokerCalls = 0
+  let deferredSubmission
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      placeOrder: async () => {
+        brokerCalls += 1
+        return { ok: false }
+      },
+    },
+    onPendingOrder: async () => ({
+      ownership: conflictingOwnership,
+    }),
+    onAcknowledgedOrder: async () => {},
+    onSubmissionFailure: async () => {},
+    onSubmissionDeferred: async (details) => {
+      deferredSubmission = details
+    },
+  })
+  const result = await execute({
+    decision: createOwnedDecision({ ownership }),
+    marketMetadata,
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(brokerCalls, 0, "Conflicting ownership must never reach broker I/O.")
+  assert.equal(deferredSubmission.reason, "SUBMISSION_OWNERSHIP_CONFLICT")
+  assert.equal(deferredSubmission.registered, true)
+  assert.deepEqual(deferredSubmission.ownership, conflictingOwnership)
+})
+
 test("persists the registered CG strategy purpose for an ordinary Conservative BUY", async () => {
   const durableFacts = []
   const conservativeOwnership = Object.freeze({
