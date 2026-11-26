@@ -981,7 +981,7 @@ test("stages streamed RS SELL fills for complete terminal mixed-SELL reconciliat
 })
 
 
-test("routes terminal RS SELL fill history through mixed accounting without Conservative completion", async () => {
+function createTerminalRecoverySellerOrderEventFixture() {
   const previousOrder = makeOrder({
     side: "SELL",
     status: "OPEN",
@@ -1032,7 +1032,23 @@ test("routes terminal RS SELL fill history through mixed accounting without Cons
       })
     },
   })
+  return {
+    terminalOrder,
+    fill,
+    workflow,
+    calls,
+    mixedSellReconciliations,
+  }
+}
 
+test("routes terminal RS SELL fill history through mixed accounting without Conservative completion", async () => {
+  const {
+    terminalOrder,
+    fill,
+    workflow,
+    calls,
+    mixedSellReconciliations,
+  } = createTerminalRecoverySellerOrderEventFixture()
   const result = await workflow.processUserDataEventTransition({
     event: {
       eventType: "executionReport",
@@ -1047,7 +1063,6 @@ test("routes terminal RS SELL fill history through mixed accounting without Cons
   assert.deepEqual(calls.completedCycles, [], "RS SELL must never enter Conservative recovery-cycle completion.")
   assert.deepEqual(calls.sellFills, [fill], "The terminal canonical fill must be staged exactly once.")
 })
-
 function createUnderTargetRecoverySellerOrderEventFixture() {
   const terminalOrder = makeOrder({
     side: "SELL",

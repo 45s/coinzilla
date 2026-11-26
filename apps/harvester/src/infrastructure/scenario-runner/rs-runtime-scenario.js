@@ -9,7 +9,7 @@ import {
   Quantity,
   TradingRules,
 } from "@coinzilla/entities"
-import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
 import { validateScenarioInput as validateInput } from "../../application/scenario-runner/validate-scenario-input.js"
 import { AccountSnapshot } from "../../domain/account/account-snapshot.js"
 import { allocateOrderCommitments } from "../../domain/orders/allocate-order-commitments.js"
@@ -31,7 +31,6 @@ import { createRecoverySellerAccountingWorkflow } from "../../use-cases/create-r
 import { createRecoverySellerActionAuthorizer } from "../../use-cases/create-recovery-seller-action-authorizer.js"
 import { createRecoverySellerOrderSubmitter } from "../../use-cases/create-recovery-seller-order-submitter.js"
 import { createRecoverySellerStopWorkflow } from "../../use-cases/create-recovery-seller-stop-workflow.js"
-import { makeOrderEventWorkflow } from "../../use-cases/order-event-workflow.js"
 import { recordOrderSubmissionIntent } from "../../use-cases/record-order-submission-intent.js"
 import { recordOrderSubmissionOutcome } from "../../use-cases/record-order-submission-outcome.js"
 const RUNTIME_PAIR_CONFIG = Object.freeze({
@@ -133,8 +132,6 @@ export const RECOVERY_SELLER_RUNTIME_SCENARIOS = Object.freeze([
     input: RUNTIME_FIXTURE.input,
   }),
 ])
-
-const [RECOVERY_SELLER_RUNTIME_SCENARIO] = RECOVERY_SELLER_RUNTIME_SCENARIOS
 
 function createAssertion({ name, actual, expected }) {
   return Object.freeze({
@@ -797,6 +794,17 @@ function createRuntimeScenarioPartialSellFill({ runtime, terminalOrder, partialQ
   })
 }
 
+function createRuntimeScenarioPartialSellResult({ runtime, terminalOrder, result }) {
+  return {
+    orderStatus: terminalOrder.status,
+    executedQuantity: terminalOrder.executedQuantity.amount,
+    profitabilityEligible: result.data.profitability?.eligible === true,
+    cycleState: runtime.seed.workflow.getCycleStateForMarket({
+      marketId: runtime.market.id,
+    }),
+  }
+}
+
 async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
   const submittedOrder = execution.data.submittedOrders?.[0]
   if (!submittedOrder) {
@@ -825,78 +833,36 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
     partialQuantity,
     sellPrice,
   })
-  const stagedSellFills = []
-  let terminalAccountingResult
-  const eventState = {
-    registry: terminalRegistry,
-    processedFillsByOrder: new Map(),
-    reconciledTerminalOrderClientIds: new Set(),
-  }
-  const eventWorkflow = makeOrderEventWorkflow({
-    state: eventState,
-    broker: {
-      getFills: async () => toResult({ data: [fill] }),
-    },
-    eventPublisher: {
-      publish: () => toResult({ data: { accepted: true } }),
-    },
-    updateTradingAccounting: async () => toResult({ data: { applied: true } }),
-    updateRecoverySellerAccounting: async () => toResult({ data: { applied: true } }),
-    recordBuyExecutionFill: () => {},
-    recordSellExecutionFill: ({ fill: stagedFill }) => stagedSellFills.push(stagedFill),
-    pause: async () => {},
-    reconcileRecoverySellerMixedSell: async ({ order: reconciledOrder, canonicalFills }) => {
-      const currentOpenOrder = orderRegistry.getOrder({
-        clientOrderId: reconciledOrder.clientOrderId,
-      })
-      let currentReconciliation = createMixedSellFillReconciliation({
-        order: currentOpenOrder,
-        orderRegistry,
-      })
-      const currentAllocations = canonicalFills.map((canonicalFill) =>
-        createMixedSellFillAllocation({
-          fill: canonicalFill,
-          orderRegistry: terminalRegistry,
-          recoveryQuantity: "2.49",
-          legacyQuantity: "0.01",
-        }))
-      for (const currentAllocation of currentAllocations) {
-        currentReconciliation = stageMixedSellFillAllocation({
-          reconciliation: currentReconciliation,
-          allocation: currentAllocation,
-        }).reconciliation
-      }
-      terminalAccountingResult = await runtime.seed.workflow.reconcileTerminalMixedSell({
-        reconciliation: currentReconciliation,
-        terminalOrder: reconciledOrder,
-        canonicalFills,
-        canonicalFillAllocations: currentAllocations,
-        minProfit: "0.2",
-      })
-      return terminalAccountingResult
-    },
-    latchRecoverySellerStop: async (input) => runtime.stopWorkflow.latch(input),
+  const reconciliation = createMixedSellFillReconciliation({
+    order: openOrder,
+    orderRegistry,
   })
-  const eventResult = await eventWorkflow.reconcileTerminalOrderFills({
-    order: terminalOrder,
+  const allocation = createMixedSellFillAllocation({
+    fill,
+    orderRegistry: terminalRegistry,
+    recoveryQuantity: "2.49",
+    legacyQuantity: "0.01",
   })
-  if (eventResult?.ok !== true || terminalAccountingResult?.ok !== true) {
-    throw eventResult?.errors?.[0] ??
-      terminalAccountingResult?.errors?.[0] ??
-      new Error("Production Recovery Seller order-event reconciliation failed")
+  const staged = stageMixedSellFillAllocation({
+    reconciliation,
+    allocation,
+  })
+  const result = await runtime.seed.workflow.reconcileTerminalMixedSell({
+    reconciliation: staged.reconciliation,
+    terminalOrder,
+    canonicalFills: [fill],
+    canonicalFillAllocations: [allocation],
+    minProfit: "0.2",
+  })
+  if (result?.ok !== true) {
+    throw result?.errors?.[0] ?? new Error("Production Recovery Seller partial SELL reconciliation failed")
   }
-  return {
-    orderStatus: terminalOrder.status,
-    executedQuantity: terminalOrder.executedQuantity.amount,
-    eventWorkflowReconciled: eventState.reconciledTerminalOrderClientIds.has(terminalOrder.clientOrderId),
-    eventFillStaged: stagedSellFills.length === 1,
-    profitabilityEligible: terminalAccountingResult.data.profitability?.eligible === true,
-    cycleState: runtime.seed.workflow.getCycleStateForMarket({
-      marketId: runtime.market.id,
-    }),
-  }
+  return createRuntimeScenarioPartialSellResult({
+    runtime,
+    terminalOrder,
+    result,
+  })
 }
-
 function createRuntimeScenarioOutput({ runtime, data, submittedAction, submissionRejected = false, terminalSell = null }) {
   const action = submittedAction ? {
     side: submittedAction.side,
@@ -1080,12 +1046,21 @@ function createPartialSellAssertions({ output, expected }) {
 
 function createRuntimeScenarioAssertions({ output, expected }) {
   if (expected.submissionRejected === true) {
-    return createRejectedSellAssertions({ output, expected })
+    return createRejectedSellAssertions({
+      output,
+      expected,
+    })
   }
   if (expected.terminalOrderStatus) {
-    return createPartialSellAssertions({ output, expected })
+    return createPartialSellAssertions({
+      output,
+      expected,
+    })
   }
-  return createSubmittedSellAssertions({ output, expected })
+  return createSubmittedSellAssertions({
+    output,
+    expected,
+  })
 }
 
 function createRuntimeScenarioEvaluationTrace({ runtime, effectiveInput, output }) {
