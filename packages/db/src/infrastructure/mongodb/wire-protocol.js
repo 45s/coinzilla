@@ -40,8 +40,10 @@ function encodeDocumentSequence({ identifier, documents }) {
 
 /** Encode a MongoDB OP_MSG request or response. */
 export function encodeOpMsg({ requestId, responseTo = 0, flags = 0, body, sequences = [] }) {
-  validateMessageIdentifier({ value: requestId, label: "requestId" })
-  validateMessageIdentifier({ value: responseTo, label: "responseTo" })
+  validateMessageIdentifier({ value: requestId,
+label: "requestId" })
+  validateMessageIdentifier({ value: responseTo,
+label: "responseTo" })
   if (!Number.isInteger(flags) || flags < 0 || flags > 0xffffffff || (flags & ~SUPPORTED_FLAGS) !== 0) {
     throw new TypeError("MongoDB OP_MSG contains unsupported flag bits")
   }
@@ -161,7 +163,8 @@ end: message.length }
       if (body === undefined) {
         throw new TypeError("MongoDB OP_MSG body section must precede document sequences")
       }
-      const sequence = readSequence({ buffer: message, state })
+      const sequence = readSequence({ buffer: message,
+state })
       if (Object.hasOwn(sequences, sequence.identifier)) {
         throw new TypeError("MongoDB OP_MSG contains a duplicate sequence identifier")
       }
@@ -175,8 +178,10 @@ end: message.length }
   }
   const requestId = message.readInt32LE(4)
   const responseTo = message.readInt32LE(8)
-  validateMessageIdentifier({ value: requestId, label: "requestId" })
-  validateMessageIdentifier({ value: responseTo, label: "responseTo" })
+  validateMessageIdentifier({ value: requestId,
+label: "requestId" })
+  validateMessageIdentifier({ value: responseTo,
+label: "responseTo" })
   return {
     requestId,
     responseTo,

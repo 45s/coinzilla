@@ -266,7 +266,8 @@ function hasAmbiguousWriteConcern(response) {
 
 function isRetryableTransactionError(error) {
   return error?.outcomeUnknown === true
-    || hasErrorLabel({ response: error, label: "RetryableWriteError" })
+    || hasErrorLabel({ response: error,
+label: "RetryableWriteError" })
     || hasAmbiguousWriteConcern(error)
     || error?.code === 50
     || error?.codeName === "MaxTimeMSExpired"
@@ -319,8 +320,10 @@ errorLabels: response.errorLabels }
         : response
       const error = createServerCommandError(serverFailure)
       if (hasAmbiguousWriteConcern(response)
-        || hasErrorLabel({ response, label: "UnknownTransactionCommitResult" })
-        || hasErrorLabel({ response, label: "RetryableWriteError" })
+        || hasErrorLabel({ response,
+label: "UnknownTransactionCommitResult" })
+        || hasErrorLabel({ response,
+label: "RetryableWriteError" })
         || response?.code === 50
         || response?.codeName === "MaxTimeMSExpired"
         || ambiguous) {
@@ -710,7 +713,8 @@ export function createMongoProvider(options = {}) {
     if (typeof work !== "function") {
       throw new TypeError("A MongoDB read transaction callback is required")
     }
-    return runTrackedOperation({ state, work: async () => {
+    return runTrackedOperation({ state,
+work: async () => {
       const operations = createMongoRecordOperations({
         command: (commandInput) => state.transport.command(commandInput),
         databaseName: state.options.databaseName,
@@ -730,10 +734,12 @@ export function createMongoProvider(options = {}) {
           throw new Error("MongoDB read transaction cannot execute mutations")
         },
         readOne(input) {
-          return invokeRead({ method: "readOne", input })
+          return invokeRead({ method: "readOne",
+input })
         },
         readMany(input) {
-          return invokeRead({ method: "readMany", input })
+          return invokeRead({ method: "readMany",
+input })
         },
         update() {
           throw new Error("MongoDB read transaction cannot execute mutations")
@@ -756,7 +762,8 @@ export function createMongoProvider(options = {}) {
   }
 
   async function execute({ operation, input }) {
-    return runTrackedOperation({ state, work: async () => {
+    return runTrackedOperation({ state,
+work: async () => {
       if (!CRUD_OPERATIONS.includes(operation)) {
         throw new TypeError(`Unsupported MongoDB CRUD operation: ${operation}`)
       }
@@ -771,7 +778,8 @@ export function createMongoProvider(options = {}) {
   return Object.freeze({
     connect,
     close,
-    withTransaction: (work) => runTrackedOperation({ state, work: () => runTransaction(work) }),
+    withTransaction: (work) => runTrackedOperation({ state,
+work: () => runTransaction(work) }),
     withReadTransaction,
     execute,
     capabilities: MONGO_CAPABILITIES,
