@@ -844,8 +844,13 @@
         },
         {
           "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
-          "name": "exits the child process only after Journal shutdown and real process-lock release",
+          "name": "exits child process only after Journal shutdown and real process-lock release",
           "kind": "integration"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "retains the process lock when release acknowledgement is ambiguous",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
