@@ -398,10 +398,10 @@ Both named tests are included in `config.targetedTestFiles`. They passed Harvest
 
 ## RS-006 application scenario checkpoint — 2026-11-26
 
-- Registered application cases: `RS-006-003-A/B`, `RS-006-012-A`, `RS-006-016-A` and `RS-006-018-A`.
+- Registered cases: `RS-006-003-A/B`, `RS-006-012-A`, `RS-006-014-A`, `RS-006-015-A`, `RS-006-016-A` and `RS-006-018-A`.
 - `RS-006-003-A` reconciles two canonical partial SELL Fills through the real workflow. It asserts exact 5.00 recovery / 0.01 legacy allocation, 10.518 net quote proceeds after both quote commissions, one durable terminal commit and reservation release only after both projections commit.
 - `RS-006-003-B` replays the identical two-Fill terminal boundary and asserts duplicate classification, stable Portfolio/legacy/registry snapshots and no second durable append.
 - `RS-006-012-A` proves a failed durable append leaves Portfolio, legacy Position/accounting, OrderRegistry and the SELL reservation unchanged.
 - `RS-006-016-A` proves incomplete terminal Fill history cannot publish accounting or release the reservation.
 - `RS-006-018-A` proves confirmed execution facts are committed even when realized profitability misses `minProfit`.
-- Six subcases are `TEST-MAPPED`, not `VERIFIED`; RS-006-014/015 cover domain-level duplicate/conflict staging only, not full REST/stream retrieval ordering. RS-006 remains PARTIAL because the end-to-end source merge, complete persistence-barrier and failure-interleaving permutations remain.
+- Seven subcases are `TEST-MAPPED`, not `VERIFIED`; RS-006-014/015 cover domain-level duplicate/conflict staging only, not full REST/stream retrieval ordering. RS-006 remains PARTIAL because the end-to-end source merge, complete persistence-barrier and failure-interleaving permutations remain.
