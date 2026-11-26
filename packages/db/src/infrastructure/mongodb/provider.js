@@ -211,6 +211,7 @@ async function commitMongoTransaction({ transport, session }) {
     writeConcern: { w: "majority" },
     $db: "admin",
   }
+  let ambiguous = false
   let lastError
   for (let attempt = 0; attempt < MAX_COMMIT_ATTEMPTS; attempt += 1) {
     try {
@@ -218,8 +219,12 @@ async function commitMongoTransaction({ transport, session }) {
       if (Number(response?.ok) === 1 && !response.writeConcernError) {
         return
       }
-      const error = createServerCommandError(response)
-      if (response?.writeConcernError || hasErrorLabel(response, "UnknownTransactionCommitResult")) {
+      const serverFailure = response?.writeConcernError
+        ? { ...response.writeConcernError, errorLabels: response.errorLabels }
+        : response
+      const error = createServerCommandError(serverFailure)
+      if (hasErrorLabel(response, "UnknownTransactionCommitResult") || ambiguous) {
+        ambiguous = true
         lastError = error
       } else {
         throw new DatabaseProviderError({
@@ -231,6 +236,9 @@ async function commitMongoTransaction({ transport, session }) {
       if (error instanceof DatabaseProviderError) {
         throw error
       }
+      // Once a commit request may have reached the server, a later error such
+      // as NoSuchTransaction cannot prove whether the earlier commit succeeded.
+      ambiguous = true
       lastError = error
     }
     if (attempt + 1 < MAX_COMMIT_ATTEMPTS) {
