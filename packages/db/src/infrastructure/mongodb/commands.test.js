@@ -509,7 +509,7 @@ test("MongoDB reads reject malformed encoded user field names", async () => {
 })
 
 
-test("MongoDB updates refresh stored scalar sort metadata", async () => {
+test("MongoDB updates store only changed user data and sorting reads the current value", async () => {
   const stub = createCommandStub([{
     ok: 1,
     value: {
@@ -531,8 +531,7 @@ test("MongoDB updates refresh stored scalar sort metadata", async () => {
     changes: { name: "Ada" },
   })
 
-  assert.deepEqual(
-    stub.calls[0].update.$set["sortData.__coinzilla_key_bmFtZQ"],
-    { rank: 4 },
-  )
+  assert.deepEqual(stub.calls[0].update.$set, {
+    "data.__coinzilla_key_bmFtZQ": "Ada",
+  })
 })
