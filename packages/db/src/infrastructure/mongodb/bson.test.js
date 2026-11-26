@@ -169,6 +169,86 @@ test("BSON enforces the 16 MiB document limit and rejects trailing input bytes",
   )
 })
 
+
+function rawBsonDocument(elements) {
+  const size = 5 + elements.reduce((total, element) => total + element.length, 0)
+  const document = Buffer.alloc(size)
+  document.writeInt32LE(size, 0)
+  let offset = 4
+  for (const element of elements) {
+    element.copy(document, offset)
+    offset += element.length
+  }
+  document[offset] = 0
+  return document
+}
+
+test("BSON decodes protocol ObjectId and timestamp values", () => {
+  const objectId = Buffer.from("00112233445566778899aabb", "hex")
+  const timestamp = Buffer.alloc(8)
+  timestamp.writeBigUInt64LE(123456789n)
+  const objectIdElement = Buffer.concat([
+    Buffer.from([0x07]),
+    Buffer.from("objectId\\0"),
+    objectId,
+  ])
+  const timestampElement = Buffer.concat([
+    Buffer.from([0x11]),
+    Buffer.from("timestamp\\0"),
+    timestamp,
+  ])
+  const decoded = decodeBsonDocument(rawBsonDocument([
+    objectIdElement,
+    timestampElement,
+  ]))
+
+  assert.equal(decoded.objectId, objectId.toString("hex"))
+  assert.equal(decoded.timestamp, 123456789)
+})
+
+test("BSON decoder rejects duplicate keys, invalid array indexes, and unsupported types", () => {
+  const int32 = (key, value) => {
+    const payload = Buffer.alloc(4)
+    payload.writeInt32LE(value)
+    return Buffer.concat([Buffer.from([0x10]), Buffer.from(`${key}\\0`), payload])
+  }
+  assert.throws(
+    () => decodeBsonDocument(rawBsonDocument([
+      int32("duplicate", 1),
+      int32("duplicate", 2),
+    ])),
+    /duplicate key/,
+  )
+
+  const invalidArray = rawBsonDocument([int32("1", 1)])
+  const arrayElement = Buffer.concat([
+    Buffer.from([0x04]),
+    Buffer.from("values\\0"),
+    invalidArray,
+  ])
+  assert.throws(
+    () => decodeBsonDocument(rawBsonDocument([arrayElement])),
+    /array indexes/,
+  )
+
+  assert.throws(
+    () => decodeBsonDocument(rawBsonDocument([
+      Buffer.concat([Buffer.from([0xff]), Buffer.from("unknown\\0")]),
+    ])),
+    /Unsupported BSON element type/,
+  )
+})
+
+test("BSON decoder rejects invalid UTF-8 in cstring keys", () => {
+  const malformed = rawBsonDocument([
+    Buffer.concat([Buffer.from([0x10, 0xff, 0x00]), Buffer.from([1, 0, 0, 0])]),
+  ])
+  assert.throws(
+    () => decodeBsonDocument(malformed),
+    /invalid UTF-8/,
+  )
+})
+
 test("BSON decoder rejects truncated documents and inconsistent declared lengths", () => {
   const encoded = encodeBsonDocument({ value: "valid" })
 
