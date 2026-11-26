@@ -714,7 +714,7 @@ test("rejects an action ID already present in durable resolution history", async
   })
 
   assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /action ID has already been used/)
+  assert.match(result.errors[0].message, /legacy resolution history without replay-safe metadata/)
   assert.equal(auditCalls, 0)
 })
 
