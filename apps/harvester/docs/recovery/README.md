@@ -164,6 +164,8 @@ Steps 8 and 9 remain separate gates: candidate-state restoration behind closed r
 
 This is the explicit operator workflow for a user-data ACCOUNT safety blocker. It is separate from one-market coverage confirmation and is only available after the Harvester process has been cleanly stopped.
 
+Producer provenance determines resolver ownership. `RECOVERY_SELLER_STOP_WORKFLOW` facts remain exclusively owned by the existing Recovery Seller resolver; legacy untagged Recovery Seller facts retain that resolver through the reserved reason code. If a fact explicitly identifies `USER_DATA_EVENT_HANDLER` but uses the reserved Recovery Seller STOP reason, projection fails closed and neither resolver may clear it.
+
 From `apps/harvester`, run:
 
 ```sh
