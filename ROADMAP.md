@@ -2,7 +2,7 @@
 
 **Scope:** cross-workspace priorities only. App/package implementation backlogs belong in their owning roadmap and GitHub issues.
 **Last reviewed:** 2026-11-26
-**Current branch:** `develop`
+**Target branch:** `develop`
 
 > This page is an index, not a second task tracker. The full pre-cleanup roadmap was preserved at [ROOT_ROADMAP_HISTORY_2026-11-26](docs/archive/roadmap-history-2026-11-26.md#root-roadmap).
 
