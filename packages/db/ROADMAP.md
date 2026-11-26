@@ -26,9 +26,9 @@ The infrastructure adapter uses Node.js built-ins only and includes native BSON 
 
 **Supported topology envelope:** single-seed `mongodb://` standalone and replica-set deployments. Replica-set multi-document transactions are verified. Sharded transactions, SRV, multi-seed discovery, pooling, topology monitoring/failover, retryable writes, compression, change streams, GridFS, client-side encryption and legacy wire opcodes are not supported guarantees. Supported wire-version overlap is 13–25. SCRAM usernames and SHA-256 passwords are restricted to printable ASCII because full SASLprep is not implemented. The public record contract is JSON-oriented, not arbitrary BSON. Client session pooling and explicit `endSessions` cleanup remain deferred.
 
-**Verification on feature head `6b45a99`:**
+**Latest exact-head verification recorded on `da7446fce09791cd28fffb114cf9d23d9f1d0e6c` (2026-11-26):**
 
-- DB unit suite: 400 tests, 379 passed, 0 failed, 21 skipped. Line coverage 98.68%, branch coverage 96.70%, function coverage 100%.
+- DB unit suite: 400 tests, 379 passed, 0 failed, 21 skipped. Line coverage 98.68%, branch coverage 96.76%, function coverage 100%.
 - Full workspace Unit Tests workflow: passed, including `@coinzilla/db` and existing providers/packages.
 - Test Coverage workflow: passed for all packages and workspace coverage.
 - Repository Quality: passed, including zero-warning workspace ESLint, strict changed-file ESLint, JavaScript syntax, actionlint and maintained-Markdown checks.
