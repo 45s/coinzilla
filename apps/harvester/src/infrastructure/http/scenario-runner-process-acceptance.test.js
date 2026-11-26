@@ -10,6 +10,7 @@ const TEST_WORKER_PATH = fileURLToPath(new URL(
 ))
 
 function createTestSandboxLauncher() {
+  // Test-only attestation exercises the host gate; it does not apply an OS sandbox.
   const launcher = ({ env, execArgv, stdio }) => fork(TEST_WORKER_PATH, [], {
     env,
     execArgv,
@@ -28,7 +29,7 @@ function createTestSandboxLauncher() {
   return launcher
 }
 
-test("host executes the test-only RS runtime fixture through a real process worker", async () => {
+test("host executes the test-only RS runtime fixture in a child process with a simulated broker", async () => {
   const scenario = {
     id: "RS-TEST-ONLY-RUNTIME-DISPATCH",
     name: "Test-only production runtime dispatch through simulated infrastructure",
