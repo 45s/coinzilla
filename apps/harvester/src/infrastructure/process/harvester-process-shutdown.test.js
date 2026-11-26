@@ -23,6 +23,12 @@ function createShutdownChildSource({ lockModuleUrl, shutdownModuleUrl } = {}) {
     const journalService = {
       close: async () => ({ ok: true }),
     }
+    const processLock = {
+      release: async () => {
+        process.stdout.write("LOCK_RELEASED\\n")
+        return lock.release()
+      },
+    }
     const handler = createRuntimeShutdownHandler({
       runtime: {
         stop: async () => ({ ok: true, status: "STOPPED" }),
@@ -39,19 +45,17 @@ function createShutdownChildSource({ lockModuleUrl, shutdownModuleUrl } = {}) {
         flush: async () => ({ ok: true }),
       },
       journalService,
-      processLock: lock,
-      closeObservability: async ({ journalService: journal, processLock, allowProcessLockRelease }) => {
-        if (allowProcessLockRelease !== true) {
-          return [new Error("Process lock release was not authorized.")]
-        }
+      processLock,
+      closeObservability: async ({ journalService: journal }) => {
         const closed = await journal.close()
         if (closed.ok !== true) {
           return [new Error("Journal shutdown was not confirmed.")]
         }
-        const released = await processLock.release()
-        return released.ok === true ? [] : released.errors
+        return []
       },
-      closeLogger: async () => {},
+      closeLogger: async () => {
+        process.stdout.write("LOGGER_CLOSED\\n")
+      },
       logTelegramNotificationSummary: () => {},
     })
 
@@ -165,7 +169,11 @@ test("exits the child process only after Journal shutdown and real process-lock 
     const output = getOutput()
     assert.equal(exit.code, 0, `The child must exit successfully after shutdown; stderr: ${output.stderr}`)
     assert.equal(exit.signal, null, "The child must exit naturally rather than being killed by a signal.")
-    assert.equal(output.stdout.trim(), "SHUTDOWN_COMPLETE", "The shutdown handler must resolve before the child exits.")
+    assert.deepEqual(
+      output.stdout.trim().split("\\n"),
+      ["LOGGER_CLOSED", "LOCK_RELEASED", "SHUTDOWN_COMPLETE"],
+      "The process logger must close before the process lock is released, and the lock must release before process exit.",
+    )
     await assert.rejects(
       readFile(lockPath, "utf8"),
       { code: "ENOENT" },
@@ -279,7 +287,7 @@ test("retains the real process lock when durable PROCESS_STOPPED acknowledgement
   }
 })
 
-test("marks shutdown incomplete when the event bus rejects its final flush", async () => {
+test("retains all shared resources and the process lock when the final EventBus flush fails", async () => {
   const calls = []
   const previousExitCode = process.exitCode
   process.exitCode = 0
@@ -291,20 +299,20 @@ test("marks shutdown incomplete when the event bus rejects its final flush", asy
       }),
     },
     logger: {
-      system: (message) => calls.push(message),
-      error: ({
-        message,
-        errors,
-      }) => calls.push({
-        message,
-        errors,
-      }),
+      system: () => {},
+      error: ({ shutdownPhase }) => calls.push(shutdownPhase),
     },
     eventPublisher: {
       publish: () => ({ ok: true }),
     },
     eventBus: {
       flush: async () => ({ ok: false }),
+    },
+    processLock: {
+      release: async () => {
+        calls.push("process-lock-release")
+        return { ok: true }
+      },
     },
     closeObservability: async () => {
       calls.push("observability-close")
@@ -316,14 +324,158 @@ test("marks shutdown incomplete when the event bus rejects its final flush", asy
 
   try {
     await handler("SIGTERM")
-    assert.equal(process.exitCode, 1, "An unconfirmed final event-bus flush must fail shutdown.")
-    assert.equal(
-      calls.some((entry) => entry?.message === "Telegram notification shutdown was incomplete."),
-      true,
-      "Shutdown diagnostics must report the failed final event-bus flush.",
+    assert.equal(process.exitCode, 1, "An unconfirmed final EventBus flush must fail shutdown.")
+    assert.ok(calls.includes("EVENT_BUS_FLUSH"), "Shutdown diagnostics must identify the failed flush phase.")
+    assert.equal(calls.includes("observability-close"), false, "Journal and EventBus cleanup must wait until accepted deliveries drain.")
+    assert.equal(calls.includes("logger-close"), false, "The logger must remain available while delivery work is pending.")
+    assert.equal(calls.includes("process-lock-release"), false, "The process lock must remain held after an incomplete flush.")
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("bounds a hung EventBus flush and retains the process lock without overlapping retries", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  let releaseFlush
+  let flushCalls = 0
+  const flushPromise = new Promise((resolve) => {
+    releaseFlush = () => resolve({ ok: true })
+  })
+  const handler = createRuntimeShutdownHandler({
+    cleanupTimeoutMs: 10,
+    runtimeStopTimeoutMs: 100,
+    runtime: {
+      stop: async () => ({ ok: true, status: "STOPPED" }),
+    },
+    logger: {
+      system: () => {},
+      error: () => {},
+    },
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+    },
+    eventBus: {
+      flush: () => {
+        flushCalls += 1
+        return flushPromise
+      },
+    },
+    processLock: {
+      release: async () => {
+        calls.push("process-lock-release")
+        return { ok: true }
+      },
+    },
+    closeObservability: async () => {
+      calls.push("observability-close")
+      return []
+    },
+    closeLogger: async () => calls.push("logger-close"),
+    logTelegramNotificationSummary: () => {},
+  })
+
+  try {
+    await handler("SIGTERM")
+    assert.equal(process.exitCode, 1, "A hung EventBus flush must fail closed at its configured deadline.")
+    assert.equal(flushCalls, 1, "A timed-out EventBus flush must remain single-flight.")
+    assert.deepEqual(calls, [], "No downstream cleanup or process-lock release may run while delivery draining is pending.")
+
+    const retry = handler("SIGTERM")
+    releaseFlush()
+    await retry
+    assert.equal(flushCalls, 1, "A retry must await the original pending flush instead of starting a concurrent one.")
+    assert.deepEqual(
+      calls,
+      ["observability-close", "logger-close", "process-lock-release"],
+      "Cleanup and lock release may proceed only after the original flush completes.",
     )
-    assert.ok(calls.includes("observability-close"), "Observability cleanup must still run after the runtime has stopped.")
-    assert.ok(calls.includes("logger-close"), "The process logger must close after cleanup.")
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("retains the process lock when observability cleanup exceeds its deadline", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  const handler = createRuntimeShutdownHandler({
+    cleanupTimeoutMs: 10,
+    observabilityCleanupTimeoutMs: 10,
+    runtimeStopTimeoutMs: 100,
+    runtime: {
+      stop: async () => ({ ok: true, status: "STOPPED" }),
+    },
+    logger: {
+      system: () => {},
+      error: () => {},
+    },
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+    },
+    eventBus: {
+      flush: async () => ({ ok: true }),
+    },
+    processLock: {
+      release: async () => {
+        calls.push("process-lock-release")
+        return { ok: true }
+      },
+    },
+    closeObservability: () => new Promise(() => {}),
+    closeLogger: async () => calls.push("logger-close"),
+    logTelegramNotificationSummary: () => {},
+  })
+
+  try {
+    await handler("SIGTERM")
+    assert.equal(process.exitCode, 1)
+    assert.deepEqual(calls, [], "Logger close and process-lock release must not run while observability cleanup is pending.")
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("retains the process lock when process logger close fails", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  const handler = createRuntimeShutdownHandler({
+    cleanupTimeoutMs: 100,
+    observabilityCleanupTimeoutMs: 100,
+    runtimeStopTimeoutMs: 100,
+    runtime: {
+      stop: async () => ({ ok: true, status: "STOPPED" }),
+    },
+    logger: {
+      system: () => {},
+      error: () => {},
+    },
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+    },
+    eventBus: {
+      flush: async () => ({ ok: true }),
+    },
+    processLock: {
+      release: async () => {
+        calls.push("process-lock-release")
+        return { ok: true }
+      },
+    },
+    closeObservability: async () => [],
+    closeLogger: async () => {
+      calls.push("logger-close")
+      throw new Error("logger close failed")
+    },
+    logTelegramNotificationSummary: () => {},
+  })
+
+  try {
+    await handler("SIGTERM")
+    assert.equal(process.exitCode, 1)
+    assert.deepEqual(calls, ["logger-close"], "A failed logger close must prevent process-lock release.")
   } finally {
     process.exitCode = previousExitCode
   }
