@@ -1393,6 +1393,11 @@
           "path": "src/use-cases/record-safety-control-facts.test.js",
           "name": "rejects user-data resolution when its reason is reserved for Recovery Seller STOP",
           "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
+          "name": "keeps Recovery Seller STOP reason with user-data provenance unresolved",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "offline-only",
