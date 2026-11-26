@@ -26,10 +26,10 @@ The infrastructure adapter uses Node.js built-ins only and includes native BSON 
 
 **Supported topology envelope:** single-seed `mongodb://` standalone and replica-set deployments. Replica-set multi-document transactions are verified. Sharded/mongos deployments, SRV, multi-seed discovery, pooling, topology monitoring/failover, retryable writes, compression, change streams, GridFS, client-side encryption and legacy wire opcodes are not supported guarantees. Supported wire-version overlap is 13–25. SCRAM usernames and SHA-256 passwords are restricted to printable ASCII because full SASLprep is not implemented. The public record contract is JSON-oriented, not arbitrary BSON. Client session pooling and explicit `endSessions` cleanup remain deferred.
 
-**Latest exact-head verification on `04d1aecf7244be1e4f618a58485ede3567bb95a1` (2026-11-26):**
+**Latest exact-head verification on `a90f08025eb5ed66ee2dfd9bd07f0bffc8ab52fb` (2026-11-26):**
 
 - DB unit suite: **402 tests, 381 passed, 0 failed, 21 skipped**.
-- DB coverage: **98.74% lines, 96.82% branches, 100% functions**; package coverage thresholds passed.
+- DB coverage: **98.74% lines, 96.76% branches, 100% functions**; package coverage thresholds passed.
 - Full workspace Unit Tests and Test Coverage workflows passed.
 - Repository Quality passed, including zero-warning workspace ESLint, strict changed-file ESLint, JavaScript syntax and actionlint.
 - Dependency Audit, External Documentation Links and Harvester Targeted Tests passed.
