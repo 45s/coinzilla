@@ -105,7 +105,7 @@ export async function authenticateMongoScram({
     throw new TypeError("MongoDB SCRAM command callback is required")
   }
   if (typeof username !== "string" || username.length === 0
-    || !/^[\\x20-\\x7e]+$/.test(username)
+    || !/^[\x20-\x7e]+$/.test(username)
     || typeof password !== "string") {
     throw new TypeError("MongoDB SCRAM requires a non-empty username and string password")
   }
