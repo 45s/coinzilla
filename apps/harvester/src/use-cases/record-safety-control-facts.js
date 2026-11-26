@@ -65,34 +65,6 @@ reason },
  * of the evidence that caused the blocker; the evidence itself remains outside
  * the fact stream unless separately allowlisted.
  */
-function validateSafetyBlockerScope({ scope, symbol }) {
-  const validScope = scope === "ACCOUNT" || scope === "MARKET"
-  const validSymbol = (scope === "ACCOUNT" && symbol === null) ||
-    (scope === "MARKET" && typeof symbol === "string" && /^[A-Z0-9]{3,30}$/.test(symbol))
-  if (!validScope || !validSymbol) {
-    throw new TypeError("Safety blocker scope and symbol must form a canonical ACCOUNT or MARKET identity")
-  }
-}
-
-function validateSafetyBlockerProducer({ producer, reason }) {
-  const supportedProducer = producer === undefined ||
-    ["USER_DATA_EVENT_HANDLER", "RECOVERY_SELLER_STOP_WORKFLOW"].includes(producer)
-  if (!supportedProducer) {
-    throw new TypeError("Safety blocker producer must identify a supported producer")
-  }
-  if (producer === "RECOVERY_SELLER_STOP_WORKFLOW" && reason !== "RECOVERY_SELLER_UNEXPECTED_CONDITION") {
-    throw new TypeError("Recovery Seller STOP producer may emit only its dedicated blocker reason")
-  }
-}
-
-function validateSafetyBlockerEvidence({ reason, evidenceDigest }) {
-  const validReason = typeof reason === "string" && /^[A-Z][A-Z0-9_]{1,127}$/.test(reason)
-  const validDigest = typeof evidenceDigest === "string" && /^[a-f0-9]{64}$/.test(evidenceDigest)
-  if (!validReason || !validDigest) {
-    throw new TypeError("Safety blocker requires a canonical reason code and SHA-256 evidence digest")
-  }
-}
-
 function validateSafetyBlockerScopeAndSymbol({ scope, symbol }) {
   const validScope = scope === "ACCOUNT" || scope === "MARKET"
   if (!validScope) {
