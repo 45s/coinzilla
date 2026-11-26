@@ -224,59 +224,84 @@ label: "databaseName" })
   assertProviderFunctions({ options })
 }
 
+function createSessionCommandBody({ body, session }) {
+  const database = body.$db
+  const commandBody = { ...body }
+  delete commandBody.$db
+  const sessionBody = {
+    ...commandBody,
+    lsid: session.lsid,
+    txnNumber: session.txnNumber,
+    autocommit: false,
+  }
+  if (!session.started) {
+    sessionBody.startTransaction = true
+    sessionBody.readConcern = { level: "snapshot" }
+    session.started = true
+  }
+  sessionBody.$db = database
+  return sessionBody
+}
+
+function refreshSessionRecoveryToken({ response, session }) {
+  if (session.topology !== "sharded" || Number(response?.ok) !== 1) {
+    return
+  }
+  if (!isPlainDocument(response.recoveryToken)) {
+    throw new DatabaseProviderError({
+      operation: "transaction",
+      cause: new TypeError("Sharded MongoDB transaction response omitted a valid recoveryToken"),
+    })
+  }
+  session.recoveryToken = response.recoveryToken
+}
+
+function assertSessionCommandSucceeded({ response }) {
+  if (response && Number(response.ok) === 1
+    && !(Array.isArray(response.writeErrors) && response.writeErrors.length > 0)
+    && !response.writeConcernError) {
+    return
+  }
+  const failure = response?.writeErrors?.[0] ?? response?.writeConcernError ?? response
+  throw createServerCommandError(failure ?? {})
+}
+
+async function sendSessionCommand({
+  transport,
+  session,
+  body,
+  sequences,
+  timeoutMS,
+  operation,
+}) {
+  const sessionBody = createSessionCommandBody({ body, session })
+  const response = await transport.command({
+    body: sessionBody,
+    sequences,
+    timeoutMS,
+    operation,
+    transaction: true,
+  })
+  refreshSessionRecoveryToken({ response, session })
+  assertSessionCommandSucceeded({ response })
+  return response
+}
+
 function createTransactionCommand({ transport, session }) {
   let queue = Promise.resolve()
   let firstError = null
-
-  async function sendSessionCommand({ body, sequences, timeoutMS, operation }) {
-    const database = body.$db
-    const commandBody = { ...body }
-    delete commandBody.$db
-    const sessionBody = {
-      ...commandBody,
-      lsid: session.lsid,
-      txnNumber: session.txnNumber,
-      autocommit: false,
-    }
-    if (!session.started) {
-      sessionBody.startTransaction = true
-      sessionBody.readConcern = { level: "snapshot" }
-      session.started = true
-    }
-    sessionBody.$db = database
-    const response = await transport.command({
-      body: sessionBody,
-      sequences,
-      timeoutMS,
-      operation,
-      transaction: true,
-    })
-    if (session.topology === "sharded" && Number(response?.ok) === 1) {
-      if (!isPlainDocument(response.recoveryToken)) {
-        throw new DatabaseProviderError({
-          operation: "transaction",
-          cause: new TypeError("Sharded MongoDB transaction response omitted a valid recoveryToken"),
-        })
-      }
-      session.recoveryToken = response.recoveryToken
-    }
-    if (!response || Number(response.ok) !== 1
-      || (Array.isArray(response.writeErrors) && response.writeErrors.length > 0)
-      || response.writeConcernError) {
-      const failure = response?.writeErrors?.[0] ?? response?.writeConcernError ?? response
-      throw createServerCommandError(failure ?? {})
-    }
-    return response
-  }
-
-  const runSessionCommand = ({ body, sequences, timeoutMS, operation: operationName }) => {
+  const runSessionCommand = ({ body, sequences, timeoutMS, operation }) => {
     const queuedOperation = queue.then(() => {
-      if (firstError) {throw firstError}
+      if (firstError) {
+        throw firstError
+      }
       return sendSessionCommand({
+        transport,
+        session,
         body,
         sequences,
         timeoutMS,
-        operation: operationName,
+        operation,
       })
     })
     queuedOperation.catch(() => {})
@@ -285,10 +310,11 @@ function createTransactionCommand({ transport, session }) {
     })
     return queuedOperation
   }
-
   runSessionCommand.drain = async () => {
     await queue
-    if (firstError) {throw firstError}
+    if (firstError) {
+      throw firstError
+    }
   }
   runSessionCommand.failure = () => firstError
   return runSessionCommand
@@ -433,17 +459,26 @@ cause: error })
   throw new DatabaseTransactionOutcomeUnknownError({ cause: lastError })
 }
 
-async function abortMongoTransaction({ transport, session }) {
-  const body = {
+function createAbortCommand({ session }) {
+  return {
     abortTransaction: 1,
     lsid: session.lsid,
     txnNumber: session.txnNumber,
     autocommit: false,
     $db: "admin",
   }
-  if (session.recoveryToken !== undefined) {
-    body.recoveryToken = session.recoveryToken
-  }
+}
+
+function isAbortCommandSuccessful({ response }) {
+  return Number(response?.ok) === 1 && !response.writeConcernError
+}
+
+function shouldRetryAbort({ error, attempt }) {
+  return attempt + 1 < MAX_ABORT_ATTEMPTS && isRetryableTransactionError(error)
+}
+
+async function abortMongoTransaction({ transport, session }) {
+  const body = createAbortCommand({ session })
   for (let attempt = 0; attempt < MAX_ABORT_ATTEMPTS; attempt += 1) {
     try {
       if (session.recoveryToken !== undefined) {
@@ -451,23 +486,20 @@ async function abortMongoTransaction({ transport, session }) {
       } else {
         delete body.recoveryToken
       }
-      const response = await transport.command({
-        body,
-        operation: "abort",
-      })
+      const response = await transport.command({ body, operation: "abort" })
       if (session.topology === "sharded"
         && Number(response?.ok) === 1
         && isPlainDocument(response.recoveryToken)) {
         session.recoveryToken = response.recoveryToken
       }
-      if (Number(response?.ok) === 1 && !response.writeConcernError) {
+      if (isAbortCommandSuccessful({ response })) {
         return
       }
-      if (attempt + 1 >= MAX_ABORT_ATTEMPTS || !isRetryableTransactionError(response)) {
+      if (!shouldRetryAbort({ error: response, attempt })) {
         return
       }
     } catch (error) {
-      if (attempt + 1 >= MAX_ABORT_ATTEMPTS || !isRetryableTransactionError(error)) {
+      if (!shouldRetryAbort({ error, attempt })) {
         return
       }
     }
