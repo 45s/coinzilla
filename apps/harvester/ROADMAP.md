@@ -24,7 +24,7 @@ The source-backed [2026-11-26 reliability baseline report](docs/audits/reports/2
 
 - **R0 — baseline and incident triage.** The report records a 300.10-second Harvester Targeted Tests timeout in the inspected PR #1858 head; its root cause remains unconfirmed. The current `develop` commit `fcfc11107ea077f96ee4af635ed66db8e01a4ea8` has six successful workflow runs, including Harvester Targeted Tests and Harvester Process Lock. Treat the timeout as unresolved historical evidence, not a current failing check or a proven fix.
 - **Readiness review.** PR #1861 merged, but the baseline report records `action_required` workflows and calls for independent review of readiness-report/startup composition; those runs are not passing validation evidence.
-- **Persisted account blockers.** PR #1867 merged the non-recovery startup gate for unresolved persisted ACCOUNT blockers. The broader #1828 producer, restoration and durable-resolution matrix remains open.
+- **Persisted account blockers.** PR #1833 merged the shared final submission gate and synchronous account STOP latch; PR #1867 merged the non-recovery startup restoration gate. The broader #1828 matrix remains open for all ACCOUNT-scoped producers and durable-resolution paths. This follow-up covers the user-data producer's no-symbol ACCOUNT blockers for both unowned executions and terminal accounting failures, and proves the in-memory gate remains closed while persistence is pending, returns non-durable, or throws; no runtime behavior change is intended.
 - Do not claim coverage percentages or branch-protection guarantees without exact-current-SHA measurements/readback. This baseline does not authorize LIVE exchange mutations.
 
 ## Scenario Runner / GC Strategy Lab
