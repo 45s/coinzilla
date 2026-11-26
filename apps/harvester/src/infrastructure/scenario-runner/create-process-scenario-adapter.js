@@ -450,6 +450,25 @@ function spawnScenarioWorker({ spawnSandboxedWorker, workerPath, maxOutputBytes 
   })
 }
 
+function assertWorkerCanStart({ osSandboxVerified, signal }) {
+  if (!osSandboxVerified) {
+    throw new Error("OS-level sandbox isolation has not been verified for the process scenario adapter")
+  }
+  if (signal?.aborted) {
+    throw new Error("Scenario worker execution was cancelled before startup")
+  }
+}
+
+function confirmWorkerReadiness({ signal, onStarted }) {
+  if (signal?.aborted) {
+    return false
+  }
+  if (typeof onStarted === "function") {
+    onStarted()
+  }
+  return true
+}
+
 function createWorkerExecutor({
   strategyId,
   spawnSandboxedWorker,
@@ -460,12 +479,10 @@ function createWorkerExecutor({
   osSandboxVerified,
 }) {
   return async function execute({ runId, scenarioId, input, signal, onStarted } = {}) {
-    if (!osSandboxVerified) {
-      throw new Error("OS-level sandbox isolation has not been verified for the process scenario adapter")
-    }
-    if (signal?.aborted) {
-      throw new Error("Scenario worker execution was cancelled before startup")
-    }
+    assertWorkerCanStart({
+      osSandboxVerified,
+      signal,
+    })
     const child = spawnScenarioWorker({
       spawnSandboxedWorker,
       workerPath,
@@ -484,11 +501,11 @@ function createWorkerExecutor({
       terminationGraceMs,
       maxOutputBytes,
     })
-    if (signal?.aborted) {
+    if (!confirmWorkerReadiness({
+      signal,
+      onStarted,
+    })) {
       return execution.promise
-    }
-    if (typeof onStarted === "function") {
-      onStarted()
     }
     try {
       child.send({

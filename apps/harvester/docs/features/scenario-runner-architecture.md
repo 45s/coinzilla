@@ -153,3 +153,5 @@ Terminal execution outcome mapping is kept separate from timeout/cleanup coordin
 The process adapter rechecks cancellation immediately after registering worker lifecycle handlers. If cancellation races the synchronous launcher call, it waits for cleanup and never sends the scenario execution message to the newly created worker.
 
 After installing abort handling, the adapter checks the signal again before readiness notification or dispatch. This closes the race where cancellation occurs inside the trusted launcher's synchronous spawn call: the worker receives cooperative cancellation and is never sent an execute request.
+
+Worker startup preconditions and readiness notification are named helpers: the execution path rejects unverified isolation before spawning, and the post-spawn readiness helper rechecks cancellation before any execute message is sent.
