@@ -549,11 +549,14 @@ function hasStructuredOperatorActionMetadata(data) {
 }
 
 function validateSafetyBlockerResolutionOwnership({ raisedBlocker, resolution }) {
-  const isRecoverySellerProducer = raisedBlocker.producer === undefined ||
-    raisedBlocker.producer === "RECOVERY_SELLER_STOP_WORKFLOW"
-  const isRecoverySellerStop = isRecoverySellerProducer &&
-    raisedBlocker.reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+  const isRecoverySellerStopReason = raisedBlocker.reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+  const isRecoverySellerStop = isRecoverySellerStopReason &&
+    (raisedBlocker.producer === "RECOVERY_SELLER_STOP_WORKFLOW" ||
+      raisedBlocker.producer === undefined)
   const hasOperatorMetadata = hasStructuredOperatorActionMetadata(resolution)
+  if (isRecoverySellerStopReason && !isRecoverySellerStop) {
+    throw new Error("Recovery Seller STOP reason has ambiguous producer provenance and must remain blocking")
+  }
   if (isRecoverySellerStop) {
     if (resolution.resolution !== "OPERATOR_ACTION" || hasOperatorMetadata) {
       throw new Error("Recovery Seller STOP must remain exclusively owned by its operator-action resolver")

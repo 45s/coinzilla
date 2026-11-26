@@ -337,6 +337,34 @@ test("classifies Recovery Seller STOP by producer rather than a colliding reason
   assert.equal(structured.ok, true, "A user-data ACCOUNT blocker with structured operator evidence must remain resolvable")
 })
 
+test("keeps Recovery Seller STOP reason with user-data provenance unresolved", () => {
+  const raisedBlocker = {
+    blockerId,
+    producer: "USER_DATA_EVENT_HANDLER",
+    scope: "ACCOUNT",
+    symbol: null,
+    reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    evidenceDigest: blockerDigest,
+  }
+  const result = projectHarvesterOperationalState({
+    records: [
+      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+      baseline(),
+      started(),
+      ...preflightFacts(),
+      record(5, "SAFETY_BLOCKER_RAISED", raisedBlocker, `safety-blocker-raised:${blockerId}`),
+      record(6, "SAFETY_BLOCKER_RESOLVED", {
+        blockerId,
+        resolvedBy: "operator:legacy-account-action",
+        resolution: "OPERATOR_ACTION",
+        evidenceDigest: "c".repeat(64),
+      }, `safety-blocker-resolved:${blockerId}`),
+    ],
+  })
+
+  assert.equal(result.ok, false, "An ambiguous Recovery Seller reason must not be resolved by either workflow.")
+})
+
 test("fails closed for missing configuration baseline, orphan facts, or resolution without a raised blocker", () => {
   const noBaseline = projectHarvesterOperationalState({ records: [started()] })
   const orphan = projectHarvesterOperationalState({

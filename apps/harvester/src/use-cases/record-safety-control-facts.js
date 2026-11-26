@@ -93,10 +93,43 @@ function validateSafetyBlockerEvidence({ reason, evidenceDigest }) {
   }
 }
 
-function validateSafetyBlockerRaisedData(options) {
-  validateSafetyBlockerScope(options)
-  validateSafetyBlockerProducer(options)
-  validateSafetyBlockerEvidence(options)
+function validateSafetyBlockerScopeAndSymbol({ scope, symbol }) {
+  const validScope = scope === "ACCOUNT" || scope === "MARKET"
+  if (!validScope) {
+    throw new TypeError("Safety blocker scope must be ACCOUNT or MARKET")
+  }
+  const validAccountSymbol = scope === "ACCOUNT" && symbol === null
+  const validMarketSymbol = scope === "MARKET" &&
+    typeof symbol === "string" &&
+    /^[A-Z0-9]{3,30}$/.test(symbol)
+  if (!validAccountSymbol && !validMarketSymbol) {
+    throw new TypeError("Safety blocker symbol must be null for ACCOUNT scope or canonical for MARKET scope")
+  }
+}
+
+function validateSafetyBlockerProducer({ producer, reason }) {
+  const validProducer = producer === undefined ||
+    ["USER_DATA_EVENT_HANDLER", "RECOVERY_SELLER_STOP_WORKFLOW"].includes(producer)
+  if (!validProducer) {
+    throw new TypeError("Safety blocker producer must identify a supported producer")
+  }
+  if (producer === "RECOVERY_SELLER_STOP_WORKFLOW" && reason !== "RECOVERY_SELLER_UNEXPECTED_CONDITION") {
+    throw new TypeError("Recovery Seller STOP producer may emit only its dedicated blocker reason")
+  }
+}
+
+function validateSafetyBlockerReasonAndEvidence({ reason, evidenceDigest }) {
+  const validReason = typeof reason === "string" && /^[A-Z][A-Z0-9_]{1,127}$/.test(reason)
+  const validDigest = typeof evidenceDigest === "string" && /^[a-f0-9]{64}$/.test(evidenceDigest)
+  if (!validReason || !validDigest) {
+    throw new TypeError("Safety blocker requires a canonical reason code and SHA-256 evidence digest")
+  }
+}
+
+function validateSafetyBlockerRaisedData(input) {
+  validateSafetyBlockerScopeAndSymbol(input)
+  validateSafetyBlockerProducer(input)
+  validateSafetyBlockerReasonAndEvidence(input)
 }
 
 export async function recordSafetyBlockerRaised({
@@ -222,6 +255,11 @@ function validateSafetyBlockerResolutionBase({ blockerId, resolvedBy, resolution
 
 function validateSafetyBlockerResolution(options) {
   validateSafetyBlockerResolutionBase(options)
+  if (options.raisedFact?.data?.reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION" &&
+      options.raisedFact.data.producer !== "RECOVERY_SELLER_STOP_WORKFLOW" &&
+      options.raisedFact.data.producer !== undefined) {
+    throw new TypeError("Recovery Seller STOP reason has ambiguous producer provenance and cannot be resolved")
+  }
   if (isRecoverySellerStopBlocker(options.raisedFact)) {
     if (options.resolution !== "OPERATOR_ACTION") {
       throw new TypeError("Recovery Seller STOP must remain exclusively owned by its operator-action resolver")
