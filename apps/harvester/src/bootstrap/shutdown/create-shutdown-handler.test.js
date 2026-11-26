@@ -180,8 +180,18 @@ test("bounds a pending CLOSING audit phase and retains shared services", async (
   const pendingAudit = new Promise((resolve) => {
     resolveAudit = resolve
   })
+  const strategyShutdownCoordinator = createStrategyShutdownCoordinator({
+    participants: [{
+      strategyId: "CONSERVATIVE",
+      beginShutdown() {},
+      waitUntilSafe: async () => ({ ok: true }),
+      isSafeToShutdown: () => true,
+      getSafetySnapshot: () => ({ markets: [] }),
+    }],
+  })
   const fixture = createShutdown({
     calls,
+    strategyShutdownCoordinator,
     publishAccountSnapshot: async () => {
       auditCalls += 1
       markAuditStarted()
