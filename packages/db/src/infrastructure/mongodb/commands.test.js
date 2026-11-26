@@ -234,6 +234,68 @@ test("MongoDB rejects malformed cursor responses rather than returning empty res
   )
 })
 
+
+test("MongoDB readOne closes unexpected non-exhausted single-batch cursors", async () => {
+  const stub = createCommandStub([
+    { ok: 1, cursor: { id: 99, firstBatch: [{ data: { id: "person-1" } }] } },
+    { ok: 1, cursorsKilled: [99] },
+  ])
+  const operations = createMongoRecordOperations({
+    command: stub.command,
+    databaseName: "app",
+  })
+
+  assert.deepEqual(
+    await operations.readOne({ collection: "people", id: "person-1" }),
+    { id: "person-1" },
+  )
+  assert.equal(stub.calls[1].killCursors, "coinzilla_cGVvcGxl")
+  assert.deepEqual(stub.calls[1].cursors, [99])
+})
+
+test("MongoDB reads reject invalid cursor identifiers", async () => {
+  const operations = createMongoRecordOperations({
+    command: async ({ body }) => ({
+      ok: 1,
+      cursor: body.find
+        ? { id: "0", firstBatch: [] }
+        : { id: -1, firstBatch: [] },
+    }),
+    databaseName: "app",
+  })
+
+  await assert.rejects(
+    operations.readOne({ collection: "people", id: "one" }),
+    (error) => error instanceof DatabaseProviderError
+      && error.cause?.message.includes("invalid cursor id"),
+  )
+  await assert.rejects(
+    operations.readMany({ collection: "people" }),
+    (error) => error instanceof DatabaseProviderError
+      && error.cause?.message.includes("invalid cursor id"),
+  )
+})
+
+test("MongoDB readMany accepts BSON int64 cursor ids and validates getMore replacements", async () => {
+  const stub = createCommandStub([
+    { ok: 1, cursor: { id: 12n, firstBatch: [] } },
+    { ok: 1, cursor: { id: -1, nextBatch: [] } },
+    { ok: 1, cursorsKilled: [12n] },
+  ])
+  const operations = createMongoRecordOperations({
+    command: stub.command,
+    databaseName: "app",
+  })
+
+  await assert.rejects(
+    operations.readMany({ collection: "people" }),
+    (error) => error instanceof DatabaseProviderError
+      && error.cause?.message.includes("invalid cursor id"),
+  )
+  assert.equal(stub.calls[1].getMore, 12n)
+  assert.deepEqual(stub.calls[2].cursors, [12n])
+})
+
 test("MongoDB readMany drains every cursor batch", async () => {
   const stub = createCommandStub([
     { ok: 1, cursor: { id: 12, firstBatch: [{ data: { id: "one" } }] } },
