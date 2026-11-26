@@ -126,7 +126,7 @@ The Explorer reads records available from source rather than hardcoding the fami
 
 ## Discussion log
 
-- **2026-11-25 audit:** PR #1823 was closed unmerged as superseded; replacement Draft PR #1852 remains unmerged, so its 44 scenario records and test mappings are not available in `develop`. RS-004-011 is a provisional helper-only candidate, marked PRELIMINARY and non-executable. The production SELL dispatch integration fixture is test-only and is not a registry scenario. The host requires a simulation-only adapter with verified OS sandbox attestation; no production launcher currently provides that attestation, so no RS scenario is executable.
+- **2026-11-26 audit:** PR #1823 was closed unmerged as superseded; replacement Draft PR #1852 remains unmerged, so its 44 scenario records and test mappings are not available in `develop`. RS-004-011 is a provisional helper-only candidate, marked PRELIMINARY and non-executable. The production SELL dispatch integration fixture is test-only and is not a registry scenario. The host requires a simulation-only adapter with verified OS sandbox attestation; no production launcher currently provides that attestation, so no RS scenario is executable.
 
 ## Framework-independent execution architecture — required runner foundation
 
