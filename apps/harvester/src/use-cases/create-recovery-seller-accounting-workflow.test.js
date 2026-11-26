@@ -668,6 +668,7 @@ test("treats a repeated terminal RS accounting event as an exact no-op", async (
   const workflow = makeWorkflow({ context })
   await ensureRecoverySellerSellReserved({ workflow, context })
   await ensureRecoverySellerSellReserved({ workflow, context })
+  await ensureRecoverySellerSellReserved({ workflow, context })
   const input = {
     reconciliation: context.reconciliation,
     terminalOrder: context.terminalOrder,
@@ -720,13 +721,7 @@ test("accounts a loss-making legacy allocation but marks the mixed SELL ineligib
     }),
   })
 
-  const result = await workflow.reconcileTerminalMixedSell({
-    reconciliation: context.reconciliation,
-    terminalOrder: context.terminalOrder,
-    canonicalFills: [context.fill],
-    canonicalFillAllocations: [context.allocation],
-    minProfit: "0.2",
-  })
+  const result = await reconcileTerminalMixedSell({ workflow, context })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(result.data.applied, true,
