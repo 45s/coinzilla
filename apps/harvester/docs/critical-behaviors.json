@@ -1179,6 +1179,11 @@
           "path": "src/bootstrap/user-data/subscribe-to-user-data.test.js",
           "name": "post-resolution restart remains blocked when the account PREFLIGHT snapshot is stale",
           "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/user-data/subscribe-to-user-data.test.js",
+          "name": "post-resolution restart accepts a reconciled owned open-orders PREFLIGHT audit",
+          "kind": "normal"
         }
       ],
       "runtimeStatus": "active",
