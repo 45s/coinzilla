@@ -41,6 +41,8 @@ test("host executes the registered production RS runtime scenario in a child pro
     spawnSandboxedWorker: createTestSandboxLauncher(),
   })
   const updates = []
+  assert.equal(adapter.osSandboxVerified, true,
+    "The test launcher attestation must satisfy the process adapter profile for this host-to-worker plumbing test.")
   const host = createScenarioRunnerHost({
     adapters: [adapter],
     scenarioCatalog: [scenario],
@@ -50,6 +52,8 @@ test("host executes the registered production RS runtime scenario in a child pro
   })
 
   try {
+    assert.equal(host.catalog[0].scenarios[0].executable, true,
+      JSON.stringify(host.catalog[0].scenarios[0]))
     const accepted = host.runner.submit({
       strategyId: "RS",
       scenarioId: scenario.id,
@@ -57,7 +61,7 @@ test("host executes the registered production RS runtime scenario in a child pro
     })
     const result = await host.runner.waitForRun(accepted.runId)
 
-    assert.equal(result.status, "Completed", result.diagnostics?.join("; "))
+    assert.equal(result.status, "Completed", JSON.stringify(result))
     assert.equal(result.output.source, "production-runtime-evaluator")
     assert.equal(result.output.fixtureId, "rs-runtime-sell-submission")
     assert.equal(result.output.passed, true)

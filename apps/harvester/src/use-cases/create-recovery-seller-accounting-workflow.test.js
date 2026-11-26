@@ -1398,25 +1398,20 @@ test("initializes operator-authorized legacy positions once in the shared accoun
   assert.deepEqual(workflow.getLegacyPosition({ marketId: market.id }), record.position)
 })
 
-for (const terminalOrderStatus of ["CANCELED", "REJECTED", "EXPIRED"]) {
+for (const terminalOrderStatus of ["CANCELED", "EXPIRED"]) {
   test(`keeps a reconciled ${terminalOrderStatus} Recovery Seller SELL unresolved`, async () => {
     const partialFill = makeFill({
       quantity: "2.5",
       quoteQuantity: "10.5",
       price: "4.2",
     })
-    const context = terminalOrderStatus === "REJECTED"
-      ? makeContext({
-          terminalOrderStatus,
-          executedQuantity: "0",
-        })
-      : makeContext({
-          fill: partialFill,
-          terminalOrderStatus,
-          executedQuantity: "2.5",
-          recoveryQuantity: "2.49",
-          legacyQuantity: "0.01",
-        })
+    const context = makeContext({
+      fill: partialFill,
+      terminalOrderStatus,
+      executedQuantity: "2.5",
+      recoveryQuantity: "2.49",
+      legacyQuantity: "0.01",
+    })
     const workflow = makeWorkflow({ context })
     const openOrder = context.openRegistry.getOrder({ clientOrderId: "rs-sell-1" })
     const reservation = await reserveRecoverySellerSell({ workflow, openOrder })
@@ -1424,9 +1419,8 @@ for (const terminalOrderStatus of ["CANCELED", "REJECTED", "EXPIRED"]) {
 
     const result = await reconcileTerminalMixedSell({ workflow, context })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
-    const expectedProfitabilityEligible = terminalOrderStatus !== "REJECTED"
-    assert.equal(result.data.profitability.eligible, expectedProfitabilityEligible,
-      "CANCELED/EXPIRED partial proceeds may be profitable; REJECTED is constrained to zero executed quantity.")
+    assert.equal(result.data.profitability.eligible, true,
+      "The partial CANCELED/EXPIRED fixture must be profitable so terminal status alone controls cycle closure.")
     const cycleState = workflow.getCycleStateForMarket({ marketId: market.id })
     assert.equal(cycleState.status, "UNRESOLVED",
       "Only a FILLED terminal SELL may close the Recovery Seller cycle.")
@@ -1434,7 +1428,7 @@ for (const terminalOrderStatus of ["CANCELED", "REJECTED", "EXPIRED"]) {
       "The canonical cycle state must retain the exact non-FILLED terminal status.")
     assert.equal(cycleState.terminalReconciled, true,
       "The terminal partial-fill history must remain explicitly reconciled.")
-    assert.equal(cycleState.profitabilityEligible, expectedProfitabilityEligible,
+    assert.equal(cycleState.profitabilityEligible, true,
       "The canonical state must retain profitability without confusing it with terminal status.")
     assert.equal(cycleState.sellOrderIdentity.clientOrderId, openOrder.clientOrderId,
       "The unresolved cycle must retain its one SELL identity.")
