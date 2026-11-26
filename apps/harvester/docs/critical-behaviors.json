@@ -1219,7 +1219,7 @@
         },
         {
           "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
-          "name": "audits every configured market before recording account blocker resolution",
+          "name": "runs the production offline account/order/fill audit for every configured market",
           "kind": "normal"
         },
         {
@@ -1245,6 +1245,16 @@
         {
           "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
           "name": "CLI returns nonzero when durable resolution is not confirmed",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "rejects an action ID already present in durable resolution history",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "rejects an unclean latest stop even when an earlier clean stop exists",
           "kind": "failure"
         }
       ],
