@@ -150,7 +150,7 @@ function createTransactionCommand({ transport, session }) {
   let queue = Promise.resolve()
   let firstError = null
 
-  async function sendSessionCommand({ body, sequences, timeoutMS }) {
+  async function sendSessionCommand({ body, sequences, timeoutMS, operation }) {
     const database = body.$db
     const commandBody = { ...body }
     delete commandBody.$db
@@ -170,6 +170,8 @@ function createTransactionCommand({ transport, session }) {
       body: sessionBody,
       sequences,
       timeoutMS,
+      operation,
+      transaction: true,
     })
     if (!response || Number(response.ok) !== 1
       || (Array.isArray(response.writeErrors) && response.writeErrors.length > 0)
@@ -180,7 +182,7 @@ function createTransactionCommand({ transport, session }) {
     return response
   }
 
-  const runSessionCommand = ({ body, sequences, timeoutMS }) => {
+  const runSessionCommand = ({ body, sequences, timeoutMS, operation }) => {
     const operation = queue.then(() => {
       if (firstError) throw firstError
       return sendSessionCommand({ body, sequences, timeoutMS, operation })
