@@ -97,7 +97,7 @@ test("MongoDB rejects stored documents whose decoded record has no valid identif
   const operations = createMongoRecordOperations({
     command: async () => ({
       ok: 1,
-      cursor: { firstBatch: [{ _id: "record-1", data: { __coinzilla_key_bmFtZQ: "missing id" } }] },
+      cursor: { id: 0, firstBatch: [{ _id: "record-1", data: { __coinzilla_key_bmFtZQ: "missing id" } }] },
     }),
     databaseName: "app",
   })
@@ -215,7 +215,7 @@ test("MongoDB rejects malformed cursor responses rather than returning empty res
     databaseName: "app",
   })
   const readMany = createMongoRecordOperations({
-    command: async () => ({ ok: 1, cursor: {} }),
+    command: async () => ({ ok: 1, cursor: { id: 0 } }),
     databaseName: "app",
   })
 

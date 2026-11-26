@@ -153,7 +153,7 @@ test("MongoDB provider uses one logical session across replica-set transaction c
     })
 
     assert.equal(result, "committed")
-    const insert = calls.find((body) => body.insert === "people")
+    const insert = calls.find((body) => body.insert === "coinzilla_cGVvcGxl")
     const commit = calls.find((body) => body.commitTransaction === 1)
     assert.ok(insert.lsid)
     assert.equal(insert.autocommit, false)
@@ -204,7 +204,7 @@ test("MongoDB provider aborts failed transactions and preserves callback failure
     topology: "replicaSet",
     transactionSupported: true,
     commandHandler: async (body) => {
-      if (body.find === "people") {
+      if (body.find === "coinzilla_cGVvcGxl") {
         return { ok: 1, cursor: { id: 0, firstBatch: [] } }
       }
       return { ok: 1 }

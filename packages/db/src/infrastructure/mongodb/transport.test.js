@@ -103,6 +103,8 @@ test("MongoDB transport enforces the connection timeout and destroys stalled soc
 
     setNoDelay() {}
 
+    write() { return true }
+
     destroy() {
       this.destroyed = true
       this.emit("close")
@@ -126,8 +128,9 @@ test("MongoDB transport enforces the connection timeout and destroys stalled soc
 })
 
 test("MongoDB transport preserves socket errors and rejects every outstanding request", async () => {
-  const { transport, socket } = createFakeTransport()
+  const fake = createFakeTransport()
   await transport.connect()
+  const { socket } = fake
   const first = transport.command({ body: { ping: 1 } })
   const second = transport.command({ body: { ping: 1 } })
   socket.emit("error", new Error("network reset"))
@@ -153,12 +156,13 @@ test("MongoDB transport validates commands, options, pending limits, and socket 
     /socketFactory/,
   )
 
-  const { transport, socket } = createFakeTransport()
+  const fake = createFakeTransport()
   await assert.rejects(
     transport.command({ body: { ping: 1 } }),
     /not connected/,
   )
   await transport.connect()
+  const { socket } = fake
   await assert.rejects(
     transport.command({ body: { ping: 1 }, timeoutMS: 0 }),
     /positive safe integer/,
@@ -206,8 +210,9 @@ test("MongoDB transport rejects unsupported streaming responses", async () => {
 })
 
 test("MongoDB transport fails closed when socket writes fail", async () => {
-  const { transport, socket } = createFakeTransport()
+  const fake = createFakeTransport()
   await transport.connect()
+  const { socket } = fake
   socket.write = (_frame, callback) => {
     callback(new Error("write failed"))
     return false
@@ -251,8 +256,9 @@ test("MongoDB TLS transport waits for secureConnect rather than plain connect", 
 })
 
 test("MongoDB transport handles socket end and idempotent close", async () => {
-  const { transport, socket } = createFakeTransport()
+  const fake = createFakeTransport()
   await transport.connect()
+  const { socket } = fake
   const pending = transport.command({ body: { ping: 1 } })
   socket.emit("end")
 
@@ -316,8 +322,9 @@ test("MongoDB transport rejects timed-out requests and releases their correlatio
 })
 
 test("MongoDB transport rejects malformed frames and all pending operations", async () => {
-  const { transport, socket } = createFakeTransport()
+  const fake = createFakeTransport()
   await transport.connect()
+  const { socket } = fake
   const pending = transport.command({ body: { ping: 1 } })
   socket.emit("data", Buffer.from([1, 0, 0, 0]))
 
@@ -326,8 +333,9 @@ test("MongoDB transport rejects malformed frames and all pending operations", as
 })
 
 test("MongoDB transport close rejects outstanding commands and destroys the socket", async () => {
-  const { transport, socket } = createFakeTransport()
+  const fake = createFakeTransport()
   await transport.connect()
+  const { socket } = fake
   const pending = transport.command({ body: { ping: 1 } })
 
   await transport.close()
@@ -341,6 +349,7 @@ test("MongoDB transport close rejects outstanding commands and destroys the sock
 test("MongoDB transport close rejects an in-progress connection attempt", async () => {
   const socket = new EventEmitter()
   socket.destroyed = false
+  socket.write = () => true
   socket.destroy = function destroy() { this.destroyed = true; this.emit("close") }
   const transport = createMongoTransport({
     host: "localhost",
@@ -359,8 +368,9 @@ test("MongoDB transport close rejects an in-progress connection attempt", async 
 
 
 test("MongoDB transport enforces the queued write-buffer bound before writing", async () => {
-  const { transport, socket } = createFakeTransport()
+  const fake = createFakeTransport()
   await transport.connect()
+  const { socket } = fake
   socket.writableLength = 64 * 1024 * 1024 - 1
 
   await assert.rejects(
