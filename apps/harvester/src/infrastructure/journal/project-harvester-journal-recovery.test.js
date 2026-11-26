@@ -320,55 +320,59 @@ test("rejects an applied fill with no durable owned-order intent", () => {
   assert.match(result.errors[0].message, /unknown clientOrderId/)
 })
 
+function createRecoveryCycleCompletionRecords() {
+  return [
+        record("order.submission_requested", {
+          clientOrderId: "h-BTCUSDT-sell-1",
+          symbol: "BTCUSDT",
+          side: "SELL",
+          type: "LIMIT",
+          price: "100",
+          quantity: "0.4",
+          status: "PENDING",
+        }),
+        record("order.submitted", {
+          clientOrderId: "h-BTCUSDT-sell-1",
+          brokerOrderId: "9002",
+          symbol: "BTCUSDT",
+          side: "SELL",
+          type: "LIMIT",
+          price: "100",
+          quantity: "0.4",
+          status: "FILLED",
+        }),
+        record("execution.fill_applied", {
+          fillId: "binance:BTCUSDT:trade-2",
+          tradeId: "trade-2",
+          brokerOrderId: "9002",
+          clientOrderId: "h-BTCUSDT-sell-1",
+          symbol: "BTCUSDT",
+          side: "SELL",
+          price: "100",
+          quantity: "0.4",
+          quoteQuantity: "40",
+          liquidityRole: "MAKER",
+          commissions: [],
+          commissionStatus: "COMPLETE",
+        }),
+        record("recovery.cycle_completed", {
+          symbol: "BTCUSDT",
+          marketId: "binance:BTCUSDT",
+          freeQuantity: "0.01",
+          keepQuantity: "0.01",
+          minProfit: "0.01",
+          realizedNetProfit: "0.25",
+        }),
+        record("strategy.paused", {
+          symbol: "BTCUSDT",
+          reason: "UNKNOWN_ORDER_OUTCOME",
+        }),
+  ]
+}
+
 test("projects recovery-cycle completions and paused strategy state", () => {
   const result = projectHarvesterJournalRecovery({
-    records: [
-      record("order.submission_requested", {
-        clientOrderId: "h-BTCUSDT-sell-1",
-        symbol: "BTCUSDT",
-        side: "SELL",
-        type: "LIMIT",
-        price: "100",
-        quantity: "0.4",
-        status: "PENDING",
-      }),
-      record("order.submitted", {
-        clientOrderId: "h-BTCUSDT-sell-1",
-        brokerOrderId: "9002",
-        symbol: "BTCUSDT",
-        side: "SELL",
-        type: "LIMIT",
-        price: "100",
-        quantity: "0.4",
-        status: "FILLED",
-      }),
-      record("execution.fill_applied", {
-        fillId: "binance:BTCUSDT:trade-2",
-        tradeId: "trade-2",
-        brokerOrderId: "9002",
-        clientOrderId: "h-BTCUSDT-sell-1",
-        symbol: "BTCUSDT",
-        side: "SELL",
-        price: "100",
-        quantity: "0.4",
-        quoteQuantity: "40",
-        liquidityRole: "MAKER",
-        commissions: [],
-        commissionStatus: "COMPLETE",
-      }),
-      record("recovery.cycle_completed", {
-        symbol: "BTCUSDT",
-        marketId: "binance:BTCUSDT",
-        freeQuantity: "0.01",
-        keepQuantity: "0.01",
-        minProfit: "0.01",
-        realizedNetProfit: "0.25",
-      }),
-      record("strategy.paused", {
-        symbol: "BTCUSDT",
-        reason: "UNKNOWN_ORDER_OUTCOME",
-      }),
-    ],
+    records: createRecoveryCycleCompletionRecords(),
   })
 
   assert.equal(result.ok, true)
@@ -389,6 +393,7 @@ test("projects recovery-cycle completions and paused strategy state", () => {
   }])
 })
 
+
 test("fails closed on malformed recognized recovery records", () => {
   const result = projectHarvesterJournalRecovery({
     records: [record("order.submission_requested", { clientOrderId: "missing-other-fields" })],
@@ -407,10 +412,12 @@ test("requires records to be an array", () => {
 
 
 test("projects account audit snapshots and recognizes a complete prior trading shutdown", () => {
-  const balances = [{ asset: "BTC",
-free: "0.5",
-locked: "0",
-total: "0.5" }]
+  const balances = [{
+    asset: "BTC",
+    free: "0.5",
+    locked: "0",
+    total: "0.5",
+  }]
   const result = projectHarvesterJournalRecovery({
     records: [
       record("account.snapshot_captured", {
@@ -1038,7 +1045,7 @@ test("restores third-asset commission facts and historical quote valuation into 
   assert.equal(ledger.netSellProceeds, "0")
 })
 
-const completedCycleRecords = () => [
+const completedCycleRecords = Object.freeze([
   record("order.submission_requested", {
     clientOrderId: "h-BTCUSDT-buy-1",
     symbol: "BTCUSDT",
@@ -1115,10 +1122,10 @@ asset: "BTC" }],
     minProfit: "0.01",
     realizedNetProfit: "0.25",
   }),
-]
+])
 
 test("rejects a journal completion whose free quantity is not keepQuantity plus dust", () => {
-  const records = completedCycleRecords()
+  const records = completedCycleRecords.slice()
   records[6] = record("recovery.cycle_completed", {
     symbol: "BTCUSDT",
     marketId: "binance:BTCUSDT",
@@ -1133,7 +1140,7 @@ test("rejects a journal completion whose free quantity is not keepQuantity plus 
 })
 
 test("rejects a journal completion whose realized profit misses its recorded configured threshold", () => {
-  const records = completedCycleRecords()
+  const records = completedCycleRecords.slice()
   records[6] = record("recovery.cycle_completed", {
     symbol: "BTCUSDT",
     marketId: "binance:BTCUSDT",
@@ -1148,7 +1155,7 @@ test("rejects a journal completion whose realized profit misses its recorded con
 })
 
 test("replays exchange-constrained dust as a bonus above keepQuantity", () => {
-  const records = completedCycleRecords()
+  const records = completedCycleRecords.slice()
   records[6] = record("recovery.cycle_completed", {
     symbol: "BTCUSDT",
     marketId: "binance:BTCUSDT",
@@ -1179,7 +1186,7 @@ test("replays exchange-constrained dust as a bonus above keepQuantity", () => {
 })
 
 test("restores Portfolio, RecoveryLedger, free inventory, and order ownership from replayed fills", () => {
-  const projection = projectHarvesterJournalRecovery({ records: completedCycleRecords() })
+  const projection = projectHarvesterJournalRecovery({ records: completedCycleRecords.slice() })
   assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join('; '))
 
   const restored = restoreHarvesterJournalState({
@@ -1204,7 +1211,7 @@ test("restores Portfolio, RecoveryLedger, free inventory, and order ownership fr
 })
 
 test("fails closed when a completed-cycle journal record leaves active sellable inventory", () => {
-  const records = completedCycleRecords()
+  const records = completedCycleRecords.slice()
   records[6] = record("recovery.cycle_completed", {
     symbol: "BTCUSDT",
     marketId: "binance:BTCUSDT",
@@ -1226,7 +1233,7 @@ test("fails closed when a completed-cycle journal record leaves active sellable 
 })
 
 test("fails closed when canonical market metadata is missing for a recovered fill", () => {
-  const projection = projectHarvesterJournalRecovery({ records: completedCycleRecords() })
+  const projection = projectHarvesterJournalRecovery({ records: completedCycleRecords.slice() })
   const restored = restoreHarvesterJournalState({
     projection,
     marketMetadata: new Map(),
@@ -1237,7 +1244,7 @@ test("fails closed when canonical market metadata is missing for a recovered fil
 })
 
 test("fails closed when recovery-cycle profit contradicts replayed fills", () => {
-  const records = completedCycleRecords()
+  const records = completedCycleRecords.slice()
   records[6] = record("recovery.cycle_completed", {
     symbol: "BTCUSDT",
     marketId: "binance:BTCUSDT",
@@ -1348,69 +1355,71 @@ test("restores a replacement intent after confirmed cancellation but before the 
   assert.deepEqual([...restored.data.replacementIntents], ["BTCUSDT"])
 })
 
+function createReplacementSubmittedRecords() {
+  return [
+        record("order.submission_requested", {
+          clientOrderId: "h-BTCUSDT-1",
+          symbol: "BTCUSDT",
+          side: "SELL",
+          type: "LIMIT",
+          price: "100",
+          quantity: "1",
+          status: "PENDING",
+        }),
+        record("order.submitted", {
+          clientOrderId: "h-BTCUSDT-1",
+          brokerOrderId: "9001",
+          symbol: "BTCUSDT",
+          side: "SELL",
+          type: "LIMIT",
+          price: "100",
+          quantity: "1",
+          status: "NEW",
+        }),
+        record("order.cancel_requested", {
+          clientOrderId: "h-BTCUSDT-1",
+          brokerOrderId: "9001",
+          symbol: "BTCUSDT",
+          side: "SELL",
+          type: "LIMIT",
+          price: "100",
+          quantity: "1",
+          executedQuantity: "0",
+          status: "OPEN",
+          reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
+        }),
+        record("order.cancelled", {
+          clientOrderId: "h-BTCUSDT-1",
+          brokerOrderId: "9001",
+          symbol: "BTCUSDT",
+          side: "SELL",
+          type: "LIMIT",
+          price: "100",
+          quantity: "1",
+          executedQuantity: "0",
+          status: "CANCELED",
+        }),
+        record("order.submission_requested", {
+          clientOrderId: "h-BTCUSDT-2",
+          symbol: "BTCUSDT",
+          side: "SELL",
+          type: "LIMIT",
+          price: "101",
+          quantity: "1",
+          status: "PENDING",
+        }),
+  ]
+}
+
 test("does not restore a replacement intent after the replacement submission is journaled", () => {
   const projection = projectHarvesterJournalRecovery({
-    records: [
-      record("order.submission_requested", {
-        clientOrderId: "h-BTCUSDT-1",
-        symbol: "BTCUSDT",
-        side: "SELL",
-        type: "LIMIT",
-        price: "100",
-        quantity: "1",
-        status: "PENDING",
-      }),
-      record("order.submitted", {
-        clientOrderId: "h-BTCUSDT-1",
-        brokerOrderId: "9001",
-        symbol: "BTCUSDT",
-        side: "SELL",
-        type: "LIMIT",
-        price: "100",
-        quantity: "1",
-        status: "NEW",
-      }),
-      record("order.cancel_requested", {
-        clientOrderId: "h-BTCUSDT-1",
-        brokerOrderId: "9001",
-        symbol: "BTCUSDT",
-        side: "SELL",
-        type: "LIMIT",
-        price: "100",
-        quantity: "1",
-        executedQuantity: "0",
-        status: "OPEN",
-        reason: "BUY_FILLED_RECALCULATE_RECOVERY_SELL",
-      }),
-      record("order.cancelled", {
-        clientOrderId: "h-BTCUSDT-1",
-        brokerOrderId: "9001",
-        symbol: "BTCUSDT",
-        side: "SELL",
-        type: "LIMIT",
-        price: "100",
-        quantity: "1",
-        executedQuantity: "0",
-        status: "CANCELED",
-      }),
-      record("order.submission_requested", {
-        clientOrderId: "h-BTCUSDT-2",
-        symbol: "BTCUSDT",
-        side: "SELL",
-        type: "LIMIT",
-        price: "101",
-        quantity: "1",
-        status: "PENDING",
-      }),
-    ],
+    records: createReplacementSubmittedRecords(),
   })
   assert.equal(projection.ok, true)
-
   const restored = restoreHarvesterJournalState({
     projection,
     marketMetadata: new Map([["BTCUSDT", canonicalMarket]]),
   })
-
   assert.equal(restored.ok, true)
   assert.deepEqual([...restored.data.replacementIntents], [])
 })
@@ -1636,7 +1645,7 @@ total: "0.5" }]
 
 
 test("rejects multiple fully filled SELL orders before one recovery-cycle completion", () => {
-  const records = completedCycleRecords()
+  const records = completedCycleRecords.slice()
   records.splice(6, 0,
     record("order.submission_requested", {
       clientOrderId: "h-BTCUSDT-sell-2",
@@ -1872,59 +1881,64 @@ data: { symbol: "BTCUSDT" } },
   assert.deepEqual(result.data.stickySafetyBlockers, [])
 })
 
-test("accepts RECOVERY account and open-order snapshots between PREFLIGHT and CLOSING", () => {
-  const balances = [{ asset: "BTC",
-free: "0.5",
-locked: "0",
-total: "0.5" }]
-  const result = projectHarvesterJournalRecovery({
-    records: [
-      record("account.snapshot_captured", {
-        phase: "PREFLIGHT",
-        sourceTime: 100,
-        auditStatus: "COMPLETE",
-        balances,
-        auditReasons: [],
-      }),
-      record("account.open_orders_captured", {
-        phase: "PREFLIGHT",
-        observedAt: 100,
-        readiness: "READY",
-        orderCount: 0,
-        orders: [],
-        blockReasons: [],
-      }),
-      record("harvester.started", {
-        broker: "binance",
-        strategyMode: "conservative",
-        enabledMarkets: ["BTCUSDT"],
-        tradingEnabled: true,
-      }),
-      record("account.snapshot_captured", {
-        phase: "RECOVERY",
-        sourceTime: 200,
-        auditStatus: "COMPLETE",
-        balances,
-        auditReasons: [],
-      }),
-      record("account.open_orders_captured", {
-        phase: "RECOVERY",
-        observedAt: 200,
-        readiness: "READY",
-        orderCount: 0,
-        orders: [],
-        blockReasons: [],
-      }),
-      record("account.snapshot_captured", {
-        phase: "CLOSING",
-        sourceTime: 300,
-        auditStatus: "COMPLETE",
-        balances,
-        auditReasons: [],
-      }),
-    ],
-  })
+function createPreflightRecoveryClosingSnapshotRecords() {
+  const balances = [{
+    asset: "BTC",
+    free: "0.5",
+    locked: "0",
+    total: "0.5",
+  }]
+  return [
+        record("account.snapshot_captured", {
+          phase: "PREFLIGHT",
+          sourceTime: 100,
+          auditStatus: "COMPLETE",
+          balances,
+          auditReasons: [],
+        }),
+        record("account.open_orders_captured", {
+          phase: "PREFLIGHT",
+          observedAt: 100,
+          readiness: "READY",
+          orderCount: 0,
+          orders: [],
+          blockReasons: [],
+        }),
+        record("harvester.started", {
+          broker: "binance",
+          strategyMode: "conservative",
+          enabledMarkets: ["BTCUSDT"],
+          tradingEnabled: true,
+        }),
+        record("account.snapshot_captured", {
+          phase: "RECOVERY",
+          sourceTime: 200,
+          auditStatus: "COMPLETE",
+          balances,
+          auditReasons: [],
+        }),
+        record("account.open_orders_captured", {
+          phase: "RECOVERY",
+          observedAt: 200,
+          readiness: "READY",
+          orderCount: 0,
+          orders: [],
+          blockReasons: [],
+        }),
+        record("account.snapshot_captured", {
+          phase: "CLOSING",
+          sourceTime: 300,
+          auditStatus: "COMPLETE",
+          balances,
+          auditReasons: [],
+        }),
+  ]
+}
 
+test("accepts RECOVERY account and open-order snapshots between PREFLIGHT and CLOSING", () => {
+  const result = projectHarvesterJournalRecovery({
+    records: createPreflightRecoveryClosingSnapshotRecords(),
+  })
   assert.equal(result.ok, true)
   assert.deepEqual(result.data.accountSnapshots.map(({ phase }) => phase), [
     "PREFLIGHT",
@@ -2081,8 +2095,10 @@ error: new Error("accounting mismatch") })],
     ["execution.accounting_failed", "DOGEUSDT"],
   ])
 
-  const restored = restoreHarvesterJournalState({ projection,
-marketMetadata: new Map() })
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map(),
+  })
   assert.equal(restored.ok, true)
   assert.equal(restored.data.pausedMarkets.has("DOGEUSDT"), true)
   assert.equal(restored.data.durablePausedMarkets.has("DOGEUSDT"), true)
@@ -2091,7 +2107,7 @@ marketMetadata: new Map() })
 
 test("fails closed when a fully filled SELL has no explicit recovery-cycle outcome", () => {
   const result = projectHarvesterJournalRecovery({
-    records: completedCycleRecords().slice(0, 6),
+    records: completedCycleRecords.slice().slice(0, 6),
   })
 
   assert.equal(result.ok, false)
@@ -2099,53 +2115,8 @@ test("fails closed when a fully filled SELL has no explicit recovery-cycle outco
 })
 
 test("preserves an explicitly evaluated residual sell-through without resetting the recovery basis", () => {
-  const records = completedCycleRecords().slice(0, 6)
-  records[3] = record("order.submission_requested", {
-    clientOrderId: "h-BTCUSDT-sell-1",
-symbol: "BTCUSDT",
-side: "SELL",
-type: "LIMIT",
-    price: "102.75",
-quantity: "0.4",
-status: "PENDING",
-  })
-  records[4] = record("order.submitted", {
-    clientOrderId: "h-BTCUSDT-sell-1",
-brokerOrderId: "9002",
-symbol: "BTCUSDT",
-side: "SELL",
-    type: "LIMIT",
-price: "102.75",
-quantity: "0.4",
-status: "FILLED",
-  })
-  records[5] = record("execution.fill_applied", {
-    fillId: "binance:BTCUSDT:trade-2",
-tradeId: "trade-2",
-brokerOrderId: "9002",
-    clientOrderId: "h-BTCUSDT-sell-1",
-symbol: "BTCUSDT",
-side: "SELL",
-    price: "102.75",
-quantity: "0.4",
-quoteQuantity: "41.1",
-liquidityRole: "MAKER",
-    commissions: [],
-commissionStatus: "COMPLETE",
-  })
-  records.push(harvesterRecord("recovery.cycle_not_completed", {
-    symbol: "BTCUSDT",
-marketId: "binance:BTCUSDT",
-    sellOrderClientId: "h-BTCUSDT-sell-1",
-sellOrderBrokerOrderId: "9002",
-    outcome: "CONTINUE_SELL_THROUGH",
-reason: "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
-    realizedNetProfit: "-8.9",
-activeQuantity: "0.0996",
-keepQuantity: "0.01",
-minProfit: "0.01",
-  }))
-
+  const records = createFirstSellThroughRecords()
+  appendSellThroughContinuation({ records })
   const result = projectHarvesterJournalRecovery({ records })
   assert.equal(result.ok, true)
   assert.equal(result.data.recoveryCycleEvaluations.length, 1)
@@ -2168,8 +2139,9 @@ minProfit: "0.01",
   assert.equal(ledger.netSellProceeds, "41.1")
 })
 
+
 function createFirstSellThroughRecords() {
-  const records = completedCycleRecords().slice(0, 6)
+  const records = completedCycleRecords.slice().slice(0, 6)
   records[3] = record("order.submission_requested", {
     clientOrderId: "h-BTCUSDT-sell-1",
     symbol: "BTCUSDT",
@@ -2282,7 +2254,7 @@ test("allows another fully filled SELL only after the prior SELL has an explicit
   assert.equal(result.data.recoveryCycles[0].completedOrderClientId, "h-BTCUSDT-sell-2")
 })
 test("restores a BLOCKED cycle evaluation as a market pause", () => {
-  const records = completedCycleRecords().slice(0, 6)
+  const records = completedCycleRecords.slice().slice(0, 6)
   records.push(harvesterRecord("recovery.cycle_not_completed", {
     symbol: "BTCUSDT",
 marketId: "binance:BTCUSDT",
