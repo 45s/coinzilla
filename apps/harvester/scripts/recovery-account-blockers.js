@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url"
 import { defaultLogger } from "@coinzilla/utils"
 import { createFileOperationalStateStore } from "../src/infrastructure/operational-state/create-file-store.js"
 import { resolveOperationalStateDirectory } from "../src/infrastructure/operational-state/resolve-directory.js"
-import { runOfflineAccountBlockerResolution } from "./recovery-account-blockers-context.js"
+import { runOfflineAccountBlockerResolution } from "../src/use-cases/resolve-offline-user-data-account-blockers.js"
 
 const HELP = `Usage:
   node apps/harvester/scripts/recovery-account-blockers.js --context <account-evidence.json> --operator-id <id> --action-id <unique-id> --cause-fixed
