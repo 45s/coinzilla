@@ -711,3 +711,14 @@ test("MongoDB provider rejects invalid explicit database names before connecting
     /databaseName.*unsupported character/i,
   )
 })
+
+
+test("MongoDB provider rejects database names beyond the portable 63-byte limit", () => {
+  assert.throws(
+    () => createMongoProvider({
+      host: "localhost",
+      databaseName: "d".repeat(64),
+    }),
+    /databaseName.*63-byte/i,
+  )
+})
