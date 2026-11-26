@@ -32,7 +32,10 @@ function createStopDependencies({ calls, stopRuntime, operatorStop, recordProces
       if (stopRuntime) {
         return stopRuntime(options)
       }
-      return undefined
+      return {
+        ok: true,
+        status: "STOPPED",
+      }
     },
     operationalStateStore: {},
     processStopDurabilityTimeoutMs,
@@ -61,6 +64,10 @@ test("stops operator control only after the runtime confirms strategy safety", a
       calls.push("runtime-safety-start")
       await beforeSharedServicesStop()
       calls.push("runtime-shared-cleanup")
+      return {
+        ok: true,
+        status: "STOPPED",
+      }
     },
   })
 
@@ -77,6 +84,24 @@ test("stops operator control only after the runtime confirms strategy safety", a
     ],
     "Inbound operator control must remain available until the strategy coordinator has proven safety, then stop before shared broker cleanup.",
   )
+})
+
+test("does not record PROCESS_STOPPED when runtime stop omits an explicit terminal outcome", async () => {
+  const calls = []
+  const dependencies = createStopDependencies({
+    calls,
+    stopRuntime: async () => undefined,
+  })
+  const stop = createHarvesterStop(dependencies)
+
+  await assert.rejects(
+    stop(),
+    /explicit STOPPED confirmation/,
+    "An ambiguous runtime stop result must not be treated as successful shutdown.",
+  )
+
+  assert.equal(dependencies.userDataState.status, "SHUTDOWN_INCOMPLETE")
+  assert.deepEqual(calls, ["runtime-stop-start"])
 })
 
 test("keeps operator control and process-stop facts alive when runtime safety cannot be proven", async () => {
@@ -179,7 +204,10 @@ test("allows a later shutdown attempt after an earlier strategy-safety failure",
         throw new Error("first safety proof incomplete")
       }
       await beforeSharedServicesStop()
-      return undefined
+      return {
+        ok: true,
+        status: "STOPPED",
+      }
     },
   }))
 
