@@ -332,6 +332,39 @@ test("MongoDB provider rejects invalid operation callbacks and unsupported opera
   await harness.provider.close()
 })
 
+test("MongoDB provider preserves callback failures when abort is rejected", async () => {
+  let abortAttempts = 0
+  const harness = createProviderHarness({
+    transactionSupported: true,
+    commandHandler: async (body) => {
+      if (body.abortTransaction) {
+        abortAttempts += 1
+        return {
+          ok: 0,
+          code: 999,
+          errmsg: "abort rejected",
+        }
+      }
+      return { ok: 1 }
+    },
+  })
+  await harness.provider.connect()
+  const callbackError = new Error("transaction callback failed")
+
+  await assert.rejects(
+    harness.provider.withTransaction(async (transaction) => {
+      await transaction.create({
+        collection: "people",
+        record: { id: "abort-rejected" },
+      })
+      throw callbackError
+    }),
+    (error) => error === callbackError,
+  )
+  assert.equal(abortAttempts, 1)
+  await harness.provider.close()
+})
+
 test("MongoDB provider retries close after a transport cleanup failure", async () => {
   const harness = createProviderHarness()
   await harness.provider.connect()
