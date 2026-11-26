@@ -1066,7 +1066,7 @@ function assertPublishedOrderSubmissionLifecycle({ harness, events, timeline, li
   assert.deepEqual(timeline, [
     "event:strategy.decision",
     "event:order.submission_requested",
-    "log:SUBMITTED",
+    "log:PENDING",
     "broker.placeOrder",
     "event:order.submitted",
     "log:ACCEPTED",
@@ -1095,9 +1095,9 @@ function assertPublishedOrderSubmissionLifecycle({ harness, events, timeline, li
   assert.match(clientOrderId, /^h-[0-9a-f]{22}-1$/)
   assert.equal(events[2].data.status, "OPEN")
   assert.equal(events[2].data.brokerOrderId, `broker-${clientOrderId}`)
-  assert.deepEqual(lifecycleLogs.map(({ lifecycleStatus }) => lifecycleStatus), ["SUBMITTED", "ACCEPTED"])
+  assert.deepEqual(lifecycleLogs.map(({ lifecycleStatus }) => lifecycleStatus), ["PENDING", "ACCEPTED"])
   assert.equal(lifecycleLogs[0].strategyId, StrategyId.COIN_GRABBER)
-  assert.equal(lifecycleLogs[0].brokerOrderId, undefined, "SUBMITTED must describe the durable intent before broker acknowledgement assigns an exchange order ID.")
+  assert.equal(lifecycleLogs[0].brokerOrderId, undefined, "PENDING must describe local order registration before durable intent and broker acknowledgement are confirmed.")
   assert.equal(lifecycleLogs[0].clientOrderId, clientOrderId, "The pending lifecycle record must retain the client order identity.")
   assert.equal(lifecycleLogs[1].brokerOrderId, `broker-${clientOrderId}`, "ACCEPTED must carry the exchange-assigned broker order identity.")
 }
