@@ -36,41 +36,83 @@ function isNumberBoundary({ character }) {
     character === "}" || isWhitespace({ character })
 }
 
-function readJsonNumberEnd({ text, startIndex }) {
+function readDigitsEnd({ text, startIndex }) {
+  let index = startIndex
+  while (isDigit({ character: text[index] })) {
+    index += 1
+  }
+  return index
+}
+
+function readJsonIntegerEnd({ text, startIndex }) {
   let index = startIndex
   if (text[index] === "-") {
     index += 1
   }
   if (text[index] === "0") {
-    index += 1
-  } else if (text[index] >= "1" && text[index] <= "9") {
-    index += 1
-    while (isDigit({ character: text[index] })) {
-      index += 1
-    }
-  } else {
+    return index + 1
+  }
+  if (text[index] < "1" || text[index] > "9") {
+    return null
+  }
+  return readDigitsEnd({
+    text,
+    startIndex: index + 1,
+  })
+}
+
+function readJsonFractionEnd({ text, index }) {
+  if (text[index] !== ".") {
+    return index
+  }
+  const digitsStart = index + 1
+  if (!isDigit({ character: text[digitsStart] })) {
+    return null
+  }
+  return readDigitsEnd({
+    text,
+    startIndex: digitsStart,
+  })
+}
+
+function readJsonExponentEnd({ text, index }) {
+  if (text[index] !== "e" && text[index] !== "E") {
+    return index
+  }
+  let digitsStart = index + 1
+  if (text[digitsStart] === "+" || text[digitsStart] === "-") {
+    digitsStart += 1
+  }
+  if (!isDigit({ character: text[digitsStart] })) {
+    return null
+  }
+  return readDigitsEnd({
+    text,
+    startIndex: digitsStart,
+  })
+}
+
+function readJsonNumberEnd({ text, startIndex }) {
+  let index = readJsonIntegerEnd({
+    text,
+    startIndex,
+  })
+  if (index === null) {
     return startIndex
   }
-  if (text[index] === ".") {
-    index += 1
-    if (!isDigit({ character: text[index] })) {
-      return startIndex
-    }
-    while (isDigit({ character: text[index] })) {
-      index += 1
-    }
+  index = readJsonFractionEnd({
+    text,
+    index,
+  })
+  if (index === null) {
+    return startIndex
   }
-  if (text[index] === "e" || text[index] === "E") {
-    index += 1
-    if (text[index] === "+" || text[index] === "-") {
-      index += 1
-    }
-    if (!isDigit({ character: text[index] })) {
-      return startIndex
-    }
-    while (isDigit({ character: text[index] })) {
-      index += 1
-    }
+  index = readJsonExponentEnd({
+    text,
+    index,
+  })
+  if (index === null) {
+    return startIndex
   }
   return isNumberBoundary({ character: text[index] }) ? index : startIndex
 }
