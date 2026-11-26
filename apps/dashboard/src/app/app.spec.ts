@@ -167,13 +167,18 @@ describe('AppComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Connecting to Harvester');
     expect(fixture.nativeElement.textContent).toContain('Orders');
 
-    const fillsButton = Array.from(root.querySelectorAll('button.section-nav-item'))
+    const historyButton = Array.from(root.querySelectorAll('button.section-nav-item'))
+      .find((button) => button.textContent?.includes('History')) as HTMLButtonElement;
+    historyButton.click();
+    fixture.detectChanges();
+
+    const fillsButton = Array.from(root.querySelectorAll('button.context-subnav-item'))
       .find((button) => button.textContent?.includes('Fills')) as HTMLButtonElement;
     fillsButton.click();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Fills');
 
-    const commissionsButton = Array.from(root.querySelectorAll('button.section-nav-item'))
+    const commissionsButton = Array.from(root.querySelectorAll('button.context-subnav-item'))
       .find((button) => button.textContent?.includes('Commissions')) as HTMLButtonElement;
     commissionsButton.click();
     fixture.detectChanges();
@@ -198,7 +203,11 @@ describe('AppComponent', () => {
       .find((button) => button.textContent?.includes('Brokers')) as HTMLButtonElement;
     brokersButton.click();
     fixture.detectChanges();
-    const openOrdersButton = Array.from(root.querySelectorAll('button.section-nav-item'))
+    const ordersTab = Array.from(root.querySelectorAll('button.section-nav-item'))
+      .find((button) => button.textContent?.includes('Orders')) as HTMLButtonElement;
+    ordersTab.click();
+    fixture.detectChanges();
+    const openOrdersButton = Array.from(root.querySelectorAll('button.context-subnav-item'))
       .find((button) => button.textContent?.includes('Open Orders')) as HTMLButtonElement;
     expect(openOrdersButton).toBeDefined();
     openOrdersButton.click();
@@ -251,10 +260,27 @@ describe('AppComponent', () => {
     fixture.detectChanges();
 
     let tabs = Array.from(root.querySelectorAll('.section-nav-item'));
-    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual([
-      'Markets', 'Orders', 'Fills', 'Commissions', 'Open Orders', 'Exchanges', 'History SOON',
-    ]);
-    expect(tabs.at(-1)?.getAttribute('aria-disabled')).toBe('true');
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Markets', 'Orders', 'History']);
+
+    const ordersTab = tabs.find((tab) => tab.textContent?.trim() === 'Orders') as HTMLButtonElement;
+    ordersTab.click();
+    fixture.detectChanges();
+    expect(ordersTab.classList.contains('active')).toBe(true);
+    let secondaryTabs = Array.from(root.querySelectorAll('.context-subnav-item'));
+    expect(secondaryTabs.map((tab) => tab.textContent?.trim())).toEqual(['Orders', 'Open Orders', 'Exchanges']);
+    expect(secondaryTabs[0]?.getAttribute('aria-current')).toBe('page');
+
+    const historyTab = tabs.find((tab) => tab.textContent?.trim() === 'History') as HTMLButtonElement;
+    historyTab.click();
+    fixture.detectChanges();
+    expect(historyTab.classList.contains('active')).toBe(true);
+    secondaryTabs = Array.from(root.querySelectorAll('.context-subnav-item'));
+    expect(secondaryTabs.map((tab) => tab.textContent?.trim())).toEqual(['Fills', 'Commissions']);
+    expect(secondaryTabs[0]?.classList.contains('active')).toBe(true);
+    secondaryTabs[1]?.dispatchEvent(new Event('click'));
+    fixture.detectChanges();
+    expect(historyTab.classList.contains('active')).toBe(true);
+    expect(root.querySelectorAll('.context-subnav-item')[1]?.getAttribute('aria-current')).toBe('page');
 
     const botsButton = Array.from(root.querySelectorAll('button.nav-item'))
       .find((button) => button.textContent?.includes('Bots')) as HTMLButtonElement;
@@ -265,6 +291,7 @@ describe('AppComponent', () => {
       'Operators', 'Orders', 'Positions SOON', 'Portfolio',
     ]);
     expect(tabs[2]?.getAttribute('aria-disabled')).toBe('true');
+    expect(root.querySelectorAll('.context-subnav-item')).toHaveLength(0);
 
     fixture.destroy();
   });

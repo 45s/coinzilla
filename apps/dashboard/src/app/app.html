@@ -91,8 +91,8 @@
             <button
               type="button"
               class="section-nav-item"
-              [class.active]="activePage() === item.page"
-              [attr.aria-current]="activePage() === item.page ? 'page' : null"
+              [class.active]="isPrimaryTabActive(item)"
+              [attr.aria-current]="isPrimaryTabActive(item) ? 'page' : null"
               (click)="selectSubPage(item.page)"
             >{{ item.label }}</button>
           } @else {
@@ -100,6 +100,22 @@
               {{ item.label }} <small>SOON</small>
             </span>
           }
+        }
+      </nav>
+    }
+    @if (secondaryNavigationItems().length > 0) {
+      <nav
+        class="context-subnav"
+        [attr.aria-label]="activePage() === 'fills' || activePage() === 'commissions' ? 'Broker history navigation' : 'Broker order navigation'"
+      >
+        @for (item of secondaryNavigationItems(); track item.page) {
+          <button
+            type="button"
+            class="context-subnav-item"
+            [class.active]="activePage() === item.page"
+            [attr.aria-current]="activePage() === item.page ? 'page' : null"
+            (click)="selectSubPage(item.page)"
+          >{{ item.label }}</button>
         }
       </nav>
     }
