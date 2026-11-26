@@ -14,7 +14,7 @@ function validateMessageIdentifier(value, label) {
 }
 
 function encodeDocumentSequence({ identifier, documents }) {
-  if (typeof identifier !== "string" || identifier.length === 0 || identifier.includes("\0")) {
+  if (typeof identifier !== "string" || identifier.length === 0 || identifier.includes("\0") || !identifier.isWellFormed()) {
     throw new TypeError("MongoDB document sequence identifier must be a non-empty cstring")
   }
   if (!Array.isArray(documents)) {
@@ -79,7 +79,11 @@ function readSequence(buffer, state) {
   if (nameEnd < 0 || nameEnd >= end) {
     throw new TypeError("Invalid MongoDB document sequence identifier")
   }
-  const identifier = buffer.toString("utf8", start + 4, nameEnd)
+  const identifierBytes = buffer.subarray(start + 4, nameEnd)
+  const identifier = identifierBytes.toString("utf8")
+  if (!Buffer.from(identifier, "utf8").equals(identifierBytes)) {
+    throw new TypeError("MongoDB document sequence identifier contains invalid UTF-8")
+  }
   if (!identifier) {
     throw new TypeError("MongoDB document sequence identifier must not be empty")
   }
@@ -164,9 +168,13 @@ export function decodeOpMsg(message) {
   if (body === undefined) {
     throw new TypeError("MongoDB OP_MSG is missing its body section")
   }
+  const requestId = message.readInt32LE(4)
+  const responseTo = message.readInt32LE(8)
+  validateMessageIdentifier(requestId, "requestId")
+  validateMessageIdentifier(responseTo, "responseTo")
   return {
-    requestId: message.readInt32LE(4),
-    responseTo: message.readInt32LE(8),
+    requestId,
+    responseTo,
     flags,
     body,
     sequences,
