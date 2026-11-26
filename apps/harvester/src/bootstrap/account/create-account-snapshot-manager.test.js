@@ -45,15 +45,19 @@ function createFixtureEventPublisher({ state }) {
 }
 
 function createFixtureMarket() {
-  const baseAsset = new Asset({ id: "asset:BTC", code: "BTC" })
-  const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+  const baseAsset = new Asset({ id: "asset:BTC",
+code: "BTC" })
+  const quoteAsset = new Asset({ id: "asset:USDT",
+code: "USDT" })
   const market = new Market({
     venue: "binance",
     symbol: "BTCUSDT",
     baseAsset,
     quoteAsset,
   })
-  return { baseAsset, quoteAsset, market }
+  return { baseAsset,
+quoteAsset,
+market }
 }
 
 const createFixture = ({
@@ -172,8 +176,10 @@ test("captures configured-asset balances and durably publishes the account audit
 
 function createCommissionAssetBalance({ asset, amount } = {}) {
   return new Balance({
-    free: new Quantity({ amount, asset }),
-    locked: new Quantity({ amount: "0", asset }),
+    free: new Quantity({ amount,
+asset }),
+    locked: new Quantity({ amount: "0",
+asset }),
   })
 }
 
@@ -182,19 +188,31 @@ function createCommissionAssetSnapshot({ market, sourceTime, bnb, xrp, bnbAmount
     market,
     sourceTime,
     extraBalances: [
-      createCommissionAssetBalance({ asset: bnb, amount: bnbAmount }),
-      createCommissionAssetBalance({ asset: xrp, amount: "25" }),
+      createCommissionAssetBalance({ asset: bnb,
+amount: bnbAmount }),
+      createCommissionAssetBalance({ asset: xrp,
+amount: "25" }),
     ],
   })
 }
 
 function createThirdAssetCommissionFixture() {
   const { market } = createFixtureMarket()
-  const bnb = new Asset({ id: "asset:BNB", code: "BNB" })
-  const xrp = new Asset({ id: "asset:XRP", code: "XRP" })
+  const bnb = new Asset({ id: "asset:BNB",
+code: "BNB" })
+  const xrp = new Asset({ id: "asset:XRP",
+code: "XRP" })
   const accountSnapshots = [
-    createCommissionAssetSnapshot({ market, sourceTime: 100, bnb, xrp, bnbAmount: "1" }),
-    createCommissionAssetSnapshot({ market, sourceTime: 200, bnb, xrp, bnbAmount: "0.9999" }),
+    createCommissionAssetSnapshot({ market,
+sourceTime: 100,
+bnb,
+xrp,
+bnbAmount: "1" }),
+    createCommissionAssetSnapshot({ market,
+sourceTime: 200,
+bnb,
+xrp,
+bnbAmount: "0.9999" }),
   ]
   return {
     fixture: createFixture({ accountSnapshots }),
@@ -281,9 +299,12 @@ function createPartialActiveOrder({ market, side, clientOrderId, price, original
     market,
     side,
     type: "LIMIT",
-    limitPrice: new Money({ amount: price, asset: market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: originalQuantity, asset: market.baseAsset }),
-    executedQuantity: new Quantity({ amount: executedQuantity, asset: market.baseAsset }),
+    limitPrice: new Money({ amount: price,
+asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: originalQuantity,
+asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: executedQuantity,
+asset: market.baseAsset }),
     status: "PARTIALLY_FILLED",
   })
 }
@@ -294,9 +315,12 @@ function createPortfolioAndActiveOrderBaseline({ market } = {}) {
     brokerOrderId: "snapshot-baseline-buy-order",
     market,
     side: "BUY",
-    price: new Money({ amount: "10", asset: market.quoteAsset }),
-    quantity: new Quantity({ amount: "10", asset: market.baseAsset }),
-    quoteQuantity: new Money({ amount: "100", asset: market.quoteAsset }),
+    price: new Money({ amount: "10",
+asset: market.quoteAsset }),
+    quantity: new Quantity({ amount: "10",
+asset: market.baseAsset }),
+    quoteQuantity: new Money({ amount: "100",
+asset: market.quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -322,14 +346,16 @@ function createPortfolioAndActiveOrderBaseline({ market } = {}) {
       executedQuantity: "2",
     }),
   ]
-  return { portfolio, activeOrders }
+  return { portfolio,
+activeOrders }
 }
 
 test("captures Portfolio and active-order baselines at the account snapshot boundary", async () => {
   const fixtureMarket = createFixtureMarket().market
   const { portfolio, activeOrders } = createPortfolioAndActiveOrderBaseline({ market: fixtureMarket })
   const fixture = createFixture({
-    accountSnapshots: [createAccountSnapshot({ market: fixtureMarket, sourceTime: 100 })],
+    accountSnapshots: [createAccountSnapshot({ market: fixtureMarket,
+sourceTime: 100 })],
     portfolio,
     activeOrders,
   })

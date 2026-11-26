@@ -67,7 +67,8 @@ reason: "HIGH_VOLATILITY" },
 function createHarness({
   runtimeSnapshot = DEFAULT_RUNTIME_SNAPSHOT,
   markets = DEFAULT_MARKETS,
-  marketResult = { ok: true, data: { markets } },
+  marketResult = { ok: true,
+data: { markets } },
 } = {}) {
   const calls = []
   const engine = {

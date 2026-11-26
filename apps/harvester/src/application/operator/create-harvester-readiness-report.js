@@ -516,7 +516,8 @@ function createOpenOrdersCheck({ inputs, runtime, observedAt } = {}) {
       durable: openOrderState.durable === true,
       phase: openOrderState.phase ?? null,
       observedAt: isTimestamp(openOrderState.observedAt) ? openOrderState.observedAt : null,
-      ageMs: ageMs({ observedAt, timestamp: openOrderState.observedAt }),
+      ageMs: ageMs({ observedAt,
+timestamp: openOrderState.observedAt }),
       orderCount: Number.isSafeInteger(openOrderState.orderCount) ? openOrderState.orderCount : null,
       unownedSymbols: Array.isArray(openOrderState.unownedSymbols) ? openOrderState.unownedSymbols : [],
       blockReasons: Array.isArray(openOrderState.blockReasons) ? openOrderState.blockReasons : [],
@@ -569,7 +570,8 @@ function createAccountSafetyCheck({ inputs, runtime, observedAt } = {}) {
   return createCheck({
     id: "account.safety-blocker",
     scope: "ACCOUNT",
-    ...getAccountSafetyOutcome({ blocker, runtimeSafetyHalt }),
+    ...getAccountSafetyOutcome({ blocker,
+runtimeSafetyHalt }),
     expected: "No ACCOUNT-scoped safety blocker remains active.",
     remediation: "Resolve the existing safety blocker through its owning recovery or operator workflow.",
     observedAt,
@@ -939,7 +941,8 @@ function createMissingMarketPriceSnapshotCheck({ market, observedAt } = {}) {
     details: {
       fresh: market.priceFresh === true,
       timestamp: isTimestamp(market.priceTimestamp) ? market.priceTimestamp : null,
-      ageMs: ageMs({ observedAt, timestamp: market.priceTimestamp }),
+      ageMs: ageMs({ observedAt,
+timestamp: market.priceTimestamp }),
     },
   })
 }
@@ -968,7 +971,8 @@ function getMarketPriceReadinessOutcome({ routeRequired, ready } = {}) {
 
 function createMarketPriceCheck({ market, input, routeRequired, runtime, observedAt } = {}) {
   if (!input.price && runtime.startupBoundary !== true) {
-    return createMissingMarketPriceSnapshotCheck({ market, observedAt })
+    return createMissingMarketPriceSnapshotCheck({ market,
+observedAt })
   }
   const route = input.route ?? {}
   const price = input.price ?? {}
@@ -979,7 +983,8 @@ function createMarketPriceCheck({ market, input, routeRequired, runtime, observe
     isTimestamp(market.priceTimestamp) &&
     route.priceSubscriptionReady === true &&
     validSource
-  const outcome = getMarketPriceReadinessOutcome({ routeRequired, ready })
+  const outcome = getMarketPriceReadinessOutcome({ routeRequired,
+ready })
   return createMarketCheck({
     id: "market.price",
     ...outcome,
@@ -995,7 +1000,8 @@ function createMarketPriceCheck({ market, input, routeRequired, runtime, observe
       subscriptionAcknowledged: route.priceSubscriptionReady === true,
       websocketEventReceived: eventReceived,
       timestamp: isTimestamp(market.priceTimestamp) ? market.priceTimestamp : null,
-      ageMs: ageMs({ observedAt, timestamp: market.priceTimestamp }),
+      ageMs: ageMs({ observedAt,
+timestamp: market.priceTimestamp }),
       freshnessThresholdMs: price.freshnessThresholdMs ?? null,
       fresh: market.priceFresh === true,
     },
@@ -1136,7 +1142,8 @@ function createVolatilityDetails({ market, snapshotStatus, observedAt } = {}) {
     historyCount: safeIntegerOrNull(snapshotStatus?.historyCount),
     requiredHistoryCount: safeIntegerOrNull(snapshotStatus?.requiredHistoryCount),
     lastEventAt: timestampOrNull(snapshotStatus?.lastEventAt),
-    lastEventAgeMs: ageMs({ observedAt, timestamp: snapshotStatus?.lastEventAt }),
+    lastEventAgeMs: ageMs({ observedAt,
+timestamp: snapshotStatus?.lastEventAt }),
     freshnessThresholdMs: snapshotStatus?.freshnessThresholdMs ?? null,
     reason: snapshotStatus?.reason ?? null,
     blockers: arrayOrEmpty(snapshotStatus?.blockers),
@@ -1195,7 +1202,8 @@ function createMarketVolatilityCheck({ market, input, runtime, observedAt } = {}
     return applicabilityCheck
   }
   const snapshotStatus = getVolatilitySnapshotStatus(input.volatility.snapshot)
-  const ready = isVolatilityProtectionReady({ market, snapshotStatus })
+  const ready = isVolatilityProtectionReady({ market,
+snapshotStatus })
   return createMarketCheck({
     id: "market.volatility",
     status: ready ? "PASS" : "BLOCKED",
@@ -1210,7 +1218,9 @@ function createMarketVolatilityCheck({ market, input, runtime, observedAt } = {}
       snapshot: input.volatility.snapshot,
       snapshotStatus,
     }),
-    details: createVolatilityDetails({ market, snapshotStatus, observedAt }),
+    details: createVolatilityDetails({ market,
+snapshotStatus,
+observedAt }),
   })
 }
 
@@ -1250,12 +1260,32 @@ function getMarketBlockers({ checks, engineBlockers, startupBoundary } = {}) {
 
 function createMarketReadinessChecks({ market, input, routeRequired, bookRequired, runtime, observedAt, engineBlockers } = {}) {
   return [
-    createMarketRouteCheck({ market, input, routeRequired, bookRequired, runtime, observedAt }),
-    createMarketPriceCheck({ market, input, routeRequired, runtime, observedAt }),
-    createMarketBookCheck({ market, input, routeRequired, bookRequired, runtime, observedAt }),
-    createMarketMetadataCheck({ market, observedAt }),
-    createMarketVolatilityCheck({ market, input, runtime, observedAt }),
-    createMarketEngineSafetyCheck({ market, engineBlockers, observedAt }),
+    createMarketRouteCheck({ market,
+input,
+routeRequired,
+bookRequired,
+runtime,
+observedAt }),
+    createMarketPriceCheck({ market,
+input,
+routeRequired,
+runtime,
+observedAt }),
+    createMarketBookCheck({ market,
+input,
+routeRequired,
+bookRequired,
+runtime,
+observedAt }),
+    createMarketMetadataCheck({ market,
+observedAt }),
+    createMarketVolatilityCheck({ market,
+input,
+runtime,
+observedAt }),
+    createMarketEngineSafetyCheck({ market,
+engineBlockers,
+observedAt }),
   ]
 }
 
@@ -1275,10 +1305,13 @@ function resolveMarketReadinessState({ runtime, blockers } = {}) {
 
 function createMarketReadiness({ market, input = {}, runtime, observedAt } = {}) {
   if (market.enabled === false) {
-    return freezeValue(createDisabledMarketReport({ market, observedAt }))
+    return freezeValue(createDisabledMarketReport({ market,
+observedAt }))
   }
   const routeRequired = input.route?.required !== false
-  const bookRequired = getBookRequired({ market, input, runtime })
+  const bookRequired = getBookRequired({ market,
+input,
+runtime })
   const engineBlockers = Array.isArray(market.blockers) ? [...market.blockers] : []
   const userDataNotReady = runtime.tradingEnabled === true &&
     runtime.userData?.ready !== true &&
@@ -1304,7 +1337,8 @@ function createMarketReadiness({ market, input = {}, runtime, observedAt } = {})
   return freezeValue({
     symbol: market.symbol,
     enabled: true,
-    readiness: resolveMarketReadinessState({ runtime, blockers }),
+    readiness: resolveMarketReadinessState({ runtime,
+blockers }),
     blockers,
     warnings,
     checks,

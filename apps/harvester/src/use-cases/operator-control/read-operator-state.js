@@ -19,13 +19,15 @@ function hasValidUserDataSnapshot({ userData }) {
 }
 
 function isValidOperatorRuntimeSnapshot({ snapshot, runtimeState } = {}) {
-  return hasValidRuntimeMetadata({ snapshot, runtimeState }) &&
+  return hasValidRuntimeMetadata({ snapshot,
+runtimeState }) &&
     hasValidUserDataSnapshot({ userData: snapshot?.userData })
 }
 
 function validateRuntimeSnapshot({ snapshot, operation }) {
   const runtimeState = snapshot?.runtimeState ?? (snapshot?.connected === true ? "RUNNING" : "UNKNOWN")
-  if (!isValidOperatorRuntimeSnapshot({ snapshot, runtimeState })) {
+  if (!isValidOperatorRuntimeSnapshot({ snapshot,
+runtimeState })) {
     const cause = new TypeError("Runtime snapshot must include an integer observedAt, runtime state, trading flag and user-data readiness.")
     throw new OperatorQueryError({
       message: "Harvester operator runtime snapshot is invalid",

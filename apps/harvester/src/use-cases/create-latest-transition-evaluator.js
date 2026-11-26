@@ -45,7 +45,8 @@ function canEvaluateShutdownRecoveryThroughManagedPause({ state, symbol, shutdow
 function getEvaluationEntryGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
   const { state, hasBlockingOpenOrdersForSymbol, isStopping, canTrade } = dependencies
   if (state.shutdownBuyGate === true && !shutdownRecoveryOnly) {
-    return toResult({ data: { skipped: true, reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE" } })
+    return toResult({ data: { skipped: true,
+reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE" } })
   }
   const recoveryManagedPause = canEvaluateShutdownRecoveryThroughManagedPause({
     state,
@@ -53,18 +54,21 @@ function getEvaluationEntryGateResult({ dependencies, symbol, shutdownRecoveryOn
     shutdownRecoveryOnly,
   })
   if (state.paused.has(symbol) && !recoveryManagedPause) {
-    return toResult({ data: { skipped: true, reason: "PAIR_PAUSED" } })
+    return toResult({ data: { skipped: true,
+reason: "PAIR_PAUSED" } })
   }
   if (hasBlockingOpenOrdersForSymbol({ symbol })) {
     state.deferredEvaluations.add(symbol)
-    return toResult({ data: { skipped: true, reason: "UNOWNED_OPEN_ORDER" } })
+    return toResult({ data: { skipped: true,
+reason: "UNOWNED_OPEN_ORDER" } })
   }
   if (shutdownRecoveryOnly && isStopping?.() !== true) {
     return toResult({ error: new Error("Shutdown recovery SELL evaluation requires the stopping state") })
   }
   if (!canTrade({ symbol }) && !shutdownRecoveryOnly) {
     state.deferredEvaluations.add(symbol)
-    return toResult({ data: { skipped: true, reason: "TRADING_NOT_READY" } })
+    return toResult({ data: { skipped: true,
+reason: "TRADING_NOT_READY" } })
   }
   state.deferredEvaluations.delete(symbol)
   return null
@@ -74,10 +78,12 @@ function getFreshMarketPriceGateResult({ dependencies, symbol } = {}) {
   const { state, isMarketPriceFresh } = dependencies
   const marketPrice = state.prices.get(symbol)
   if (!marketPrice) {
-    return toResult({ data: { skipped: true, reason: "NO_MARKET_PRICE" } })
+    return toResult({ data: { skipped: true,
+reason: "NO_MARKET_PRICE" } })
   }
   if (!isMarketPriceFresh(marketPrice)) {
-    return toResult({ data: { skipped: true, reason: "STALE_MARKET_PRICE" } })
+    return toResult({ data: { skipped: true,
+reason: "STALE_MARKET_PRICE" } })
   }
   return { marketPrice }
 }
@@ -91,7 +97,8 @@ function getMarketMetadataGateResult({ dependencies, symbol } = {}) {
     return { metadata }
   }
   state.deferredEvaluations.add(symbol)
-  return toResult({ data: { deferred: true, reason: "MARKET_METADATA_UNAVAILABLE" } })
+  return toResult({ data: { deferred: true,
+reason: "MARKET_METADATA_UNAVAILABLE" } })
 }
 
 function getMarketBookGateResult({ dependencies, symbol, metadata } = {}) {
@@ -138,11 +145,13 @@ function getMarketVolatilityGateResult({ dependencies, symbol } = {}) {
     return null
   }
   state.deferredEvaluations.add(symbol)
-  return toResult({ data: { deferred: true, reason: "VOLATILITY_PROTECTION_NOT_READY" } })
+  return toResult({ data: { deferred: true,
+reason: "VOLATILITY_PROTECTION_NOT_READY" } })
 }
 
 function getMarketPrerequisiteGateResult({ dependencies, symbol } = {}) {
-  const metadataResult = getMarketMetadataGateResult({ dependencies, symbol })
+  const metadataResult = getMarketMetadataGateResult({ dependencies,
+symbol })
   if (metadataResult?.ok === false || metadataResult?.data?.deferred) {
     return metadataResult
   }
@@ -154,7 +163,8 @@ function getMarketPrerequisiteGateResult({ dependencies, symbol } = {}) {
   if (bookResult) {
     return bookResult
   }
-  return getMarketVolatilityGateResult({ dependencies, symbol })
+  return getMarketVolatilityGateResult({ dependencies,
+symbol })
 }
 
 function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
@@ -166,12 +176,14 @@ function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } 
   if (entryGateResult) {
     return entryGateResult
   }
-  const priceGateResult = getFreshMarketPriceGateResult({ dependencies, symbol })
+  const priceGateResult = getFreshMarketPriceGateResult({ dependencies,
+symbol })
   if (priceGateResult?.data || priceGateResult?.errors || priceGateResult?.error) {
     return priceGateResult
   }
   if (!shutdownRecoveryOnly) {
-    const prerequisiteResult = getMarketPrerequisiteGateResult({ dependencies, symbol })
+    const prerequisiteResult = getMarketPrerequisiteGateResult({ dependencies,
+symbol })
     if (prerequisiteResult) {
       return prerequisiteResult
     }

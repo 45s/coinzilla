@@ -49,7 +49,8 @@ function appendReadinessReport({ lines, report }) {
   if (Array.isArray(report.runtimeBlockers) && report.runtimeBlockers.length > 0) {
     lines.push(`Startup blockers: ${report.runtimeBlockers.join(", ")}`)
   }
-  appendReadinessMarketBlockers({ lines, report })
+  appendReadinessMarketBlockers({ lines,
+report })
   if (Array.isArray(report.warnings) && report.warnings.length > 0) {
     lines.push(`Warnings: ${report.warnings.join(", ")}`)
   }
@@ -111,7 +112,8 @@ function appendMarketDetails({ lines, market }) {
   if (volatilityLine) {
     lines.push(volatilityLine)
   }
-  appendMarketBlockers({ lines, market })
+  appendMarketBlockers({ lines,
+market })
 }
 
 export function formatTelegramOperatorStatus({ status } = {}) {
@@ -205,7 +207,8 @@ export function formatTelegramOperatorOrders({ snapshot } = {}) {
   }
   for (const order of snapshot.orders) {
     lines.push("")
-    appendTelegramOperatorOrder({ lines, order })
+    appendTelegramOperatorOrder({ lines,
+order })
   }
   lines.push(formatObservedAt(snapshot))
   const message = lines.join("\n")
