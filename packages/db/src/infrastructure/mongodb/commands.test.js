@@ -495,7 +495,7 @@ test("MongoDB readMany cleans up the replacement cursor when a later batch canno
 
   await assert.rejects(
     operations.readMany({ collection: "people" }),
-    /record identifier/i,
+    (error) => error.cause?.message.includes("Record identifier"),
   )
   assert.equal(stub.calls[2].killCursors, "coinzilla_cGVvcGxl")
   assert.deepEqual(stub.calls[2].cursors, [99])
