@@ -80,8 +80,8 @@ test("MongoDB create maps duplicate key responses to the shared conflict error",
 
 test("MongoDB readOne returns null or the decoded stored record", async () => {
   const stub = createCommandStub([
-    { ok: 1, cursor: { firstBatch: [] } },
-    { ok: 1, cursor: { firstBatch: [{ data: { id: "person-1", name: "Ada" } }] } },
+    { ok: 1, cursor: { id: 0, firstBatch: [] } },
+    { ok: 1, cursor: { id: 0, firstBatch: [{ data: { id: "person-1", name: "Ada" } }] } },
   ])
   const operations = createMongoRecordOperations({
     command: stub.command,
@@ -181,7 +181,7 @@ test("MongoDB update refreshes portable sort metadata for changed JSON values", 
 test("MongoDB empty updates delegate to readOne without issuing a mutation", async () => {
   const stub = createCommandStub([{
     ok: 1,
-    cursor: { firstBatch: [{ data: { id: "person-1" } }] },
+    cursor: { id: 0, firstBatch: [{ data: { id: "person-1" } }] },
   }])
   const operations = createMongoRecordOperations({
     command: stub.command,
