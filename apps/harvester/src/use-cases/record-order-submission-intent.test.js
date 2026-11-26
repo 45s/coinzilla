@@ -227,3 +227,39 @@ test("rejects Recovery Seller BUY intents without exact cycle ownership", async 
 
   assert.equal(result.ok, false, "A Recovery Seller BUY must persist its strategy, position, and cycle ownership.")
 })
+
+
+test("persists Conservative recovery SELL ownership through the strict operational-state fact schema", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const conservativeSellOrder = new CanonicalOrder({
+    clientOrderId: "h-0123456789abcdef012345-cg-sell",
+    providerInstanceId: "binanceTestnet",
+    providerType: "binance",
+    accountId: "binance-primary",
+    market,
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "0.101", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "100", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "PENDING",
+  })
+  const ownership = {
+    strategyId: StrategyId.COIN_GRABBER,
+    positionId: "position:cg:dogeusdt",
+    purpose: "RECOVERY_SELL",
+  }
+
+  const sellResult = await recordOrderSubmissionIntent({
+    operationalStateStore,
+    order: conservativeSellOrder,
+    purpose: "RECOVERY_SELL",
+    ownership,
+  })
+
+  assert.equal(sellResult.ok, true, "The strict durable-fact schema must accept a correctly attributed CG recovery SELL.")
+  assert.equal(sellResult.data.durable, true, "The CG recovery SELL must have a confirmed durable intent before broker placement.")
+  assert.equal(sellResult.data.record.data.strategyId, StrategyId.COIN_GRABBER)
+  assert.equal(sellResult.data.record.data.positionId, ownership.positionId)
+  assert.equal(Object.hasOwn(sellResult.data.record.data, "cycleId"), false, "A CG recovery SELL must not acquire an RS cycle identity.")
+})

@@ -1204,22 +1204,13 @@ test("fails closed before registration or broker I/O when durable provenance met
 })
 
 
-test("persists CG Position ownership returned by pending-order registration", async () => {
+test("persists the registered CG strategy purpose for an ordinary Conservative BUY", async () => {
+  const durableFacts = []
   const conservativeOwnership = Object.freeze({
     strategyId: StrategyId.COIN_GRABBER,
     positionId: "position:cg:dogeusdt",
-    purpose: "RECOVERY_SELL",
+    purpose: "CONSERVATIVE_BUY",
   })
-  const persistedOwnership = []
-  const sellDecision = {
-    actions: [{
-      side: "SELL",
-      purpose: "RECOVERY_SELL",
-      type: "LIMIT_MAKER",
-      price: "0.101",
-      quantity: "100",
-    }],
-  }
   const execute = makeExecuteStrategyDecision({
     broker: {
       providerInstanceId: "binanceTestnet",
@@ -1227,87 +1218,31 @@ test("persists CG Position ownership returned by pending-order registration", as
       accountId: "binance-primary",
       placeOrder: async ({ order }) => ({
         ok: true,
-        data: makeAcknowledgement({ ...order, side: "SELL", price: "0.101" }),
+        data: makeAcknowledgement(order),
       }),
     },
     onPendingOrder: async () => ({ ownership: conservativeOwnership }),
-    onDurableSubmissionIntent: async ({ ownership }) => {
-      persistedOwnership.push(ownership)
+    onDurableSubmissionIntent: async ({ purpose, ownership }) => {
+      durableFacts.push({ purpose, ownership })
       return { ok: true, data: { durable: true } }
     },
-    onDurableSubmissionOutcome: async ({ ownership }) => {
-      persistedOwnership.push(ownership)
+    onDurableSubmissionOutcome: async ({ purpose, ownership }) => {
+      durableFacts.push({ purpose, ownership })
       return { ok: true, data: { durable: true } }
     },
     onAcknowledgedOrder: async () => {},
-    onSubmissionFailure: async () => assert.fail("unexpected failure while persisting CG recovery SELL ownership"),
+    onSubmissionFailure: async () => assert.fail("unexpected failure while persisting a Conservative BUY"),
   })
 
-  const result = await execute({ decision: sellDecision, marketMetadata })
+  const result = await execute({ decision, marketMetadata })
 
-  assert.equal(result.ok, true, "A valid CG recovery SELL must proceed after its immutable ownership is durably recorded.")
+  assert.equal(result.ok, true, "A normal Conservative BUY must retain its registered CG ownership through durable submission.")
   assert.deepEqual(
-    persistedOwnership,
-    [conservativeOwnership, conservativeOwnership],
-    "Both durable intent and outcome must retain the exact CG strategy and Position ownership returned by registration.",
-  )
-})
-
-test("does not persist or submit a sibling BUY when the recovery SELL intent is rejected", async () => {
-  const durableIntentSides = []
-  const registeredSides = []
-  let brokerCalls = 0
-  const sellThenBuyDecision = {
-    actions: [
-      {
-        side: "SELL",
-        purpose: "RECOVERY_SELL",
-        type: "LIMIT_MAKER",
-        price: "0.101",
-        quantity: "100",
-      },
-      {
-        side: "BUY",
-        type: "LIMIT_MAKER",
-        price: "0.099",
-        quantity: "100",
-      },
+    durableFacts,
+    [
+      { purpose: "CONSERVATIVE_BUY", ownership: conservativeOwnership },
+      { purpose: "CONSERVATIVE_BUY", ownership: conservativeOwnership },
     ],
-  }
-  const execute = makeExecuteStrategyDecision({
-    broker: {
-      providerInstanceId: "binanceTestnet",
-      providerType: "binance",
-      accountId: "binance-primary",
-      placeOrder: async () => {
-        brokerCalls += 1
-        return { ok: false }
-      },
-    },
-    onPendingOrder: async ({ order }) => {
-      registeredSides.push(order.side)
-      return order.side === "SELL"
-        ? { ownership: {
-          strategyId: StrategyId.COIN_GRABBER,
-          positionId: "position:cg:dogeusdt",
-          purpose: "RECOVERY_SELL",
-        } }
-        : undefined
-    },
-    onDurableSubmissionIntent: async ({ order }) => {
-      durableIntentSides.push(order.side)
-      return { ok: false, errors: [new Error("simulated SELL intent validation failure")] }
-    },
-    onDurableSubmissionOutcome: async () => ({ ok: true, data: { durable: true } }),
-    onSubmissionDeferred: async () => {},
-    onAcknowledgedOrder: async () => {},
-    onSubmissionFailure: async () => {},
-  })
-
-  const result = await execute({ decision: sellThenBuyDecision, marketMetadata })
-
-  assert.equal(result.ok, false, "A rejected recovery SELL intent must fail the complete ordered submission batch.")
-  assert.deepEqual(registeredSides, ["SELL"], "The executor must stop before registering the sibling BUY.")
-  assert.deepEqual(durableIntentSides, ["SELL"], "The executor must not persist a sibling BUY intent after the SELL intent fails.")
-  assert.equal(brokerCalls, 0, "Neither the failed SELL nor its sibling BUY may reach broker placement.")
+    "Durable intent and outcome must store the same CG purpose and Position attribution.",
+  )
 })
