@@ -32,6 +32,7 @@ import { createRecoverySellerActionAuthorizer } from "../../use-cases/create-rec
 import { createRecoverySellerOrderSubmitter } from "../../use-cases/create-recovery-seller-order-submitter.js"
 import { createRecoverySellerStopWorkflow } from "../../use-cases/create-recovery-seller-stop-workflow.js"
 import { makeOrderEventWorkflow } from "../../use-cases/order-event-workflow.js"
+import { makeOrderEventWorkflow } from "../../use-cases/order-event-workflow.js"
 import { recordOrderSubmissionIntent } from "../../use-cases/record-order-submission-intent.js"
 import { recordOrderSubmissionOutcome } from "../../use-cases/record-order-submission-outcome.js"
 const RUNTIME_PAIR_CONFIG = Object.freeze({
@@ -814,6 +815,92 @@ function createRuntimeScenarioPartialSellResult({
   }
 }
 
+function createRuntimeScenarioMixedSellReconciler({
+  runtime,
+  orderRegistry,
+  terminalRegistry,
+  setTerminalAccountingResult,
+}) {
+  return async ({ order: reconciledOrder, canonicalFills }) => {
+    const currentOpenOrder = orderRegistry.getOrder({
+      clientOrderId: reconciledOrder.clientOrderId,
+    })
+    let reconciliation = createMixedSellFillReconciliation({
+      order: currentOpenOrder,
+      orderRegistry,
+    })
+    const allocations = canonicalFills.map((canonicalFill) =>
+      createMixedSellFillAllocation({
+        fill: canonicalFill,
+        orderRegistry: terminalRegistry,
+        recoveryQuantity: "2.49",
+        legacyQuantity: "0.01",
+      }))
+    for (const allocation of allocations) {
+      reconciliation = stageMixedSellFillAllocation({
+        reconciliation,
+        allocation,
+      }).reconciliation
+    }
+    const result = await runtime.seed.workflow.reconcileTerminalMixedSell({
+      reconciliation,
+      terminalOrder: reconciledOrder,
+      canonicalFills,
+      canonicalFillAllocations: allocations,
+      minProfit: "0.2",
+    })
+    setTerminalAccountingResult(result)
+    return result
+  }
+}
+
+function createRuntimeScenarioEventState({ terminalRegistry }) {
+  return {
+    registry: terminalRegistry,
+    processedFillsByOrder: new Map(),
+    reconciledTerminalOrderClientIds: new Set(),
+  }
+}
+
+function createRuntimeScenarioOrderEventWorkflow({
+  runtime,
+  eventState,
+  fill,
+  stagedSellFills,
+  reconcileRecoverySellerMixedSell,
+}) {
+  return makeOrderEventWorkflow({
+    state: eventState,
+    broker: {
+      getFills: async () => toResult({
+        data: [fill],
+      }),
+    },
+    eventPublisher: {
+      publish: () => toResult({
+        data: {
+          accepted: true,
+        },
+      }),
+    },
+    updateTradingAccounting: async () => toResult({
+      data: {
+        applied: true,
+      },
+    }),
+    updateRecoverySellerAccounting: async () => toResult({
+      data: {
+        applied: true,
+      },
+    }),
+    recordBuyExecutionFill: () => {},
+    recordSellExecutionFill: ({ fill: stagedFill }) => stagedSellFills.push(stagedFill),
+    pause: async () => {},
+    reconcileRecoverySellerMixedSell,
+    latchRecoverySellerStop: async (input) => runtime.stopWorkflow.latch(input),
+  })
+}
+
 async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
   const submittedOrder = execution.data.submittedOrders?.[0]
   if (!submittedOrder) {
@@ -827,7 +914,6 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
     throw new Error("Partial SELL scenario cannot find its acknowledged canonical SELL order")
   }
   const partialQuantity = "2.5"
-  const sellPrice = openOrder.limitPrice.amount
   const terminalOrder = createRuntimeScenarioPartialSellOrder({
     runtime,
     openOrder,
@@ -840,59 +926,27 @@ async function reconcileRuntimeScenarioPartialSell({ runtime, execution }) {
     runtime,
     terminalOrder,
     partialQuantity,
-    sellPrice,
+    sellPrice: openOrder.limitPrice.amount,
   })
   const stagedSellFills = []
   let terminalAccountingResult
-  const eventState = {
-    registry: terminalRegistry,
-    processedFillsByOrder: new Map(),
-    reconciledTerminalOrderClientIds: new Set(),
-  }
-  const eventWorkflow = makeOrderEventWorkflow({
-    state: eventState,
-    broker: {
-      getFills: async () => toResult({ data: [fill] }),
+  const eventState = createRuntimeScenarioEventState({
+    terminalRegistry,
+  })
+  const reconcileRecoverySellerMixedSell = createRuntimeScenarioMixedSellReconciler({
+    runtime,
+    orderRegistry,
+    terminalRegistry,
+    setTerminalAccountingResult: (result) => {
+      terminalAccountingResult = result
     },
-    eventPublisher: {
-      publish: () => toResult({ data: { accepted: true } }),
-    },
-    updateTradingAccounting: async () => toResult({ data: { applied: true } }),
-    updateRecoverySellerAccounting: async () => toResult({ data: { applied: true } }),
-    recordBuyExecutionFill: () => {},
-    recordSellExecutionFill: ({ fill: stagedFill }) => stagedSellFills.push(stagedFill),
-    pause: async () => {},
-    reconcileRecoverySellerMixedSell: async ({ order: reconciledOrder, canonicalFills }) => {
-      const currentOpenOrder = orderRegistry.getOrder({
-        clientOrderId: reconciledOrder.clientOrderId,
-      })
-      let currentReconciliation = createMixedSellFillReconciliation({
-        order: currentOpenOrder,
-        orderRegistry,
-      })
-      const currentAllocations = canonicalFills.map((canonicalFill) =>
-        createMixedSellFillAllocation({
-          fill: canonicalFill,
-          orderRegistry: terminalRegistry,
-          recoveryQuantity: "2.49",
-          legacyQuantity: "0.01",
-        }))
-      for (const currentAllocation of currentAllocations) {
-        currentReconciliation = stageMixedSellFillAllocation({
-          reconciliation: currentReconciliation,
-          allocation: currentAllocation,
-        }).reconciliation
-      }
-      terminalAccountingResult = await runtime.seed.workflow.reconcileTerminalMixedSell({
-        reconciliation: currentReconciliation,
-        terminalOrder: reconciledOrder,
-        canonicalFills,
-        canonicalFillAllocations: currentAllocations,
-        minProfit: "0.2",
-      })
-      return terminalAccountingResult
-    },
-    latchRecoverySellerStop: async (input) => runtime.stopWorkflow.latch(input),
+  })
+  const eventWorkflow = createRuntimeScenarioOrderEventWorkflow({
+    runtime,
+    eventState,
+    fill,
+    stagedSellFills,
+    reconcileRecoverySellerMixedSell,
   })
   const eventResult = await eventWorkflow.reconcileTerminalOrderFills({
     order: terminalOrder,

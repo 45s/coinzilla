@@ -226,9 +226,16 @@ uses a test-only registration override and simulated launcher attestation to exe
 the production worker/bootstrap path; it does not establish production readiness or OS
 containment.
 
-The runtime scenario currently proves the authorized SELL-submission success path only.
-Rejection, partial-fill/terminal reconciliation, injected infrastructure failures and
-safety-stop cases remain unregistered and must not be inferred from the success case.
+The runtime scenario registry now includes three deterministic application-level
+cases: authorized SELL submission, rejected SELL submission with a durable STOP latch,
+and a profitable partial CANCELED SELL. The partial-terminal case uses the production
+`makeOrderEventWorkflow.reconcileTerminalOrderFills` path to stage the canonical SELL
+fill, reconcile complete terminal fill history, and invoke the production mixed-SELL
+accounting workflow. It asserts that the cycle remains `UNRESOLVED`, terminal
+reconciliation is committed, profitability is preserved, and the sole-SELL reservation
+is released. Broker, fill-history, STOP persistence and clock inputs remain run-local
+simulation boundaries; this does not establish live exchange integration or OS-level
+process isolation.
 
 
 ## Exact replay provenance gate — 2026-11-26

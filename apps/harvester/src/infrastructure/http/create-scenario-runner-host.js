@@ -346,9 +346,18 @@ function createRunner({ adapters, catalog, replayProvenance, eventBus }) {
     sourceRevision: replayProvenance.identity.sourceCommitSha,
     replayProvenance,
     canExecuteScenario: ({ strategyId, scenarioId }) =>
-      canExecuteCatalogScenario({ catalog, strategyId, scenarioId }),
+      canExecuteCatalogScenario({
+        catalog,
+        strategyId,
+        scenarioId,
+      }),
     validateScenarioInput: ({ strategyId, scenarioId, input }) =>
-      validateCatalogScenarioInput({ catalog, strategyId, scenarioId, input }),
+      validateCatalogScenarioInput({
+        catalog,
+        strategyId,
+        scenarioId,
+        input,
+      }),
     timeoutMs: 30_000,
     maxStoredRuns: 100,
     onUpdate: (run) => publishScenarioRunUpdate({
