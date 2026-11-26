@@ -10,7 +10,7 @@ const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDe
 const { mkdtemp, rm, os, path, createFileOperationalStateStore } = shared
 const test = (...args) => nodeTest(`[start-harvester.test.js] ${args[0]}`, ...args.slice(1))
 
-async function createResolvedAccountBlockerRestartStore({ directory, store, config } = {}) {
+async function seedAccountBlockerRestartSession({ store, config } = {}) {
   const baseline = await recordConfigurationBaseline({
     operationalStateStore: store,
     appConfig: config,
@@ -33,14 +33,17 @@ async function createResolvedAccountBlockerRestartStore({ directory, store, conf
     evidenceDigest: "a".repeat(64),
   })
   assert.equal(raised.ok, true, raised.errors?.[0]?.message)
-  const blockerId = raised.data.record.data.blockerId
+  const { blockerId } = raised.data.record.data
   const stopped = await recordProcessStopped({
     operationalStateStore: store,
     reason: "TEST_CLEAN_STOP_AFTER_ACCOUNT_BLOCKER",
     clean: true,
   })
   assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
+  return blockerId
+}
 
+async function resolveAccountBlockerOffline({ directory, blockerId } = {}) {
   const offlineStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "account-blocker-offline-resolution-session",
@@ -66,15 +69,16 @@ async function createResolvedAccountBlockerRestartStore({ directory, store, conf
     actionBlockerIds: [blockerId],
   })
   assert.equal(resolved.ok, true, resolved.errors?.[0]?.message)
+}
 
-  const restartStore = createFileOperationalStateStore({
-    directory,
-    runtimeSessionId: "account-blocker-restart-session",
-  })
-  const read = await restartStore.readAll()
-  assert.equal(read.ok, true, read.errors?.[0]?.message)
+async function createResolvedAccountBlockerRestartStore({ directory, store, config } = {}) {
+  const blockerId = await seedAccountBlockerRestartSession({ store, config })
+  await resolveAccountBlockerOffline({ directory, blockerId })
   return {
-    restartStore,
+    restartStore: createFileOperationalStateStore({
+      directory,
+      runtimeSessionId: "account-blocker-restart-session",
+    }),
     blockerId,
   }
 }
@@ -2235,7 +2239,7 @@ test("allows only an observation-only restart after account resolution and verif
     assert.equal(result.userDataReady, false, "A fresh snapshot does not silently restore trading readiness.")
     const read = await restartStore.readAll()
     assert.equal(read.ok, true, read.errors?.[0]?.message)
-    const records = read.data.records
+    const { records } = read.data
     const resolutionIndex = records.findIndex((record) =>
       record.factType === "SAFETY_BLOCKER_RESOLVED" && record.data.blockerId === blockerId
     )

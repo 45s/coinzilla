@@ -218,28 +218,35 @@ function logUserDataSubscriptionEstablished(logger) {
   })
 }
 
+function hasDurableAccountPreflight(readiness) {
+  const { preflight, currentAccount } = readiness ?? {}
+  return preflight?.completed === true &&
+    preflight.durable === true &&
+    preflight.sourceTime !== null &&
+    preflight.sourceTime === currentAccount?.sourceTime &&
+    preflight.balanceCount === currentAccount?.balanceCount
+}
+
+function hasCleanOpenOrdersPreflight(readiness) {
+  const openOrders = readiness?.openOrders?.preflight
+  return openOrders?.completed === true &&
+    openOrders.durable === true &&
+    openOrders.phase === "PREFLIGHT" &&
+    openOrders.readiness === "READY" &&
+    openOrders.blockReasons?.length === 0 &&
+    openOrders.unownedSymbols?.length === 0
+}
+
 function assertAccountRecoveryPreflight({
   state,
   tradingModeLabel,
   getAccountReadinessSnapshot,
 } = {}) {
-  if (state.accountRecoverySnapshotRequired !== true) return
+  if (state.accountRecoverySnapshotRequired !== true) {
+    return
+  }
   const readiness = getAccountReadinessSnapshot?.()
-  const accountSnapshot = readiness?.preflight
-  const currentAccount = readiness?.currentAccount
-  const openOrdersSnapshot = readiness?.openOrders?.preflight
-  const accountReady = accountSnapshot?.completed === true &&
-    accountSnapshot.durable === true &&
-    accountSnapshot.sourceTime !== null &&
-    accountSnapshot.sourceTime === currentAccount?.sourceTime &&
-    accountSnapshot.balanceCount === currentAccount?.balanceCount
-  const openOrdersReady = openOrdersSnapshot?.completed === true &&
-    openOrdersSnapshot.durable === true &&
-    openOrdersSnapshot.phase === "PREFLIGHT" &&
-    openOrdersSnapshot.readiness === "READY" &&
-    openOrdersSnapshot.blockReasons?.length === 0 &&
-    openOrdersSnapshot.unownedSymbols?.length === 0
-  if (!accountReady || !openOrdersReady) {
+  if (!hasDurableAccountPreflight(readiness) || !hasCleanOpenOrdersPreflight(readiness)) {
     throw new HarvesterUserDataStartupUnsafeError({
       tradingModeLabel,
       code: "ACCOUNT_RECOVERY_FRESH_PREFLIGHT_REQUIRED",
@@ -295,6 +302,14 @@ async function completeTradingUserDataPreflight({
     getAccountSafetyBlocker,
   })
   state.preflightComplete = true
+}
+
+async function completeUserDataPreflight(options) {
+  if (options.tradingEnabled) {
+    await completeTradingUserDataPreflight(options)
+    return
+  }
+  await completeReadOnlyUserDataPreflight(options)
 }
 
 function createDeferredTradingActivation({
@@ -375,18 +390,17 @@ export async function subscribeToUserData({
   markUserDataReconciliationRequired(state)
   await publishInitialAccountSnapshot({ state,
 publishAccountSnapshot })
-  if (!tradingEnabled) {
-    await completeReadOnlyUserDataPreflight({ state,
-publishOpenOrdersSnapshot })
-    return userDataSubscription
-  }
-  await completeTradingUserDataPreflight({
+  await completeUserDataPreflight({
     state,
+    tradingEnabled,
     publishOpenOrdersSnapshot,
+    getAccountReadinessSnapshot,
     tradingModeLabel,
     getAccountSafetyBlocker,
-    getAccountReadinessSnapshot,
   })
+  if (!tradingEnabled) {
+    return userDataSubscription
+  }
   if (deferTradingActivation) {
     return createDeferredTradingActivation({
       userDataSubscription,

@@ -129,7 +129,7 @@ function getLatestResolvedUserDataAccountBlockerIndex(records) {
     )
     .map((record) => record.data.blockerId))
   let latestResolutionIndex = -1
-  records.forEach((record, index) => {
+  for (const [index, record] of records.entries()) {
     const { data } = record
     const structuredResolution = record.factType === "SAFETY_BLOCKER_RESOLVED" &&
       accountBlockerIds.has(data?.blockerId) &&
@@ -138,12 +138,14 @@ function getLatestResolvedUserDataAccountBlockerIndex(records) {
       typeof data?.operatorId === "string" &&
       typeof data?.actionId === "string" &&
       data?.actionBlockerIds?.includes(data.blockerId)
-    if (structuredResolution) latestResolutionIndex = index
-  })
+    if (structuredResolution) {
+      latestResolutionIndex = index
+    }
+  }
   return latestResolutionIndex
 }
 
-function hasCleanAccountRecoveryPreflight(records, resolutionIndex) {
+function hasCleanAccountRecoveryPreflight({ records, resolutionIndex } = {}) {
   const laterRecords = records.slice(resolutionIndex + 1)
   const accountSnapshot = laterRecords.findLast((record) =>
     record.factType === "ACCOUNT_SNAPSHOT_CAPTURED" &&
@@ -165,7 +167,7 @@ function hasCleanAccountRecoveryPreflight(records, resolutionIndex) {
 
 function requiresAccountRecoverySnapshot(records) {
   const resolutionIndex = getLatestResolvedUserDataAccountBlockerIndex(records)
-  return resolutionIndex >= 0 && !hasCleanAccountRecoveryPreflight(records, resolutionIndex)
+  return resolutionIndex >= 0 && !hasCleanAccountRecoveryPreflight({ records, resolutionIndex })
 }
 
 function assertOperationalStateCanStart({
@@ -218,7 +220,10 @@ async function verifyOperationalStateStore({ operationalStateStore,
       records: history.records,
       accountRecoverySnapshotRequired,
     })
-    return { previousProcessStarted, accountRecoverySnapshotRequired }
+    return {
+      previousProcessStarted,
+      accountRecoverySnapshotRequired,
+    }
   }
   const history = await readVerifiedOperationalStateHistory({ operationalStateStore })
   assertNoUnresolvedAccountSafetyBlockers({ projection: history.projection })
