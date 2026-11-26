@@ -393,6 +393,7 @@ function createHarnessEngineCoreOptions({ options, brokerState } = {}) {
     logger: options.logger,
     strategyPolicy: options.strategyPolicy ?? defaultStrategyPolicy,
     hasUnownedOpenOrdersForSymbol: options.hasUnownedOpenOrdersForSymbol,
+    getAccountSafetyBlocker: options.getAccountSafetyBlocker,
     isMarketPriceFresh: options.isMarketPriceFresh,
     isMarketBookFresh: options.isMarketBookFresh,
     getVolatilityData: options.getVolatilityData,
@@ -575,6 +576,42 @@ test("rechecks external-order ownership after the durable order intent and befor
   assert.equal(harness.engine.getOrders().length, 0)
   assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
 })
+
+test("rechecks a newly raised account blocker after durable intent and before broker submission", async () => {
+  let accountBlocker = null
+  const harness = await createHarness({
+    getAccountSafetyBlocker: () => accountBlocker,
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => {
+        accountBlocker = {
+          scope: "ACCOUNT",
+          reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+          blockerId: "late-account-blocker",
+        }
+        return {
+          ok: true,
+          durable: true,
+        }
+      },
+    },
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(harness.orders, [])
+  assert.equal(harness.engine.getOrders().length, 0)
+  assert.deepEqual(harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
+})
+
 test("subtracts only shared BUY commitments created after the account snapshot", async () => {
   const ethAsset = new Asset({
     id: "eth",
