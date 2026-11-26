@@ -70,6 +70,7 @@ function createRuntime({
   recoverySellerPairs = { [symbol]: pairConfig },
 } = {}) {
   let snapshotInput
+  let buyDecisionInput
   const state = {
     prices: new Map([[symbol, marketPrice]]),
     paused: new Set(),
@@ -105,13 +106,16 @@ function createRuntime({
       ok: true,
       data: Object.freeze({ submitted: true }),
     }),
-    evaluateBuyDecision: () => Object.freeze({
-      decision: Object.freeze({
-        outcome: "WAIT",
-        reasonCode: "TEST_WAIT",
-        explanation: "No action in runtime wrapper test",
-      }),
-    }),
+    evaluateBuyDecision: (input) => {
+      buyDecisionInput = input
+      return Object.freeze({
+        decision: Object.freeze({
+          outcome: "WAIT",
+          reasonCode: "TEST_WAIT",
+          explanation: "No action in runtime wrapper test",
+        }),
+      })
+    },
   })
   return {
     evaluate,
@@ -120,6 +124,7 @@ function createRuntime({
       state,
     },
     getSnapshotInput: () => snapshotInput,
+    getBuyDecisionInput: () => buyDecisionInput,
   }
 }
 
@@ -179,6 +184,8 @@ test("blocks new BUY admission while allowing the runtime to remain active for e
     "Account STOP must not mark the whole strategy runtime as shut down.")
   assert.equal(snapshotInput.buyAdmissionBlocked, true,
     "An unresolved account STOP persistence attempt must block new BUY spending.")
+  assert.equal(runtime.getBuyDecisionInput().strategyStopped, true,
+    "The BUY policy must receive the admission gate without globally stopping the runtime.")
 })
 
 test("skips evaluation when market price is missing or stale", async () => {

@@ -253,6 +253,8 @@ test("production RS STOP blocks new BUY spending while allowing an eligible firs
     "The STOP must remain latched after the recovery SELL is submitted.")
   assert.equal(result.output.stopAdmissionChecks.accountAdmissionBlocked, true,
     "Account admission must remain blocked for additional BUY spending.")
+  assert.equal(result.output.stopAdmissionChecks.buyAdmissionBlocked, true,
+    "The BUY admission gate must remain active while the eligible recovery SELL proceeds.")
   assert.equal(result.output.action.side, "SELL")
   assert.equal(result.output.submitted, true)
 })
@@ -287,6 +289,8 @@ test("production RS runtime fails closed when account STOP persistence fails aft
     "The terminal event must fail closed when account STOP persistence is unavailable.")
   assert.equal(result.output.terminalSell.accountAdmissionBlocked, true,
     "The STOP workflow must block account admission before attempting persistence.")
+  assert.equal(result.output.terminalSell.buyAdmissionBlocked, true,
+    "The STOP workflow must block new BUY spending even if durable STOP persistence fails.")
   assert.equal(result.output.terminalSell.postFailureAdmissionBlocked, true,
     "The production runtime must continue blocking account admission after persistence fails.")
   assert.equal(result.output.terminalSell.postFailureSubmittedOrderCount, 0,

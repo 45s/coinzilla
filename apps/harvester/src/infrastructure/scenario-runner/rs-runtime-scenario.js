@@ -1176,6 +1176,7 @@ function createRuntimeScenarioTerminalSellResult({
     stopPersistenceFailed: pauses.some((pause) =>
       pause.error?.message?.includes("global STOP could not be confirmed")),
     accountAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
+    buyAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
     postFailureAdmissionBlocked: false,
     postFailureSubmittedOrderCount: 0,
     postFailureActionSubmitted: false,
@@ -1560,6 +1561,7 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
         sellActionSide: "SELL",
         stopStateStatus: "STOPPED",
         accountAdmissionBlocked: true,
+        buyAdmissionBlocked: true,
       },
     }
   }
@@ -1590,6 +1592,7 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
       marketPaused: true,
       stopPersistenceFailed: true,
       accountAdmissionBlocked: true,
+      buyAdmissionBlocked: true,
       postFailureAdmissionBlocked: true,
       postFailureSubmittedOrderCount: 0,
       postFailureActionSubmitted: false,
@@ -1613,6 +1616,7 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
       eventWorkflowFailedClosed: true,
       marketPaused: true,
       accountAdmissionBlocked: true,
+      buyAdmissionBlocked: true,
     }
   }
   if (scenarioId === "RS-RUNTIME-SELL-PARTIAL-CANCEL-001") {
@@ -1633,6 +1637,7 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
       eventWorkflowFailedClosed: true,
       marketPaused: true,
       accountAdmissionBlocked: true,
+      buyAdmissionBlocked: true,
     }
   }
   return {
@@ -1723,6 +1728,11 @@ function createPartialSellSafetyAssertions({ output, expected }) {
       name: "account admission remains blocked after terminal SELL STOP",
       actual: output.terminalSell?.accountAdmissionBlocked,
       expected: expected.accountAdmissionBlocked,
+    }),
+    createAssertion({
+      name: "the BUY admission gate remains blocked after terminal SELL STOP",
+      actual: output.terminalSell?.buyAdmissionBlocked,
+      expected: expected.buyAdmissionBlocked,
     }),
     createAssertion({
       name: "terminal SELL releases the terminal order reservation after fill reconciliation",
@@ -1842,6 +1852,11 @@ function createStopAdmissionAssertions({ output, expected }) {
       name: "account admission remains blocked for additional BUY spending",
       actual: output.stopAdmissionChecks?.accountAdmissionBlocked,
       expected: expected.stopAdmissionChecks.accountAdmissionBlocked,
+    }),
+    createAssertion({
+      name: "the BUY policy remains gated while eligible SELLs are allowed",
+      actual: output.stopAdmissionChecks?.buyAdmissionBlocked,
+      expected: expected.stopAdmissionChecks.buyAdmissionBlocked,
     }),
   ]
 }
@@ -2061,6 +2076,7 @@ async function executeRuntimeScenario({ runId, scenarioId, effectiveInput, signa
       sellActionSide: sellAttempt.submittedAction?.side ?? null,
       stopStateStatus: (await runtime.stopWorkflow.getState()).status,
       accountAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
+      buyAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
     }
   } else {
     execution = await executeRuntimeScenarioDispatch({
