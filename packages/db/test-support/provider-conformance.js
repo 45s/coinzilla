@@ -455,11 +455,13 @@ async function verifyScalarSortOrdering(database) {
 async function verifySortingAfterUpdate(database) {
   await database.create({
     collection: "people",
-    record: { id: "updated-rank", rank: 2 },
+    record: { id: "updated-rank",
+rank: 2 },
   })
   await database.create({
     collection: "people",
-    record: { id: "stable-rank", rank: 1 },
+    record: { id: "stable-rank",
+rank: 1 },
   })
   await database.update({
     collection: "people",
@@ -470,7 +472,8 @@ async function verifySortingAfterUpdate(database) {
   const records = await database.readMany({
     collection: "people",
     query: {
-      sort: [{ field: "rank", direction: "asc" }],
+      sort: [{ field: "rank",
+direction: "asc" }],
     },
   })
   assert.deepEqual(

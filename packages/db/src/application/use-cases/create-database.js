@@ -145,12 +145,14 @@ function createProviderNeutralFacade({ database, provider }) {
         return context[operation](input)
       })
     }
-    return database.execute({ operation, input })
+    return database.execute({ operation,
+input })
   }
 
   function invokeTransactionCallback({ work, transaction }) {
     const context = createTransactionFacade(transaction)
-    const scope = { context, active: true }
+    const scope = { context,
+active: true }
     try {
       const result = transactionScope.run(scope, () => work(context))
       if (result && typeof result.then === "function") {
@@ -192,7 +194,8 @@ function createProviderNeutralFacade({ database, provider }) {
           if (capabilities.transactions.callbackMode === "synchronous" && isAsyncFunction(work)) {
             throw new TypeError("Synchronous database provider transaction callbacks must be synchronous")
           }
-          return invokeTransactionCallback({ work, transaction })
+          return invokeTransactionCallback({ work,
+transaction })
         })
       }
       if (!capabilities.transactions.multiDocument) {
@@ -202,7 +205,8 @@ function createProviderNeutralFacade({ database, provider }) {
         if (capabilities.transactions.callbackMode === "synchronous" && isAsyncFunction(work)) {
           throw new TypeError("Synchronous database provider transaction callbacks must be synchronous")
         }
-        return invokeTransactionCallback({ work, transaction })
+        return invokeTransactionCallback({ work,
+transaction })
       })
     },
     create: (input) => runOperation({

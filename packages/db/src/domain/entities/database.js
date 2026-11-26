@@ -173,7 +173,8 @@ export function createDatabaseEntity({ provider } = {}) {
       provider,
       lifecycle,
     }),
-    execute: createProviderOperation({ provider, lifecycle }),
+    execute: createProviderOperation({ provider,
+lifecycle }),
     readTransaction: createTransactionOperation({
       provider,
       lifecycle,

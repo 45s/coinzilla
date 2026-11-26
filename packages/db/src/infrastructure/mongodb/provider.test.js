@@ -30,7 +30,8 @@ function createProviderHarness({ topology = "standalone", transactionSupported =
           sequenceCalls.push(input.sequences ?? [])
           return commandHandler
             ? commandHandler(input.body, calls.length, input.sequences ?? [])
-            : { ok: 1, n: 1 }
+            : { ok: 1,
+n: 1 }
         },
         async close() {
           this.closed = true
@@ -47,7 +48,10 @@ function createProviderHarness({ topology = "standalone", transactionSupported =
     }),
     randomBytes: (length) => Buffer.alloc(length, ++randomValue),
   })
-  return { provider, calls, sequenceCalls, transports }
+  return { provider,
+calls,
+sequenceCalls,
+transports }
 }
 
 test("MongoDB provider is usable through createDatabase on standalone servers", async () => {
@@ -56,9 +60,11 @@ test("MongoDB provider is usable through createDatabase on standalone servers", 
   await database.connect()
 
   try {
-    const record = { id: "person-1", name: "Ada" }
+    const record = { id: "person-1",
+name: "Ada" }
     assert.deepEqual(
-      await database.create({ collection: "people", record }),
+      await database.create({ collection: "people",
+record }),
       record,
     )
     assert.match(calls[0].insert, /^coinzilla_/)
@@ -80,10 +86,14 @@ test("MongoDB standalone supports provider-neutral single-operation reads withou
   const { provider, calls } = createProviderHarness({
     commandHandler: async (body) => {
       if (body.find === "coinzilla_cGVvcGxl") {
-        return { ok: 1, cursor: { id: 0, firstBatch: [] } }
+        return { ok: 1,
+cursor: { id: 0,
+firstBatch: [] } }
       }
       if (body.aggregate === "coinzilla_cGVvcGxl") {
-        return { ok: 1, cursor: { id: 0, firstBatch: [] } }
+        return { ok: 1,
+cursor: { id: 0,
+firstBatch: [] } }
       }
       return { ok: 1 }
     },
@@ -110,9 +120,13 @@ test("MongoDB read transaction boundary rejects mutations and multiple logical r
   const { provider } = createProviderHarness({
     commandHandler: async (body) => {
       if (body.find === "coinzilla_cGVvcGxl") {
-        return { ok: 1, cursor: { id: 0, firstBatch: [] } }
+        return { ok: 1,
+cursor: { id: 0,
+firstBatch: [] } }
       }
-      return { ok: 1, cursor: { id: 0, firstBatch: [] } }
+      return { ok: 1,
+cursor: { id: 0,
+firstBatch: [] } }
     },
   })
   await provider.connect()
@@ -120,7 +134,8 @@ test("MongoDB read transaction boundary rejects mutations and multiple logical r
   try {
     await assert.rejects(
       provider.withReadTransaction(async (transaction) => {
-        await transaction.readOne({ collection: "people", id: "one" })
+        await transaction.readOne({ collection: "people",
+id: "one" })
         await transaction.readMany({ collection: "people" })
       }),
       /one provider-neutral read operation/,
@@ -149,7 +164,8 @@ test("MongoDB provider uses one logical session across replica-set transaction c
     const result = await database.transaction(async (transaction) => {
       await transaction.create({
         collection: "people",
-        record: { id: "transaction-1", name: "Ada" },
+        record: { id: "transaction-1",
+name: "Ada" },
       })
       return "committed"
     })
@@ -165,7 +181,8 @@ test("MongoDB provider uses one logical session across replica-set transaction c
     assert.deepEqual(commit.lsid, insert.lsid)
     assert.equal(commit.txnNumber, insert.txnNumber)
     assert.equal(commit.autocommit, false)
-    assert.deepEqual(commit.writeConcern, { w: "majority", wtimeout: 10000 })
+    assert.deepEqual(commit.writeConcern, { w: "majority",
+wtimeout: 10000 })
   } finally {
     await database.close()
   }
@@ -173,8 +190,10 @@ test("MongoDB provider uses one logical session across replica-set transaction c
 
 test("MongoDB sharded transactions forward the latest recovery token on commit", async () => {
   const recoveryTokens = [
-    { shard: "shard-1", generation: 1 },
-    { shard: "shard-2", generation: 2 },
+    { shard: "shard-1",
+generation: 1 },
+    { shard: "shard-2",
+generation: 2 },
   ]
   let insertCount = 0
   const { provider, calls } = createProviderHarness({
@@ -183,9 +202,12 @@ test("MongoDB sharded transactions forward the latest recovery token on commit",
     commandHandler: async (body) => {
       if (body.insert) {
         insertCount += 1
-        return { ok: 1, n: 1, recoveryToken: recoveryTokens[insertCount - 1] }
+        return { ok: 1,
+n: 1,
+recoveryToken: recoveryTokens[insertCount - 1] }
       }
-      return { ok: 1, n: 1 }
+      return { ok: 1,
+n: 1 }
     },
   })
   const database = createDatabase({ provider })
@@ -204,7 +226,8 @@ test("MongoDB sharded transactions forward the latest recovery token on commit",
     })
     const commit = calls.find((body) => body.commitTransaction === 1)
     assert.deepEqual(commit.recoveryToken, recoveryTokens[1])
-    assert.deepEqual(commit.writeConcern, { w: "majority", wtimeout: 10000 })
+    assert.deepEqual(commit.writeConcern, { w: "majority",
+wtimeout: 10000 })
   } finally {
     await database.close()
   }
@@ -212,9 +235,12 @@ test("MongoDB sharded transactions forward the latest recovery token on commit",
 
 test("MongoDB sharded commit retries with the latest recovery token", async () => {
   const recoveryTokens = [
-    { shard: "shard-1", generation: 1 },
-    { shard: "shard-2", generation: 2 },
-    { shard: "shard-3", generation: 3 },
+    { shard: "shard-1",
+generation: 1 },
+    { shard: "shard-2",
+generation: 2 },
+    { shard: "shard-3",
+generation: 3 },
   ]
   let commitAttempts = 0
   const commitTokens = []
@@ -222,18 +248,22 @@ test("MongoDB sharded commit retries with the latest recovery token", async () =
     topology: "sharded",
     transactionSupported: true,
     commandHandler: async (body) => {
-      if (body.insert) return { ok: 1, n: 1, recoveryToken: recoveryTokens[0] }
+      if (body.insert) {return { ok: 1,
+n: 1,
+recoveryToken: recoveryTokens[0] }}
       if (body.commitTransaction === 1) {
         commitAttempts += 1
         commitTokens.push(body.recoveryToken)
         if (commitAttempts === 1) {
           return {
             ok: 1,
-            writeConcernError: { code: 64, errmsg: "write concern timed out" },
+            writeConcernError: { code: 64,
+errmsg: "write concern timed out" },
             recoveryToken: recoveryTokens[1],
           }
         }
-        return { ok: 1, recoveryToken: recoveryTokens[2] }
+        return { ok: 1,
+recoveryToken: recoveryTokens[2] }
       }
       return { ok: 1 }
     },
@@ -255,13 +285,16 @@ test("MongoDB sharded commit retries with the latest recovery token", async () =
 })
 
 test("MongoDB sharded transaction abort forwards the latest recovery token", async () => {
-  const recoveryToken = { shard: "shard-1", generation: 3 }
+  const recoveryToken = { shard: "shard-1",
+generation: 3 }
   const callbackError = new Error("abort requested")
   const { provider, calls } = createProviderHarness({
     topology: "sharded",
     transactionSupported: true,
     commandHandler: async (body) => {
-      if (body.insert) return { ok: 1, n: 1, recoveryToken }
+      if (body.insert) {return { ok: 1,
+n: 1,
+recoveryToken }}
       return { ok: 1 }
     },
   })
@@ -291,7 +324,8 @@ test("MongoDB sharded transactions fail closed when a successful response omits 
     topology: "sharded",
     transactionSupported: true,
     commandHandler: async (body) => body.insert
-      ? { ok: 1, n: 1 }
+      ? { ok: 1,
+n: 1 }
       : { ok: 1 },
   })
   const database = createDatabase({ provider })
@@ -306,7 +340,7 @@ test("MongoDB sharded transactions fail closed when a successful response omits 
       (error) => {
         let current = error
         while (current) {
-          if (current.message?.includes("recoveryToken")) return true
+          if (current.message?.includes("recoveryToken")) {return true}
           current = current.cause
         }
         return false
@@ -326,7 +360,8 @@ test("MongoDB provider reports an ambiguous commit outcome instead of claiming r
       if (body.commitTransaction === 1) {
         throw Object.assign(new Error("connection lost after commit was sent"), { outcomeUnknown: true })
       }
-      return { ok: 1, n: 1 }
+      return { ok: 1,
+n: 1 }
     },
   })
   const database = createDatabase({ provider })
@@ -357,7 +392,8 @@ test("MongoDB does not report a definitely-unsent commit as outcome-unknown", as
           outcomeUnknown: false,
         })
       }
-      return { ok: 1, n: 1 }
+      return { ok: 1,
+n: 1 }
     },
   })
   const database = createDatabase({ provider })
@@ -385,7 +421,9 @@ test("MongoDB provider aborts failed transactions and preserves callback failure
     transactionSupported: true,
     commandHandler: async (body) => {
       if (body.find === "coinzilla_cGVvcGxl") {
-        return { ok: 1, cursor: { id: 0, firstBatch: [] } }
+        return { ok: 1,
+cursor: { id: 0,
+firstBatch: [] } }
       }
       return { ok: 1 }
     },
@@ -396,7 +434,8 @@ test("MongoDB provider aborts failed transactions and preserves callback failure
   try {
     await assert.rejects(
       database.transaction(async (transaction) => {
-        await transaction.readOne({ collection: "people", id: "missing" })
+        await transaction.readOne({ collection: "people",
+id: "missing" })
         throw callbackError
       }),
       (error) => error === callbackError,
@@ -417,8 +456,9 @@ test("MongoDB ignores abort errors and preserves the original callback failure",
     topology: "replicaSet",
     transactionSupported: true,
     commandHandler: async (body) => {
-      if (body.abortTransaction === 1) throw abortError
-      return { ok: 1, n: 1 }
+      if (body.abortTransaction === 1) {throw abortError}
+      return { ok: 1,
+n: 1 }
     },
   })
   const database = createDatabase({ provider })
@@ -443,9 +483,12 @@ test("MongoDB ignores abort errors and preserves the original callback failure",
 
 test("MongoDB sharded abort retries with the latest recovery token", async () => {
   const recoveryTokens = [
-    { shard: "shard-1", generation: 1 },
-    { shard: "shard-2", generation: 2 },
-    { shard: "shard-3", generation: 3 },
+    { shard: "shard-1",
+generation: 1 },
+    { shard: "shard-2",
+generation: 2 },
+    { shard: "shard-3",
+generation: 3 },
   ]
   const abortTokens = []
   const callbackError = new Error("callback failed")
@@ -453,17 +496,21 @@ test("MongoDB sharded abort retries with the latest recovery token", async () =>
     topology: "sharded",
     transactionSupported: true,
     commandHandler: async (body) => {
-      if (body.insert) return { ok: 1, n: 1, recoveryToken: recoveryTokens[0] }
+      if (body.insert) {return { ok: 1,
+n: 1,
+recoveryToken: recoveryTokens[0] }}
       if (body.abortTransaction === 1) {
         abortTokens.push(body.recoveryToken)
         if (abortTokens.length === 1) {
           return {
             ok: 1,
-            writeConcernError: { code: 64, errmsg: "write concern timed out" },
+            writeConcernError: { code: 64,
+errmsg: "write concern timed out" },
             recoveryToken: recoveryTokens[1],
           }
         }
-        return { ok: 1, recoveryToken: recoveryTokens[2] }
+        return { ok: 1,
+recoveryToken: recoveryTokens[2] }
       }
       return { ok: 1 }
     },
@@ -503,7 +550,8 @@ test("MongoDB retries a retryable abort once and preserves the callback failure"
           throw Object.assign(new Error("abort reply lost"), { outcomeUnknown: true })
         }
       }
-      return { ok: 1, n: 1 }
+      return { ok: 1,
+n: 1 }
     },
   })
   const database = createDatabase({ provider })
@@ -541,7 +589,8 @@ test("MongoDB provider waits for in-flight standalone CRUD before closing its so
         markWriteStarted()
         await writeGate
       }
-      return { ok: 1, n: 1 }
+      return { ok: 1,
+n: 1 }
     },
   })
   const database = createDatabase({ provider })
@@ -580,7 +629,8 @@ test("MongoDB provider isolates concurrent transactions and drains them before c
         markWriteStarted()
         await writeGate
       }
-      return { ok: 1, n: 1 }
+      return { ok: 1,
+n: 1 }
     },
   })
   const database = createDatabase({ provider })
@@ -669,8 +719,12 @@ test("MongoDB provider follows replica-set primary discovery and closes the seed
     handshake: async () => {
       handshakes += 1
       return handshakes === 1
-        ? { topology: "replicaSet", primary: "primary.example:27018", transactionSupported: true }
-        : { topology: "replicaSet", primary: null, transactionSupported: true }
+        ? { topology: "replicaSet",
+primary: "primary.example:27018",
+transactionSupported: true }
+        : { topology: "replicaSet",
+primary: null,
+transactionSupported: true }
     },
   })
 
@@ -698,21 +752,21 @@ function createConformanceMongoServer(store) {
   }
 
   function scalarRank(value) {
-    if (value === undefined || value === null) return 0
-    if (typeof value === "boolean") return 1
-    if (typeof value === "number") return 2
-    if (typeof value === "string") return 3
+    if (value === undefined || value === null) {return 0}
+    if (typeof value === "boolean") {return 1}
+    if (typeof value === "number") {return 2}
+    if (typeof value === "string") {return 3}
     return 4
   }
 
   function compareScalar(left, right) {
     const rank = scalarRank(left) - scalarRank(right)
-    if (rank !== 0) return rank
-    if (left === undefined || left === null) return 0
+    if (rank !== 0) {return rank}
+    if (left === undefined || left === null) {return 0}
     if (typeof left === "number" || typeof left === "string") {
       return left < right ? -1 : left > right ? 1 : 0
     }
-    if (typeof left === "boolean") return Number(left) - Number(right)
+    if (typeof left === "boolean") {return Number(left) - Number(right)}
     return 0
   }
 
@@ -725,11 +779,15 @@ function createConformanceMongoServer(store) {
       const documents = sequences.find((sequence) => sequence.identifier === "documents")?.documents ?? body.documents ?? []
       for (const document of documents) {
         if (records.has(document._id)) {
-          return { ok: 1, n: 0, writeErrors: [{ code: 11000, errmsg: "duplicate key" }] }
+          return { ok: 1,
+n: 0,
+writeErrors: [{ code: 11000,
+errmsg: "duplicate key" }] }
         }
         records.set(document._id, structuredClone(document))
       }
-      return { ok: 1, n: documents.length }
+      return { ok: 1,
+n: documents.length }
     }
 
     if (body.find) {
@@ -738,7 +796,8 @@ function createConformanceMongoServer(store) {
         ok: 1,
         cursor: {
           id: 0,
-          firstBatch: document ? [{ _id: document._id, data: structuredClone(document.data) }] : [],
+          firstBatch: document ? [{ _id: document._id,
+data: structuredClone(document.data) }] : [],
         },
       }
     }
@@ -761,7 +820,7 @@ function createConformanceMongoServer(store) {
           const comparison = typeKey
             ? scalarRank(leftValue) - scalarRank(rightValue)
             : compareScalar(leftValue, rightValue)
-          if (comparison !== 0) return comparison * direction
+          if (comparison !== 0) {return comparison * direction}
         }
         return left._id < right._id ? -1 : left._id > right._id ? 1 : 0
       })
@@ -772,26 +831,31 @@ function createConformanceMongoServer(store) {
         ok: 1,
         cursor: {
           id: 0,
-          firstBatch: documents.map((document) => ({ _id: document._id, data: structuredClone(document.data) })),
+          firstBatch: documents.map((document) => ({ _id: document._id,
+data: structuredClone(document.data) })),
         },
       }
     }
 
     if (body.findAndModify) {
       const document = records.get(body.query._id)
-      if (!document) return { ok: 1, value: null }
+      if (!document) {return { ok: 1,
+value: null }}
       for (const [path, value] of Object.entries(body.update.$set)) {
         const [root, key] = path.split(".")
         if (root === "data") {
           document.data[key] = structuredClone(value)
         }
       }
-      return { ok: 1, value: { _id: document._id, data: structuredClone(document.data) } }
+      return { ok: 1,
+value: { _id: document._id,
+data: structuredClone(document.data) } }
     }
 
     if (body.delete) {
       const removed = records.delete(body.deletes[0].q._id)
-      return { ok: 1, n: Number(removed) }
+      return { ok: 1,
+n: Number(removed) }
     }
 
     throw new Error(`Unsupported conformance command: ${Object.keys(body)[0]}`)
@@ -847,12 +911,14 @@ test("MongoDB transactions serialize commands and wait for all transaction CRUD 
         await new Promise((resolve) => setTimeout(resolve, 5))
         events.push(`insert-end:${sequences[0].documents[0]._id}`)
         activeCommands -= 1
-        return { ok: 1, n: 1 }
+        return { ok: 1,
+n: 1 }
       }
       if (body.commitTransaction) {
         events.push("commit")
       }
-      return { ok: 1, n: 1 }
+      return { ok: 1,
+n: 1 }
     },
   })
   const database = createDatabase({ provider })
@@ -861,8 +927,10 @@ test("MongoDB transactions serialize commands and wait for all transaction CRUD 
   try {
     await database.transaction(async (transaction) => {
       await Promise.all([
-        transaction.create({ collection: "people", record: { id: "serial-1" } }),
-        transaction.create({ collection: "people", record: { id: "serial-2" } }),
+        transaction.create({ collection: "people",
+record: { id: "serial-1" } }),
+        transaction.create({ collection: "people",
+record: { id: "serial-2" } }),
       ])
     })
     assert.equal(maximumConcurrentCommands, 1)
@@ -880,10 +948,11 @@ test("MongoDB transactions reject synchronous callbacks that start unawaited CRU
     topology: "replicaSet",
     transactionSupported: true,
     commandHandler: async (body) => {
-      if (body.insert) events.push("insert")
-      if (body.abortTransaction) events.push("abort")
-      if (body.commitTransaction) events.push("commit")
-      return { ok: 1, n: 1 }
+      if (body.insert) {events.push("insert")}
+      if (body.abortTransaction) {events.push("abort")}
+      if (body.commitTransaction) {events.push("commit")}
+      return { ok: 1,
+n: 1 }
     },
   })
   const database = createDatabase({ provider })
@@ -892,7 +961,8 @@ test("MongoDB transactions reject synchronous callbacks that start unawaited CRU
   try {
     await assert.rejects(
       database.transaction((transaction) => {
-        transaction.create({ collection: "people", record: { id: "unawaited" } })
+        transaction.create({ collection: "people",
+record: { id: "unawaited" } })
         return "callback returned before CRUD settled"
       }),
       /asynchronous.*CRUD|await.*CRUD/i,
@@ -912,11 +982,13 @@ test("MongoDB commit treats an explicit write concern rejection as a confirmed p
       if (body.commitTransaction) {
         return {
           ok: 1,
-          writeConcernError: { code: 79, errmsg: "invalid write concern" },
+          writeConcernError: { code: 79,
+errmsg: "invalid write concern" },
           errorLabels: [],
         }
       }
-      return { ok: 1, n: 1 }
+      return { ok: 1,
+n: 1 }
     },
   })
   const database = createDatabase({ provider })
@@ -955,7 +1027,8 @@ test("MongoDB retries only ambiguous write-concern timeouts and reports exhausti
           },
         }
       }
-      return { ok: 1, n: 1 }
+      return { ok: 1,
+n: 1 }
     },
   })
   const database = createDatabase({ provider })
@@ -993,7 +1066,8 @@ test("MongoDB retries commit after a RetryableWriteError label", async () => {
           }
         }
       }
-      return { ok: 1, n: 1 }
+      return { ok: 1,
+n: 1 }
     },
   })
   const database = createDatabase({ provider })
@@ -1023,7 +1097,8 @@ test("MongoDB treats MaxTimeMSExpired during commit as an unknown result after b
           errmsg: "commit time limit expired",
         }
       }
-      return { ok: 1, n: 1 }
+      return { ok: 1,
+n: 1 }
     },
   })
   const database = createDatabase({ provider })
@@ -1051,10 +1126,13 @@ test("MongoDB preserves an ambiguous commit outcome after a lost reply and a lat
     commandHandler: async (body) => {
       if (body.commitTransaction) {
         commitAttempts += 1
-        if (commitAttempts === 1) throw Object.assign(new Error("reply lost after commit request"), { outcomeUnknown: true })
-        return { ok: 0, code: 251, errmsg: "NoSuchTransaction" }
+        if (commitAttempts === 1) {throw Object.assign(new Error("reply lost after commit request"), { outcomeUnknown: true })}
+        return { ok: 0,
+code: 251,
+errmsg: "NoSuchTransaction" }
       }
-      return { ok: 1, n: 1 }
+      return { ok: 1,
+n: 1 }
     },
   })
   const database = createDatabase({ provider })

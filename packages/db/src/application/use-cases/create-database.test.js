@@ -340,22 +340,35 @@ test("provider CRUD operations are tracked so close waits before releasing the p
   let finishOperation
   let providerClosed = false
   const capabilities = {
-    transactions: { callbackMode: "asynchronous", nestedTransactions: false, multiDocument: false },
-    queries: { equalityFilters: true, sorting: true, pagination: true },
+    transactions: { callbackMode: "asynchronous",
+nestedTransactions: false,
+multiDocument: false },
+    queries: { equalityFilters: true,
+sorting: true,
+pagination: true },
     storage: { modes: ["server"] },
   }
   const provider = {
     capabilities,
     connect() {},
     close() { providerClosed = true },
-    withTransaction(work) { return work({ create() {}, readOne() {}, readMany() {}, update() {}, delete() {} }) },
-    withReadTransaction(work) { return work({ create() {}, readOne() {}, readMany() {}, update() {}, delete() {} }) },
+    withTransaction(work) { return work({ create() {},
+readOne() {},
+readMany() {},
+update() {},
+delete() {} }) },
+    withReadTransaction(work) { return work({ create() {},
+readOne() {},
+readMany() {},
+update() {},
+delete() {} }) },
     execute() { return new Promise((resolve) => { finishOperation = resolve }) },
   }
   const database = createDatabase({ provider })
   await database.connect()
 
-  const operation = database.create({ collection: "people", record: { id: "pending" } })
+  const operation = database.create({ collection: "people",
+record: { id: "pending" } })
   const closing = database.close()
   assert.equal(database.state, "closing")
   assert.equal(providerClosed, false)
@@ -369,7 +382,8 @@ test("provider CRUD operations are tracked so close waits before releasing the p
 
 
 test("provider-neutral transaction callbacks receive the CRUD transaction facade", async () => {
-  const record = { id: "person-1", name: "Ada" };
+  const record = { id: "person-1",
+name: "Ada" };
   const transaction = {
     create: () => record,
     readOne: () => record,

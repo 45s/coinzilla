@@ -60,9 +60,9 @@ test("MongoDB transport opens a real TCP socket without a custom socket factory"
     let buffer = Buffer.alloc(0)
     socket.on("data", (chunk) => {
       buffer = Buffer.concat([buffer, chunk])
-      if (buffer.length < 4) return
+      if (buffer.length < 4) {return}
       const messageLength = buffer.readInt32LE(0)
-      if (buffer.length < messageLength) return
+      if (buffer.length < messageLength) {return}
       const request = decodeOpMsg(buffer.subarray(0, messageLength))
       buffer = buffer.subarray(messageLength)
       socket.end(encodeOpMsg({
@@ -88,7 +88,8 @@ test("MongoDB transport opens a real TCP socket without a custom socket factory"
   try {
     await transport.connect()
     assert.deepEqual(
-      await transport.command({ body: { ping: 1, $db: "admin" } }),
+      await transport.command({ body: { ping: 1,
+$db: "admin" } }),
       { ok: 1 },
     )
   } finally {
@@ -109,7 +110,8 @@ test("MongoDB transport correlates concurrent OP_MSG replies by responseTo", asy
           socket.emit("data", encodeOpMsg({
             requestId: 500 + item.requestId,
             responseTo: item.requestId,
-            body: { ok: 1, request: item.body.sequence },
+            body: { ok: 1,
+request: item.body.sequence },
           }))
         }
       }
@@ -120,8 +122,10 @@ test("MongoDB transport correlates concurrent OP_MSG replies by responseTo", asy
   const first = transport.command({ body: { sequence: "first" } })
   const second = transport.command({ body: { sequence: "second" } })
 
-  assert.deepEqual(await first, { ok: 1, request: "first" })
-  assert.deepEqual(await second, { ok: 1, request: "second" })
+  assert.deepEqual(await first, { ok: 1,
+request: "first" })
+  assert.deepEqual(await second, { ok: 1,
+request: "second" })
   await transport.close()
 })
 
@@ -192,15 +196,18 @@ test("MongoDB transport preserves socket errors and rejects every outstanding re
 
 test("MongoDB transport validates commands, options, pending limits, and socket backpressure", async () => {
   assert.throws(
-    () => createMongoTransport({ host: " ", port: 27017 }),
+    () => createMongoTransport({ host: " ",
+port: 27017 }),
     /host/,
   )
   assert.throws(
-    () => createMongoTransport({ host: "localhost", tls: [] }),
+    () => createMongoTransport({ host: "localhost",
+tls: [] }),
     /TLS options/,
   )
   assert.throws(
-    () => createMongoTransport({ host: "localhost", socketFactory: {} }),
+    () => createMongoTransport({ host: "localhost",
+socketFactory: {} }),
     /socketFactory/,
   )
 
@@ -213,7 +220,8 @@ test("MongoDB transport validates commands, options, pending limits, and socket 
   await transport.connect()
   const { socket } = fake
   await assert.rejects(
-    transport.command({ body: { ping: 1 }, timeoutMS: 0 }),
+    transport.command({ body: { ping: 1 },
+timeoutMS: 0 }),
     /positive safe integer/,
   )
 
@@ -269,7 +277,8 @@ test("MongoDB transport fails closed when socket writes fail", async () => {
   }
 
   await assert.rejects(
-    transport.command({ body: { insert: "records" }, operation: "create" }),
+    transport.command({ body: { insert: "records" },
+operation: "create" }),
     (error) => error.outcomeUnknown === true,
   )
   assert.equal(transport.state, "closed")
@@ -425,7 +434,8 @@ test("MongoDB transport rejects timed-out requests and releases their correlatio
   await transport.connect()
 
   await assert.rejects(
-    transport.command({ body: { ping: 1 }, timeoutMS: 10 }),
+    transport.command({ body: { ping: 1 },
+timeoutMS: 10 }),
     /timed out/,
   )
   assert.equal(transport.pendingRequestCount, 0)

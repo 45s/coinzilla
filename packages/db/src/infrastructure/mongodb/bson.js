@@ -39,7 +39,7 @@ function encodeCString(value) {
   if (!value.isWellFormed()) {
     throw new TypeError("BSON document keys must contain valid Unicode")
   }
-  return Buffer.from(value + "\0", "utf8")
+  return Buffer.from(`${value  }\0`, "utf8")
 }
 
 function encodeString(value) {
@@ -66,13 +66,16 @@ function encodeInt64(value) {
 
 function encodeElement(value, ancestors, depth) {
   if (value === null) {
-    return { type: 0x0A, bytes: Buffer.alloc(0) }
+    return { type: 0x0A,
+bytes: Buffer.alloc(0) }
   }
   if (typeof value === "string") {
-    return { type: 0x02, bytes: encodeString(value) }
+    return { type: 0x02,
+bytes: encodeString(value) }
   }
   if (typeof value === "boolean") {
-    return { type: 0x08, bytes: Buffer.from([Number(value)]) }
+    return { type: 0x08,
+bytes: Buffer.from([Number(value)]) }
   }
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
@@ -81,17 +84,21 @@ function encodeElement(value, ancestors, depth) {
     if (Number.isSafeInteger(value) && value >= INT32_MIN && value <= INT32_MAX) {
       const bytes = Buffer.allocUnsafe(4)
       bytes.writeInt32LE(value)
-      return { type: 0x10, bytes }
+      return { type: 0x10,
+bytes }
     }
     if (Number.isSafeInteger(value)) {
-      return { type: 0x12, bytes: encodeInt64(value) }
+      return { type: 0x12,
+bytes: encodeInt64(value) }
     }
     const bytes = Buffer.allocUnsafe(8)
     bytes.writeDoubleLE(value)
-    return { type: 0x01, bytes }
+    return { type: 0x01,
+bytes }
   }
   if (typeof value === "bigint") {
-    return { type: 0x12, bytes: encodeInt64(value) }
+    return { type: 0x12,
+bytes: encodeInt64(value) }
   }
   if (Buffer.isBuffer(value) || value instanceof BsonBinary) {
     const binary = value instanceof BsonBinary ? value : new BsonBinary(value)
@@ -99,14 +106,16 @@ function encodeElement(value, ancestors, depth) {
     bytes.writeInt32LE(binary.bytes.length, 0)
     bytes[4] = binary.subtype
     binary.bytes.copy(bytes, 5)
-    return { type: 0x05, bytes }
+    return { type: 0x05,
+bytes }
   }
   if (value instanceof Date) {
     const timestamp = value.getTime()
     if (!Number.isFinite(timestamp)) {
       throw new TypeError("BSON dates must be valid")
     }
-    return { type: 0x09, bytes: encodeInt64(timestamp) }
+    return { type: 0x09,
+bytes: encodeInt64(timestamp) }
   }
   if (Array.isArray(value)) {
     if (ancestors.has(value)) {
@@ -122,7 +131,8 @@ function encodeElement(value, ancestors, depth) {
     }
     const bytes = encodeDocumentEntries(entries, ancestors, depth + 1)
     ancestors.delete(value)
-    return { type: 0x04, bytes }
+    return { type: 0x04,
+bytes }
   }
   assertDocument(value, ancestors)
   ancestors.add(value)
@@ -139,7 +149,8 @@ function encodeElement(value, ancestors, depth) {
   }
   const bytes = encodeDocumentEntries(entries, ancestors, depth + 1)
   ancestors.delete(value)
-  return { type: 0x03, bytes }
+  return { type: 0x03,
+bytes }
 }
 
 function encodeDocumentEntries(entries, ancestors, depth = 0) {
@@ -248,7 +259,8 @@ function readDocument(buffer, state, asArray = false, depth = 0) {
   const document = {}
   const arrayValues = []
   state.offset += 4
-  const childState = { offset: state.offset, end: end - 1 }
+  const childState = { offset: state.offset,
+end: end - 1 }
   while (childState.offset < childState.end) {
     const type = buffer[childState.offset]
     childState.offset += 1
@@ -364,7 +376,8 @@ export function decodeBsonDocument(buffer) {
   if (!Buffer.isBuffer(buffer)) {
     throw new TypeError("BSON input must be a Buffer")
   }
-  const state = { offset: 0, end: buffer.length }
+  const state = { offset: 0,
+end: buffer.length }
   const document = readDocument(buffer, state)
   if (state.offset !== buffer.length) {
     throw new TypeError("BSON input contains trailing bytes")

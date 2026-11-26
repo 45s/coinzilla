@@ -200,16 +200,27 @@ test("MongoDB handshake rejects replica-set mismatches and secondaries without a
 
 test("MongoDB handshake detects standalone, replica-set, and sharded topologies", async () => {
   for (const [hello, topology] of [
-    [{ isWritablePrimary: true, minWireVersion: 13, maxWireVersion: 17 }, "standalone"],
-    [{ isWritablePrimary: true, setName: "rs0", minWireVersion: 13, maxWireVersion: 21, logicalSessionTimeoutMinutes: 30 }, "replicaSet"],
-    [{ isWritablePrimary: true, msg: "isdbgrid", minWireVersion: 13, maxWireVersion: 25, logicalSessionTimeoutMinutes: 30 }, "sharded"],
+    [{ isWritablePrimary: true,
+minWireVersion: 13,
+maxWireVersion: 17 }, "standalone"],
+    [{ isWritablePrimary: true,
+setName: "rs0",
+minWireVersion: 13,
+maxWireVersion: 21,
+logicalSessionTimeoutMinutes: 30 }, "replicaSet"],
+    [{ isWritablePrimary: true,
+msg: "isdbgrid",
+minWireVersion: 13,
+maxWireVersion: 25,
+logicalSessionTimeoutMinutes: 30 }, "sharded"],
   ]) {
     const commands = []
     const result = await performMongoHandshake({
       transport: {
         async command(input) {
           commands.push(input.body)
-          return { ok: 1, ...hello }
+          return { ok: 1,
+...hello }
         },
       },
       databaseName: "app",
@@ -224,14 +235,19 @@ test("MongoDB handshake detects standalone, replica-set, and sharded topologies"
 
 test("MongoDB handshake rejects servers outside the documented wire-version range", async () => {
   for (const hello of [
-    { minWireVersion: 0, maxWireVersion: 12, isWritablePrimary: true },
-    { minWireVersion: 26, maxWireVersion: 30, isWritablePrimary: true },
+    { minWireVersion: 0,
+maxWireVersion: 12,
+isWritablePrimary: true },
+    { minWireVersion: 26,
+maxWireVersion: 30,
+isWritablePrimary: true },
   ]) {
     await assert.rejects(
       performMongoHandshake({
         transport: {
           async command() {
-            return { ok: 1, ...hello }
+            return { ok: 1,
+...hello }
           },
         },
       }),
@@ -263,7 +279,10 @@ test("MongoDB handshake rejects unsupported wire versions and a missing writable
     performMongoHandshake({
       transport: {
         async command() {
-          return { ok: 1, minWireVersion: 30, maxWireVersion: 31, isWritablePrimary: true }
+          return { ok: 1,
+minWireVersion: 30,
+maxWireVersion: 31,
+isWritablePrimary: true }
         },
       },
     }),

@@ -22,7 +22,8 @@ function createCommandStub(responses = []) {
       if (response instanceof Error) {
         throw response
       }
-      return response ?? { ok: 1, n: 1 }
+      return response ?? { ok: 1,
+n: 1 }
     },
   }
 }
@@ -42,7 +43,8 @@ test("MongoDB create isolates collection records and returns the provider-neutra
   }
 
   assert.deepEqual(
-    await operations.create({ collection: "people", record }),
+    await operations.create({ collection: "people",
+record }),
     record,
   )
   assert.match(stub.calls[0].insert, /^coinzilla_/)
@@ -58,7 +60,8 @@ test("MongoDB create maps duplicate key responses to the shared conflict error",
   const stub = createCommandStub([{
     ok: 1,
     n: 0,
-    writeErrors: [{ code: 11000, errmsg: "duplicate key" }],
+    writeErrors: [{ code: 11000,
+errmsg: "duplicate key" }],
   }])
   const operations = createMongoRecordOperations({
     command: stub.command,
@@ -77,18 +80,27 @@ test("MongoDB create maps duplicate key responses to the shared conflict error",
 
 test("MongoDB readOne returns null or the decoded stored record", async () => {
   const stub = createCommandStub([
-    { ok: 1, cursor: { id: 0, firstBatch: [] } },
-    { ok: 1, cursor: { id: 0, firstBatch: [{ _id: "person-1", data: { __coinzilla_key_aWQ: "person-1", __coinzilla_key_bmFtZQ: "Ada" } }] } },
+    { ok: 1,
+cursor: { id: 0,
+firstBatch: [] } },
+    { ok: 1,
+cursor: { id: 0,
+firstBatch: [{ _id: "person-1",
+data: { __coinzilla_key_aWQ: "person-1",
+__coinzilla_key_bmFtZQ: "Ada" } }] } },
   ])
   const operations = createMongoRecordOperations({
     command: stub.command,
     databaseName: "app",
   })
 
-  assert.equal(await operations.readOne({ collection: "people", id: "missing" }), null)
+  assert.equal(await operations.readOne({ collection: "people",
+id: "missing" }), null)
   assert.deepEqual(
-    await operations.readOne({ collection: "people", id: "person-1" }),
-    { id: "person-1", name: "Ada" },
+    await operations.readOne({ collection: "people",
+id: "person-1" }),
+    { id: "person-1",
+name: "Ada" },
   )
 })
 
@@ -97,13 +109,16 @@ test("MongoDB rejects stored documents whose decoded record has no valid identif
   const operations = createMongoRecordOperations({
     command: async () => ({
       ok: 1,
-      cursor: { id: 0, firstBatch: [{ _id: "record-1", data: { __coinzilla_key_bmFtZQ: "missing id" } }] },
+      cursor: { id: 0,
+firstBatch: [{ _id: "record-1",
+data: { __coinzilla_key_bmFtZQ: "missing id" } }] },
     }),
     databaseName: "app",
   })
 
   await assert.rejects(
-    operations.readOne({ collection: "people", id: "record-1" }),
+    operations.readOne({ collection: "people",
+id: "record-1" }),
     (error) => error instanceof DatabaseProviderError
       && error.cause?.message.includes("Record identifier"),
   )
@@ -114,7 +129,9 @@ test("MongoDB readMany builds exact-null filters and portable sort pagination st
     ok: 1,
     cursor: {
       id: 0,
-      firstBatch: [{ _id: "person-1", data: { __coinzilla_key_aWQ: "person-1", __coinzilla_key_bmlja25hbWU: null } }],
+      firstBatch: [{ _id: "person-1",
+data: { __coinzilla_key_aWQ: "person-1",
+__coinzilla_key_bmlja25hbWU: null } }],
     },
   }])
   const operations = createMongoRecordOperations({
@@ -126,14 +143,16 @@ test("MongoDB readMany builds exact-null filters and portable sort pagination st
     collection: "people",
     query: {
       filter: { nickname: null },
-      sort: [{ field: "name", direction: "desc" }],
+      sort: [{ field: "name",
+direction: "desc" }],
       limit: 5,
       offset: 10,
     },
   })
 
-  assert.deepEqual(records, [{ id: "person-1", nickname: null }])
-  const pipeline = stub.calls[0].pipeline
+  assert.deepEqual(records, [{ id: "person-1",
+nickname: null }])
+  const {pipeline} = stub.calls[0]
   assert.deepEqual(pipeline[0].$match.$and[0]["data.__coinzilla_key_bmlja25hbWU"], { $type: 10 })
   assert.ok(pipeline.some((stage) => stage.$addFields))
   assert.deepEqual(pipeline.find((stage) => stage.$sort).$sort, {
@@ -168,7 +187,8 @@ test("MongoDB updates shallow-merge JSON values without storing derived sort met
       id: "person-1",
       changes: { rank: [1, 2] },
     }),
-    { id: "person-1", rank: [1, 2] },
+    { id: "person-1",
+rank: [1, 2] },
   )
   assert.deepEqual(stub.calls[0].update.$set, {
     "data.__coinzilla_key_cmFuaw": [1, 2],
@@ -178,7 +198,9 @@ test("MongoDB updates shallow-merge JSON values without storing derived sort met
 test("MongoDB empty updates delegate to readOne without issuing a mutation", async () => {
   const stub = createCommandStub([{
     ok: 1,
-    cursor: { id: 0, firstBatch: [{ _id: "person-1", data: { __coinzilla_key_aWQ: "person-1" } }] },
+    cursor: { id: 0,
+firstBatch: [{ _id: "person-1",
+data: { __coinzilla_key_aWQ: "person-1" } }] },
   }])
   const operations = createMongoRecordOperations({
     command: stub.command,
@@ -197,30 +219,35 @@ test("MongoDB empty updates delegate to readOne without issuing a mutation", asy
 })
 
 test("MongoDB delete reports successful single-record deletion", async () => {
-  const stub = createCommandStub([{ ok: 1, n: 1 }])
+  const stub = createCommandStub([{ ok: 1,
+n: 1 }])
   const operations = createMongoRecordOperations({
     command: stub.command,
     databaseName: "app",
   })
 
   assert.equal(
-    await operations.delete({ collection: "people", id: "person-1" }),
+    await operations.delete({ collection: "people",
+id: "person-1" }),
     true,
   )
 })
 
 test("MongoDB rejects malformed cursor responses rather than returning empty results", async () => {
   const readOne = createMongoRecordOperations({
-    command: async () => ({ ok: 1, cursor: { id: 0 } }),
+    command: async () => ({ ok: 1,
+cursor: { id: 0 } }),
     databaseName: "app",
   })
   const readMany = createMongoRecordOperations({
-    command: async () => ({ ok: 1, cursor: { id: 0 } }),
+    command: async () => ({ ok: 1,
+cursor: { id: 0 } }),
     databaseName: "app",
   })
 
   await assert.rejects(
-    readOne.readOne({ collection: "people", id: "person-1" }),
+    readOne.readOne({ collection: "people",
+id: "person-1" }),
     (error) => error instanceof DatabaseProviderError
       && error.cause?.message.includes("cursor.firstBatch"),
   )
@@ -234,8 +261,12 @@ test("MongoDB rejects malformed cursor responses rather than returning empty res
 
 test("MongoDB readOne closes unexpected non-exhausted single-batch cursors", async () => {
   const stub = createCommandStub([
-    { ok: 1, cursor: { id: 99, firstBatch: [{ _id: "person-1", data: { __coinzilla_key_aWQ: "person-1" } }] } },
-    { ok: 1, cursorsKilled: [99] },
+    { ok: 1,
+cursor: { id: 99,
+firstBatch: [{ _id: "person-1",
+data: { __coinzilla_key_aWQ: "person-1" } }] } },
+    { ok: 1,
+cursorsKilled: [99] },
   ])
   const operations = createMongoRecordOperations({
     command: stub.command,
@@ -243,7 +274,8 @@ test("MongoDB readOne closes unexpected non-exhausted single-batch cursors", asy
   })
 
   assert.deepEqual(
-    await operations.readOne({ collection: "people", id: "person-1" }),
+    await operations.readOne({ collection: "people",
+id: "person-1" }),
     { id: "person-1" },
   )
   assert.equal(stub.calls[1].killCursors, "coinzilla_cGVvcGxl")
@@ -255,14 +287,17 @@ test("MongoDB reads reject invalid cursor identifiers", async () => {
     command: async ({ body }) => ({
       ok: 1,
       cursor: body.find
-        ? { id: "0", firstBatch: [] }
-        : { id: -1, firstBatch: [] },
+        ? { id: "0",
+firstBatch: [] }
+        : { id: -1,
+firstBatch: [] },
     }),
     databaseName: "app",
   })
 
   await assert.rejects(
-    operations.readOne({ collection: "people", id: "one" }),
+    operations.readOne({ collection: "people",
+id: "one" }),
     (error) => error instanceof DatabaseProviderError
       && error.cause?.message.includes("invalid cursor id"),
   )
@@ -275,9 +310,14 @@ test("MongoDB reads reject invalid cursor identifiers", async () => {
 
 test("MongoDB readMany accepts BSON int64 cursor ids and validates getMore replacements", async () => {
   const stub = createCommandStub([
-    { ok: 1, cursor: { id: 12n, firstBatch: [] } },
-    { ok: 1, cursor: { id: -1, nextBatch: [] } },
-    { ok: 1, cursorsKilled: [12n] },
+    { ok: 1,
+cursor: { id: 12n,
+firstBatch: [] } },
+    { ok: 1,
+cursor: { id: -1,
+nextBatch: [] } },
+    { ok: 1,
+cursorsKilled: [12n] },
   ])
   const operations = createMongoRecordOperations({
     command: stub.command,
@@ -296,12 +336,18 @@ test("MongoDB readMany accepts BSON int64 cursor ids and validates getMore repla
 
 test("MongoDB cleans up cursors when initial read batches are malformed", async () => {
   const readOneStub = createCommandStub([
-    { ok: 1, cursor: { id: 17, firstBatch: null } },
-    { ok: 1, cursorsKilled: [17] },
+    { ok: 1,
+cursor: { id: 17,
+firstBatch: null } },
+    { ok: 1,
+cursorsKilled: [17] },
   ])
   const readManyStub = createCommandStub([
-    { ok: 1, cursor: { id: 18, firstBatch: null } },
-    { ok: 1, cursorsKilled: [18] },
+    { ok: 1,
+cursor: { id: 18,
+firstBatch: null } },
+    { ok: 1,
+cursorsKilled: [18] },
   ])
   const readOne = createMongoRecordOperations({
     command: readOneStub.command,
@@ -312,7 +358,8 @@ test("MongoDB cleans up cursors when initial read batches are malformed", async 
     databaseName: "app",
   })
 
-  await assert.rejects(readOne.readOne({ collection: "people", id: "one" }))
+  await assert.rejects(readOne.readOne({ collection: "people",
+id: "one" }))
   await assert.rejects(readMany.readMany({ collection: "people" }))
   assert.deepEqual(readOneStub.calls[1].cursors, [17])
   assert.deepEqual(readManyStub.calls[1].cursors, [18])
@@ -320,8 +367,14 @@ test("MongoDB cleans up cursors when initial read batches are malformed", async 
 
 test("MongoDB readMany drains every cursor batch", async () => {
   const stub = createCommandStub([
-    { ok: 1, cursor: { id: 12, firstBatch: [{ _id: "one", data: { __coinzilla_key_aWQ: "one" } }] } },
-    { ok: 1, cursor: { id: 0, nextBatch: [{ _id: "two", data: { __coinzilla_key_aWQ: "two" } }] } },
+    { ok: 1,
+cursor: { id: 12,
+firstBatch: [{ _id: "one",
+data: { __coinzilla_key_aWQ: "one" } }] } },
+    { ok: 1,
+cursor: { id: 0,
+nextBatch: [{ _id: "two",
+data: { __coinzilla_key_aWQ: "two" } }] } },
   ])
   const operations = createMongoRecordOperations({
     command: stub.command,
@@ -338,9 +391,13 @@ test("MongoDB readMany drains every cursor batch", async () => {
 
 test("MongoDB readMany kills an open cursor after a failed getMore response", async () => {
   const stub = createCommandStub([
-    { ok: 1, cursor: { id: 12, firstBatch: [] } },
-    { ok: 1, cursor: { id: 12 } },
-    { ok: 1, cursorsUnknown: [] },
+    { ok: 1,
+cursor: { id: 12,
+firstBatch: [] } },
+    { ok: 1,
+cursor: { id: 12 } },
+    { ok: 1,
+cursorsUnknown: [] },
   ])
   const operations = createMongoRecordOperations({
     command: stub.command,
@@ -357,8 +414,10 @@ test("MongoDB readMany kills an open cursor after a failed getMore response", as
 
 test("MongoDB update and delete preserve missing-record result semantics", async () => {
   const stub = createCommandStub([
-    { ok: 1, value: null },
-    { ok: 1, n: 0 },
+    { ok: 1,
+value: null },
+    { ok: 1,
+n: 0 },
   ])
   const operations = createMongoRecordOperations({
     command: stub.command,
@@ -385,7 +444,8 @@ test("MongoDB provider failures are normalized without hiding their causes", asy
   })
 
   await assert.rejects(
-    operations.readOne({ collection: "people", id: "one" }),
+    operations.readOne({ collection: "people",
+id: "one" }),
     (error) => error instanceof DatabaseProviderError
       && error.code === "DB_PROVIDER_OPERATION_FAILED"
       && error.cause === nativeError,
@@ -396,9 +456,12 @@ test("MongoDB provider failures are normalized without hiding their causes", asy
 test("MongoDB readMany kills an outstanding cursor when fetching a later batch fails", async () => {
   const transportError = new Error("getMore failed")
   const stub = createCommandStub([
-    { ok: 1, cursor: { id: 12, firstBatch: [] } },
+    { ok: 1,
+cursor: { id: 12,
+firstBatch: [] } },
     transportError,
-    { ok: 1, cursorsKilled: [12] },
+    { ok: 1,
+cursorsKilled: [12] },
   ])
   const operations = createMongoRecordOperations({
     command: stub.command,
@@ -416,8 +479,11 @@ test("MongoDB readMany kills an outstanding cursor when fetching a later batch f
 
 test("MongoDB record serialization limits surface as input TypeErrors rather than provider failures", async () => {
   const command = async ({ body, sequences }) => {
-    encodeOpMsg({ requestId: 1, body, sequences })
-    return { ok: 1, n: 1 }
+    encodeOpMsg({ requestId: 1,
+body,
+sequences })
+    return { ok: 1,
+n: 1 }
   }
   const operations = createMongoRecordOperations({
     command,
@@ -439,7 +505,8 @@ test("MongoDB record serialization limits surface as input TypeErrors rather tha
 
 test("MongoDB rejects collection names whose encoded namespace exceeds the server limit", async () => {
   const operations = createMongoRecordOperations({
-    command: async () => ({ ok: 1, n: 1 }),
+    command: async () => ({ ok: 1,
+n: 1 }),
     databaseName: "app",
   })
   await assert.rejects(
@@ -471,7 +538,8 @@ test("MongoDB reads reject stored records whose envelope identifier disagrees wi
   })
 
   await assert.rejects(
-    operations.readOne({ collection: "people", id: "envelope-id" }),
+    operations.readOne({ collection: "people",
+id: "envelope-id" }),
     (error) => error instanceof DatabaseProviderError
       && /identifier.*does not match/i.test(error.cause.message),
   )
@@ -498,7 +566,8 @@ test("MongoDB reads reject malformed encoded user field names", async () => {
   })
 
   await assert.rejects(
-    operations.readOne({ collection: "people", id: "person-1" }),
+    operations.readOne({ collection: "people",
+id: "person-1" }),
     (error) => error instanceof DatabaseProviderError
       && /invalid encoded MongoDB user key/i.test(error.cause.message),
   )
@@ -545,7 +614,8 @@ test("MongoDB readMany kills an outstanding cursor when the first batch is malfo
         }],
       },
     },
-    { ok: 1, cursorsKilled: [12] },
+    { ok: 1,
+cursorsKilled: [12] },
   ])
   const operations = createMongoRecordOperations({
     command: stub.command,

@@ -281,11 +281,13 @@ test("record contracts reject ill-formed Unicode before provider serialization",
   assert.throws(() => validateRecordIdentifier(`id${loneLowSurrogate}`), /well-formed Unicode/i)
   assert.throws(() => validateRecordIdentifier(`id${loneSurrogate}`), /well-formed Unicode/i)
   assert.throws(
-    () => serializeRecord({ id: "person-1", value: loneSurrogate }),
+    () => serializeRecord({ id: "person-1",
+value: loneSurrogate }),
     /well-formed Unicode/i,
   )
   assert.throws(
-    () => serializeRecord({ id: "person-1", [`bad${loneSurrogate}`]: "value" }),
+    () => serializeRecord({ id: "person-1",
+[`bad${loneSurrogate}`]: "value" }),
     /well-formed Unicode/i,
   )
 })

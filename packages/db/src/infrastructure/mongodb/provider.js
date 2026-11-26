@@ -51,18 +51,21 @@ function parsePrimaryAddress(address) {
     if (!Number.isInteger(port) || port < 1 || port > 65535) {
       throw new TypeError("MongoDB primary port is invalid")
     }
-    return { host, port }
+    return { host,
+port }
   }
   const separator = address.lastIndexOf(":")
   if (separator < 1) {
-    return { host: address, port: 27017 }
+    return { host: address,
+port: 27017 }
   }
   const host = address.slice(0, separator)
   const port = Number(address.slice(separator + 1))
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new TypeError("MongoDB primary port is invalid")
   }
-  return { host, port }
+  return { host,
+port }
 }
 
 function resolveOptions(options) {
@@ -206,7 +209,7 @@ function createTransactionCommand({ transport, session }) {
 
   const runSessionCommand = ({ body, sequences, timeoutMS, operation: operationName }) => {
     const queuedOperation = queue.then(() => {
-      if (firstError) throw firstError
+      if (firstError) {throw firstError}
       return sendSessionCommand({
         body,
         sequences,
@@ -223,7 +226,7 @@ function createTransactionCommand({ transport, session }) {
 
   runSessionCommand.drain = async () => {
     await queue
-    if (firstError) throw firstError
+    if (firstError) {throw firstError}
   }
   runSessionCommand.failure = () => firstError
   return runSessionCommand
@@ -282,7 +285,8 @@ async function commitMongoTransaction({ transport, session }) {
     lsid: session.lsid,
     txnNumber: session.txnNumber,
     autocommit: false,
-    writeConcern: { w: "majority", wtimeout: 10000 },
+    writeConcern: { w: "majority",
+wtimeout: 10000 },
     $db: "admin",
   }
   if (session.recoveryToken !== undefined) {
@@ -310,7 +314,8 @@ async function commitMongoTransaction({ transport, session }) {
         return
       }
       const serverFailure = response?.writeConcernError
-        ? { ...response.writeConcernError, errorLabels: response.errorLabels }
+        ? { ...response.writeConcernError,
+errorLabels: response.errorLabels }
         : response
       const error = createServerCommandError(serverFailure)
       if (hasAmbiguousWriteConcern(response)
@@ -409,7 +414,8 @@ function createTransactionRunner({ state, randomBytes }) {
       throw new DatabaseTransactionUnsupportedError()
     }
 
-    const session = createSession({ state, randomBytes })
+    const session = createSession({ state,
+randomBytes })
     const command = createTransactionCommand({
       transport: state.transport,
       session,
@@ -439,7 +445,7 @@ function createTransactionRunner({ state, randomBytes }) {
       while (pendingOperations.size > 0) {
         await Promise.allSettled([...pendingOperations])
       }
-      if (firstOperationError) throw firstOperationError
+      if (firstOperationError) {throw firstOperationError}
       await command.drain()
     }
     let callbackResult
@@ -473,7 +479,8 @@ function createTransactionRunner({ state, randomBytes }) {
       if (error === command.failure()) {
         error = error?.code === 11000 || error?.code === 11001
           ? new DatabaseConflictError({ cause: error })
-          : new DatabaseProviderError({ operation: "transaction", cause: error })
+          : new DatabaseProviderError({ operation: "transaction",
+cause: error })
       }
       if (session.started) {
         await abortMongoTransaction({

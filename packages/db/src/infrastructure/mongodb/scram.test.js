@@ -260,7 +260,8 @@ test("SCRAM rejects unsupported mechanisms, malformed salt, and unsafe iteration
 
 test("SCRAM rejects non-ASCII/control credentials and invalid random sources", async () => {
   for (const password of ["pässword", "password\u0001"]) {
-    const server = createScramServer({ username: "alice", password })
+    const server = createScramServer({ username: "alice",
+password })
     await assert.rejects(
       authenticateMongoScram({
         command: server.command,
@@ -334,7 +335,9 @@ test("SCRAM rejects malformed server attributes, mandatory extensions, and chang
 test("SCRAM validates response shape and bounds server continuation rounds", async () => {
   await assert.rejects(
     authenticateMongoScram({
-      command: async () => ({ ok: 1, conversationId: 1, payload: Buffer.alloc(0) }),
+      command: async () => ({ ok: 1,
+conversationId: 1,
+payload: Buffer.alloc(0) }),
       username: "alice",
       password: "secret",
     }),

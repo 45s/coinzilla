@@ -7,7 +7,8 @@ import { encodeBsonDocument } from "./bson.js"
 test("OP_MSG encodes a BSON body with the exact MongoDB message header", () => {
   const message = encodeOpMsg({
     requestId: 17,
-    body: { ping: 1, $db: "admin" },
+    body: { ping: 1,
+$db: "admin" },
   })
 
   assert.equal(message.readInt32LE(0), message.length)
@@ -18,7 +19,8 @@ test("OP_MSG encodes a BSON body with the exact MongoDB message header", () => {
   const decoded = decodeOpMsg(message)
   assert.equal(decoded.requestId, 17)
   assert.equal(decoded.responseTo, 0)
-  assert.deepEqual(decoded.body, { ping: 1, $db: "admin" })
+  assert.deepEqual(decoded.body, { ping: 1,
+$db: "admin" })
 })
 
 test("OP_MSG preserves response correlation, flags, and document sequences", () => {
@@ -26,7 +28,8 @@ test("OP_MSG preserves response correlation, flags, and document sequences", () 
     requestId: 22,
     responseTo: 17,
     flags: 2,
-    body: { insert: "records", $db: "app" },
+    body: { insert: "records",
+$db: "app" },
     sequences: [{
       identifier: "documents",
       documents: [{ _id: "one" }, { _id: "two" }],
@@ -107,7 +110,8 @@ test("OP_MSG requires the body before document sequences and rejects duplicate s
   const withSequence = encodeOpMsg({
     requestId: 1,
     body: { insert: "records" },
-    sequences: [{ identifier: "documents", documents: [{ _id: "one" }] }],
+    sequences: [{ identifier: "documents",
+documents: [{ _id: "one" }] }],
   })
   const bodyLength = encodeBsonDocument({ insert: "records" }).length
   const sequenceSection = withSequence.subarray(21 + bodyLength)
@@ -126,8 +130,10 @@ test("OP_MSG requires the body before document sequences and rejects duplicate s
       requestId: 2,
       body: { insert: "records" },
       sequences: [
-        { identifier: "documents", documents: [] },
-        { identifier: "documents", documents: [] },
+        { identifier: "documents",
+documents: [] },
+        { identifier: "documents",
+documents: [] },
       ],
     })),
     /duplicate sequence identifier/,
@@ -159,7 +165,8 @@ test("OP_MSG rejects malformed sequence lengths and invalid request options", ()
   const withSequence = encodeOpMsg({
     requestId: 1,
     body: { insert: "records" },
-    sequences: [{ identifier: "documents", documents: [] }],
+    sequences: [{ identifier: "documents",
+documents: [] }],
   })
   const malformedSequence = Buffer.from(withSequence)
   malformedSequence.writeInt32LE(4, 21 + encodeBsonDocument({ insert: "records" }).length + 1)
@@ -167,22 +174,28 @@ test("OP_MSG rejects malformed sequence lengths and invalid request options", ()
   assert.throws(() => decodeOpMsg(malformedSequence), /sequence size/)
 
   assert.throws(
-    () => encodeOpMsg({ requestId: -1, body: { ping: 1 } }),
+    () => encodeOpMsg({ requestId: -1,
+body: { ping: 1 } }),
     /requestId/,
   )
   assert.throws(
-    () => encodeOpMsg({ requestId: 1, responseTo: -1, body: { ping: 1 } }),
+    () => encodeOpMsg({ requestId: 1,
+responseTo: -1,
+body: { ping: 1 } }),
     /responseTo/,
   )
   assert.throws(
-    () => encodeOpMsg({ requestId: 1, body: { ping: 1 }, sequences: {} }),
+    () => encodeOpMsg({ requestId: 1,
+body: { ping: 1 },
+sequences: {} }),
     /sequences must be an array/,
   )
   assert.throws(
     () => encodeOpMsg({
       requestId: 1,
       body: { ping: 1 },
-      sequences: [{ identifier: "bad\u0000name", documents: [] }],
+      sequences: [{ identifier: "bad\u0000name",
+documents: [] }],
     }),
     /identifier/,
   )

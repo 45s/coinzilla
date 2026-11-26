@@ -37,7 +37,8 @@ function parsePrimaryAddress(address) {
   }
   const separator = address.lastIndexOf(":")
   return separator < 0
-    ? { host: address, port: 27017 }
+    ? { host: address,
+port: 27017 }
     : {
       host: address.slice(0, separator),
       port: Number(address.slice(separator + 1)) || 27017,
@@ -45,8 +46,8 @@ function parsePrimaryAddress(address) {
 }
 
 async function dropDatabase(databaseName, parsed) {
-  let host = parsed.host
-  let port = parsed.port
+  let {host} = parsed
+  let {port} = parsed
   let transport
   try {
     for (let redirect = 0; redirect < 4; redirect += 1) {
@@ -162,11 +163,13 @@ if (connectionString) {
         const result = await database.transaction(async (transaction) => {
           await transaction.create({
             collection: "transaction-commit",
-            record: { id: "commit-one", value: 1 },
+            record: { id: "commit-one",
+value: 1 },
           })
           await transaction.create({
             collection: "transaction-commit",
-            record: { id: "commit-two", value: 2 },
+            record: { id: "commit-two",
+value: 2 },
           })
           return "committed"
         })
@@ -174,8 +177,10 @@ if (connectionString) {
         assert.deepEqual(
           await database.readMany({ collection: "transaction-commit" }),
           [
-            { id: "commit-one", value: 1 },
-            { id: "commit-two", value: 2 },
+            { id: "commit-one",
+value: 1 },
+            { id: "commit-two",
+value: 2 },
           ],
         )
       } catch (error) {

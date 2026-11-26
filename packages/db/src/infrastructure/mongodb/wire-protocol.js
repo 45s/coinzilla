@@ -21,7 +21,7 @@ function encodeDocumentSequence({ identifier, documents }) {
     throw new TypeError("MongoDB document sequence documents must be an array")
   }
   const encodedDocuments = documents.map(encodeBsonDocument)
-  const name = Buffer.from(identifier + "\0", "utf8")
+  const name = Buffer.from(`${identifier  }\0`, "utf8")
   const size = 4 + name.length + encodedDocuments.reduce((total, item) => total + item.length, 0)
   const section = Buffer.allocUnsafe(size)
   section.writeInt32LE(size, 0)
@@ -106,7 +106,8 @@ function readSequence(buffer, state) {
   if (state.offset !== end) {
     throw new TypeError("MongoDB document sequence length mismatch")
   }
-  return { identifier, documents }
+  return { identifier,
+documents }
 }
 
 /** Decode one complete MongoDB OP_MSG frame. */
@@ -129,7 +130,8 @@ export function decodeOpMsg(message) {
   if ((flags & ~SUPPORTED_FLAGS) !== 0) {
     throw new TypeError("MongoDB OP_MSG contains unsupported flag bits")
   }
-  const state = { offset: 20, end: message.length }
+  const state = { offset: 20,
+end: message.length }
   let body
   const sequences = Object.create(null)
   while (state.offset < state.end) {

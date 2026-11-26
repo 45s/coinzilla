@@ -136,7 +136,7 @@ async function runMongoCommand({ command, body, sequences, operation, collection
       })
     }
     if (response.writeConcernError) {
-      const writeConcernError = response.writeConcernError
+      const {writeConcernError} = response
       throw new MongoCommandError({
         ...writeConcernError,
         errorLabels: response.errorLabels,
@@ -227,10 +227,14 @@ function createSortStages(sort) {
     additions[typeKey] = {
       $switch: {
         branches: [
-          { case: { $in: [typeExpression, ["missing", "null"]] }, then: 0 },
-          { case: { $eq: [typeExpression, "bool"] }, then: 1 },
-          { case: { $in: [typeExpression, ["int", "long", "double", "decimal"]] }, then: 3 },
-          { case: { $eq: [typeExpression, "string"] }, then: 4 },
+          { case: { $in: [typeExpression, ["missing", "null"]] },
+then: 0 },
+          { case: { $eq: [typeExpression, "bool"] },
+then: 1 },
+          { case: { $in: [typeExpression, ["int", "long", "double", "decimal"]] },
+then: 3 },
+          { case: { $eq: [typeExpression, "string"] },
+then: 4 },
         ],
         default: 5,
       },
@@ -303,7 +307,8 @@ function createMongoRecordOperations({ command, databaseName }) {
         find: mongoCollection,
         filter: { _id: id },
         collation: { locale: "simple" },
-        projection: { _id: 1, data: 1 },
+        projection: { _id: 1,
+data: 1 },
         limit: 1,
         singleBatch: true,
         $db: databaseName,
@@ -364,7 +369,9 @@ function createMongoRecordOperations({ command, databaseName }) {
       }
     }
     const document = response.cursor.firstBatch[0]
-    return document ? decodeStoredRecord({ document, operation: "readOne", collection }) : null
+    return document ? decodeStoredRecord({ document,
+operation: "readOne",
+collection }) : null
   }
 
   async function readMany({ collection, query }) {
@@ -381,7 +388,8 @@ function createMongoRecordOperations({ command, databaseName }) {
     if (normalizedQuery.limit !== undefined) {
       pipeline.push({ $limit: normalizedQuery.limit })
     }
-    pipeline.push({ $project: { _id: 1, data: 1 } })
+    pipeline.push({ $project: { _id: 1,
+data: 1 } })
 
     const response = await runMongoCommand({
       command,
@@ -395,7 +403,7 @@ function createMongoRecordOperations({ command, databaseName }) {
         $db: databaseName,
       },
     })
-    const cursor = response.cursor
+    const {cursor} = response
     if (!cursor) {
       throw new DatabaseProviderError({
         operation: "readMany",
@@ -501,7 +509,8 @@ function createMongoRecordOperations({ command, databaseName }) {
     validateRecordIdentifier(id)
     const snapshot = JSON.parse(serializeChanges(changes))
     if (Object.keys(snapshot).length === 0) {
-      return readOne({ collection, id })
+      return readOne({ collection,
+id })
     }
     const mongoCollection = encodeCollectionName(collection, databaseName)
     const set = {}
@@ -520,7 +529,8 @@ function createMongoRecordOperations({ command, databaseName }) {
         collation: { locale: "simple" },
         new: true,
         upsert: false,
-        fields: { _id: 1, data: 1 },
+        fields: { _id: 1,
+data: 1 },
         $db: databaseName,
       },
     })
@@ -541,7 +551,8 @@ function createMongoRecordOperations({ command, databaseName }) {
       collection,
       body: {
         delete: mongoCollection,
-        deletes: [{ q: { _id: id }, limit: 1 }],
+        deletes: [{ q: { _id: id },
+limit: 1 }],
         collation: { locale: "simple" },
         ordered: true,
         $db: databaseName,

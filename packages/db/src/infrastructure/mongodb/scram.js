@@ -53,7 +53,10 @@ function deriveScramMaterial({ passwordDigest, salt, iterations, mechanism }) {
   const clientKey = createHmac(hash, saltedPassword).update("Client Key").digest()
   const storedKey = createHash(hash).update(clientKey).digest()
   const serverKey = createHmac(hash, saltedPassword).update("Server Key").digest()
-  return { hash, clientKey, storedKey, serverKey }
+  return { hash,
+clientKey,
+storedKey,
+serverKey }
 }
 
 function assertCommandSucceeded(response, stage) {

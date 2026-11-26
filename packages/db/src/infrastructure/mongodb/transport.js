@@ -16,7 +16,8 @@ function validateOptions({ host, port, connectTimeoutMS, socketTimeoutMS }) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new TypeError("MongoDB port must be an integer between 1 and 65535")
   }
-  for (const [name, value] of Object.entries({ connectTimeoutMS, socketTimeoutMS })) {
+  for (const [name, value] of Object.entries({ connectTimeoutMS,
+socketTimeoutMS })) {
     if (!Number.isSafeInteger(value) || value < 1) {
       throw new TypeError(`MongoDB ${name} must be a positive safe integer`)
     }
@@ -25,7 +26,9 @@ function validateOptions({ host, port, connectTimeoutMS, socketTimeoutMS }) {
 
 function createSocket({ host, port, tlsOptions, socketFactory }) {
   if (socketFactory) {
-    return socketFactory({ host, port, tls: Boolean(tlsOptions) })
+    return socketFactory({ host,
+port,
+tls: Boolean(tlsOptions) })
   }
   if (tlsOptions) {
     return tls.connect({
@@ -34,7 +37,8 @@ function createSocket({ host, port, tlsOptions, socketFactory }) {
       port,
     })
   }
-  return net.createConnection({ host, port })
+  return net.createConnection({ host,
+port })
 }
 
 function createRequestError(message, cause, outcomeUnknown = false) {
@@ -63,7 +67,10 @@ export function createMongoTransport({
   socketTimeoutMS = 30_000,
   socketFactory,
 } = {}) {
-  validateOptions({ host, port, connectTimeoutMS, socketTimeoutMS })
+  validateOptions({ host,
+port,
+connectTimeoutMS,
+socketTimeoutMS })
   if (tlsOptions !== null && (typeof tlsOptions !== "object" || Array.isArray(tlsOptions))) {
     throw new TypeError("MongoDB TLS options must be an object")
   }
@@ -316,7 +323,12 @@ export function createMongoTransport({
           ),
         )
       }, timeoutMS)
-      const entry = { resolve, reject, timer, operation, transaction, sent: false }
+      const entry = { resolve,
+reject,
+timer,
+operation,
+transaction,
+sent: false }
       pending.set(requestId, entry)
       try {
         entry.sent = true

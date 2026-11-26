@@ -225,7 +225,8 @@ test("provider-neutral reads and writes use their distinct execution boundaries"
   await database.connect()
 
   try {
-    await database.readOne({ collection: "people", id: "one" })
+    await database.readOne({ collection: "people",
+id: "one" })
     await database.create({
       collection: "people",
       record: { id: "one" },
@@ -290,11 +291,15 @@ test("database CRUD inside a transaction reuses its transaction context", async 
   await database.connect()
 
   try {
-    await database.create({ collection: "people", record: { id: "outside" } })
-    await database.readOne({ collection: "people", id: "outside" })
+    await database.create({ collection: "people",
+record: { id: "outside" } })
+    await database.readOne({ collection: "people",
+id: "outside" })
     await database.transaction(() => {
-      database.create({ collection: "people", record: { id: "inside" } })
-      database.readOne({ collection: "people", id: "inside" })
+      database.create({ collection: "people",
+record: { id: "inside" } })
+      database.readOne({ collection: "people",
+id: "inside" })
       assert.throws(
         () => database.transaction(() => {}),
         /Nested database transactions are not supported/,
