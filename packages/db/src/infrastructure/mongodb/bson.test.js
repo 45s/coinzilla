@@ -206,6 +206,21 @@ test("BSON decodes protocol ObjectId and timestamp values", () => {
   assert.equal(decoded.timestamp, 123456789)
 })
 
+test("BSON timestamps preserve the full unsigned 64-bit range", () => {
+  const timestamp = Buffer.alloc(8)
+  const value = (1n << 63n) + 123n
+  timestamp.writeBigUInt64LE(value)
+  const timestampElement = Buffer.concat([
+    Buffer.from([0x11]),
+    Buffer.from("timestamp\0"),
+    timestamp,
+  ])
+
+  const decoded = decodeBsonDocument(rawBsonDocument([timestampElement]))
+
+  assert.equal(decoded.timestamp, value)
+})
+
 test("BSON decoder rejects duplicate keys, invalid array indexes, and unsupported types", () => {
   const int32 = (key, value) => {
     const payload = Buffer.alloc(4)
