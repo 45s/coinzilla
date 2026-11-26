@@ -1,6 +1,6 @@
 # Entities roadmap
 
-**Owner:** Entities domain  
+**Owner:** Entities domain
 **Scope:** `packages/entities/`
 
 ## Active direction
