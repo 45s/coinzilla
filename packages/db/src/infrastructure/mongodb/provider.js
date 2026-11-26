@@ -215,6 +215,13 @@ function hasErrorLabel(response, label) {
   return Array.isArray(response?.errorLabels) && response.errorLabels.includes(label)
 }
 
+function hasAmbiguousWriteConcern(response) {
+  const error = response?.writeConcernError
+  return error?.code === 64
+    || error?.codeName === "WriteConcernTimeout"
+    || error?.errInfo?.wtimeout === true
+}
+
 function createServerCommandError(response) {
   const error = new Error(response?.errmsg ?? "MongoDB transaction command failed")
   error.code = response?.code
@@ -243,7 +250,9 @@ async function commitMongoTransaction({ transport, session }) {
         ? { ...response.writeConcernError, errorLabels: response.errorLabels }
         : response
       const error = createServerCommandError(serverFailure)
-      if (response?.writeConcernError || hasErrorLabel(response, "UnknownTransactionCommitResult") || ambiguous) {
+      if (hasAmbiguousWriteConcern(response)
+        || hasErrorLabel(response, "UnknownTransactionCommitResult")
+        || ambiguous) {
         ambiguous = true
         lastError = error
       } else {
