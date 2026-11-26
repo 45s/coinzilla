@@ -122,6 +122,36 @@ parsed }),
     }),
   })
 
+  test("MongoDB native provider correlates concurrent CRUD operations", async () => {
+    const databaseName = databaseNameForKey({ storageKey: randomUUID(), parsed })
+    const database = createDatabase({
+      provider: createMongoProvider({
+        uri: connectionString,
+        databaseName,
+      }),
+    })
+    await database.connect()
+    const records = Array.from({ length: 12 }, (_, index) => ({
+      id: `concurrent-${index}`,
+      sequence: index,
+    }))
+
+    try {
+      await Promise.all(records.map((record) => database.create({
+        collection: "concurrent-operations",
+        record,
+      })))
+      const results = await Promise.all(records.map(({ id }) => database.readOne({
+        collection: "concurrent-operations",
+        id,
+      })))
+      assert.deepEqual(results, records)
+    } finally {
+      await database.close()
+      await dropDatabase({ databaseName, parsed })
+    }
+  })
+
   test("MongoDB multi-document transactions roll back writes atomically", async (context) => {
     const databaseName = databaseNameForKey({ storageKey: randomUUID(),
 parsed })
