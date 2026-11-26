@@ -287,13 +287,17 @@ test("activates every strategy gate before any shared service can stop", async (
     participants,
     calls,
   })
-  await fixture.stop({
+  const stopResult = await fixture.stop({
     beforeSharedServicesStop: async () => {
       calls.push("operator-control-stop")
       return []
     },
   })
 
+  assert.deepEqual(stopResult, {
+    ok: true,
+    status: "STOPPED",
+  }, "The shutdown handler must expose an explicit terminal outcome.")
   assert.deepEqual(calls.slice(0, 4), [
     "gate:CONSERVATIVE",
     "gate:RECOVERY_SELLER",
