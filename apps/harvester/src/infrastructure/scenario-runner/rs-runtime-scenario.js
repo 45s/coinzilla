@@ -202,8 +202,7 @@ function assertRuntimeScenarioConfig({ input }) {
   }
 }
 
-async function resolveRuntimeScenarioConfiguration({ input }) {
-  assertRuntimeScenarioConfig({ input })
+function createRuntimeScenarioAppConfig({ input }) {
   const pair = {
     enabled: true,
     tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
@@ -225,7 +224,7 @@ async function resolveRuntimeScenarioConfiguration({ input }) {
       quantity: input.legacyQuantity,
     },
   }
-  const appConfig = {
+  return {
     strategies: {
       CG_coinGrabber: {
         enabled: true,
@@ -243,8 +242,12 @@ async function resolveRuntimeScenarioConfiguration({ input }) {
       },
     },
   }
+}
+
+async function resolveRuntimeScenarioConfiguration({ input }) {
+  assertRuntimeScenarioConfig({ input })
   const resolved = await resolveHarvesterOptions({
-    appConfig,
+    appConfig: createRuntimeScenarioAppConfig({ input }),
     env: {
       NODE_ENV: "test",
       TRADING_MODE: "testnet",
