@@ -288,6 +288,13 @@ function readInt64(buffer, state) {
     : value
 }
 
+function readUInt64(buffer, state) {
+  assertRange(buffer, state.offset, 8, state.end, "uint64")
+  const value = buffer.readBigUInt64LE(state.offset)
+  state.offset += 8
+  return value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : value
+}
+
 function readValue(buffer, state, type, depth) {
   if (type === 0x01) {
     assertRange(buffer, state.offset, 8, state.end, "double")
@@ -343,7 +350,8 @@ function readValue(buffer, state, type, depth) {
     return value
   }
   if (type === 0x11) {
-    return readInt64(buffer, state)
+    // BSON Timestamp is an unsigned 64-bit value, unlike BSON int64 and Date.
+    return readUInt64(buffer, state)
   }
   if (type === 0x12) {
     return readInt64(buffer, state)

@@ -48,6 +48,10 @@ The public CRUD API remains provider-independent. MongoDB collections, BSON, com
 
 Supported protocol generations, topology/authentication limits, BSON subset, transaction guarantees and explicit exclusions are documented in [MongoDB provider support and limitations](./docs/mongodb.md). The roadmap remains in progress until the implementation PR is merged and all required validation passes on its exact final head.
 
+### Official-source review finding — BSON Timestamp
+
+A source-level comparison with the official driver and its separate `mongodb/js-bson` dependency found a signedness defect in our BSON decoder: BSON Timestamp (type `0x11`) is unsigned 64-bit, but the previous implementation decoded it using a signed int64 read. A regression test was committed first (`73494aa26b6059428ecf61a9584f273ecc88cc7a`), followed by the unsigned decoder correction. See [the official-driver reference strategy](./docs/mongodb-driver-reference-strategy.md) for the pinned source evidence and review method. This is an independently implemented fix, not copied upstream code.
+
 ### Audit conclusion
 
 The accepted provider-neutral architecture has enabled MongoDB to be implemented as an infrastructure adapter. The public `createDatabase({ provider })` facade, asynchronous provider transaction contract, immutable capability declarations, and reusable provider-conformance suite keep MongoDB details out of consumer-facing CRUD without redesigning application APIs.

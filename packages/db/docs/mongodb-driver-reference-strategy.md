@@ -48,6 +48,12 @@ The following official-driver areas are the first places to inspect. Paths are p
 | URI parsing | provider configuration in `provider.js` | [`src/connection_string.ts`](https://github.com/mongodb/node-mongodb-native/blob/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea/src/connection_string.ts) | URI grammar, percent decoding, option precedence, authSource and rejection of unsupported options. Do not import `mongodb-connection-string-url`. |
 | Error semantics | `database-errors.js`, MongoDB provider error mapping | [`src/error.ts`](https://github.com/mongodb/node-mongodb-native/blob/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea/src/error.ts), [`src/cmap/errors.ts`](https://github.com/mongodb/node-mongodb-native/blob/2ed780df2a57884c3fa597da9ebbb6256ae0a5ea/src/cmap/errors.ts) | Distinguish server rejection, definitely-unsent operations, interrupted writes and uncertain commit results. Map to our provider-neutral error taxonomy. |
 
+## Source-review finding — BSON Timestamp signedness
+
+The pinned driver delegates BSON serialization/deserialization to the separate `mongodb/js-bson` project, so `src/bson.ts` alone is not the codec implementation. Inspection of `js-bson` at commit [`c9922e971af774d260bb529cf2c405def8036633`](https://github.com/mongodb/js-bson/commit/c9922e971af774d260bb529cf2c405def8036633) confirmed that BSON Timestamp is unsigned: its deserializer reads two unsigned 32-bit fields and constructs an unsigned Timestamp value ([deserializer.ts](https://github.com/mongodb/js-bson/blob/c9922e971af774d260bb529cf2c405def8036633/src/parser/deserializer.ts), [timestamp.ts](https://github.com/mongodb/js-bson/blob/c9922e971af774d260bb529cf2c405def8036633/src/timestamp.ts)).
+
+The Coinzilla decoder previously routed BSON type `0x11` through `Buffer.readBigInt64LE`, interpreting values with the high bit set as negative. A test-first regression was committed in `73494aa26b6059428ecf61a9584f273ecc88cc7a` for a timestamp above `2^63 - 1`. The correction uses Node's `readBigUInt64LE` and retains precision by returning a Number only within the safe-integer range, otherwise BigInt. This is a specification-informed local fix; no upstream source was copied, so the attribution ledger remains empty.
+
 ## Porting workflow — required for every candidate
 
 1. **Name the concrete gap.** Identify the current Coinzilla function, its public contract, observed defect or missing edge case, and a regression test that demonstrates the requirement. Do not port code merely because the official driver has it.
