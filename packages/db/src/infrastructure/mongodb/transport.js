@@ -242,6 +242,9 @@ export function createMongoTransport({
     if (state !== "connected" || !socket) {
       return Promise.reject(new Error("MongoDB transport is not connected"))
     }
+    if (typeof transaction !== "boolean") {
+      return Promise.reject(new TypeError("MongoDB transaction command flag must be a boolean"))
+    }
     if (!Number.isSafeInteger(timeoutMS) || timeoutMS < 1) {
       return Promise.reject(new TypeError("MongoDB command timeout must be a positive safe integer"))
     }
