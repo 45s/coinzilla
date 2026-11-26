@@ -268,8 +268,10 @@ function registerWorkerMessageHandler({
   setMessageReceived,
   signal,
   onReady,
+  onStarted,
 }) {
   let readyReceived = false
+  let startedReceived = false
   const handleMessage = (message) => {
     if (message?.type === "ready") {
       if (!readyReceived) {
@@ -278,15 +280,22 @@ function registerWorkerMessageHandler({
       }
       return
     }
+    if (message?.type === "started" && readyReceived && !startedReceived && message.runId === runId) {
+      startedReceived = true
+      onStarted()
+      return
+    }
     child.off("message", handleMessage)
     setMessageReceived()
     void handleWorkerMessage({
-      message: readyReceived
+      message: startedReceived
         ? message
         : {
           runId,
           ok: false,
-          error: "Scenario worker returned a result before confirming readiness",
+          error: readyReceived
+            ? "Scenario worker returned a result before confirming execution start"
+            : "Scenario worker returned a result before confirming readiness",
         },
       runId,
       child,
@@ -345,6 +354,7 @@ function createExecutionPromise({
   terminationGraceMs,
   maxOutputBytes,
   onReady,
+  onStarted,
 }) {
   let finishExecution
   const promise = new Promise((...settlers) => {
@@ -377,6 +387,7 @@ function createExecutionPromise({
       finish,
       signal,
       onReady,
+      onStarted,
       setMessageReceived: () => {
         messageReceived = true
       },
@@ -478,7 +489,7 @@ function assertWorkerCanStart({ osSandboxVerified, signal }) {
   }
 }
 
-function confirmWorkerReadiness({ signal, onStarted }) {
+function confirmWorkerExecutionStarted({ signal, onStarted }) {
   if (signal?.aborted) {
     return false
   }
@@ -520,10 +531,7 @@ function createWorkerExecutor({
       terminationGraceMs,
       maxOutputBytes,
       onReady: () => {
-        if (!confirmWorkerReadiness({
-          signal,
-          onStarted,
-        })) {
+        if (signal?.aborted) {
           return
         }
         try {
@@ -545,6 +553,12 @@ function createWorkerExecutor({
             preserveChild: true,
           }))
         }
+      },
+      onStarted: () => {
+        confirmWorkerExecutionStarted({
+          signal,
+          onStarted,
+        })
       },
     })
     return execution.promise
