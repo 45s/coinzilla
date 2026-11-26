@@ -948,12 +948,20 @@ function resolveFillOrder({ fill, state }) {
     clientOrderId,
     eventName: EVENT.FILL_APPLIED,
   })
-  if (fill.providerInstanceId !== undefined) {
+  if (fill.providerInstanceId !== undefined || fill.strategyId !== undefined) {
+    const fields = [
+      ...(fill.providerInstanceId === undefined
+        ? []
+        : ["providerInstanceId", "providerType", "accountId"]),
+      ...(fill.strategyId === undefined
+        ? []
+        : ["purpose", "strategyId", "positionId", "cycleId"]),
+    ]
     assertJournalOrderFieldsMatch({
       data: fill,
       order,
-      fields: ["providerInstanceId", "providerType", "accountId"],
-      message: "Applied fill provider provenance conflicts with its journaled order",
+      fields,
+      message: "Applied fill provenance conflicts with its journaled order",
     })
   }
   if (order.submissionOutcome === "REJECTED") {
