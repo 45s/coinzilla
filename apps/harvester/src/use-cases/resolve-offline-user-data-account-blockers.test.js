@@ -234,7 +234,7 @@ function makeJournalRecords(balances) {
 
 function makeCurrentAccountSnapshot() {
   return {
-    sourceTime: 300,
+    sourceTime: 1_700_000_000_000,
     balances: [
       {
         assetId: "binance:BTC",
