@@ -556,3 +556,24 @@ test("MongoDB URI parser rejects conflicting TLS aliases and empty read preferen
     /primary read preference only/i,
   )
 })
+
+test("MongoDB handshake rejects sharded/mongos topology outside the supported contract", async () => {
+  await assert.rejects(
+    performMongoHandshake({
+      transport: {
+        async command() {
+          return {
+            ok: 1,
+            minWireVersion: 13,
+            maxWireVersion: 25,
+            isWritablePrimary: true,
+            msg: "isdbgrid",
+            logicalSessionTimeoutMinutes: 30,
+          }
+        },
+      },
+      databaseName: "app",
+    }),
+    /sharded topology is not supported/i,
+  )
+})
