@@ -1897,7 +1897,10 @@ test("rejects an unprojectable account-blocker ledger before broker connection f
     const { directory, store } = await createRsOnlyOperationalStateStore()
     try {
       await seedAccountBlocker({ store })
-      await assertStartupRejectedBeforeBroker({ scenario, store })
+      await assertStartupRejectedBeforeBroker({
+        scenario,
+        store,
+      })
     } finally {
       await rm(directory, {
         recursive: true,
