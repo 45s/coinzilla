@@ -1,0 +1,204 @@
+import {
+  createHash,
+  createHmac,
+  pbkdf2Sync,
+  randomBytes as nativeRandomBytes,
+  timingSafeEqual,
+} from "node:crypto"
+
+const SUPPORTED_MECHANISMS = Object.freeze(["SCRAM-SHA-256", "SCRAM-SHA-1"])
+const MINIMUM_ITERATIONS = 4_096
+const MAXIMUM_ITERATIONS = 1_000_000
+
+function parseAttributes(message) {
+  const attributes = new Map()
+  for (const part of message.split(",")) {
+    const separator = part.indexOf("=")
+    if (separator !== 1) {
+      throw new Error("MongoDB SCRAM server sent a malformed attribute")
+    }
+    const key = part.slice(0, separator)
+    if (attributes.has(key)) {
+      throw new Error("MongoDB SCRAM server sent a duplicate attribute")
+    }
+    attributes.set(key, part.slice(separator + 1))
+  }
+  return attributes
+}
+
+function escapeUsername(username) {
+  return username.replace(/=/g, "=3D").replace(/,/g, "=2C")
+}
+
+function prepareSha256Password(password) {
+  const mapped = password
+    .replace(/[\u00ad\u034f\u1806\u180b-\u180d\u200b-\u200d\u2060\ufe00-\ufe0f\ufeff]/g, "")
+    .replace(/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/g, " ")
+    .normalize("NFKC")
+  if (/[\p{Cc}\p{Co}\p{Cs}\p{Cn}\p{Zl}\p{Zp}]/u.test(mapped)) {
+    throw new TypeError("MongoDB SCRAM-SHA-256 password contains prohibited SASLprep characters")
+  }
+  return mapped
+}
+
+function createPasswordDigest({ username, password, mechanism }) {
+  if (mechanism === "SCRAM-SHA-1") {
+    return createHash("md5")
+      .update(`${username}:mongo:${password}`, "utf8")
+      .digest("hex")
+  }
+  return prepareSha256Password(password)
+}
+
+function deriveScramMaterial({ passwordDigest, salt, iterations, mechanism }) {
+  const hash = mechanism === "SCRAM-SHA-1" ? "sha1" : "sha256"
+  const length = mechanism === "SCRAM-SHA-1" ? 20 : 32
+  const saltedPassword = pbkdf2Sync(passwordDigest, salt, iterations, length, hash)
+  const clientKey = createHmac(hash, saltedPassword).update("Client Key").digest()
+  const storedKey = createHash(hash).update(clientKey).digest()
+  const serverKey = createHmac(hash, saltedPassword).update("Server Key").digest()
+  return { hash, clientKey, storedKey, serverKey }
+}
+
+function assertCommandSucceeded(response, stage) {
+  if (!response || Number(response.ok) !== 1) {
+    const message = response?.errmsg ?? "MongoDB authentication command failed"
+    throw new Error(`MongoDB SCRAM ${stage} failed: ${message}`, {
+      cause: response?.code === undefined ? undefined : { code: response.code },
+    })
+  }
+  if (!Number.isInteger(response.conversationId)) {
+    throw new Error("MongoDB SCRAM response omitted its conversation identifier")
+  }
+  if (!Buffer.isBuffer(response.payload)) {
+    throw new Error("MongoDB SCRAM response payload must be binary")
+  }
+}
+
+function verifyServerSignature({ payload, expectedSignature }) {
+  const attributes = parseAttributes(payload.toString("utf8"))
+  if (attributes.has("e")) {
+    throw new Error(`MongoDB SCRAM server rejected authentication: ${attributes.get("e")}`)
+  }
+  if (!attributes.has("v")) {
+    throw new Error("MongoDB SCRAM server final message omitted its signature")
+  }
+  const actualSignature = Buffer.from(attributes.get("v"), "base64")
+  if (actualSignature.length !== expectedSignature.length
+    || !timingSafeEqual(actualSignature, expectedSignature)) {
+    throw new Error("MongoDB SCRAM server signature verification failed")
+  }
+}
+
+/**
+ * Authenticate a MongoDB connection using SCRAM-SHA-256 or SCRAM-SHA-1.
+ * The command callback accepts the provider's ordinary command input object.
+ */
+export async function authenticateMongoScram({
+  command,
+  username,
+  password,
+  authSource = "admin",
+  mechanism = "SCRAM-SHA-256",
+  randomBytes = nativeRandomBytes,
+} = {}) {
+  if (typeof command !== "function") {
+    throw new TypeError("MongoDB SCRAM command callback is required")
+  }
+  if (typeof username !== "string" || username.length === 0
+    || typeof password !== "string") {
+    throw new TypeError("MongoDB SCRAM requires a non-empty username and string password")
+  }
+  if (!SUPPORTED_MECHANISMS.includes(mechanism)) {
+    throw new TypeError(`Unsupported MongoDB SCRAM mechanism: ${mechanism}`)
+  }
+  if (typeof authSource !== "string" || authSource.trim() === "") {
+    throw new TypeError("MongoDB authentication source must be a non-empty string")
+  }
+
+  const nonce = randomBytes(24).toString("base64")
+  const clientFirstBare = `n=${escapeUsername(username)},r=${nonce}`
+  const clientFirst = `n,,${clientFirstBare}`
+  const startResponse = await command({
+    body: {
+      saslStart: 1,
+      mechanism,
+      payload: Buffer.from(clientFirst, "utf8"),
+      autoAuthorize: 1,
+      options: { skipEmptyExchange: true },
+      $db: authSource,
+    },
+  })
+  assertCommandSucceeded(startResponse, "start")
+  if (startResponse.done) {
+    throw new Error("MongoDB SCRAM server completed authentication before client proof")
+  }
+
+  const serverFirst = startResponse.payload.toString("utf8")
+  const serverAttributes = parseAttributes(serverFirst)
+  const serverNonce = serverAttributes.get("r")
+  if (typeof serverNonce !== "string" || !serverNonce.startsWith(nonce) || serverNonce.length <= nonce.length) {
+    throw new Error("MongoDB SCRAM server nonce does not extend the client nonce")
+  }
+  const saltValue = serverAttributes.get("s")
+  const salt = Buffer.from(saltValue ?? "", "base64")
+  if (!saltValue || salt.length === 0 || salt.length > 1024) {
+    throw new Error("MongoDB SCRAM server supplied an invalid salt")
+  }
+  const iterations = Number(serverAttributes.get("i"))
+  if (!Number.isSafeInteger(iterations)
+    || iterations < MINIMUM_ITERATIONS
+    || iterations > MAXIMUM_ITERATIONS) {
+    throw new Error("MongoDB SCRAM iteration count is outside the supported safe range")
+  }
+
+  const passwordDigest = createPasswordDigest({
+    username,
+    password,
+    mechanism,
+  })
+  const material = deriveScramMaterial({
+    passwordDigest,
+    salt,
+    iterations,
+    mechanism,
+  })
+  const clientFinalWithoutProof = `c=biws,r=${serverNonce}`
+  const authMessage = `${clientFirstBare},${serverFirst},${clientFinalWithoutProof}`
+  const clientSignature = createHmac(material.hash, material.storedKey)
+    .update(authMessage, "utf8")
+    .digest()
+  const proof = Buffer.allocUnsafe(material.clientKey.length)
+  for (let index = 0; index < material.clientKey.length; index += 1) {
+    proof[index] = material.clientKey[index] ^ clientSignature[index]
+  }
+  const serverSignature = createHmac(material.hash, material.serverKey)
+    .update(authMessage, "utf8")
+    .digest()
+  const clientFinal = `${clientFinalWithoutProof},p=${proof.toString("base64")}`
+
+  let continueResponse = await command({
+    body: {
+      saslContinue: 1,
+      conversationId: startResponse.conversationId,
+      payload: Buffer.from(clientFinal, "utf8"),
+      $db: authSource,
+    },
+  })
+  assertCommandSucceeded(continueResponse, "continue")
+  while (!continueResponse.done) {
+    continueResponse = await command({
+      body: {
+        saslContinue: 1,
+        conversationId: startResponse.conversationId,
+        payload: Buffer.alloc(0),
+        $db: authSource,
+      },
+    })
+    assertCommandSucceeded(continueResponse, "finalize")
+  }
+  verifyServerSignature({
+    payload: continueResponse.payload,
+    expectedSignature: serverSignature,
+  })
+}
