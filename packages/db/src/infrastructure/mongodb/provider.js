@@ -321,7 +321,7 @@ function createTransactionRunner({ state, randomBytes }) {
       throw new TypeError("A MongoDB transaction callback is required")
     }
     if (transactionScope.getStore()) {
-      throw new Error("Nested MongoDB transactions are not supported")
+      throw new DatabaseTransactionUnsupportedError({ capability: "nestedTransactions" })
     }
     if (state.lifecycle !== "connected") {
       throw new Error("MongoDB provider must be connected before starting a transaction")
