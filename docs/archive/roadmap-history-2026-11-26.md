@@ -2,14 +2,13 @@
 
 Historical snapshots retained for provenance. Active roadmap and inventory pages are current sources of truth; this archive is not current task status.
 
-
 ---
 
 ## root-roadmap
 
 Archived source path: `ROADMAP_HISTORY_2026-11-26.md`
 
-# Repository — develop engineering roadmap
+## Repository — develop engineering roadmap
 
 **Scope:** cross-workspace engineering priorities for the active `develop` branch. Application- and package-specific backlogs remain in their owning roadmaps; this file is a concise priority index, not a duplicate task tracker.
 
@@ -245,15 +244,13 @@ Keep PR #1837 Draft and unmerged until the real production RS adapter is compose
 
 Open Draft [PR #1662](https://github.com/45s/coinzilla/pull/1662) promotes current `develop` (`b69b32ce438a56de84bb51eaa16cce87be253c95`) to `main` (`043943051582a8d7bceb5a3a2f642bd886470cc8`). The current comparison is 4,957 commits ahead / 1 behind (merge base `72aed890fbe50f05b9e6608e6e755e900898d0e7`). The PR body records 7 new high-severity CodeQL alerts on the earlier promotion head `1f55d5989e8122421f4d9e37693f68f32e0c29ed` (2026-11-25); that observation is specific to that commit and does not establish the alert count or CodeQL result on current `develop` head `b69b32ce438a56de84bb51eaa16cce87be253c95`. Recheck exact-head CodeQL and classify any current alerts before promotion. Issues [#1674](https://github.com/45s/coinzilla/issues/1674) and [#1765](https://github.com/45s/coinzilla/issues/1765) remain open. Keep the release Draft and do not bypass or suppress the security gate; reconcile the main/develop divergence before promotion.
 
-
-
 ---
 
 ## inventory
 
 Archived source path: `docs/REPOSITORY_DOCUMENTATION_INVENTORY_HISTORY_2026-11-26.md`
 
-# Repository documentation inventory
+## Repository documentation inventory
 
 - Status: Initial recursive inventory complete; all 6 initial REVIEW candidates have evidence-based dispositions; current package/app entry-point audit is complete; source-level review and full-tree enforcement are tracked by [#1401](https://github.com/45s/coinzilla/issues/1401) and [#1402](https://github.com/45s/coinzilla/issues/1402); reference/consolidation work is tracked by [#1403](https://github.com/45s/coinzilla/issues/1403)
 - Type: Repository documentation inventory
@@ -633,8 +630,6 @@ The recursive counts above remain the 2026-11-21 `develop` checkpoint; PR #1718 
 
 The existing `.github/ISSUE_TEMPLATE/cross-domain-request.md` receives the same preflight block; its established cross-domain request fields remain intact. The canonical continuous issue knowledge-capture rule is in [AI_AGENT_WORKFLOW.md](../../AI_AGENT_WORKFLOW.md). This pending addition does not change the historical recursive-count checkpoint above.
 
-
-
 ---
 
 ## dashboard-roadmap
@@ -643,7 +638,7 @@ Archived source path: `apps/dashboard/ROADMAP_HISTORY_2026-11-26.md`
 
 <!-- Preserved verbatim from apps/dashboard/ROADMAP.md during documentation consolidation on 2026-11-26. Historical record; not current status authority. -->
 
-# Dashboard application roadmap
+## Dashboard application roadmap
 
 **Owner:** Dashboard application
 **Scope:** `apps/dashboard/`
@@ -743,8 +738,6 @@ The Dashboard validator now consumes the dedicated browser-safe decimal subpath 
 
 The initial attempt to reuse `@coinzilla/utils` from Dashboard was rejected by the canonical workspace dependency allowlist. Rather than broaden the approved dependency graph, the Scenario Runner now uses a narrowly scoped pure decimal-string comparator in the Dashboard core, with exact BigInt-based tests. This is framework-independent business/application logic, not Angular component logic; the UI remains a presentation adapter.
 
-
-
 ---
 
 ## database-roadmap
@@ -753,7 +746,7 @@ Archived source path: `packages/db/ROADMAP_HISTORY_2026-11-26.md`
 
 <!-- Preserved verbatim from packages/db/ROADMAP.md during documentation consolidation on 2026-11-26. Historical record; not current status authority. -->
 
-# Database roadmap
+## Database roadmap
 
 ---
 status: active
@@ -954,8 +947,6 @@ Application domains own their business entities, schemas, repository interfaces,
 
 A roadmap item is complete only after implementation is merged into `develop`, relevant tests and coverage pass, required CI passes on the exact final PR head, and affected living documentation is current.
 
-
-
 ---
 
 ## entities-roadmap
@@ -964,7 +955,7 @@ Archived source path: `packages/entities/ROADMAP_HISTORY_2026-11-26.md`
 
 <!-- Preserved verbatim from packages/entities/ROADMAP.md during documentation consolidation on 2026-11-26. Historical record; not current status authority. -->
 
-# Entities roadmap
+## Entities roadmap
 
 ---
 status: active
@@ -1128,8 +1119,6 @@ An item is complete only after its focused tests pass, its PR is merged into `de
 - [x] Delegate decimal subtraction to `subtractDecimal` in `@coinzilla/utils`.
 - [x] Preserve the Entities package's structured `toResult` API and field-specific validation messages.
 
-
-
 ---
 
 ## notifiers-roadmap
@@ -1138,7 +1127,7 @@ Archived source path: `packages/notifiers/ROADMAP_HISTORY_2026-11-26.md`
 
 <!-- Preserved verbatim from packages/notifiers/ROADMAP.md during documentation consolidation on 2026-11-26. Historical record; not current status authority. -->
 
-# Notifiers roadmap
+## Notifiers roadmap
 
 ---
 status: active
@@ -1352,8 +1341,6 @@ All five workflow runs completed successfully on the exact PR head `79725255e3fc
 
 The task branch was automatically deleted after merge. The live Telegram smoke test was not run because it requires operator-provided credentials and a dedicated test chat.
 
-
-
 ---
 
 ## harvester-journal-integration
@@ -1362,7 +1349,7 @@ Archived source path: `apps/harvester/docs/JOURNAL_INTEGRATION_ROADMAP_HISTORY_2
 
 <!-- Preserved verbatim from apps/harvester/docs/JOURNAL_INTEGRATION_ROADMAP.md during documentation consolidation on 2026-11-26. Historical record; not current status authority. -->
 
-# Harvester Journal Integration Roadmap
+## Harvester Journal Integration Roadmap
 
 ---
 status: active
@@ -1757,15 +1744,13 @@ A separate Harvester P0 recovery track may consume the Journal as validated reco
 - [x] Step 7: shutdown and failure isolation (PRs #470–#472).
 - [ ] Step 8: final documentation and verification.
 
-
-
 ---
 
 ## harvester-roadmap
 
 Archived source path: `apps/harvester/ROADMAP.md`
 
-# Harvester Roadmap
+## Harvester Roadmap
 
 The shutdown-handler regression fixture declares the market-task drain latch in the test that consumes it and removes the unused latch from the separate post-drain safety test; production shutdown behavior is unchanged.
 
@@ -4256,14 +4241,13 @@ The readiness report, market prerequisites and operator query projection were de
 Accepted market-price events received while the global gate is closed are retained without running or consuming the strategy transition, then replayed through the engine's existing deferred-evaluation queue after activation; startup awaits replay completion, and market-local pause state is not broadened into a global replay.
 Per-market book freshness, metadata and volatility remain enforced at the final engine submission boundary; the operator readiness projection reports those blockers without masking the engine's precise submission/replacement diagnostics.
 
-
 ---
 
 ## brokers-roadmap
 
 Archived source path: `packages/brokers/ROADMAP_HISTORY_2026-11-26.md`
 
-# Brokers Package Roadmap
+## Brokers Package Roadmap
 
 ---
 status: active
@@ -5914,15 +5898,13 @@ See [the private polling contract](../../packages/brokers/docs/BITUNIX_SPOT_POLL
 
 See the [Broker API capability matrix](../../packages/brokers/BROKER_API.md#bitunix-usdt-futures-provider--implementation-status), [Futures reference audit](../../packages/brokers/docs/bitunix-futures-reference-audit.md), and [scenario catalog](../testing/SCENARIO_CATALOG.md).
 
-
-
 ---
 
 ## journal-roadmap
 
 Archived source path: `packages/journal/ROADMAP_HISTORY_2026-11-26.md`
 
-# Journal roadmap
+## Journal roadmap
 
 ---
 status: active
@@ -6343,15 +6325,13 @@ PR [#714](https://github.com/45s/coinzilla/pull/714) merged into `develop` as `0
 
 **Historical `develop` checkpoint for the 2026-11-09 review:** `7b2345c5e2fea538ba5bc023f36cc6a8c77259ca`.
 
-
-
 ---
 
 ## event-bus-roadmap
 
 Archived source path: `packages/event-bus/ROADMAP_HISTORY_2026-11-26.md`
 
-# Event Bus Reliability Roadmap
+## Event Bus Reliability Roadmap
 
 ---
 status: active
@@ -6691,15 +6671,13 @@ Use short-lived task branches from `develop`; do not create permanent per-domain
 
 - [x] **Package ESLint cleanup — COMPLETE / superseded by the workspace gate.** [Issue #1230](https://github.com/45s/coinzilla/issues/1230) is closed. The required full-workspace `pnpm lint` gate checks every in-scope JavaScript file and fails on errors or warnings; progressive strict changed-file enforcement adds tighter thresholds for new and modified files. No package ESLint cleanup remains outstanding. Fix future findings in the PR that introduces them.
 
-
-
 ---
 
 ## utils-roadmap
 
 Archived source path: `packages/utils/ROADMAP_HISTORY_2026-11-26.md`
 
-# Utilities roadmap
+## Utilities roadmap
 
 ---
 status: active
@@ -6882,8 +6860,6 @@ The initial findings and mandatory agent workflow are in [../../docs/engineering
 
 Do not move strategy, broker, entity, event-bus, or journal rules into this package merely to share code. A helper belongs here only when it is domain-neutral and has a real shared use case.
 
-
-
 ---
 
 ## strategy-extensibility-architecture-discussion
@@ -6899,7 +6875,7 @@ created: 2026-11-19
 last_verified: 2026-11-20
 ---
 
-# Strategy extensibility architecture discussion and audit roadmap
+## Strategy extensibility architecture discussion and audit roadmap
 
 ## 1. Purpose
 
@@ -7280,4 +7256,3 @@ When continuing this work:
 - Terminal RS SELL processing stages canonical fills until complete terminal reconciliation can atomically commit recovery and legacy accounting. Missing or failed reconciliation remains a durable global STOP.
 - The production composition is protected by `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = true` after RS-4/RS-5 offline acceptance. `RS_RECOVERY_SELLER_CONFIG.enabled` remains false by default.
 - Restart/replay and third-asset commission valuation are deferred. STOP is terminal with read-only CC-operator status and no clear/resume transport. Offline same-/different-market concurrency, lifecycle and failure proofs are complete. No TESTNET/LIVE exchange operations were authorized or performed.
-
