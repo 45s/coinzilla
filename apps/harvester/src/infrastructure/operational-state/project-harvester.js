@@ -549,7 +549,9 @@ function hasStructuredOperatorActionMetadata(data) {
 }
 
 function validateSafetyBlockerResolutionOwnership({ raisedBlocker, resolution }) {
-  const isRecoverySellerStop = raisedBlocker.producer === "RECOVERY_SELLER_STOP_WORKFLOW" &&
+  const isRecoverySellerProducer = raisedBlocker.producer === undefined ||
+    raisedBlocker.producer === "RECOVERY_SELLER_STOP_WORKFLOW"
+  const isRecoverySellerStop = isRecoverySellerProducer &&
     raisedBlocker.reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
   const hasOperatorMetadata = hasStructuredOperatorActionMetadata(resolution)
   if (isRecoverySellerStop) {
