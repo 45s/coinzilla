@@ -8,13 +8,19 @@ test("worker handler aborts the matching active execution on cooperative cancel"
   let observedSignal
   let disconnectCount = 0
   const handleMessage = createScenarioWorkerMessageHandler({
-    dispatch: ({ signal }) => new Promise((...settlers) => {
-      const [, reject] = settlers
-      observedSignal = signal
-      signal.addEventListener("abort", () => reject(new Error("Scenario worker was cancelled")), {
-        once: true,
+    dispatch: ({ signal }) => {
+      assert.deepEqual(messages, [{
+        type: "started",
+        runId: "run-worker-cancel",
+      }], "The worker must announce execution start before invoking the strategy adapter.")
+      return new Promise((...settlers) => {
+        const [, reject] = settlers
+        observedSignal = signal
+        signal.addEventListener("abort", () => reject(new Error("Scenario worker was cancelled")), {
+          once: true,
+        })
       })
-    }),
+    },
     send: (message) => messages.push(message),
     disconnect: () => {
       disconnectCount += 1
@@ -38,11 +44,17 @@ test("worker handler aborts the matching active execution on cooperative cancel"
   })
   await execution
   assert.equal(observedSignal.aborted, true)
-  assert.deepEqual(messages, [{
-    runId: "run-worker-cancel",
-    ok: false,
-    error: "Scenario worker was cancelled",
-  }])
+  assert.deepEqual(messages, [
+    {
+      type: "started",
+      runId: "run-worker-cancel",
+    },
+    {
+      runId: "run-worker-cancel",
+      ok: false,
+      error: "Scenario worker was cancelled",
+    },
+  ], "Cancellation must preserve the start notification before its terminal worker result.")
   assert.equal(disconnectCount, 1)
 })
 
