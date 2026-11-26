@@ -250,7 +250,7 @@ try {
 }
 ```
 
-The URI parser deliberately accepts a single-seed `mongodb://` URI. `mongodb+srv://`, multi-host seed lists and DNS SRV discovery are rejected rather than silently reduced to one host. Credentials, database name, `authSource`, `authMechanism`, `replicaSet`, `directConnection`, TLS and connection/socket timeouts can be supplied in the URI or as explicit provider options. `readPreference=primary` and `retryWrites=false` are the only accepted values for those URI options. Provider options override parsed URI values.
+The URI parser deliberately accepts a single-seed `mongodb://` URI. `mongodb+srv://`, multi-host seed lists and DNS SRV discovery are rejected rather than silently reduced to one host. Credentials, database name, `authSource`, `authMechanism`, `replicaSet`, `directConnection`, TLS and connection/socket timeouts can be supplied in the URI or as explicit provider options. `directConnection=true` requires the selected replica-set node to already be the writable primary. `readPreference=primary` and `retryWrites=false` are the only accepted values for those URI options. Provider options override parsed URI values.
 
 The adapter uses Node.js built-ins only (`node:net`, `node:tls`, `node:crypto`, `node:buffer`, `node:async_hooks` and timers). It implements BSON and MongoDB OP_MSG internally; it does not add a runtime dependency.
 
