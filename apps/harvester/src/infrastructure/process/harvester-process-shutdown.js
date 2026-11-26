@@ -152,10 +152,14 @@ async function stopRuntimeForShutdown({ runtime, logger } = {}) {
         error,
       }
     }
-    logSystem({
-      logger,
-      message: "Shutdown completed.",
-    })
+    try {
+      logSystem({
+        logger,
+        message: "Shutdown completed.",
+      })
+    } catch {
+      // A diagnostic failure cannot invalidate the durable STOPPED acknowledgement.
+    }
     return { runtimeStopped: true }
   } catch (error) {
     try {
@@ -298,7 +302,7 @@ async function runRuntimeShutdown({
 
   if (!shutdownState.has("stopped-event")) {
     try {
-      publishLifecycleEvent({
+      const publication = publishLifecycleEvent({
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.STOPPED,
         dataResult: mapHarvesterStoppedData({
@@ -306,15 +310,20 @@ async function runRuntimeShutdown({
           outcome: "success",
         }),
       })
+      if (publication?.ok === false) {
+        logger?.warn?.({
+          message: "Durable PROCESS_STOPPED was confirmed, but the non-durable STOPPED notification was rejected.",
+          errors: publication.errors,
+        })
+      }
     } catch (error) {
-      logShutdownFailure({
-        logger,
-        phase: "STOPPED_EVENT_PUBLICATION",
-        error,
-      })
-      return {
-        runtimeStopped: true,
-        shutdownComplete: false,
+      try {
+        logger?.warn?.({
+          message: "Durable PROCESS_STOPPED was confirmed, but the non-durable STOPPED notification failed.",
+          error,
+        })
+      } catch {
+        // The durable operational-state acknowledgement remains authoritative.
       }
     }
     shutdownState.set("stopped-event", {
