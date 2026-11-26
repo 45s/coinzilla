@@ -13,7 +13,7 @@ describe('market screener theme contract', () => {
 
   it('uses active theme tokens for source, search and movement controls', () => {
     expect(marketStyles).toContain('background: var(--control-bg);');
-    expect(marketStyles).toContain('border-color: var(--line);');
+    expect(marketStyles).toContain('border: 1px solid var(--line);');
     expect(marketStyles).toContain('color: var(--muted);');
   });
 
