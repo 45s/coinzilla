@@ -65,3 +65,8 @@ Health, trading enablement, operator authorization and restart-recovery permissi
 ## Verification
 
 Default tests remain offline, deterministic and credential-free. Test-first RED/GREEN evidence and exact-head GitHub Actions results are recorded in the task PR. No TESTNET or LIVE account operation is part of this issue.
+
+
+## Test-first implementation checkpoints
+
+The first regression slice specifies the source-backed report contract, the authorized operator read-model exposure, and deferred opening of the existing user-data trading gate. The RED checkpoint is expected until the report builder and deferred activation integration are implemented. No new mutable readiness state or exchange operation is introduced by the tests.

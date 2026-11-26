@@ -222,3 +222,59 @@ blockers: "invalid" }] },
   assert.equal(result.errors[0].cause instanceof TypeError, true, "The market validation failure must preserve its underlying shape error.")
   assert.equal(result.errors[0].context.symbol, "DOGEUSDT", "Market snapshot diagnostics must identify the affected symbol.")
 })
+
+
+test("includes the source-backed readiness report in the authorized status and market read models", async () => {
+  const readinessInputs = {
+    configuration: { validated: true, enabledMarkets: ["BTCUSDT"] },
+    broker: {
+      connected: true,
+      identity: { providerInstanceId: "binanceTestnet", providerType: "binance", environment: "testnet", accountId: "private-account-id" },
+      capabilities: { validated: true, missing: [] },
+    },
+    account: {
+      preflight: { completed: true, durable: true, sourceTime: 19900, balanceCount: 2 },
+      openOrders: { completed: true, durable: true, observedAt: 19950, orderCount: 0, readiness: "READY", blockReasons: [], unownedSymbols: [] },
+    },
+    userData: { subscriptionEstablished: true, preflightComplete: true, requiresReconciliation: false, accountingFailed: false, streamUnsafe: false, pendingRecovery: false, safetyHaltRequired: false },
+    processContinuity: { storeConfigured: true, previousProcessStarted: false, restorationEnabled: false },
+    markets: {
+      BTCUSDT: {
+        route: {
+          expected: { providerInstanceId: "binanceTestnet", providerType: "binance", environment: "testnet" },
+          actual: { providerInstanceId: "binanceTestnet", providerType: "binance", environment: "testnet" },
+          priceSubscriptionReady: true,
+          bookSubscriptionReady: true,
+        },
+        price: { valid: true, fresh: true, timestamp: 19999, source: "WEBSOCKET", websocketEventReceived: true },
+        book: { required: true, fresh: true, timestamp: 19998 },
+        volatility: { enabled: false, snapshot: null },
+        externalOrdersPolicy: "IGNORE",
+        unownedOrderObserved: false,
+      },
+    },
+  }
+  const { readState } = createHarness({
+    runtimeSnapshot: {
+      observedAt: 20000, startedAt: 100, connected: true, tradingEnabled: true, tradingMode: "testnet",
+      strategyMode: "conservative", stopping: false, startupComplete: true,
+      userData: { ready: true, status: "READY", lastEventAt: 19990, ageMs: 10 },
+      readinessInputs,
+    },
+    markets: [{
+      symbol: "BTCUSDT", enabled: true, marketMetadataReady: true, orderType: "LIMIT_MAKER",
+      latestPrice: "65000", priceTimestamp: 19999, priceFresh: true, bookTimestamp: 19998,
+      bookFresh: true, volatilityProtection: null, blockers: [],
+    }],
+  })
+
+  const status = await readState.getStatus({ actor })
+  const markets = await readState.getMarkets({ actor })
+
+  assert.equal(status.ok, true, "An authorized status read must succeed with complete readiness evidence.")
+  assert.equal(status.data.readinessReport.status, "HEALTHY", "The operator status must expose the consolidated source-backed readiness result used at startup.")
+  assert.equal(status.data.readinessReport.markets[0].symbol, "BTCUSDT", "The consolidated report must retain per-market identity.")
+  assert.equal(markets.ok, true, "An authorized market read must succeed.")
+  assert.equal(markets.data.readinessReport.status, "HEALTHY", "The market read model must expose the same readiness contract.")
+  assert.equal(JSON.stringify(status.data.readinessReport).includes("private-account-id"), false, "The operator report must not expose private account identifiers.")
+})
