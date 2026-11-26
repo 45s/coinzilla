@@ -13,8 +13,14 @@ function getLatestFact({ records, factType }) {
 }
 
 function validateStoppedSession({ records, runtimeSessionId }) {
-  const started = getLatestFact({ records, factType: "PROCESS_STARTED" })
-  const baseline = getLatestFact({ records, factType: "CONFIGURATION_BASELINE" })
+  const started = getLatestFact({
+    records,
+    factType: "PROCESS_STARTED",
+  })
+  const baseline = getLatestFact({
+    records,
+    factType: "CONFIGURATION_BASELINE",
+  })
   if (!started ||
       !baseline ||
       started.runtimeSessionId !== runtimeSessionId ||
@@ -98,7 +104,11 @@ function createMarketEvidenceContext({ context, symbol }) {
   }
 }
 
-function isMarketAuditReady({ result, reconciliation, audit }) {
+function isMarketAuditReady({
+    result,
+    reconciliation,
+    audit,
+  }) {
   return result?.ok === true &&
     reconciliation?.ready === true &&
     audit?.status === "READY" &&
@@ -146,7 +156,8 @@ function validateMarketAudit({ symbol, result, accountSnapshotSourceTime }) {
 }
 
 async function auditAllConfiguredMarkets({ context, configuredMarkets, reconcileMarket }) {
-  const sourceTime = context.exchange.currentAccountSnapshot.sourceTime
+  const { currentAccountSnapshot } = context.exchange
+  const { sourceTime } = currentAccountSnapshot
   const summaries = []
   for (const symbol of configuredMarkets) {
     const marketContext = createMarketEvidenceContext({
