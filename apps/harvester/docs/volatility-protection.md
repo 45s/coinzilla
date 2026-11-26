@@ -275,6 +275,14 @@ Volatility state is process-local in the first implementation. It is not a subst
 
 The initial thresholds are provisional. Calibration uses completed Binance Spot 1-minute Kline CSV files from the official [Binance Public Data archive](https://github.com/binance/binance-public-data) ([archive browser](https://data.binance.vision/)). Download the matching `.zip` and `.CHECKSUM` files, verify the archive checksum, and extract the CSV outside the repository; no market-history dataset or credentials are bundled with Harvester.
 
+The official monthly Spot 1-minute archive path is:
+
+`https://data.binance.vision/data/spot/monthly/klines/{SYMBOL}/1m/{SYMBOL}-1m-{YYYY}-{MM}.zip`
+
+Fetch the sibling `.CHECKSUM` file for every ZIP and verify it before extraction. A defensible multi-symbol review requires at least BTCUSDT, ETHUSDT and SOLUSDT, with multiple contiguous multi-month windows covering both quieter and high-volatility regimes. Keep each symbol's monthly files contiguous within an analysis window; do not concatenate separated windows across missing time. Preserve the archive SHA-256 manifest and the analyzer's extracted-CSV SHA-256 manifest with each report. The analyzer must validate the 12-column Spot Kline schema, symbol identity, timestamp units, complete minute sequence, duplicate/conflicting candle identities, ordering and gaps before any threshold statistics are accepted.
+
+The timestamp contract changes at 2025-01-01: Spot archive timestamps are milliseconds before that date and microseconds from that date onward. The existing parser normalizes both to runtime milliseconds and rejects mixed/invalid units. The execution environment used for the current investigation could not resolve `data.binance.vision` when attempting `BTCUSDT-1m-2025-03.zip`; no genuine dataset was downloaded or calibrated. This is an acquisition/network blocker, not evidence that the public archive is absent. Until checksum-verified multi-symbol inputs are actually analyzed, keep thresholds provisional and unchanged.
+
 Run the offline analyzer with one or more monthly/daily CSV files. The filenames must follow Binance's `SYMBOL-1m-YYYY-MM.csv` or `SYMBOL-1m-YYYY-MM-DD.csv` convention:
 
 ```sh
