@@ -56,10 +56,14 @@ describe('GitHubPullRequestsComponent', () => {
     const root = fixture.nativeElement as HTMLElement;
     const name = root.querySelector('.label-create input') as HTMLInputElement;
     name.value = 'Codex';
-    name.dispatchEvent(new Event('input'));
-    root.querySelector<HTMLButtonElement>('.label-create .add-label-button')?.click();
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(fixture.componentInstance.newLabelName()).toBe('Codex');
+    const createForm = root.querySelector<HTMLFormElement>('form.label-create');
+    expect(createForm).toBeDefined();
+    createForm?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     fixture.detectChanges();
 
+    expect(fixture.componentInstance.labels().labels).toHaveLength(1);
     const assignment = root.querySelector<HTMLButtonElement>('.assignment-chip');
     expect(assignment).toBeDefined();
     assignment?.click();
@@ -78,8 +82,10 @@ describe('GitHubPullRequestsComponent', () => {
     const root = fixture.nativeElement as HTMLElement;
     const name = root.querySelector('.label-create input') as HTMLInputElement;
     name.value = 'Codex';
-    name.dispatchEvent(new Event('input'));
-    root.querySelector<HTMLButtonElement>('.label-create .add-label-button')?.click();
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    const createForm = root.querySelector<HTMLFormElement>('form.label-create');
+    expect(createForm).toBeDefined();
+    createForm?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     fixture.detectChanges();
 
     const renameInput = root.querySelector<HTMLInputElement>('.label-name-input');
