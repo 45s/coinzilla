@@ -574,13 +574,13 @@ test("replays a fill that races an uncertain cancellation without losing executi
   const raceFacts = history.data.records
     .filter((record) => [
       "ORDER_CANCELLATION_INTENT",
-      "EXECUTION_FILL",
+      "EXECUTION_FILL_APPLIED",
       "ORDER_CANCELLATION_OUTCOME",
     ].includes(record.factType))
     .map((record) => record.factType)
   assert.deepEqual(raceFacts, [
     "ORDER_CANCELLATION_INTENT",
-    "EXECUTION_FILL",
+    "EXECUTION_FILL_APPLIED",
     "ORDER_CANCELLATION_OUTCOME",
   ])
   assert.equal(history.data.records.filter((record) => record.factType === "PROCESS_STOPPED").length, 0)
