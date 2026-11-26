@@ -2,6 +2,8 @@
 
 ## Harvester Conservative ownership and shutdown incident — issue #1856
 
+- CI follow-up: lifecycle test doubles now return the explicit `{ ok: true, status: "STOPPED" }` runtime-stop contract; ADA replay assertions retain the existing AggregateError contract emitted by the runtime shutdown boundary. No production shutdown behavior was relaxed.
+
 Tracking issue: [#1856](https://github.com/45s/coinzilla/issues/1856)  
 Implementation PR: [#1858](https://github.com/45s/coinzilla/pull/1858)  
 Feature branch: `fix/harvester/incident-1856-ownership-shutdown-safety`

@@ -65,6 +65,7 @@ test("outer process-stop orchestration uses concise shutdown phase and milestone
     },
     stopRuntime: async ({ beforeSharedServicesStop }) => {
       await beforeSharedServicesStop()
+      return { ok: true, status: "STOPPED" }
     },
   })
 
@@ -171,6 +172,7 @@ test("outer process-stop callers continue sharing one in-flight stop promise", a
     stopRuntime: async ({ beforeSharedServicesStop }) => {
       runtimeStopCalls += 1
       await beforeSharedServicesStop()
+      return { ok: true, status: "STOPPED" }
     },
   })
 

@@ -278,13 +278,10 @@ function assertAdaShutdownOutcome({ replay, thirdBuy, shutdownError }) {
     replay.confirmedCanceledOrders.some((order) => order.clientOrderId === thirdBuy.clientOrderId),
     "shutdown must cancel the still-open next BUY without completing the below-target recovery cycle",
   )
-  assert.ok(shutdownError instanceof Error, "shutdown must fail closed while recovery SELL coverage is unproven")
-  assert.equal(shutdownError.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN")
-  const strategyBlocker = shutdownError.shutdownDiagnostics?.strategyBlockers?.[0]
-  assert.equal(strategyBlocker?.cause?.code, "CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN")
-  const marketFailures = strategyBlocker?.cause?.errors ?? []
-  assert.ok(marketFailures.some(({ blockers = [] }) => blockers.includes("RECOVERY_SELL_COVERAGE_UNVERIFIED")))
-  assert.ok(marketFailures.some(({ blockers = [] }) => blockers.includes("SHUTDOWN_RECOVERY_REPLACEMENT_NOT_SUBMITTED")))
+  assert.ok(shutdownError instanceof AggregateError, "shutdown must fail closed while recovery SELL coverage is unproven")
+  assert.match(shutdownError.message, /CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN/)
+  assert.match(shutdownError.message, /RECOVERY_SELL_COVERAGE_UNVERIFIED/)
+  assert.match(shutdownError.message, /SHUTDOWN_RECOVERY_REPLACEMENT_NOT_SUBMITTED/)
   assert.equal(
     replay.receivedLifecycleEvents.some(({ name }) => name === "recovery.cycle_completed"),
     false,

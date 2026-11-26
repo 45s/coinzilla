@@ -286,7 +286,7 @@ test("sends allowlisted Harvester lifecycle, pause, fill, and recovery notificat
         tradingEnabled: true,
         strategyMode: "conservative",
         subscriptions: ["DOGEUSDT"],
-        stop: async () => ({ ok: true }),
+        stop: async () => ({ ok: true, status: "STOPPED" }),
       };
     },
     registerSignalHandler: (...signalHandlerArguments) => {
@@ -336,7 +336,7 @@ test("keeps Harvester running when optional Telegram setup fails", async () => {
         tradingEnabled: true,
         strategyMode: "conservative",
         subscriptions: [],
-        stop: async () => ({ ok: true }),
+        stop: async () => ({ ok: true, status: "STOPPED" }),
       }
     },
     registerSignalHandler: (...signalHandlerArguments) => {
@@ -401,7 +401,7 @@ test("Telegram delivery failure is logged but does not fail runtime shutdown", a
         tradingEnabled: true,
         strategyMode: "conservative",
         subscriptions: [],
-        stop: async () => ({ ok: true }),
+        stop: async () => ({ ok: true, status: "STOPPED" }),
       }),
       registerSignalHandler: (...signalHandlerArguments) => {
         const [signal, handler] = signalHandlerArguments;
@@ -459,7 +459,7 @@ test("applies custom Telegram event overrides and market filters while preservin
         tradingEnabled: true,
         strategyMode: "conservative",
         subscriptions: ["LINKUSDT","ETHUSDT"],
-        stop: async () => ({ ok: true }),
+        stop: async () => ({ ok: true, status: "STOPPED" }),
       };
     },
     registerSignalHandler: (...signalHandlerArguments) => {
@@ -568,7 +568,7 @@ TELEGRAM_CHAT_ID: "test-chat" },
         tradingEnabled: true,
         strategyMode: "conservative",
         subscriptions: ["LINKUSDT"],
-        stop: async () => ({ ok: true }),
+        stop: async () => ({ ok: true, status: "STOPPED" }),
       };
     },
     registerSignalHandler: (...signalHandlerArguments) => {
@@ -610,7 +610,7 @@ TELEGRAM_CHAT_ID: "test-chat" },
         tradingEnabled: true,
         strategyMode: "conservative",
         subscriptions: ["LINKUSDT"],
-        stop: async () => ({ ok: true }),
+        stop: async () => ({ ok: true, status: "STOPPED" }),
       };
     },
     registerSignalHandler: (...signalHandlerArguments) => {
@@ -696,7 +696,7 @@ async function runTelegramProfileScenario({ scenario }) {
         tradingEnabled: true,
         strategyMode: "conservative",
         subscriptions: ["LINKUSDT"],
-        stop: async () => ({ ok: true }),
+        stop: async () => ({ ok: true, status: "STOPPED" }),
       }
     },
     registerSignalHandler: (...args) => {
