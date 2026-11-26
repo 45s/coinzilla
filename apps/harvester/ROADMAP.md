@@ -1,5 +1,23 @@
 # Harvester Roadmap
 
+## Relational trading-history startup failure — issue #1854
+
+In progress in [PR #1855](https://github.com/45s/coinzilla/pull/1855), branch
+`fix/harvester/1854-trading-history-persistence-startup`.
+
+A deterministic offline regression now reproduces a relational v5 migration failure when
+two legacy records have distinct client IDs but the same market-scoped exchange order ID.
+The test asserts that the legacy fallback remains available and that the relational migration
+failure is preserved for diagnostics. The existing implementation currently omits the original
+error object/message from the fallback log, so this test-first checkpoint is expected to be RED.
+
+This synthetic collision proves one failure class and a diagnostic gap; it does **not** establish
+that the operator's 2026-11-26 database contains duplicate identities. No production code or
+runtime behavior is changed in this test-only increment. The next increment adds cause-preserving
+diagnostics and the correct Harvester DOGEUSDT history API commands. Preserve fail-closed migration
+behavior and do not repair or rewrite ambiguous persisted order/fill rows.
+
+
 ## Binance historical order identity collisions — issue #1851
 
 In review in [PR #1849](https://github.com/45s/coinzilla/pull/1849). The 2026-11-25 TESTNET startup history scan failed independently for ZROUSDT and DOGEUSDT with immutable-price conflicts while records shared client IDs but carried exchange order IDs 661748 and 1193792. Source inspection confirmed the canonical identity and relational uniqueness constraint were clientOrderId-based. Binance permits clientOrderId reuse after the previous order is FILLED; pending identities remain market-scoped because the REST documentation does not specify cross-symbol client-ID uniqueness. The corrected model keys exchange-identified orders by provider/account/environment/market/exchangeOrderId and links fills by that same identity. Migration v5 preserves old row IDs and foreign-key links, verifies a pre-migration backup, and fails closed on duplicate exchange identities. Same-order immutable price conflicts remain fatal and any failed history page keeps coverage incomplete. The sanitized report is [2026-11-25 ZRO/DOGE order-history identity investigation](./docs/audits/reports/2026-11-25_binance-order-history-identity-conflicts.md). The exact old SQLite row broker IDs/prices were not present in recovered logs or Library files; regression prices are synthetic, so the per-symbol original row pairing remains explicitly unproven.
