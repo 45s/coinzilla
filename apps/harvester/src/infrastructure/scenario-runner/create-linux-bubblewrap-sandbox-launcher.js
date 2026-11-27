@@ -102,6 +102,7 @@ function verifySandboxTools({ bwrap, prlimit, execFileSync }) {
   const prlimitVersion = execFileSync(prlimit.path, ["--version"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
+    timeout: 5_000,
   })
   if (typeof bwrapVersion !== "string" || !bwrapVersion.toLowerCase().includes("bubblewrap") ||
       typeof prlimitVersion !== "string" || !prlimitVersion.trim()) {
@@ -116,8 +117,11 @@ function verifySandboxCapabilities({ bwrap, prlimit, execFileSync }) {
     "--",
     bwrap.path,
     "--die-with-parent",
+    "--new-session",
     "--unshare-user",
     "--unshare-pid",
+    "--unshare-ipc",
+    "--unshare-uts",
     "--unshare-net",
     "--ro-bind", "/usr", "/usr",
     "--ro-bind", "/lib", "/lib",
@@ -288,7 +292,17 @@ function writeSeccompFilter({ child, filter }) {
   filterPipe.end(filter)
 }
 
-function createLinuxLauncher({ bwrap, prlimit, repositoryRoot, nodeExecutable, spawn, existsSync, realpathSync, maxOutputBytes }) {
+function createLinuxLauncher({
+  bwrap,
+  prlimit,
+  repositoryRoot,
+  nodeExecutable,
+  nodeRuntimeSha256,
+  spawn,
+  existsSync,
+  realpathSync,
+  maxOutputBytes,
+}) {
   const launcher = ({ workerPath, stdio, sandboxProfile }) => {
     assertIsolationProfile({ profile: sandboxProfile, maxOutputBytes })
     const args = [
@@ -317,6 +331,7 @@ function createLinuxLauncher({ bwrap, prlimit, repositoryRoot, nodeExecutable, s
     maxOutputBytes,
     bwrapSha256: bwrap.sha256,
     prlimitSha256: prlimit.sha256,
+    nodeRuntimeSha256,
   })
   return launcher
 }
@@ -367,11 +382,16 @@ export function createLinuxBubblewrapSandboxLauncher({
   if (!resolvedNodeExecutable.startsWith("/usr/")) {
     throw new Error("The scenario sandbox requires a trusted Node runtime below /usr")
   }
+  const nodeRuntime = verify({ path: resolvedNodeExecutable })
+  if (nodeRuntime.path !== resolvedNodeExecutable || !/^[a-f0-9]{64}$/i.test(nodeRuntime.sha256)) {
+    throw new Error("The scenario Node runtime failed trusted executable verification")
+  }
   return createLinuxLauncher({
     bwrap,
     prlimit,
     repositoryRoot: resolvedRepositoryRoot,
     nodeExecutable: resolvedNodeExecutable,
+    nodeRuntimeSha256: nodeRuntime.sha256,
     spawn,
     existsSync,
     realpathSync,

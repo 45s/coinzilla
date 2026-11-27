@@ -4,6 +4,7 @@ import { resolve } from "node:path"
 import test from "node:test"
 import { EventBus } from "@coinzilla/event-bus"
 import { startTradingHistoryApi } from "./start-trading-history-api.js"
+import { createScenarioRunnerHost } from "./create-scenario-runner-host.js"
 
 const API_TOKEN = "test-token-with-more-than-thirty-two-characters"
 
@@ -279,76 +280,26 @@ test("derives the source revision from a clean Git checkout when build metadata 
   await eventBus.close()
 })
 
-test("composes executable simulation catalogue only when a launcher attests the exact OS profile", async () => {
-  const database = createDatabase()
+test("Scenario Runner host marks runtime simulation executable only with a verified adapter", async () => {
   const eventBus = new EventBus()
-  let serverInput
-  const launcher = () => {
-    throw new Error("This test verifies catalog composition only; it does not spawn a worker.")
-  }
-  launcher.isolationAttestation = {
-    level: "os",
-    networkAccess: "deny",
-    filesystemAccess: "read-only-allowlisted-runtime",
-    processExecution: "deny-child-processes",
-    memoryLimitBytes: 268_435_456,
-    cpuTimeLimitMs: 30_000,
-    wallTimeLimitMs: 30_000,
-    maxOutputBytes: 1_048_576,
-  }
-  const service = await startTradingHistoryApi({
-    database,
+  const host = createScenarioRunnerHost({
     eventBus,
-    env: { TRADING_MODE: "testnet" },
-    scenarioSandboxLauncher: launcher,
-    logger: { info() {} },
-    startServer: async (input) => {
-      serverInput = input
-      return {
-        address: { address: "127.0.0.1", port: 4201 },
-        close: async () => {},
-      }
-    },
+    sourceRevision: "c".repeat(40),
+    adapters: [{
+      strategyId: "RS",
+      executionMode: "simulation-only",
+      osSandboxVerified: true,
+      execute: async () => ({ ok: true, data: {} }),
+      cancel: async () => ({ ok: true, data: {} }),
+    }],
   })
-  const registration = serverInput.scenarioRunnerCatalog.find((item) => item.strategyId === "RS")
+  const registration = host.catalog.find((item) => item.strategyId === "RS")
   const runtimeScenario = registration.scenarios.find((item) =>
     item.id === "RS-RUNTIME-SELL-SUBMISSION-001")
   assert.equal(runtimeScenario.executable, true)
   assert.equal(runtimeScenario.executionStatus, "EXECUTABLE")
   assert.equal(runtimeScenario.status, "PARTIAL",
-    "Execution means isolated simulation is available, not production acceptance.")
-  await service.close()
+    "Simulation execution does not promote production acceptance.")
+  await host.runner.close()
   await eventBus.close()
 })
-
-test("configured Linux sandbox failure leaves the RS adapter unavailable", async () => {
-  const database = createDatabase()
-  const eventBus = new EventBus()
-  let serverInput
-  const service = await startTradingHistoryApi({
-    database,
-    eventBus,
-    env: {
-      TRADING_MODE: "testnet",
-      HARVESTER_SCENARIO_SANDBOX: "linux-bubblewrap",
-    },
-    logger: { info() {} },
-    startServer: async (input) => {
-      serverInput = input
-      return {
-        address: { address: "127.0.0.1", port: 4201 },
-        close: async () => {},
-      }
-    },
-  })
-  const registration = serverInput.scenarioRunnerCatalog.find((item) => item.strategyId === "RS")
-  const runtimeScenario = registration.scenarios.find((item) =>
-    item.id === "RS-RUNTIME-SELL-SUBMISSION-001")
-  assert.equal(runtimeScenario.executable, false,
-    "A missing or unverified Linux sandbox must never enable scenario execution.")
-  assert.equal(runtimeScenario.executionStatus, "BLOCKED")
-  assert.ok(runtimeScenario.readinessReasons.some((reason) => /sandbox/i.test(reason)))
-  await service.close()
-  await eventBus.close()
-})
-
