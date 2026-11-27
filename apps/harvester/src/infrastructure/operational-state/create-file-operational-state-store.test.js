@@ -418,7 +418,13 @@ test("fails closed after the fact stream is synced but before its manifest check
     "A fact written without a committed manifest checkpoint must remain an uncertain commit.",
   )
   assert.notEqual(uncertainAppend.data?.durable, true, "The uncertain append must never claim durable success.")
-  assert.equal((await originalStore.append(operatorPause())).ok, false, "The original store instance must remain fenced.")
+  const repeatedAppend = await originalStore.append(operatorPause())
+  assert.equal(repeatedAppend.ok, false, "The original store instance must remain fenced.")
+  assert.equal(
+    repeatedAppend.errors[0].code,
+    "DURABLE_FACTS_COMMIT_UNCERTAIN",
+    "A genuinely uncertain append must retain its commit-uncertain classification when fenced.",
+  )
 
   const persistedFacts = await readLines(factPath)
   const persistedManifest = await readManifestRecords(directory)
@@ -456,20 +462,45 @@ test("classifies ledger integrity failures separately from uncertain append ackn
   const manifestLines = await readLines(manifestPath)
   await writeFile(manifestPath, `${manifestLines[0]}\\n`)
 
-  const verification = await createStore(directory).verify()
+  const verificationStore = createStore(directory)
+  const verification = await verificationStore.verify()
   assert.equal(verification.ok, false, "Verification must reject a fact stream that is ahead of its manifest.")
   assert.equal(
     verification.errors[0].code,
     "DURABLE_FACTS_INTEGRITY_FAILED",
     "A fresh verifier must report ledger inconsistency, not misclassify it as this process's uncertain append.",
   )
+  const fencedAppend = await verificationStore.append(operatorPause())
+  assert.equal(fencedAppend.ok, false, "A store that failed integrity verification must remain write-fenced.")
+  assert.equal(
+    fencedAppend.errors[0].code,
+    "DURABLE_FACTS_INTEGRITY_FAILED",
+    "The write fence must preserve the integrity failure instead of reporting an uncertain append.",
+  )
 
-  const history = await createStore(directory).readAll()
+  const historyStore = createStore(directory)
+  const history = await historyStore.readAll()
   assert.equal(history.ok, false, "History reads must reject the same uncommitted fact.")
   assert.equal(
     history.errors[0].code,
     "DURABLE_FACTS_INTEGRITY_FAILED",
     "A fresh history reader must preserve the integrity-failure classification.",
+  )
+  const fencedRead = await historyStore.readAll()
+  assert.equal(fencedRead.ok, false, "The same history reader must remain fenced after failed verification.")
+  assert.equal(
+    fencedRead.errors[0].code,
+    "DURABLE_FACTS_INTEGRITY_FAILED",
+    "The read fence must preserve the integrity failure on subsequent operations.",
+  )
+
+  const appendStore = createStore(directory)
+  const blockedAppend = await appendStore.append(operatorPause())
+  assert.equal(blockedAppend.ok, false, "Append preflight must reject an inconsistent ledger before writing.")
+  assert.equal(
+    blockedAppend.errors[0].code,
+    "DURABLE_FACTS_INTEGRITY_FAILED",
+    "Append preflight must not misclassify a detected integrity failure as an uncertain new commit.",
   )
 })
 
