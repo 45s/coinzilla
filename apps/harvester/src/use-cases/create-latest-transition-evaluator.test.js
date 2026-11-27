@@ -367,7 +367,7 @@ function configureDustCompletionFailureMarket({ dependencies, symbol, publishedE
       publishedEvents.push(event)
       return { ok: true }
     },
-    flush: async () => {
+    flushWrites: async () => {
       dependencies.state.recoveryDecisionFlushCount = (dependencies.state.recoveryDecisionFlushCount ?? 0) + 1
       return {
         ok: true,
