@@ -98,7 +98,10 @@ async function fillAdaBuy({
 }
 
 async function submitAdaFirstBuyAndWait({ replay, initialBuy }) {
-  const firstSellSubmission = waitForAdaOrder({ replay, side: "SELL" })
+  const firstSellSubmission = waitForAdaOrder({
+    replay,
+    side: "SELL",
+  })
   await fillAdaBuy({
     replay,
     order: initialBuy,
@@ -118,7 +121,11 @@ async function submitAdaFirstBuyAndWait({ replay, initialBuy }) {
 }
 
 async function submitAdaLateBuyFillAndWait({ replay, firstSell, initialBuy }) {
-  const replacementSellSubmission = waitForAdaOrder({ replay, side: "SELL", occurrence: 2 })
+  const replacementSellSubmission = waitForAdaOrder({
+    replay,
+    side: "SELL",
+    occurrence: 2,
+  })
   await fillAdaBuy({
     replay,
     order: initialBuy,
