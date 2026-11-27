@@ -22,6 +22,19 @@ function readMetadataCaptureTimestamp({ now } = {}) {
   return timestamp
 }
 
+function logReceivedMarketMetadata({ logger, symbol, pairConfig, metadata } = {}) {
+  logger?.trace?.({
+    message: "Exchange market metadata received",
+    component: "market-metadata-bootstrap",
+    operation: "validate-market-trading-readiness",
+    symbol,
+    enabled: pairConfig.enabled === true,
+    supportedOrderTypes: metadata.supportedOrderTypes,
+    unvalidatedConstraintCount: metadata.unvalidatedConstraints?.length,
+    unvalidatedConstraints: metadata.unvalidatedConstraints,
+  })
+}
+
 async function loadConfiguredMarketMetadata({
   broker,
   symbol,
@@ -50,15 +63,11 @@ async function loadConfiguredMarketMetadata({
     metadataVersion,
   })
   const { market } = receivedMetadata
-  logger?.trace?.({
-    message: "Exchange market metadata received",
-    component: "market-metadata-bootstrap",
-    operation: "validate-market-trading-readiness",
+  logReceivedMarketMetadata({
+    logger,
     symbol,
-    enabled: pairConfig.enabled === true,
-    supportedOrderTypes: receivedMetadata.supportedOrderTypes,
-    unvalidatedConstraintCount: receivedMetadata.unvalidatedConstraints?.length,
-    unvalidatedConstraints: receivedMetadata.unvalidatedConstraints,
+    pairConfig,
+    metadata: receivedMetadata,
   })
   if (
     !market ||

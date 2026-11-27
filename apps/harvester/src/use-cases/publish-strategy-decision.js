@@ -20,7 +20,21 @@ function findRecoverySellAction({ context, allocation } = {}) {
     effectiveActions.find((action) => action.side === "SELL")
 }
 
-function resolveRecoveryResidualQuantity({ inventoryDisposition, position, activeQuantity, keepQuantity, sellAction } = {}) {
+function resolveRecoveryPosition({ balances, context, symbol } = {}) {
+  return balances?.position ?? context.portfolioBefore?.getPosition?.({ symbol })
+}
+
+function resolveRecoveryActiveQuantity({ position } = {}) {
+  return position?.baseQuantity?.amount ?? "0"
+}
+
+function resolveRecoveryResidualQuantity({
+  inventoryDisposition,
+  position,
+  activeQuantity,
+  keepQuantity,
+  sellAction,
+} = {}) {
   if (inventoryDisposition?.quantity !== undefined) {
     return inventoryDisposition.quantity
   }
@@ -31,6 +45,54 @@ function resolveRecoveryResidualQuantity({ inventoryDisposition, position, activ
     })
   }
   return sellAction?.quantity ?? "0"
+}
+
+function resolveRecoveryEvidenceStatus({ inventoryDisposition } = {}) {
+  return inventoryDisposition?.status ?? "SELL_THROUGH_PLANNED"
+}
+
+function resolveRecoveryEvidenceReason({ inventoryDisposition, sellAction, decision } = {}) {
+  if (inventoryDisposition?.reason !== undefined) {
+    return inventoryDisposition.reason
+  }
+  if (sellAction?.reason !== undefined) {
+    return sellAction.reason
+  }
+  if (typeof decision.reason === "string" && decision.reason.trim()) {
+    return decision.reason
+  }
+  return "RECOVERY_SELL_THROUGH"
+}
+
+function resolveRecoveryEvaluatedPrice({ inventoryDisposition, sellAction, marketPrice } = {}) {
+  if (inventoryDisposition?.evaluatedPrice !== undefined) {
+    return inventoryDisposition.evaluatedPrice
+  }
+  if (sellAction?.price !== undefined) {
+    return sellAction.price
+  }
+  return marketPrice.price
+}
+
+function resolveRecoveryCandidateQuantity({ inventoryDisposition, sellAction } = {}) {
+  if (inventoryDisposition?.evaluatedQuantity !== undefined) {
+    return inventoryDisposition.evaluatedQuantity
+  }
+  return sellAction?.quantity ?? "0"
+}
+
+function resolveRecoverySellableQuantity({ sellAction } = {}) {
+  return sellAction?.quantity ?? "0"
+}
+
+function resolveRecoveryCandidateNotional({ inventoryDisposition, evaluatedPrice, candidateQuantity } = {}) {
+  if (inventoryDisposition?.evaluatedNotional !== undefined) {
+    return inventoryDisposition.evaluatedNotional
+  }
+  return multiplyDecimal({
+    left: evaluatedPrice,
+    right: candidateQuantity,
+  })
 }
 
 function createRecoveryFilterSnapshot({ metadata, marketPrice } = {}) {
@@ -71,16 +133,20 @@ function createRecoveryDecisionEvidence({
   allocation,
 } = {}) {
   const { decision, symbol, marketPrice, metadata } = context
+  const { inventoryDisposition } = decision
   const sellAction = findRecoverySellAction({
     context,
     allocation,
   })
-  const inventoryDisposition = decision.inventoryDisposition
   if (inventoryDisposition === undefined && sellAction === undefined) {
     return undefined
   }
-  const position = balances?.position ?? context.portfolioBefore?.getPosition?.({ symbol })
-  const activeQuantity = position?.baseQuantity?.amount ?? "0"
+  const position = resolveRecoveryPosition({
+    balances,
+    context,
+    symbol,
+  })
+  const activeQuantity = resolveRecoveryActiveQuantity({ position })
   const keepQuantity = String(dependencies.pairs[symbol].keepQuantity)
   const residualQuantity = resolveRecoveryResidualQuantity({
     inventoryDisposition,
@@ -89,17 +155,28 @@ function createRecoveryDecisionEvidence({
     keepQuantity,
     sellAction,
   })
-  const evaluatedPrice = inventoryDisposition?.evaluatedPrice ?? sellAction?.price ?? marketPrice.price
-  const candidateQuantity = inventoryDisposition?.evaluatedQuantity ?? sellAction?.quantity ?? "0"
-  const sellableQuantity = sellAction?.quantity ?? "0"
-  const candidateNotional = inventoryDisposition?.evaluatedNotional ??
-    multiplyDecimal({
-      left: evaluatedPrice,
-      right: candidateQuantity,
-    })
+  const evaluatedPrice = resolveRecoveryEvaluatedPrice({
+    inventoryDisposition,
+    sellAction,
+    marketPrice,
+  })
+  const candidateQuantity = resolveRecoveryCandidateQuantity({
+    inventoryDisposition,
+    sellAction,
+  })
+  const sellableQuantity = resolveRecoverySellableQuantity({ sellAction })
+  const candidateNotional = resolveRecoveryCandidateNotional({
+    inventoryDisposition,
+    evaluatedPrice,
+    candidateQuantity,
+  })
   return {
-    status: inventoryDisposition?.status ?? "SELL_THROUGH_PLANNED",
-    reason: inventoryDisposition?.reason ?? sellAction?.reason ?? decision.reason ?? "RECOVERY_SELL_THROUGH",
+    status: resolveRecoveryEvidenceStatus({ inventoryDisposition }),
+    reason: resolveRecoveryEvidenceReason({
+      inventoryDisposition,
+      sellAction,
+      decision,
+    }),
     activeQuantity,
     keepQuantity,
     residualQuantity,

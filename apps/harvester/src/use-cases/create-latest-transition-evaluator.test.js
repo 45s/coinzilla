@@ -280,13 +280,13 @@ test("stops Conservative evaluation when recovery filter refresh fails", async (
 })
 
 
-test("forwards the original dust-completion failure and publishes exact filter evidence before pausing", async () => {
-  const dependencies = createDependencies()
-  const symbol = "DOGEUSDT"
-  const failure = new Error("recovery completion fact append failed")
-  failure.code = "RECOVERY_COMPLETION_WRITE_FAILED"
-  const pauses = []
-  const publishedEvents = []
+function configureDustCompletionFailureEvidence({
+  dependencies,
+  symbol,
+  failure,
+  pauses,
+  publishedEvents,
+} = {}) {
   dependencies.state.completedRecoverySellSymbols = new Set([symbol])
   dependencies.state.completedRecoverySellOrdersBySymbol = new Map([
     [symbol, {
@@ -316,17 +316,32 @@ test("forwards the original dust-completion failure and publishes exact filter e
         {
           type: "MIN_QUANTITY",
           status: "SUPPORTED",
-          value: { amount: "1", asset: { code: "DOGE" } },
+          value: {
+            amount: "1",
+            asset: {
+              code: "DOGE",
+            },
+          },
         },
         {
           type: "QUANTITY_INCREMENT",
           status: "SUPPORTED",
-          value: { amount: "1", asset: { code: "DOGE" } },
+          value: {
+            amount: "1",
+            asset: {
+              code: "DOGE",
+            },
+          },
         },
         {
           type: "MIN_NOTIONAL",
           status: "SUPPORTED",
-          value: { amount: "5", asset: { code: "USDT" } },
+          value: {
+            amount: "5",
+            asset: {
+              code: "USDT",
+            },
+          },
         },
       ],
     },
@@ -364,6 +379,22 @@ test("forwards the original dust-completion failure and publishes exact filter e
       evaluatedNotional: "0.05719",
       evaluatedPrice: "0.05719",
     },
+  })
+}
+
+test("forwards the original dust-completion failure and publishes exact filter evidence before pausing", async () => {
+  const dependencies = createDependencies()
+  const symbol = "DOGEUSDT"
+  const failure = new Error("recovery completion fact append failed")
+  failure.code = "RECOVERY_COMPLETION_WRITE_FAILED"
+  const pauses = []
+  const publishedEvents = []
+  configureDustCompletionFailureEvidence({
+    dependencies,
+    symbol,
+    failure,
+    pauses,
+    publishedEvents,
   })
   const evaluate = createLatestTransitionEvaluator(dependencies)
 

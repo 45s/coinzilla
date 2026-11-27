@@ -544,12 +544,15 @@ const mapStrategyDecisionInputs = (inputs) => {
   }
 }
 
-/** Map an actionable strategy decision; NO_ACTION evaluations are not journal events. */
+/** Map a strategy decision; no-action recovery decisions require explicit evidence. */
 function mapOptionalRecoveryDecimal({ value, field } = {}) {
   if (value === undefined) {
     return undefined
   }
-  return requireDecimalString({ value, field })
+  return requireDecimalString({
+    value,
+    field,
+  })
 }
 
 function mapRecoveryInventoryDisposition({ value } = {}) {
@@ -2150,7 +2153,10 @@ function mapOptionalEvidenceVersion({ value, field } = {}) {
     return null
   }
   if (typeof value === "string") {
-    return requireString({ value, field })
+    return requireString({
+      value,
+      field,
+    })
   }
   if (Number.isSafeInteger(value) && value >= 0) {
     return value
