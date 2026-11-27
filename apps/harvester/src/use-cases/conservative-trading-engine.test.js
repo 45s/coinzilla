@@ -6528,6 +6528,18 @@ async function fillInitialRecoveryOnlyBuy({ harness, observedReferences }) {
     },
   })
   assert.equal(fillResult.ok, true, fillResult.errors?.[0]?.message)
+  const portfolioUpdate = harness.getCurrentPortfolio().applyFill({
+    strategyId: StrategyId.COIN_GRABBER,
+    fill,
+  })
+  const ledgerUpdate = harness.getCurrentRecoveryLedger().applyFill({
+    strategyId: StrategyId.COIN_GRABBER,
+    fill,
+  })
+  assert.equal(portfolioUpdate.applied, true, "The test's external accounting workflow must apply the BUY fill to the canonical Portfolio before recovery evaluation.")
+  assert.equal(ledgerUpdate.applied, true, "The test's external accounting workflow must apply the same BUY fill to the RecoveryLedger before recovery evaluation.")
+  harness.setCurrentPortfolio(portfolioUpdate.portfolio)
+  harness.setCurrentRecoveryLedger(ledgerUpdate.ledger)
   await harness.engine.evaluateLatest({
     symbol: "DOGEUSDT",
   })
@@ -6553,6 +6565,7 @@ test("a fully filled BUY keeps subsequent evaluations in recovery-only mode whil
   const observedReferences = []
   const harness = await createHarness({
     strategyPolicy: createRecoveryOnlyStrategyPolicy(observedReferences),
+    baseFreeBalance: "1.1",
     accountingApplied: true,
   })
   await fillInitialRecoveryOnlyBuy({
