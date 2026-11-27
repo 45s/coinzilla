@@ -1,16 +1,15 @@
 # Brokers package roadmap
 
 **Owner:** `@coinzilla/brokers`
-**Last reviewed:** 2026-11-26
+**Last reviewed:** 2026-11-27
 
 > Detailed delivery history and implementation evidence from the previous roadmap are preserved in [Brokers roadmap history](../../docs/archive/roadmap-history-2026-11-26.md#brokers-roadmap). This page is the active priority index only.
 
 ## Active priorities
 
-1. **Release CodeQL disposition — [#1857](https://github.com/45s/coinzilla/issues/1857), [PR #1859](https://github.com/45s/coinzilla/pull/1859), follow-up [PR #1914](https://github.com/45s/coinzilla/pull/1914).** The Futures rate-limiter fingerprint now uses a process-local HMAC key to prevent offline correlation/guessing while preserving same-key sharing; fresh exact-head CodeQL verification is pending. Bitunix REST/WebSocket signature hashing remains protocol-mandated and is not password storage. Keep release PR [#1662](https://github.com/45s/coinzilla/pull/1662) blocked until the exact active alert instances are verified and appropriately dispositioned. Do not suppress/disable the stock query or use a false sanitizer.
-2. **Common exchange-neutral Broker API — [#1446](https://github.com/45s/coinzilla/issues/1446).** Maintain the capability/contract boundary; provider-specific unsupported operations must remain explicit.
-3. **Bitunix Futures production exclusion.** Provider implementation merged in [PR #1806](https://github.com/45s/coinzilla/pull/1806); implementation issue [#1805](https://github.com/45s/coinzilla/issues/1805) is closed and is historical delivery evidence, not an active task. Keep Futures excluded from Harvester routing until authoritative recovery, private-channel acceptance, complete account-wide fill/fee semantics, and distributed pacing are verified. Track cross-provider routing/readiness through open [#1339](https://github.com/45s/coinzilla/issues/1339); do not infer production readiness from the merged provider.
-4. **Bitunix Spot LIVE probe matrix — [#1690](https://github.com/45s/coinzilla/issues/1690).** Live mutation probes remain explicit operator-controlled, separately approved work; no unattended live trading tests.
+1. **Common exchange-neutral Broker API — [#1446](https://github.com/45s/coinzilla/issues/1446).** Maintain the capability/contract boundary; provider-specific unsupported operations must remain explicit.
+2. **Bitunix Futures production exclusion.** Provider implementation merged in [PR #1806](https://github.com/45s/coinzilla/pull/1806); implementation issue [#1805](https://github.com/45s/coinzilla/issues/1805) is closed and is historical delivery evidence, not an active task. Keep Futures excluded from Harvester routing until authoritative recovery, private-channel acceptance, complete account-wide fill/fee semantics, and distributed pacing are verified. Track cross-provider routing/readiness through open [#1339](https://github.com/45s/coinzilla/issues/1339); do not infer production readiness from the merged provider.
+3. **Bitunix Spot LIVE probe matrix — [#1690](https://github.com/45s/coinzilla/issues/1690).** Live mutation probes remain explicit operator-controlled, separately approved work; no unattended live trading tests.
 
 ## Canonical contracts and references
 
