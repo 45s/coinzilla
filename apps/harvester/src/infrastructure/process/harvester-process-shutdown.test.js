@@ -799,3 +799,39 @@ test("retains the process lock when release acknowledgement is ambiguous", async
     process.exitCode = previousExitCode
   }
 })
+test("accepts an explicit idempotent already-released process-lock result", async () => {
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  const handler = createRuntimeShutdownHandler({
+    runtime: {
+      stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+        data: { durableProcessStopAcknowledged: true },
+      }),
+    },
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+    },
+    eventBus: {
+      flush: async () => ({ ok: true }),
+    },
+    processLock: {
+      release: async () => ({
+        ok: true,
+        released: false,
+        alreadyReleased: true,
+      }),
+    },
+    closeObservability: async () => [],
+    closeLogger: async () => ({ ok: true }),
+    logTelegramNotificationSummary: () => {},
+  })
+
+  try {
+    await handler("SIGTERM")
+    assert.equal(process.exitCode, 0, "An explicit already-released acknowledgement must be accepted as a completed lock-release outcome.")
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
