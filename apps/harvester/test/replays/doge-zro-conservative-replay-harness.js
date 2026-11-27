@@ -850,11 +850,15 @@ async function publishDogeReplayOrderFill({
   const orderStatus = cumulativeExecutedQuantity === order.originalQuantity.amount
     ? "FILLED"
     : "PARTIALLY_FILLED";
+  const normalizedQuoteQuantity = quoteQuantity ?? multiplyDecimal({
+    left: price,
+    right: fillQuantity,
+  });
   const commission = createDogeReplayCommission({
     state,
     order,
     executedBaseQuantity: fillQuantity,
-    executedQuoteQuantity: quoteQuantity,
+    executedQuoteQuantity: normalizedQuoteQuantity,
     commissionAmount,
     commissionAsset,
   });
@@ -884,7 +888,7 @@ async function publishDogeReplayOrderFill({
       tradeId,
       fillQuantity,
       cumulativeExecutedQuantity,
-      quoteQuantity,
+      quoteQuantity: normalizedQuoteQuantity,
       commission,
       orderStatus,
       timestamp,
