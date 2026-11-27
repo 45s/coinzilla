@@ -576,7 +576,7 @@ test("accepts Dashboard WebSocket upgrades from a dynamically selected localhost
     "Upgrade: websocket", "Connection: Upgrade",
     "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
     "Sec-WebSocket-Version: 13", "Origin: http://localhost:4317", "", "",
-  ].join("\\r\\n"))
-  assert.match(await response, /^HTTP\\/1\\.1 101 Switching Protocols/,
+  ].join("\r\n"))
+  assert.match(await response, /^HTTP\/1\.1 101 Switching Protocols/,
     "A local Dashboard on a dynamically selected port must complete the Harvester WebSocket handshake.")
 })
