@@ -63,7 +63,7 @@ async function readLockOwner({ lockPath } = {}) {
     return owner
   } catch (error) {
     throw new Error(
-      `Cannot safely inspect Harvester process-lock metadata at ${lockPath}; refusing local operational-state mutation.`,
+      `A Harvester process lock exists at ${lockPath}, but its owner metadata cannot be safely inspected; refusing local operational-state mutation.`,
       { cause: error },
     )
   }
