@@ -129,12 +129,22 @@ function createHarnessEventPublisher({ eventPublisher } = {}) {
   if (!eventPublisher) {
     return undefined
   }
+  const flush = typeof eventPublisher.flush === "function"
+    ? eventPublisher.flush
+    : async () => ({
+      ok: true,
+      durable: true,
+    })
+  const flushWrites = typeof eventPublisher.flushWrites === "function"
+    ? eventPublisher.flushWrites
+    : async () => ({
+      ok: true,
+      durable: true,
+    })
   return {
     ...eventPublisher,
-    flush: typeof eventPublisher.flush === "function"
-      ? eventPublisher.flush
-      : async () => ({ ok: true,
-durable: true }),
+    flush,
+    flushWrites,
   }
 }
 
@@ -7443,7 +7453,7 @@ test("does not attach a client-ID lookup that changes immutable order intent", a
 
 
 
-function createRecoveredCanonicalOrder({ clientOrderId, brokerOrderId, side, status, executedQuantity = "0" }) {
+function createRecoveredCanonicalOrder({ clientOrderId, brokerOrderId, side, status, executedQuantity = "0", originalQuantity = "1" }) {
   return new CanonicalOrder({
     clientOrderId,
     brokerOrderId,
@@ -7455,7 +7465,7 @@ function createRecoveredCanonicalOrder({ clientOrderId, brokerOrderId, side, sta
       asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
-      amount: "1",
+      amount: originalQuantity,
       asset: baseAsset,
     }),
     executedQuantity: new Quantity({
@@ -7481,6 +7491,7 @@ function createRecoveredOrderFixtures() {
     brokerOrderId: "broker-recovered-sell",
     side: "SELL",
     status: "OPEN",
+    originalQuantity: "0.9",
   })
   const buyHistory = createRecoveredCanonicalOrder({
     clientOrderId: "recovered-buy",
@@ -7494,6 +7505,7 @@ function createRecoveredOrderFixtures() {
     brokerOrderId: "broker-recovered-sell",
     side: "SELL",
     status: "OPEN",
+    originalQuantity: "0.9",
   })
   const buyFill = new Fill({
     tradeId: "recovered-buy-trade",
@@ -7582,6 +7594,36 @@ test("reconciles recovered orders without canceling or replacing any exchange or
     harness,
     result,
   })
+
+  const reevaluation = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 2,
+    },
+  })
+  assert.equal(
+    reevaluation.ok,
+    true,
+    "A process restart must safely reevaluate after reconciling the outstanding recovery SELL.",
+  )
+  const activeRecoverySells = harness.engine.getActiveOrders().filter((order) => order.side === "SELL")
+  assert.equal(
+    activeRecoverySells.length,
+    1,
+    "Reconciliation must preserve exactly one outstanding recovery SELL and prevent a duplicate.",
+  )
+  assert.equal(
+    activeRecoverySells[0].clientOrderId,
+    "recovered-sell",
+    "The reconciled exchange order must remain the active recovery SELL.",
+  )
+  assert.deepEqual(
+    harness.orders,
+    [],
+    "A restart reevaluation must not submit a replacement while the reconciled recovery SELL remains OPEN.",
+  )
 })
 
 test("clears a recovered replacement intent only after canonical history confirms cancellation", async () => {
@@ -11196,6 +11238,121 @@ function assertExternalOrderLocalDeferral({ result, harness, flushCount, journal
   assert.equal(journalEvents.some((event) => event.name === "order.submission_failed"), false,
     "A local deferral must not be misclassified as a broker rejection or ambiguous outcome.")
 }
+
+function createRecoverySellDeferralStrategyPolicy() {
+  return {
+    evaluate: ({ marketPrice }) => ({
+      strategy: "CONSERVATIVE",
+      symbol: marketPrice.symbol,
+      action: "SUBMIT",
+      reason: "RECOVERY_SELL_THROUGH",
+      actions: [{
+        side: "SELL",
+        purpose: "RECOVERY_SELL",
+        strategyId: StrategyId.COIN_GRABBER,
+        positionId: "position:cg:dogeusdt",
+        type: "LIMIT_MAKER",
+        price: "100",
+        quantity: "1",
+        reason: "RECOVERY_SELL_THROUGH",
+      }],
+    }),
+    evaluateTrailingBuyRepricing: () => ({
+      shouldReplace: false,
+      adjustmentThreshold: "0",
+    }),
+  }
+}
+
+async function createRecoverySellDeferralHarness({ failDeferralFlush = false } = {}) {
+  let hasExternalOrder = false
+  let flushCount = 0
+  const journalEvents = []
+  const failure = new Error("Journal flush failed for recovery SELL deferral")
+  failure.code = "RECOVERY_SELL_DEFERRAL_EVIDENCE_NOT_DURABLE"
+  const harness = await createHarness({
+    appConfig: withExternalOrdersPolicy("block"),
+    hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
+    strategyPolicy: createRecoverySellDeferralStrategyPolicy(),
+    eventPublisher: {
+      publish: (event) => {
+        journalEvents.push(event)
+        return { ok: true }
+      },
+      flush: async () => {
+        flushCount += 1
+        if (flushCount === 1) {
+          hasExternalOrder = true
+        }
+        return {
+          ok: true,
+          durable: true,
+        }
+      },
+      flushWrites: async () => {
+        flushCount += 1
+        if (failDeferralFlush) {
+          return {
+            ok: false,
+            errors: [failure],
+          }
+        }
+        return {
+          ok: true,
+          durable: true,
+        }
+      },
+    },
+  })
+  return {
+    harness,
+    journalEvents,
+    failure,
+    getFlushCount: () => flushCount,
+  }
+}
+
+test("durably records a blocked recovery SELL with its purpose and registration state", async () => {
+  const scenario = await createRecoverySellDeferralHarness()
+  const result = await scenario.harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(scenario.getFlushCount(), 2)
+  assert.deepEqual(scenario.harness.orders, [])
+  assert.equal(scenario.harness.engine.getOrders().length, 0)
+  assert.deepEqual(scenario.harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
+  const deferred = scenario.journalEvents.find((event) => event.name === "order.submission_deferred")
+  assert.ok(deferred)
+  assert.equal(deferred.data.purpose, "RECOVERY_SELL")
+  assert.equal(deferred.data.registered, true)
+  assert.equal(deferred.data.reason, "UNOWNED_OPEN_ORDERS_PRESENT")
+})
+
+test("pauses a blocked recovery SELL when its deferral evidence cannot be durably flushed", async () => {
+  const scenario = await createRecoverySellDeferralHarness({ failDeferralFlush: true })
+  const result = await scenario.harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.errors[0], scenario.failure)
+  assert.equal(scenario.getFlushCount(), 2)
+  assert.deepEqual(scenario.harness.orders, [])
+  assert.equal(scenario.harness.engine.getOrders().length, 0)
+  assert.ok(scenario.harness.pauses.includes("RECOVERY_SELL_DEFERRAL_EVIDENCE_PERSISTENCE_FAILED"))
+})
 
 test("rechecks external-order ownership after the durable order intent and records a terminal local deferral", async () => {
   let hasExternalOrder = false

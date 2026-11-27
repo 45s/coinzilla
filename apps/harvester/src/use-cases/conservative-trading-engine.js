@@ -420,7 +420,7 @@ function readActiveStrategySafetyPauseBuyOrders({ state, symbol }) {
     }))
 }
 
-async function persistStrategySafetyPauseFact({ callback, symbol, reason }) {
+async function persistStrategySafetyPauseFact({ callback, symbol, reason, error }) {
   if (typeof callback !== "function") {
     return {
       persisted: null,
@@ -431,16 +431,17 @@ async function persistStrategySafetyPauseFact({ callback, symbol, reason }) {
     const result = await callback({
       symbol,
       reason,
+      ...(error === undefined ? {} : { error }),
     })
     const persisted = result?.ok === true && result.data?.durable === true
     return {
       persisted,
       errors: persisted ? [] : result?.errors ?? [new Error("Strategy safety pause fact was not durably committed")],
     }
-  } catch (error) {
+  } catch (pauseError) {
     return {
       persisted: false,
-      errors: [error],
+      errors: [pauseError],
     }
   }
 }
@@ -606,6 +607,7 @@ async function prepareStrategySafetyPause({
       callback: onOperationalStateStrategyMarketPaused,
       symbol,
       reason,
+      error,
     })
     pauseFactPersisted = fact.persisted
     failures.push(...fact.errors)
@@ -808,6 +810,7 @@ const CANCELLING_STRATEGY_PAUSE_REASONS = new Set([
   "ACCOUNT_INTEGRITY_FAILURE",
   "CANCELED_ORDER_NOT_REGISTERED",
   "RECONCILIATION_PENDING_ORDER_OUTCOME",
+  "RECOVERY_DECISION_EVIDENCE_PERSISTENCE_FAILED",
 ])
 
 function shouldCancelOwnedBuysForStrategyPause({ reason, error } = {}) {
@@ -1591,6 +1594,125 @@ function createAcknowledgedOrderLifecycleHandler({
   }
 }
 
+function getRecoverySellDeferralPublicationError({ publication } = {}) {
+  if (publication?.ok === true) {
+    return undefined
+  }
+  return publication?.errors?.[0] ?? new Error("Recovery SELL deferral evidence publication failed")
+}
+
+function getRecoverySellDeferralFlushError({ flushed } = {}) {
+  if (flushed?.ok === true && flushed?.durable === true) {
+    return undefined
+  }
+  return flushed?.errors?.[0] ?? new Error("Recovery SELL deferral evidence was not durably journaled")
+}
+
+async function persistRecoverySellDeferralEvidence({ eventPublisher, publication } = {}) {
+  const publicationError = getRecoverySellDeferralPublicationError({ publication })
+  if (publicationError) {
+    return publicationError
+  }
+  if (typeof eventPublisher?.flushWrites !== "function") {
+    return new TypeError("Recovery SELL deferral evidence requires a write-only durable Journal flush capability")
+  }
+  try {
+    return getRecoverySellDeferralFlushError({
+      flushed: await eventPublisher.flushWrites(),
+    })
+  } catch (error) {
+    return error
+  }
+}
+
+function publishDeferredOrderEvidence({ eventPublisher, order, purpose, registered, reason, recoverySell } = {}) {
+  try {
+    const publication = publishSubmissionDeferral({
+      eventPublisher,
+      order,
+      reason: reason ?? "SUBMISSION_NOT_ALLOWED",
+      ...(recoverySell
+        ? {
+          purpose,
+          registered,
+        }
+        : {}),
+    })
+    return { publication }
+  } catch (error) {
+    if (!recoverySell) {
+      throw error
+    }
+    return { publicationError: error }
+  }
+}
+
+function removeDeferredPendingOrder({ state, order, registered } = {}) {
+  if (!registered) {
+    return
+  }
+  const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
+  if (!removal.removed) {
+    throw new Error("Cannot remove a pending order deferred before broker submission")
+  }
+  state.registry = removal.registry
+}
+
+function createSubmissionDeferredHandler({ state, pause, eventPublisher } = {}) {
+  return async ({ order, registered, purpose, reason, errors, error } = {}) => {
+    const recoverySell = order.side === "SELL" && purpose === "RECOVERY_SELL"
+    const publicationResult = registered || recoverySell
+      ? publishDeferredOrderEvidence({
+        eventPublisher,
+        order,
+        purpose,
+        registered,
+        reason,
+        recoverySell,
+      })
+      : {}
+    removeDeferredPendingOrder({
+      state,
+      order,
+      registered,
+    })
+    state.deferredEvaluations.add(order.market.symbol)
+    const persistenceError = publicationResult.publicationError ??
+      (recoverySell
+        ? await persistRecoverySellDeferralEvidence({
+          eventPublisher,
+          publication: publicationResult.publication,
+        })
+        : undefined)
+    const intentError = reason === "ORDER_INTENT_NOT_DURABLE"
+      ? error ?? errors?.[0] ?? new Error("Durable order-submission intent was not committed")
+      : undefined
+    const pauseError = intentError ?? persistenceError
+    if (pauseError) {
+      await pause({
+        symbol: order.market.symbol,
+        reason: intentError
+          ? "ORDER_INTENT_NOT_DURABLE"
+          : "RECOVERY_SELL_DEFERRAL_EVIDENCE_PERSISTENCE_FAILED",
+        error: pauseError,
+      })
+    }
+    if (persistenceError) {
+      throw persistenceError
+    }
+  }
+}
+
+function createOrderValidationFailureHandler({ pause } = {}) {
+  return async ({ order, error }) => {
+    await pause({
+      symbol: order.market.symbol,
+      reason: "STRATEGY_ORDER_VALIDATION_FAILED",
+      error,
+    })
+  }
+}
+
 function createSubmissionLifecycleCallbacks({
   state,
   publishDurableIntent,
@@ -1600,28 +1722,11 @@ function createSubmissionLifecycleCallbacks({
   logger,
 } = {}) {
   return {
-    onSubmissionDeferred: async ({ order, registered, reason, errors, error } = {}) => {
-      if (registered) {
-        publishSubmissionDeferral({
-          eventPublisher,
-          order,
-          reason: reason ?? "SUBMISSION_NOT_ALLOWED",
-        })
-        const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
-        if (!removal.removed) {
-          throw new Error("Cannot remove a pending order deferred before broker submission")
-        }
-        state.registry = removal.registry
-        if (reason === "ORDER_INTENT_NOT_DURABLE") {
-          await pause({
-            symbol: order.market.symbol,
-            reason: "ORDER_INTENT_NOT_DURABLE",
-            error: error ?? errors?.[0] ?? new Error("Durable order-submission intent was not committed"),
-          })
-        }
-      }
-      state.deferredEvaluations.add(order.market.symbol)
-    },
+    onSubmissionDeferred: createSubmissionDeferredHandler({
+      state,
+      pause,
+      eventPublisher,
+    }),
     onPendingOrder: createPendingOrderLifecycleHandler({
       state,
       publishDurableIntent,
@@ -1634,13 +1739,7 @@ function createSubmissionLifecycleCallbacks({
       reconcileFilledAcknowledgement,
       logger,
     }),
-    onOrderValidationFailure: async ({ order, error }) => {
-      await pause({
-        symbol: order.market.symbol,
-        reason: "STRATEGY_ORDER_VALIDATION_FAILED",
-        error,
-      })
-    },
+    onOrderValidationFailure: createOrderValidationFailureHandler({ pause }),
   }
 }
 
@@ -5535,10 +5634,12 @@ async function reconcileOwnedOrdersTransition({ context, options }) {
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
 
 
-function publishSubmissionDeferral({ eventPublisher, order, reason } = {}) {
+function publishSubmissionDeferral({ eventPublisher, order, reason, purpose, registered } = {}) {
   const dataResult = mapOrderSubmissionDeferredData({
     order,
     reason,
+    purpose,
+    registered,
   })
   if (dataResult?.ok !== true) {
     publishLifecycleEvent({

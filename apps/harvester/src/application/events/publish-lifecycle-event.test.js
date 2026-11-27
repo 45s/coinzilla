@@ -59,3 +59,28 @@ test("contains a synchronous publisher exception", () => {
   assert.equal(result.ok, false)
   assert.equal(result.errors[0], error)
 })
+
+
+test("does not await an asynchronous publisher and reports its eventual rejection", async () => {
+  const failure = new Error("asynchronous EventBus delivery failed")
+  const reportedFailures = []
+  const eventPublisher = {
+    publish: () => Promise.reject(failure),
+    reportFailure: (reportedFailure) => reportedFailures.push(reportedFailure),
+  }
+
+  const result = publishLifecycleEvent({
+    eventPublisher,
+    eventName: "harvester.started",
+    dataResult: { ok: true,
+      data: {} },
+  })
+  assert.deepEqual(result, {
+    ok: true,
+    pending: true,
+  }, "An asynchronous publisher must remain best-effort and must not hold the caller.")
+  await Promise.resolve()
+  await Promise.resolve()
+  assert.equal(reportedFailures.length, 1, "An asynchronous publisher rejection must remain observable.")
+  assert.equal(reportedFailures[0].error, failure, "The diagnostic must retain the original asynchronous failure.")
+})

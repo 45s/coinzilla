@@ -415,6 +415,10 @@ async function startHarvesterWithExternalClosingSell({ calls, publishedEvents })
         ok: true,
         durable: true,
       }),
+      flushWrites: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
     logger: {
       info() {},
@@ -482,6 +486,10 @@ function createTwoMarketShutdownEventPublisher({ calls, publishedEvents } = {}) 
     failNextFlush() {
       failNextFlush = true
     },
+    flushWrites: async () => ({
+      ok: true,
+      durable: true,
+    }),
     flush: async () => {
       if (failNextFlush) {
         failNextFlush = false

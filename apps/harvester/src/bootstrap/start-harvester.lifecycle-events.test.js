@@ -6,17 +6,27 @@ import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { startHarvester } from "./start-harvester.js"
 const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
-  flush: async () => ({ ok: true,
-durable: true }),
+  flush: async () => ({
+    ok: true,
+    durable: true,
+  }),
+  flushWrites: async () => ({
+    ok: true,
+    durable: true,
+  }),
 })
 const startHarvesterForTest = (input = {}) => {
-  let eventPublisher = input.eventPublisher ?? testEventPublisher
-  if (input.eventPublisher && typeof input.eventPublisher.flush !== "function") {
-    eventPublisher = { ...input.eventPublisher,
-flush: testEventPublisher.flush }
-  }
-  return startHarvester({ ...input,
-eventPublisher })
+  const eventPublisher = input.eventPublisher
+    ? {
+      ...input.eventPublisher,
+      flush: input.eventPublisher.flush ?? testEventPublisher.flush,
+      flushWrites: input.eventPublisher.flushWrites ?? testEventPublisher.flushWrites,
+    }
+    : testEventPublisher
+  return startHarvester({
+    ...input,
+    eventPublisher,
+  })
 }
 
 

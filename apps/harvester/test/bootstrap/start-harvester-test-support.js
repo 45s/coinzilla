@@ -24,7 +24,11 @@ export const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
   flush: async () => ({
     ok: true,
-    durable: true
+    durable: true,
+  }),
+  flushWrites: async () => ({
+    ok: true,
+    durable: true,
   }),
 })
 
@@ -119,10 +123,13 @@ export const binanceEnv = {
 }
 
 export const startHarvesterForTest = (input = {}) => {
-  const eventPublisher = input.eventPublisher ?? testEventPublisher
-  if (eventPublisher !== testEventPublisher && typeof eventPublisher.flush !== "function") {
-    eventPublisher.flush = testEventPublisher.flush
-  }
+  const eventPublisher = input.eventPublisher
+    ? {
+      ...input.eventPublisher,
+      flush: input.eventPublisher.flush ?? testEventPublisher.flush,
+      flushWrites: input.eventPublisher.flushWrites ?? testEventPublisher.flushWrites,
+    }
+    : testEventPublisher
   return startHarvester({
     ...input,
     env: {

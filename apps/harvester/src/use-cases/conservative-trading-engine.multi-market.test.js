@@ -534,6 +534,10 @@ test("publishes verified ownership with the acknowledged order history event", a
         ok: true,
         durable: true,
       }),
+      flushWrites: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
   })
   await startBothMarkets({
@@ -558,6 +562,10 @@ test("publishes verified ownership with a broker-confirmed cancellation event", 
         return { ok: true }
       },
       flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+      flushWrites: async () => ({
         ok: true,
         durable: true,
       }),
@@ -594,6 +602,10 @@ test("publishes verified ownership with an unconfirmed cancellation failure", as
         return { ok: true }
       },
       flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+      flushWrites: async () => ({
         ok: true,
         durable: true,
       }),
@@ -1632,6 +1644,10 @@ test("per-market emergency BUY pause cancels only that market's owned BUY and le
         ok: true,
         durable: true,
       }),
+      flushWrites: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
   })
   await startBothMarkets({ engine })
@@ -1684,6 +1700,10 @@ test("global emergency BUY pause cancels all owned BUYs and suppresses new BUYs 
         ok: true,
         durable: true,
       }),
+      flushWrites: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
   })
   await startBothMarkets({ engine })
@@ -1713,6 +1733,10 @@ test("global and market BUY pauses remain independent when either scope is resum
     eventPublisher: {
       publish: () => ({ ok: true }),
       flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+      flushWrites: async () => ({
         ok: true,
         durable: true,
       }),
@@ -1757,6 +1781,10 @@ test("emergency BUY pause preserves recovery SELL submission while blocking the 
         ok: true,
         durable: true,
       }),
+      flushWrites: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
   })
 
@@ -1797,6 +1825,10 @@ test("global emergency BUY pause never cancels an unowned external order", async
     eventPublisher: {
       publish: () => ({ ok: true }),
       flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+      flushWrites: async () => ({
         ok: true,
         durable: true,
       }),
@@ -1862,6 +1894,10 @@ test("resuming the global BUY pause does not clear a market-specific BUY pause",
     eventPublisher: {
       publish: () => ({ ok: true }),
       flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+      flushWrites: async () => ({
         ok: true,
         durable: true,
       }),
@@ -2488,6 +2524,10 @@ async function createVolatilityCancellationHarness({ orderRegistry, externalOrde
     eventPublisher: {
       publish: () => ({ ok: true }),
       flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+      flushWrites: async () => ({
         ok: true,
         durable: true,
       }),

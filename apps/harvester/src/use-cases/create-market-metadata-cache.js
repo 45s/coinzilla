@@ -116,8 +116,14 @@ function storeRefreshedMarketMetadata({
       },
     })
   }
-  refreshedMarketMetadata.set(symbol, refreshed)
+  const metadataSnapshot = Object.freeze({
+    ...refreshed,
+    metadataCapturedAt: refreshedAtTimestamp,
+    metadataVersion: refreshed.metadataVersion ?? null,
+  })
+  refreshedMarketMetadata.set(symbol, metadataSnapshot)
   refreshedAtBySymbol.set(symbol, refreshedAtTimestamp)
+  return metadataSnapshot
 }
 
 function createRefreshMarketMetadata({
@@ -154,7 +160,7 @@ function createRefreshMarketMetadata({
         getSymbolFilters,
         validateMarketMetadata,
       })
-      storeRefreshedMarketMetadata({
+      const metadataSnapshot = storeRefreshedMarketMetadata({
         symbol,
         refreshed,
         currentTime,
@@ -162,7 +168,7 @@ function createRefreshMarketMetadata({
         refreshedAtBySymbol,
         now,
       })
-      return toResult({ data: refreshed })
+      return toResult({ data: metadataSnapshot })
     } catch (error) {
       return toResult({ error })
     }
