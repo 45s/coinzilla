@@ -117,20 +117,20 @@ function resolveScenarioRunnerSourceRevision({ env } = {}) {
 }
 
 function createScenarioRunnerAdapter({ env, platform }) {
-  if (env.HARVESTER_SCENARIO_SANDBOX !== "linux-bubblewrap") {
-    if (platform === "win32") {
-      try {
-        return createProcessScenarioAdapter({
-          strategyId: "RS",
-          spawnSandboxedWorker: createNodeGuardedSimulationLauncher(),
-        })
-      } catch {
-        return createUnavailableScenarioAdapter({
-          strategyId: "RS",
-          reason: "The Windows guarded-simulation worker could not be initialized; scenario execution remains blocked.",
-        })
-      }
+  if (platform === "win32") {
+    try {
+      return createProcessScenarioAdapter({
+        strategyId: "RS",
+        spawnSandboxedWorker: createNodeGuardedSimulationLauncher(),
+      })
+    } catch {
+      return createUnavailableScenarioAdapter({
+        strategyId: "RS",
+        reason: "The Windows guarded-simulation worker could not be initialized; scenario execution remains blocked.",
+      })
     }
+  }
+  if (env.HARVESTER_SCENARIO_SANDBOX !== "linux-bubblewrap") {
     return createUnavailableScenarioAdapter({
       strategyId: "RS",
       reason: "No local simulation worker is configured for this host platform; Linux OS hardening remains optional.",
