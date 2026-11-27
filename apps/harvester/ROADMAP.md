@@ -89,7 +89,6 @@ The cgroup setup leak and post-spawn cleanup-handle orphaning are fixed on `fix/
 
 [PR #1925](https://github.com/45s/coinzilla/pull/1925) rejects caller-supplied `replayProvenance.verified: true` even when the accompanying source, dependency, build, runtime and registry identity values are syntactically valid. Supplied identity remains diagnostic data only; exact replay stays blocked until a trusted build-artifact verifier is integrated into trusted runtime composition. The manual Linux E2E also asserts that the real per-run cgroup directory exists while the sandbox child is alive and is absent after the child exits. Hosted CI passing does not establish either trusted-runner execution or artifact attestation acceptance.
 
-
 ## Trusted Linux E2E workflow — 2026-11-27
 
 Added `.github/workflows/trusted-linux-scenario-sandbox-e2e.yml`. It targets only the dedicated `[self-hosted, linux, scenario-sandbox]` runner, validates the runner's delegated cgroup-v2 controllers, installs the locked workspace dependencies, and executes both real Linux isolation probes plus the production RS process-adapter simulation. It is intentionally not substituted with `ubuntu-latest`.
