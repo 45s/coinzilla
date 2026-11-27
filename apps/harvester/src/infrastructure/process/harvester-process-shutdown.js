@@ -310,6 +310,7 @@ async function runRuntimeStopStep({
     operation: () => stopRuntimeForShutdown({
       runtime,
       logger,
+      shutdownState,
     }),
     timeoutMs: runtimeStopTimeoutMs,
     isSuccess: (value) => value?.runtimeStopped === true,
