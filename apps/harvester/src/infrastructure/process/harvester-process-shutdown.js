@@ -328,6 +328,62 @@ async function runRuntimeStopStep({
   return result
 }
 
+function getStoppedEventPrerequisiteError({
+  publisherAvailable,
+  journalAvailable,
+  journalFlushAvailable,
+  durableProcessStopAcknowledged,
+}) {
+  if (durableProcessStopAcknowledged === true) {
+    return null
+  }
+  if (publisherAvailable && journalAvailable && journalFlushAvailable) {
+    return null
+  }
+  return new Error(
+    "A durable PROCESS_STOPPED fact or an enabled Journal-backed STOPPED acknowledgement is required before process cleanup",
+  )
+}
+
+function publishStoppedEvent({ eventPublisher, reason }) {
+  try {
+    return publishLifecycleEvent({
+      eventPublisher,
+      eventName: HARVESTER_EVENT_NAMES.STOPPED,
+      dataResult: mapHarvesterStoppedData({
+        reason,
+        outcome: "success",
+      }),
+    })
+  } catch (error) {
+    return { ok: false, errors: [error] }
+  }
+}
+
+function handleStoppedEventPublicationFailure({
+  publication,
+  durableProcessStopAcknowledged,
+  logger,
+}) {
+  if (publication?.ok === true) {
+    return null
+  }
+  const error = publication?.errors?.[0] ??
+    new Error("STOPPED lifecycle event publication was not confirmed")
+  if (durableProcessStopAcknowledged !== true) {
+    return error
+  }
+  try {
+    logger?.warn?.({
+      message: "Durable PROCESS_STOPPED was confirmed, but the non-durable STOPPED notification was rejected.",
+      errors: publication?.errors,
+    })
+  } catch {
+    // A diagnostic failure cannot invalidate the durable PROCESS_STOPPED acknowledgement.
+  }
+  return null
+}
+
 function publishStoppedLifecycleEvent({
   shutdownState,
   eventPublisher,
@@ -343,14 +399,14 @@ function publishStoppedLifecycleEvent({
   const publisherAvailable = typeof eventPublisher?.publish === "function"
   const journalAvailable = journalService?.status?.enabled === true
   const journalFlushAvailable = typeof eventBus?.flush === "function"
-  if (durableProcessStopAcknowledged !== true &&
-      (!publisherAvailable || !journalAvailable || !journalFlushAvailable)) {
-    return {
-      ok: false,
-      error: new Error(
-        "A durable PROCESS_STOPPED fact or an enabled Journal-backed STOPPED acknowledgement is required before process cleanup",
-      ),
-    }
+  const prerequisiteError = getStoppedEventPrerequisiteError({
+    publisherAvailable,
+    journalAvailable,
+    journalFlushAvailable,
+    durableProcessStopAcknowledged,
+  })
+  if (prerequisiteError) {
+    return { ok: false, error: prerequisiteError }
   }
   if (!publisherAvailable) {
     try {
@@ -363,33 +419,17 @@ function publishStoppedLifecycleEvent({
     shutdownState.set("stopped-event", { status: "completed" })
     return { ok: true }
   }
-  let publication
-  try {
-    publication = publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.STOPPED,
-      dataResult: mapHarvesterStoppedData({
-        reason,
-        outcome: "success",
-      }),
-    })
-  } catch (error) {
-    publication = { ok: false, errors: [error] }
-  }
-  if (publication?.ok !== true) {
-    const error = publication?.errors?.[0] ??
-      new Error("STOPPED lifecycle event publication was not confirmed")
-    if (durableProcessStopAcknowledged !== true) {
-      return { ok: false, error }
-    }
-    try {
-      logger?.warn?.({
-        message: "Durable PROCESS_STOPPED was confirmed, but the non-durable STOPPED notification was rejected.",
-        errors: publication?.errors,
-      })
-    } catch {
-      // A diagnostic failure cannot invalidate the durable PROCESS_STOPPED acknowledgement.
-    }
+  const publication = publishStoppedEvent({
+    eventPublisher,
+    reason,
+  })
+  const publicationError = handleStoppedEventPublicationFailure({
+    publication,
+    durableProcessStopAcknowledged,
+    logger,
+  })
+  if (publicationError) {
+    return { ok: false, error: publicationError }
   }
   shutdownState.set("stopped-event", { status: "completed" })
   return { ok: true }
@@ -553,85 +593,68 @@ async function runProcessLockReleaseStep({
   })
 }
 
-async function runPostStopCleanup({
-  shutdownState,
-  eventPublisher,
-  reason,
-  eventBus,
-  telegramNotifications,
-  journalService,
-  processLock,
-  logger,
-  closeLogger,
-  closeObservability,
-  logTelegramNotificationSummary,
-  cleanupTimeoutMs,
-  observabilityCleanupTimeoutMs,
-  setTimeoutFn,
-  clearTimeoutFn,
-}) {
-  publishStoppedLifecycleEvent({
-    shutdownState,
-    eventPublisher,
-    reason,
-    logger,
-  })
-  const stoppedEventResult = publishStoppedLifecycleEvent({
-    shutdownState,
-    eventPublisher,
-    journalService,
-    eventBus,
-    reason,
-    logger,
-    durableProcessStopAcknowledged:
-      shutdownState.get("durable-process-stop-acknowledgement")?.value === true,
-  })
-  if (stoppedEventResult.ok !== true) {
-    process.exitCode = 1
-    logShutdownFailure({
-      logger,
-      phase: "STOPPED_EVENT",
-      error: stoppedEventResult.error,
-    })
-    return false
-  }
+async function runPostStopResourcesCleanup(dependencies) {
   const deliveryComplete = await runDeliveryCleanupSteps({
-    shutdownState,
-    eventBus,
-    telegramNotifications,
-    logger,
-    logTelegramNotificationSummary,
-    cleanupTimeoutMs,
-    setTimeoutFn,
-    clearTimeoutFn,
+    shutdownState: dependencies.shutdownState,
+    eventBus: dependencies.eventBus,
+    telegramNotifications: dependencies.telegramNotifications,
+    logger: dependencies.logger,
+    logTelegramNotificationSummary: dependencies.logTelegramNotificationSummary,
+    cleanupTimeoutMs: dependencies.cleanupTimeoutMs,
+    setTimeoutFn: dependencies.setTimeoutFn,
+    clearTimeoutFn: dependencies.clearTimeoutFn,
   })
   if (!deliveryComplete) {
     return false
   }
   const observabilityComplete = await runObservabilityCleanupSteps({
-    shutdownState,
-    journalService,
-    eventBus,
-    processLock,
-    logger,
-    closeObservability,
-    closeLogger,
-    cleanupTimeoutMs,
-    observabilityCleanupTimeoutMs,
-    setTimeoutFn,
-    clearTimeoutFn,
+    shutdownState: dependencies.shutdownState,
+    journalService: dependencies.journalService,
+    eventBus: dependencies.eventBus,
+    processLock: dependencies.processLock,
+    logger: dependencies.logger,
+    closeObservability: dependencies.closeObservability,
+    closeLogger: dependencies.closeLogger,
+    cleanupTimeoutMs: dependencies.cleanupTimeoutMs,
+    observabilityCleanupTimeoutMs: dependencies.observabilityCleanupTimeoutMs,
+    setTimeoutFn: dependencies.setTimeoutFn,
+    clearTimeoutFn: dependencies.clearTimeoutFn,
   })
   if (!observabilityComplete) {
     return false
   }
   return runProcessLockReleaseStep({
-    shutdownState,
-    processLock,
-    cleanupTimeoutMs,
-    setTimeoutFn,
-    clearTimeoutFn,
+    shutdownState: dependencies.shutdownState,
+    processLock: dependencies.processLock,
+    cleanupTimeoutMs: dependencies.cleanupTimeoutMs,
+    setTimeoutFn: dependencies.setTimeoutFn,
+    clearTimeoutFn: dependencies.clearTimeoutFn,
   })
 }
+
+async function runPostStopCleanup(dependencies) {
+  const stoppedEventResult = publishStoppedLifecycleEvent({
+    shutdownState: dependencies.shutdownState,
+    eventPublisher: dependencies.eventPublisher,
+    reason: dependencies.reason,
+    journalService: dependencies.journalService,
+    eventBus: dependencies.eventBus,
+    logger: dependencies.logger,
+    durableProcessStopAcknowledged:
+      dependencies.shutdownState.get("durable-process-stop-acknowledgement")?.value === true,
+  })
+  if (stoppedEventResult.ok !== true) {
+    process.exitCode = 1
+    logShutdownFailure({
+      logger: dependencies.logger,
+      phase: "STOPPED_EVENT",
+      error: stoppedEventResult.error,
+    })
+    return false
+  }
+  return runPostStopResourcesCleanup(dependencies)
+}
+
 async function runRuntimeShutdown(dependencies = {}) {
   const {
     runtime,

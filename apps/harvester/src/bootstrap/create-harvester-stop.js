@@ -306,6 +306,7 @@ async function stopRuntimeAndRecordProcessStop({
     setTimeoutFn,
     clearTimeoutFn,
   })
+  return true
 }
 
 async function executeShutdown({

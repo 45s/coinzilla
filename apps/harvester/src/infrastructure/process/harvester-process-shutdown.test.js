@@ -32,11 +32,10 @@ function createShutdownChildSource({ lockModuleUrl, shutdownModuleUrl } = {}) {
     const handler = createRuntimeShutdownHandler({
       runtime: {
         stop: async () => ({
-        ok: true,
-        status: "STOPPED",
-       data: { durableProcessStopAcknowledged: true },
-        data: { durableProcessStopAcknowledged: true },
-      }),
+          ok: true,
+          status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
+        }),
       },
       logger: {
         error: (error) => {
@@ -222,7 +221,10 @@ function createDurabilityFailureChildSource({
 
     const stop = createHarvesterStop({
       userDataState: { shutdownRequested: false, ready: true, status: "READY" },
-      logger: { system: () => {}, error: () => {} },
+      logger: {
+      system: () => {},
+      error: () => {},
+    },
       runtimeSessionId: "durability-failure-session",
       operatorControlLifecycle: { stop: async () => {} },
       stopRuntime: async ({ beforeSharedServicesStop }) => {
@@ -302,11 +304,12 @@ test("requires a Journal-backed STOPPED event when PROCESS_STOPPED was not durab
         stop: async () => ({
           ok: true,
           status: "STOPPED",
-         data: { durableProcessStopAcknowledged: true },
-          data: { durableProcessStopAcknowledged: false },
+         data: { durableProcessStopAcknowledged: false },
         }),
       },
-      logger: { error: () => calls.push("log-error") },
+      logger: {
+        error: () => calls.push("log-error"),
+      },
       eventPublisher: {
         publish: () => {
           calls.push("publish-stopped")
@@ -324,7 +327,11 @@ test("requires a Journal-backed STOPPED event when PROCESS_STOPPED was not durab
       },
       journalService: {
         status: { enabled: true },
-        close: async () => ({ ok: true, closed: true, durable: true }),
+        close: async () => ({
+          ok: true,
+          closed: true,
+          durable: true,
+        }),
       },
       processLock: {
         release: async () => {
@@ -375,7 +382,11 @@ test("fails closed when Journal-backed STOPPED evidence cannot be flushed", asyn
       eventBus: {},
       journalService: {
         status: { enabled: true },
-        close: async () => ({ ok: true, closed: true, durable: true }),
+        close: async () => ({
+          ok: true,
+          closed: true,
+          durable: true,
+        }),
       },
       processLock: {
         release: async () => {
@@ -412,15 +423,17 @@ test("retains the process lock when the Journal-backed STOPPED acknowledgement i
         stop: async () => ({
           ok: true,
           status: "STOPPED",
-         data: { durableProcessStopAcknowledged: true },
-          data: { durableProcessStopAcknowledged: false },
+         data: { durableProcessStopAcknowledged: false },
         }),
       },
       logger: { error: () => calls.push("log-error") },
       eventPublisher: {
         publish: () => {
           calls.push("publish-stopped")
-          return { ok: false, errors: [new Error("STOPPED event rejected")] }
+          return {
+            ok: false,
+            errors: [new Error("STOPPED event rejected")],
+          }
         },
       },
       eventBus: {
@@ -431,7 +444,11 @@ test("retains the process lock when the Journal-backed STOPPED acknowledgement i
       },
       journalService: {
         status: { enabled: true },
-        close: async () => ({ ok: true, closed: true, durable: true }),
+        close: async () => ({
+          ok: true,
+          closed: true,
+          durable: true,
+        }),
       },
       processLock: {
         release: async () => {
@@ -469,8 +486,7 @@ test("fails closed when neither durable PROCESS_STOPPED nor an enabled Journal i
         stop: async () => ({
           ok: true,
           status: "STOPPED",
-         data: { durableProcessStopAcknowledged: true },
-          data: { durableProcessStopAcknowledged: false },
+         data: { durableProcessStopAcknowledged: false },
         }),
       },
       logger: { error: () => calls.push("log-error") },
@@ -488,7 +504,11 @@ test("fails closed when neither durable PROCESS_STOPPED nor an enabled Journal i
       },
       journalService: {
         status: { enabled: false },
-        close: async () => ({ ok: true, closed: true, disabled: true }),
+        close: async () => ({
+          ok: true,
+          closed: true,
+          disabled: true,
+        }),
       },
       processLock: {
         release: async () => {
@@ -523,11 +543,10 @@ test("retains all shared resources and the process lock when the final EventBus 
   const handler = createRuntimeShutdownHandler({
     runtime: {
       stop: async () => ({
-        ok: true,
-        status: "STOPPED",
-       data: { durableProcessStopAcknowledged: true },
-        data: { durableProcessStopAcknowledged: true },
-      }),
+          ok: true,
+          status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
+        }),
     },
     logger: {
       system: () => {},
@@ -594,10 +613,10 @@ test("bounds a hung EventBus flush and retains the process lock without overlapp
     runtimeStopTimeoutMs: 100,
     runtime: {
       stop: async () => ({
-        ok: true,
-        status: "STOPPED",
-      data: { durableProcessStopAcknowledged: true },
-      }),
+          ok: true,
+          status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
+        }),
     },
     logger: {
       system: () => {},
@@ -653,10 +672,10 @@ test("retains the process lock when observability cleanup exceeds its deadline",
     runtimeStopTimeoutMs: 100,
     runtime: {
       stop: async () => ({
-        ok: true,
-        status: "STOPPED",
-      data: { durableProcessStopAcknowledged: true },
-      }),
+          ok: true,
+          status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
+        }),
     },
     logger: {
       system: () => {},
@@ -698,10 +717,10 @@ test("retains the process lock when process logger close fails", async () => {
     runtimeStopTimeoutMs: 100,
     runtime: {
       stop: async () => ({
-        ok: true,
-        status: "STOPPED",
-      data: { durableProcessStopAcknowledged: true },
-      }),
+          ok: true,
+          status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
+        }),
     },
     logger: {
       system: () => {},
@@ -746,10 +765,10 @@ test("retains the process lock when release acknowledgement is ambiguous", async
     runtimeStopTimeoutMs: 100,
     runtime: {
       stop: async () => ({
-        ok: true,
-        status: "STOPPED",
-      data: { durableProcessStopAcknowledged: true },
-      }),
+          ok: true,
+          status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
+        }),
     },
     logger: {
       system: () => {},
