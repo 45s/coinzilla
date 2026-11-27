@@ -60,30 +60,24 @@ const snapshot = Object.freeze({
   lastBuyPrice: undefined,
 })
 
-function createRuntime({
-  stateOverrides = {},
-  stopStateOverride = stopState,
-  isMarketPriceFresh = () => true,
-  isStopping = () => false,
-  hasBlockingOpenOrdersForSymbol = () => false,
-  recoverySellerPairs = { [symbol]: pairConfig },
-} = {}) {
-  let snapshotInput
-  const state = {
-    prices: new Map([[symbol, marketPrice]]),
-    paused: new Set(),
-    durablePausedMarkets: new Set(),
-    operatorPausedMarkets: new Set(),
-    ...stateOverrides,
-  }
-  const evaluate = createRecoverySellerRuntimeEvaluator({
+function createRuntimeEvaluator({
+  capture,
+  stopStateOverride,
+  accountAdmissionBlocked,
+  isMarketPriceFresh,
+  isStopping,
+  hasBlockingOpenOrdersForSymbol,
+  recoverySellerPairs,
+}) {
+  return createRecoverySellerRuntimeEvaluator({
     recoverySellerWorkflow: {
       getTransitionSnapshot: (input) => {
-        snapshotInput = input
+        capture.snapshotInput = input
         return Object.freeze({
           ...snapshot,
           stopState: input.stopState,
           strategyStopped: input.strategyStopped,
+          buyAdmissionBlocked: input.buyAdmissionBlocked,
           marketPaused: input.marketPaused,
           reconciliationComplete: input.reconciliationComplete,
         })
@@ -91,6 +85,7 @@ function createRuntime({
     },
     recoverySellerStopWorkflow: {
       getState: () => stopStateOverride,
+      isAccountAdmissionBlocked: () => accountAdmissionBlocked,
     },
     recoverySellerPairs,
     getRecoverySellerMarketMetadata: async () => marketMetadata,
@@ -102,13 +97,44 @@ function createRuntime({
       ok: true,
       data: Object.freeze({ submitted: true }),
     }),
-    evaluateBuyDecision: () => Object.freeze({
-      decision: Object.freeze({
-        outcome: "WAIT",
-        reasonCode: "TEST_WAIT",
-        explanation: "No action in runtime wrapper test",
-      }),
-    }),
+    evaluateBuyDecision: (input) => {
+      capture.buyDecisionInput = input
+      return Object.freeze({
+        decision: Object.freeze({
+          outcome: "WAIT",
+          reasonCode: "TEST_WAIT",
+          explanation: "No action in runtime wrapper test",
+        }),
+      })
+    },
+  })
+}
+
+function createRuntime({
+  stateOverrides = {},
+  stopStateOverride = stopState,
+  accountAdmissionBlocked = false,
+  isMarketPriceFresh = () => true,
+  isStopping = () => false,
+  hasBlockingOpenOrdersForSymbol = () => false,
+  recoverySellerPairs = { [symbol]: pairConfig },
+} = {}) {
+  const capture = {}
+  const state = {
+    prices: new Map([[symbol, marketPrice]]),
+    paused: new Set(),
+    durablePausedMarkets: new Set(),
+    operatorPausedMarkets: new Set(),
+    ...stateOverrides,
+  }
+  const evaluate = createRuntimeEvaluator({
+    capture,
+    stopStateOverride,
+    accountAdmissionBlocked,
+    isMarketPriceFresh,
+    isStopping,
+    hasBlockingOpenOrdersForSymbol,
+    recoverySellerPairs,
   })
   return {
     evaluate,
@@ -116,10 +142,10 @@ function createRuntime({
       symbol,
       state,
     },
-    getSnapshotInput: () => snapshotInput,
+    getSnapshotInput: () => capture.snapshotInput,
+    getBuyDecisionInput: () => capture.buyDecisionInput,
   }
 }
-
 test("builds the runtime snapshot from canonical market, account and stop state", async () => {
   const runtime = createRuntime()
   const result = await runtime.evaluate(runtime.input)
@@ -127,13 +153,22 @@ test("builds the runtime snapshot from canonical market, account and stop state"
 
   assert.equal(result.ok, true, "The runtime evaluator must return the shared result contract.")
   assert.equal(result.data.decision.outcome, "WAIT", "The runtime wrapper must preserve the pure BUY policy decision.")
-  assert.equal(snapshotInput.marketMetadata, marketMetadata)
-  assert.equal(snapshotInput.pairConfig, pairConfig)
-  assert.equal(snapshotInput.accountSnapshot, accountSnapshot)
-  assert.equal(snapshotInput.strategyStopped, false)
-  assert.equal(snapshotInput.marketPaused, false)
-  assert.equal(snapshotInput.reconciliationComplete, true)
-  assert.equal(snapshotInput.stopState, stopState)
+  assert.equal(snapshotInput.marketMetadata, marketMetadata,
+    "The runtime snapshot must use the configured canonical market metadata.")
+  assert.equal(snapshotInput.pairConfig, pairConfig,
+    "The runtime snapshot must preserve the configured Recovery Seller pair policy.")
+  assert.equal(snapshotInput.accountSnapshot, accountSnapshot,
+    "The runtime snapshot must use the authoritative account-balance snapshot.")
+  assert.equal(snapshotInput.strategyStopped, false,
+    "A running process must not be marked stopped by account-admission state.")
+  assert.equal(snapshotInput.marketPaused, false,
+    "An unpaused market must remain eligible for runtime evaluation.")
+  assert.equal(snapshotInput.reconciliationComplete, true,
+    "Fresh market data and no blockers must produce a reconciled snapshot.")
+  assert.equal(snapshotInput.stopState, stopState,
+    "The runtime snapshot must carry the canonical account STOP state.")
+  assert.equal(snapshotInput.buyAdmissionBlocked, false,
+    "A RUNNING STOP state and clear admission latch must allow BUY admission.")
 })
 
 test("fails closed for stopped, paused or unreconciled runtime state", async () => {
@@ -157,6 +192,27 @@ test("fails closed for stopped, paused or unreconciled runtime state", async () 
   assert.equal(snapshotInput.strategyStopped, true)
   assert.equal(snapshotInput.marketPaused, true)
   assert.equal(snapshotInput.reconciliationComplete, false)
+})
+
+test("blocks new BUY admission while allowing the runtime to remain active for eligible SELLs", async () => {
+  const runtime = createRuntime({
+    accountAdmissionBlocked: true,
+    stopStateOverride: Object.freeze({
+      status: "CLEAR",
+      decision: null,
+    }),
+  })
+  const result = await runtime.evaluate(runtime.input)
+  const snapshotInput = runtime.getSnapshotInput()
+
+  assert.equal(result.ok, true, "A BUY-blocked runtime snapshot must remain a successful evaluation result.")
+  assert.equal(result.data.decision.outcome, "WAIT", "The BUY policy must not create an action.")
+  assert.equal(snapshotInput.strategyStopped, false,
+    "Account STOP must not mark the whole strategy runtime as shut down.")
+  assert.equal(snapshotInput.buyAdmissionBlocked, true,
+    "An unresolved account STOP persistence attempt must block new BUY spending.")
+  assert.equal(runtime.getBuyDecisionInput().strategyStopped, true,
+    "The BUY policy must receive the admission gate without globally stopping the runtime.")
 })
 
 test("skips evaluation when market price is missing or stale", async () => {

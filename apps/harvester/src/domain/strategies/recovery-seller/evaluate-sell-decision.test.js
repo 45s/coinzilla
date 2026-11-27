@@ -3,7 +3,11 @@ import assert from "node:assert/strict"
 import { Asset, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
 import { createRecoverySellerCycleState } from "./cycle-state.js"
 import { evaluateRecoverySellerSellDecision } from "./evaluate-sell-decision.js"
-import { createRecoverySellerStopState } from "./stop-decision.js"
+import {
+  createRecoverySellerStopDecision,
+  createRecoverySellerStopState,
+  latchRecoverySellerStop,
+} from "./stop-decision.js"
 
 const baseAsset = new Asset({
   id: "doge",
@@ -332,6 +336,28 @@ test("latches STOP when the existing pair minProfit is below the Conservative mi
     "An invalid configured pair minProfit must latch the global RS STOP.")
   assert.equal(result.orderIntent, undefined,
     "An invalid configured pair minProfit must never produce a SELL intent.")
+})
+
+test("allows an otherwise eligible first recovery SELL while STOP blocks new BUY spending", () => {
+  const stopState = latchRecoverySellerStop({
+    state: createRecoverySellerStopState(),
+    decision: createRecoverySellerStopDecision({
+      explanation: "STOP blocks additional BUY spending only.",
+    }),
+  })
+  const result = evaluateRecoverySellerSellDecision({
+    ...validInput,
+    stopState,
+  })
+
+  assert.equal(stopState.status, "STOPPED",
+    "The BUY-admission STOP must remain latched while evaluating the eligible recovery SELL.")
+  assert.equal(result.decision.outcome, "SUBMIT",
+    "An eligible first recovery SELL must remain available while STOP blocks additional BUY spending.")
+  assert.equal(result.stopState.status, "STOPPED",
+    "The eligible SELL must not clear or weaken the latched STOP.")
+  assert.equal(result.orderIntent.side, "SELL",
+    "The submitted intent must be a recovery SELL, never a new BUY action.")
 })
 
 test("latches STOP when the recovery cycle state is malformed", () => {
