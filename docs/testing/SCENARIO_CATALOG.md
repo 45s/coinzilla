@@ -1605,3 +1605,9 @@ Additional RS-002-020-B mapping: an application authorizer test asserts 20 exist
 ## Scenario Runner application-level isolation checkpoint — 2026-11-27
 
 The RS runtime application scenarios are eligible for simulation only through the explicitly enabled Linux Bubblewrap/prlimit launcher. The launcher requires delegated cgroup v2 controllers and applies hard memory/CPU/pids limits plus namespaces, seccomp, read-only runtime mounts and bounded IPC. The production API remains blocked on hosts that fail any capability check. This is not RS-001…RS-010 domain scenario evidence and does not promote a scenario to VERIFIED. End-to-end adversarial isolation and trusted build provenance remain outstanding.
+
+
+
+## Scenario Runner real Linux isolation acceptance — 2026-11-27
+
+The opt-in integration test `apps/harvester/src/infrastructure/scenario-runner/linux-sandbox-e2e.test.js` and manual workflow `.github/workflows/harvester-scenario-sandbox-e2e.yml` provide adversarial OS-boundary evidence for the application-level RS simulation adapter. The test checks namespace separation, secret non-forwarding, read-only source mounts, network denial, child-process denial, and the actual cgroup memory/swap/CPU/pids controls. It is not domain RS-001…RS-010 evidence and does not promote any scenario to VERIFIED. Run only on a trusted self-hosted Linux runner with delegated cgroup v2 controllers; acceptance remains pending until the workflow succeeds.

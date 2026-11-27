@@ -70,3 +70,9 @@ Current scenarios use simulated infrastructure and run-local state. No real brok
 PR #1913 now composes the RS simulation-only process adapter behind explicit `HARVESTER_SCENARIO_SANDBOX=linux-bubblewrap`. The launcher verifies trusted Bubblewrap/prlimit/shell/Node binaries and capabilities, then applies user/network/PID/IPC/UTS namespaces, seccomp network/child-process restrictions, a read-only runtime allowlist, worker IPC preservation, RLIMIT_CPU, and a per-run delegated cgroup v2 (256 MiB hard memory, swap disabled, one CPU quota, 64 pids/threads). The API remains fail-closed when the host lacks delegated cgroup controllers or any binary/capability check fails.
 
 Runtime scenarios are eligible for isolated simulation only; they remain PARTIAL and are not production-accepted. Required remaining gates: end-to-end adversarial OS isolation acceptance on a trusted delegated Linux runner, trusted build-artifact provenance/replay, production operational-state persistence acceptance, and the independent RS lifecycle correction in issue #1842.
+
+
+
+## Linux sandbox adversarial acceptance harness — 2026-11-27
+
+A manual self-hosted workflow `.github/workflows/harvester-scenario-sandbox-e2e.yml` now runs the real Linux sandbox boundary test on a runner labeled `scenario-sandbox`. It verifies namespace separation, secret non-forwarding, read-only filesystem, network denial, child-process denial, and the per-run cgroup hard limits. It requires a trusted Linux runner with Bubblewrap/prlimit/Node root-owned and delegated cgroup v2 `memory`, `cpu`, and `pids` controllers. It is intentionally not run on the ordinary GitHub-hosted runner. Do not close the isolation acceptance gate until the manual workflow passes on the intended deployment class.

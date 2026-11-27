@@ -201,6 +201,7 @@
     "testnet:audit": "node --env-file=.env.development scripts/audit-testnet-account.js",
     "testnet": "node --env-file=.env.development scripts/testnet-menu.js",
     "test:targeted": "node scripts/run-targeted-tests.js",
+    "test:scenario-sandbox-e2e": "node --test --test-reporter=spec src/infrastructure/scenario-runner/linux-sandbox-e2e.test.js",
     "config:symbol": "node scripts/config-symbol.js",
     "volatility:calibrate": "node scripts/calibrate-volatility-thresholds.js",
     "operational-state:init": "node --env-file=.env scripts/initialize-operational-state.js",

@@ -109,3 +109,9 @@ The Harvester host now accepts explicit strategy registrations and builds its ca
 ## Harvester Scenario Runner Linux sandbox — 2026-11-27
 
 The Harvester API has an explicit opt-in Linux Bubblewrap/prlimit process adapter backed by a per-run delegated cgroup v2 hard memory/CPU/pids boundary. It is unavailable on hosts that do not pass the root-owned executable, namespace, seccomp, and cgroup-controller checks. This enables simulation-only runtime scenarios; production acceptance remains PARTIAL pending adversarial end-to-end isolation acceptance and trusted replay/build provenance.
+
+
+
+## Linux sandbox adversarial acceptance — 2026-11-27
+
+The Harvester Scenario Runner has a manual self-hosted E2E workflow that exercises the real Linux Bubblewrap/prlimit/cgroup sandbox. It checks namespace separation, secret omission, read-only source, no outbound connection, no child process, and enforced cgroup limits. The workflow requires the `scenario-sandbox` runner label and delegated cgroup v2; acceptance remains pending until it passes.
