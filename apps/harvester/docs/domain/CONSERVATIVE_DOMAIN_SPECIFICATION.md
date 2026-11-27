@@ -48,10 +48,10 @@ Keep cumulative confirmed netSellProceeds with the current position's full spent
 2. The initial BUY trails upward according to the existing Conservative trailing policy. A trailing replacement requires acknowledged/cancellable order identity, cancellation, and complete fill reconciliation. Never place a replacement from stale quantity or an uncertain cancellation result.
 3. Each actual BUY fill is accounted immediately. A partially filled BUY does not advance the completed-BUY lifecycle. Before advancing, reconcile the terminal order and all fills; their distinct executed quantities must match the broker's executed quantity and the order's original quantity.
 4. The next standing BUY is fixed one configured step below the completed BUY's volume-weighted execution price (total executed quote divided by total executed base). It is not trailed while recovery is outstanding. Conservative trailing-BUY repricing is eligible only while active strategy position quantity is zero; retained free inventory is excluded from that gate. After successful recovery completion, the existing trailing behavior resumes.
-5. Submit a required recovery SELL before the next standing BUY. Submit the next BUY only after the SELL has a successful broker acknowledgement. A failed or unknown SELL submission blocks the BUY and fails closed.
-6. A standing BUY may coexist with an acknowledged open recovery SELL. Active PENDING, OPEN, PARTIALLY_FILLED, or UNKNOWN orders suppress duplicate intents.
-   A Conservative Position may have only one active recovery SELL reservation. The final application submission gate must check the canonical OrderRegistry for another SELL owned by that market's COIN_GRABBER Position and defer a second RECOVERY_SELL while the existing order is PENDING, OPEN, PARTIALLY_FILLED, or UNKNOWN. Conservative currently has one Position per strategy/market, so an active owned SELL remains a reservation even if a legacy ownership record has a stale or missing Position ID. The candidate order itself is excluded during its post-registration gate recheck. The reservation is released only after the registry records a terminal order transition; strategy-level checks alone are not the final safety boundary.
-7. Any configured investment/balance limit is an additional Harvester safety constraint. It must not alter position quantity, accumulated spent, or the full-cost recovery target.
+5. Submit a required recovery SELL before considering any later BUY. **No new Conservative BUY may be submitted while a recovery cycle remains unresolved.** The BUY gate remains closed while Position active quantity is positive, Position.spent is positive, or RecoveryLedger cycle totals remain non-zero. A successful SELL acknowledgement, a terminal SELL acknowledgement by itself, or realized proceeds reaching the cost basis does not release the gate. Only fully reconciled recovery-cycle completion—which allocates retained inventory and resets the Position recovery basis and RecoveryLedger cycle totals—makes the next BUY eligible. PENDING, OPEN, PARTIALLY_FILLED, and UNKNOWN recovery SELL states remain active reservations and never release BUY admission.
+6. A standing BUY that was already submitted before a recovery cycle became active is not a new submission. Do not blindly cancel it or create a replacement. Continue its canonical order/fill lifecycle; reconcile every late fill exactly once, include it in the Position cost/inventory, and recalculate recovery SELL coverage from the updated reconciled state. If cancellation is independently required by an existing safety/replacement workflow, use its durable cancellation intent, authoritative terminal status, and complete fill reconciliation; an unknown cancellation remains unresolved and cannot release the BUY gate.
+7. A Conservative Position may have only one active recovery SELL reservation. The final application submission gate must check the canonical OrderRegistry for another SELL owned by that market's COIN_GRABBER Position and defer a second RECOVERY_SELL while the existing order is PENDING, OPEN, PARTIALLY_FILLED, or UNKNOWN. Conservative currently has one Position per strategy/market, so an active owned SELL remains a reservation even if a legacy ownership record has a stale or missing Position ID. The candidate order itself is excluded during its post-registration gate recheck. The reservation is released only after the registry records a terminal order transition; strategy-level checks alone are not the final safety boundary.
+8. Any configured investment/balance limit is an additional Harvester safety constraint. It must not alter position quantity, accumulated spent, or the full-cost recovery target.
 
 ## 4. Recovery SELL economics
 
@@ -160,9 +160,9 @@ Validation is fail-closed: a recovery purpose requires explicit ownership; strat
 
 The Conservative order-registration callback returns its immutable CG ownership record to the shared executor. The executor carries that same record into durable submission intent, outcome, deferral and failure callbacks; it must not reconstruct or relabel strategy ownership downstream. If durable intent validation or append fails, remove the local unsubmitted PENDING registration, latch the market's `ORDER_INTENT_NOT_DURABLE` safety pause, and stop the ordered decision batch before any sibling action is registered or submitted. A later market tick must not create a fresh client order ID while that pause remains active. Before a new recovery SELL decision, sum the exact remaining quantities of every owned PENDING, OPEN, PARTIALLY_FILLED, and UNKNOWN SELL for the market. The aggregate must not exceed net sellable Position inventory after actual base-asset commissions and `keepQuantity`; missing/invalid remaining quantities or an excess reservation fail closed and pause the market. An UNKNOWN order remains reserved until canonical client-order-ID reconciliation proves its terminal state. A durable intent must be committed before the broker placement side effect. If intent persistence fails, remove the local unsubmitted PENDING registration, retain the market safety pause, and do not call the broker. A PENDING lifecycle log is not an exchange acknowledgement. A transport timeout or ambiguous broker outcome remains UNKNOWN under the original client order identity; reconcile that identity and complete canonical order/fill history before any retry or replacement. See the [Recovery Seller Domain Specification](recovery-seller-domain-specification.md) for RS cycle ownership and lifecycle rules.
 
-### Partial SELL with no new BUY
+### Partial SELL while recovery remains active
 
-When an acknowledged SELL is OPEN or PARTIALLY_FILLED and no new BUY fill has occurred:
+When an acknowledged SELL is OPEN or PARTIALLY_FILLED and no additional fill from a pre-existing BUY has occurred:
 
 - Keep the same exchange order and the same limit price.
 - Do not cancel, replace, reprice, or recalculate its remaining quantity because of a partial fill.
@@ -170,17 +170,17 @@ When an acknowledged SELL is OPEN or PARTIALLY_FILLED and no new BUY fill has oc
 - Let the exchange maintain the remaining quantity.
 - Do not interpret a partial fill as recovery completion.
 
-### New BUY fill while a recovery SELL is open — owner decision B
+### Pre-existing BUY late fill while a recovery SELL is open — owner decision B
 
-When a new BUY fill occurs while a recovery SELL is OPEN or PARTIALLY_FILLED:
+A BUY may still fill after its original acknowledgement if it was already submitted before the recovery cycle became active. This is an existing order lifecycle event, not permission to submit a new or replacement BUY. When such a late fill occurs while a recovery SELL is OPEN or PARTIALLY_FILLED:
 
-1. Record the triggering BUY execution and its actual commission facts exactly once.
+1. Record the triggering fill from that already-acknowledged BUY order and its actual commission facts exactly once.
 2. Request cancellation of the existing SELL. If it is still PENDING, wait for its broker acknowledgement and valid broker order ID; never cancel an unacknowledged order.
 3. Reconcile the SELL's terminal exchange state and retrieve its complete canonical fill history, including every fill that raced with cancellation.
 4. Validate ownership, market, side, order identity, unique fill identities, commission facts, and equality between summed distinct SELL fill quantity and broker-reported cumulative executed quantity.
 5. Apply all newly discovered SELL fills exactly once and commit the BUY and SELL accounting updates consistently.
-6. Only after terminal state and complete fill reconciliation succeed, calculate and submit a replacement SELL from the updated position quantity, full accumulated spent, and cumulative net SELL proceeds.
-7. If cancellation, terminal state, fill history, commissions, or accounting cannot be reconciled completely, fail closed. Do not submit a replacement from stale or partial information.
+6. Only after terminal state and complete fill reconciliation succeed, calculate and submit a replacement SELL from the updated Position quantity, full accumulated spent, and cumulative net SELL proceeds. Do not submit a replacement or next standing BUY.
+7. If cancellation, terminal state, fill history, commissions, or accounting cannot be reconciled completely, fail closed. Do not submit a replacement from stale or partial information. The Conservative BUY gate remains closed until the entire recovery cycle is completed and the Position/RecoveryLedger basis is reset.
 
 If the SELL becomes FILLED while cancellation is in flight, reconcile and process it as a terminal FILLED order. Do not misclassify a successful terminal fill as a confirmed cancellation, and do not submit a duplicate replacement.
 
@@ -230,7 +230,8 @@ flowchart TD
     A[Market-price event] --> B{Active BUY and trailing enabled?}
     B -- No --> Z[Run normal Conservative evaluation]
     B -- Yes --> C{Active strategy position quantity above zero?}
-    C -- Yes --> Z2[Do not reprice the BUY]
+    C -- Yes --> Z2[Skip trailing-BUY replacement]
+    Z2 --> Z[Run normal Conservative evaluation]
     C -- No --> D{Trailing trigger reached and engine not stopping?}
     D -- No --> Z
     D -- Yes --> E[Fetch current Binance exchange filters]
@@ -273,7 +274,7 @@ flowchart TD
 
 ### Why preflight happens before cancellation
 
-The engine runs this work inside its serialized market-price transition. It first requires an acknowledged active BUY, trailing enabled, no active strategy position, a reached repricing trigger, and a process that is not stopping. It then fetches current Binance symbol filters and validates that the refreshed market metadata is complete and still identifies the active symbol and market. The Conservative policy is evaluated using the current market price as the replacement reference. Commitment allocation excludes only the existing BUY that would be canceled, modeling the quote commitment that cancellation will release; it does **not** cancel the order or remove it from the live registry.
+The engine runs this work inside its serialized market-price transition. It first requires an acknowledged active BUY, trailing enabled, no active strategy position, a reached repricing trigger, and a process that is not stopping. If an active strategy Position exists, only trailing-BUY replacement is skipped: the engine must continue normal Conservative evaluation so required recovery SELL coverage can be established or maintained. This is not an early return from strategy evaluation. The no-new-BUY rule in §3 and the final application submission gate remain authoritative throughout that evaluation. When trailing replacement is eligible, the engine then fetches current Binance symbol filters and validates that the refreshed market metadata is complete and still identifies the active symbol and market. The Conservative policy is evaluated using the current market price as the replacement reference. Commitment allocation excludes only the existing BUY that would be canceled, modeling the quote commitment that cancellation will release; it does **not** cancel the order or remove it from the live registry.
 
 The executable replacement candidate is converted into canonical preflight order(s) and checked against the refreshed exchange rules, including quantity and price increments and minimum notional. The same submission-readiness gate checks current market-price freshness and, for `LIMIT_MAKER`, a fresh same-symbol book and a price that does not cross the opposite best quote. A validation error pauses the pair; unavailable readiness or the absence of an executable replacement BUY defers/skips the replacement. In every preflight failure or deferral case, the existing BUY remains open and untouched. This is essential: canceling first would remove the existing standing order even though the replacement might be rejected by exchange filters or could not safely be submitted, leaving the pair without its intended BUY.
 
@@ -323,7 +324,7 @@ flowchart TD
   N --> O{SELL event}
   O -- Partial fill; no new BUY --> P[Apply actual fill/fee; keep same order and same price]
   P --> O
-  O -- New BUY fill while SELL open --> E
+  O -- Pre-existing BUY late fill while SELL open --> E
   O -- Terminal FILLED/CANCELED/EXPIRED/REJECTED --> Q[Reconcile terminal state and all actual fills/fees]
   Q --> R{Reconciliation complete?}
   R -- No --> X

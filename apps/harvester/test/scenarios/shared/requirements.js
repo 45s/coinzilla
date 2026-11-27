@@ -37,17 +37,22 @@ export const CONSERVATIVE_REQUIREMENTS = Object.freeze([
   {
     id: "CON-SPEC-3.5",
     section: "3",
-    title: "The recovery SELL is acknowledged before the next standing BUY is submitted.",
+    title: "No new BUY is submitted while recovery remains unresolved; admission opens only after full cycle completion and Position/RecoveryLedger basis reset.",
   },
   {
     id: "CON-SPEC-3.6",
     section: "3",
-    title: "An acknowledged recovery SELL may coexist with the next standing BUY.",
+    title: "A pre-existing acknowledged BUY may continue its canonical lifecycle during recovery; late fills are reconciled without creating another BUY.",
   },
   {
     id: "CON-SPEC-3.7",
     section: "3",
     title: "BUY placement respects investment and account commitment limits.",
+  },
+  {
+    id: "CON-SPEC-3.8",
+    section: "3",
+    title: "The final application submission gate blocks BUY while an owned recovery SELL remains PENDING, OPEN, PARTIALLY_FILLED, or UNKNOWN, even if accounting projections appear reset.",
   },
   {
     id: "CON-SPEC-4.1",
@@ -97,12 +102,17 @@ export const CONSERVATIVE_REQUIREMENTS = Object.freeze([
   {
     id: "CON-SPEC-5.2",
     section: "5",
-    title: "A new BUY during an open recovery SELL requires cancellation and fill reconciliation before replacement.",
+    title: "A late fill from a pre-existing BUY during an open recovery SELL requires cancellation and complete fill reconciliation before recovery SELL replacement; it does not authorize a new BUY.",
   },
   {
     id: "CON-SPEC-5.3",
     section: "5",
     title: "Recovery SELL terminal outcomes trigger only evidence-backed replacement or completion.",
+  },
+  {
+    id: "CON-SPEC-5.4",
+    section: "5",
+    title: "Unknown cancellation outcomes, incomplete terminal fill history, or inconsistent commissions fail closed and block recovery SELL replacement.",
   },
   {
     id: "CON-SPEC-6.1",

@@ -123,8 +123,9 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
 
 ### Harvester — Conservative (CG)
 
-- [CG-001 — Confirmed BUY, recovery SELL, and next-BUY gating](#cg-001--a-confirmed-buy-creates-recovery-work-but-the-next-buy-waits-for-sell-acknowledgement)
+- [CG-001 — No new BUY until recovery cycle completion and basis reset](#cg-001--no-new-buy-is-admitted-until-recovery-cycle-completion-and-basis-reset)
 - [CG-002 — Recovery completion and constrained dust](#cg-002--recovery-completion-preserves-required-inventory-and-does-not-misclassify-dust)
+- [CG-003 — Pre-existing BUY lifecycle remains safe during recovery](#cg-003--pre-existing-buys-continue-their-lifecycle-without-reopening-buy-admission)
 
 ### Harvester — Recovery Seller (RS)
 
@@ -207,7 +208,7 @@ This map is deliberately incomplete. It gives the reader a starting point across
 | Domain | Scenario families in this initial pass | Current catalog state | Authoritative starting point |
 | --- | --- | --- | --- |
 | Harvester — shared account/order/portfolio | Account-wide commitments, canonical fill identity, exchange filters | TEST-MAPPED | [Harvester domain test inventory](../../apps/harvester/docs/domain/DOMAIN_TEST_INVENTORY.md) |
-| Harvester — Conservative (CG) | Initial BUY, recovery SELL, next-BUY gating, partial fills, residual/dust completion | TEST-MAPPED | [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) |
+| Harvester — Conservative (CG) | Initial BUY, no-new-BUY until cycle completion, pre-existing BUY lifecycle, partial fills, residual/dust completion | TEST-MAPPED | [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) |
 | Harvester — Recovery Seller (RS) | Legacy authorization/custody, BUY accounting, mixed SELL, profitability, one-SELL lifecycle, STOP, concurrency | PARTIAL — RS-003/004/005/006/007 have limited new scenario evidence; RS-001/002/008 MISSING; RS-009 BLOCKED; RS-010 UNSUPPORTED/BLOCKED | [RS scenario issue #1780](https://github.com/45s/coinzilla/issues/1780) and [RS domain specification](../../apps/harvester/docs/domain/recovery-seller-domain-specification.md) |
 | Brokers | Canonical request/response contracts, unknown mutation outcomes, provider capability boundaries | SPECIFIED / mapping incomplete | [Broker API contract](../../packages/brokers/BROKER_API.md) |
 | Entities | Exact financial values, canonical market/order/fill identity, immutable domain contracts | SPECIFIED / mapping incomplete | [Entities roadmap](../../packages/entities/ROADMAP.md) |
@@ -401,64 +402,95 @@ The repository-wide method for designing domain scenarios is being established s
 
 The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains the authority for Conservative business rules. The following entries are an initial readable map of important existing behaviors, not a declaration that the full Conservative scenario matrix is complete.
 
-### CG-001 — A confirmed BUY creates recovery work, but the next BUY waits for SELL acknowledgement
+### CG-001 — No new BUY is admitted until recovery cycle completion and basis reset
 
-**Status:** TEST-MAPPED — named existing cases identified; full scenario-matrix completeness is not claimed.
+**Status:** TEST-MAPPED — strategy, final submission-gate, engine, and replay cases are mapped; exact-head verification is pending.
 
-**Behavior:** Conservative must base recovery work on actual filled inventory. It can plan a recovery SELL and the next standing BUY from the actual BUY fill, but it must not advance the next BUY while the recovery SELL is pending or unknown.
+**Scenario registry:** `CON-BUY-001`.
+
+**Behavior:** Conservative must recover from actual filled inventory without opening another BUY cycle prematurely. A recovery SELL acknowledgement, terminal SELL status by itself, or proceeds reaching the accumulated BUY cost does not complete the cycle. New BUY admission opens only after the full recovery cycle is reconciled, retained inventory is allocated, and the Position recovery basis and RecoveryLedger cycle totals are reset.
 
 **Given / preconditions:**
 
-- A valid market, strategy configuration, and exchange trading constraints.
-- No duplicate active BUY for the same strategy/market.
-- A confirmed BUY fill establishes actual recovery inventory.
+- A valid Conservative market, strategy configuration, and current exchange trading constraints.
+- An active strategy-owned Position and its RecoveryLedger cycle accounting.
+- A recovery SELL that may be PENDING, UNKNOWN, OPEN, or PARTIALLY_FILLED.
+- A canonical order registry that may contain an owned recovery SELL reservation.
 
 **Input / example:**
 
-- A price event causes an initial BUY to be planned.
-- The BUY receives an actual fill.
-- The strategy evaluates recovery SELL and next standing BUY.
-- The recovery SELL acknowledgement is delayed or its outcome is unknown.
+- Apply an actual BUY fill and evaluate recovery SELL planning.
+- Deliver market-price events while the recovery SELL acknowledgement is delayed, unknown, open, or partially filled.
+- Reconcile terminal SELL status and complete distinct fill/commission history.
+- Evaluate recovery completion, retained inventory allocation, and Position/RecoveryLedger basis reset.
+- Evaluate the next market-price event after completion.
 
 **Expected output:**
 
-- Initial BUY is priced and rounded according to the market tick.
-- Repeated price events do not duplicate an active BUY.
-- Actual filled inventory drives recovery SELL planning.
-- The next standing BUY is allowed only after the recovery SELL is acknowledged.
-- A pending or unknown SELL acknowledgement blocks the next BUY.
+- Actual filled inventory and commissions drive recovery SELL planning.
+- Strategy policy and the final application submission gate both block every new Conservative BUY while Position active quantity is positive, Position spent basis is positive, RecoveryLedger cycle totals remain non-zero, or an owned recovery SELL remains an active reservation.
+- PENDING, UNKNOWN, OPEN, and PARTIALLY_FILLED recovery SELL states do not release BUY admission.
+- A successful SELL acknowledgement, terminal SELL acknowledgement alone, or realized proceeds reaching the cost basis does not release BUY admission.
+- Only fully reconciled cycle completion, retained inventory allocation, and Position/RecoveryLedger basis reset permit the next BUY.
+- Recovery SELL remains eligible while the BUY gate is closed; Recovery Seller orders are not incorrectly subjected to the Conservative CG gate.
 
 **Must not happen:**
 
-- Do not use requested BUY quantity as if it were confirmed filled quantity.
-- Do not submit a duplicate active BUY.
-- Do not submit the next BUY while the required recovery SELL is pending or unknown.
+- Do not submit a new or replacement BUY while any recovery obligation or cycle basis remains.
+- Do not treat a SELL acknowledgement, terminal status without complete fill reconciliation, or recovered cost basis as cycle completion.
+- Do not reopen BUY admission before the retained allocation and recovery-basis reset are durably complete.
+- Do not block the required recovery SELL merely because new BUY admission is closed.
 
 **Subcases represented by the mapped tests:**
 
-- Initial BUY tick rounding.
-- Duplicate suppression.
-- Actual fill-driven recovery SELL and standing BUY.
-- Acknowledged versus pending/unknown recovery SELL.
-- Partial BUY fill behavior.
-- Investment cap equality and just-below behavior.
+- Initial BUY tick rounding and duplicate suppression.
+- Active Position with no active recovery SELL: recovery SELL only, no next BUY.
+- PENDING/delayed and UNKNOWN recovery SELL acknowledgement.
+- OPEN and PARTIALLY_FILLED recovery SELL reservations.
+- SELL proceeds equal to or exceed BUY cost before completion.
+- Residual sell-through and exact dust classification.
+- Position/RecoveryLedger reset and next-BUY admission after completion.
+- Recovery Seller strategy remains outside the CG-specific BUY gate.
 
 **Implementation:**
 
 - `apps/harvester/src/domain/strategies/conservative/strategy.js`
-- `apps/harvester/src/domain/strategies/conservative/recovery-sell-plan.js`
+- `apps/harvester/src/use-cases/create-submission-gate.js`
+- `apps/harvester/src/use-cases/conservative-trading-engine.js`
 
 **Automated tests:**
 
 - [`strategy.test.js`](../../apps/harvester/src/domain/strategies/conservative/strategy.test.js)
-  - `creates the initial BUY below last traded price and rounds down to tick`
-  - `does not duplicate an already active BUY on repeated price events`
-  - `creates a recovery SELL and the next standing BUY from actual filled inventory`
-  - `allows the next BUY only after the recovery SELL is acknowledged`
+  - `plans only a recovery SELL while a filled Position remains active`
+  - `blocks the next BUY while an acknowledged recovery SELL remains open`
   - `blocks the next BUY while the recovery SELL acknowledgement is pending or unknown`
-  - `keeps the partial BUY active while continuing recovery SELL planning`
+  - `keeps recovery SELL eligible while investment limits cannot reopen BUY during an active cycle`
+  - `fails closed when an active Position is missing its RecoveryLedger`
+  - `fails closed when Position.spent and RecoveryLedger buyCost diverge`
+  - `fails closed when active recovery SELL commitments exceed sellable Position inventory`
+  - `rejects a negative remaining quantity on an active recovery SELL`
+- [`create-submission-gate.test.js`](../../apps/harvester/src/use-cases/create-submission-gate.test.js)
+  - `blocks a Conservative BUY while the Position still has active recovery inventory`
+  - `blocks a Conservative BUY after SELL proceeds recover cost but before cycle completion resets the Position`
+  - `allows a Conservative BUY only after recovery basis and cycle totals have been reset`
+  - `blocks a Conservative BUY while an owned recovery SELL remains active after accounting totals reset`
+  - `does not apply the Conservative recovery BUY gate to Recovery Seller orders`
+  - `blocks a Conservative BUY while RecoveryLedger buyCost remains non-zero after Position reset`
+  - `fails closed when Conservative recovery admission dependencies are unavailable`
+  - `fails closed when Conservative recovery admission accounting contains an invalid decimal`
+- [`conservative-trading-engine.test.js`](../../apps/harvester/src/use-cases/conservative-trading-engine.test.js)
+  - `does not submit a next standing BUY while the Conservative recovery cycle remains active`
+  - `a fully filled BUY keeps subsequent evaluations in recovery-only mode while its SELL remains open`
+- [`doge-zro-conservative-replay.test.js`](../../apps/harvester/test/replays/doge-zro-conservative-replay.test.js)
+  - `submits only the recovery SELL while the recovery cycle remains active`
+  - `accounts streamed partial BUY executions before recovery SELL planning`
+  - `completes the recovery cycle only after the SELL fill report is received and reconciled`
+- [`2026-11-22-conservative-recovery-runtime-replay.test.js`](../../apps/harvester/test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js)
+  - `blocks subsequent archived ZROUSDT BUYs while the first recovery cycle is active`
+  - `blocks subsequent archived DOGEUSDT BUYs while the first recovery cycle is active`
+  - `blocks subsequent archived ADAUSDT BUYs while the first recovery cycle is active`
 
-**Evidence note:** Existing test titles were inspected to create a navigation mapping. The assertions have not yet been reviewed against every listed subcase, and the tests were not executed as part of this documentation-only catalog change; do not treat this mapping as VERIFIED.
+**Evidence note:** This mapping records the intended contract and named regression cases. It remains TEST-MAPPED, not VERIFIED, until the exact current PR head passes the focused Harvester suite and required CI checks.
 
 ### CG-002 — Recovery completion preserves required inventory and does not misclassify dust
 
@@ -522,6 +554,75 @@ The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERV
   - `rounds the minimum SELL price up only when the exact fee-adjusted price exceeds a tick`
 
 **Evidence note:** Existing test titles were inspected to create a navigation mapping. The assertions have not yet been reviewed against every listed subcase, and the tests were not executed as part of this documentation-only catalog change; do not treat this mapping as VERIFIED.
+
+### CG-003 — Pre-existing BUYs continue their lifecycle without reopening BUY admission
+
+**Status:** TEST-MAPPED — application-path cases are mapped; exact-head verification is pending.
+
+**Scenario registry:** `CON-RECOVERY-001`.
+
+**Behavior:** A BUY acknowledged before a Conservative recovery cycle became active remains an existing order lifecycle, not a new BUY intent. Its presence must not suppress recovery SELL evaluation. If that BUY fills while a recovery SELL is active, Harvester must reconcile the fill exactly once and update or replace only the recovery SELL coverage from the latest canonical Position and RecoveryLedger state. New/replacement BUY admission remains closed until full cycle completion.
+
+**Given / preconditions:**
+
+- A canonical active BUY was acknowledged before the strategy Position became active.
+- A recovery Position and its cost basis are active.
+- A recovery SELL may be PENDING, OPEN, PARTIALLY_FILLED, or UNKNOWN.
+- The existing BUY and recovery SELL are owned by the same Conservative strategy/market.
+
+**Input / example:**
+
+- Deliver a market-price event while the pre-existing BUY and active Position coexist.
+- Deliver partial/final BUY fills, including late fills while recovery SELL acknowledgement or cancellation is in flight.
+- Reconcile recovery SELL cancellation, terminal state, and all fills, including fills racing with cancellation.
+- Deliver duplicate and out-of-order execution reports and evaluate shutdown reconciliation.
+
+**Expected output:**
+
+- Skip only trailing-BUY replacement while an active Position exists; continue normal Conservative evaluation so recovery SELL coverage is established or maintained.
+- Preserve the pre-existing BUY's canonical identity and ownership until its actual terminal lifecycle is reconciled.
+- Apply each late BUY/SELL fill and commission exactly once.
+- Cancel/reconcile only the identified owned recovery SELL when coverage changes; replace it from the latest reconciled inventory.
+- Keep BUY admission closed throughout the unresolved recovery cycle.
+- Fail closed when cancellation, acknowledgement, fill history, or replacement outcome is unknown or inconsistent.
+
+**Must not happen:**
+
+- Do not cancel a pre-existing BUY merely because a recovery Position became active.
+- Do not let an active BUY suppress recovery SELL planning.
+- Do not submit a second/replacement BUY during recovery.
+- Do not duplicate or over-reserve recovery SELL quantity.
+- Do not replace a SELL from stale or incomplete fill/accounting evidence.
+
+**Subcases represented by the mapped tests:**
+
+- Pre-existing BUY with active Position and no recovery SELL yet.
+- Pre-existing BUY late partial/final fill while recovery SELL is acknowledged or pending acknowledgement.
+- Multiple BUY fills racing with shutdown cancellation.
+- SELL fill racing with cancellation and duplicate late reports.
+- Durable cancellation-intent failure and unresolved cancellation/replacement submission.
+- Existing recovery SELL reservation remains intact when no safe replacement is available.
+- Concurrent/re-entrant market evaluations while the existing BUY lifecycle is unresolved.
+
+**Implementation:**
+
+- `apps/harvester/src/use-cases/conservative-trading-engine.js`
+- `apps/harvester/src/use-cases/create-submission-gate.js`
+- `apps/harvester/src/use-cases/create-user-data-event-transition.js`
+- `apps/harvester/src/domain/strategies/conservative/strategy.js`
+
+**Automated tests:**
+
+- [`conservative-trading-engine.test.js`](../../apps/harvester/src/use-cases/conservative-trading-engine.test.js)
+  - `keeps a pre-existing BUY untouched while planning the recovery SELL for its active Position`
+  - `reconciles multiple BUY fills racing shutdown cancellation and replaces only the owned recovery SELL`
+  - `fails closed when shutdown recovery SELL cancellation or replacement submission is unresolved`
+  - `does not cancel a recovery SELL when its durable cancellation intent flush fails`
+  - `reconciles the recovery SELL after any partial BUY fill without completing the BUY lifecycle`
+- [`conservative-trading-engine.test.js`](../../apps/harvester/test/use-cases/conservative-trading-engine.test.js)
+  - `a pre-existing partially filled BUY is reconciled during recovery SELL acknowledgement and replaces SELL from latest fills`
+
+**Evidence note:** The existing-order path is a separate application lifecycle guarantee from the no-new-BUY policy. It remains TEST-MAPPED until the exact current PR head passes the named regression cases and required CI checks.
 
 ---
 

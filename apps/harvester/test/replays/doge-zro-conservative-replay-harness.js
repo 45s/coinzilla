@@ -298,6 +298,10 @@ function createDogeReplayCanonicalFill({ executionFill, brokerOrderId, order }) 
       }),
     })]
     : [];
+  const quoteQuantity = multiplyDecimal({
+    left: executionFill.price,
+    right: executionFill.quantity,
+  });
   return new Fill({
     tradeId: String(executionFill.tradeId ?? executionFill.id),
     brokerOrderId,
@@ -312,7 +316,7 @@ function createDogeReplayCanonicalFill({ executionFill, brokerOrderId, order }) 
       asset: order.market.baseAsset,
     }),
     quoteQuantity: new Money({
-      amount: executionFill.quoteQuantity,
+      amount: quoteQuantity,
       asset: order.market.quoteAsset,
     }),
     liquidityRole: executionFill.isMaker ? "MAKER" : "TAKER",
@@ -846,11 +850,15 @@ async function publishDogeReplayOrderFill({
   const orderStatus = cumulativeExecutedQuantity === order.originalQuantity.amount
     ? "FILLED"
     : "PARTIALLY_FILLED";
+  const normalizedQuoteQuantity = quoteQuantity ?? multiplyDecimal({
+    left: price,
+    right: fillQuantity,
+  });
   const commission = createDogeReplayCommission({
     state,
     order,
     executedBaseQuantity: fillQuantity,
-    executedQuoteQuantity: quoteQuantity,
+    executedQuoteQuantity: normalizedQuoteQuantity,
     commissionAmount,
     commissionAsset,
   });
@@ -880,7 +888,7 @@ async function publishDogeReplayOrderFill({
       tradeId,
       fillQuantity,
       cumulativeExecutedQuantity,
-      quoteQuantity,
+      quoteQuantity: normalizedQuoteQuantity,
       commission,
       orderStatus,
       timestamp,
