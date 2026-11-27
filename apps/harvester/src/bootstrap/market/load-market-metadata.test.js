@@ -102,6 +102,7 @@ errors: [new Error("exchange metadata unavailable")] }) },
 
 test("rejects mismatched market symbols before storing metadata", async () => {
   const marketMetadata = new Map()
+  const traceEntries = []
   await assert.rejects(
     loadMarketMetadata({
       broker: { getSymbolFilters: async () => ({ ok: true,
@@ -109,12 +110,13 @@ data: createMetadata("ETHUSDT") }) },
       pairs: { BTCUSDT: { enabled: false } },
       marketMetadata,
       eventPublisher: { publish: () => ({ ok: true }) },
-      logger: {},
+      logger: { trace: (entry) => traceEntries.push(entry) },
     }),
     /does not expose canonical base\/quote asset metadata/,
     "Exchange metadata for a different symbol must not be stored under the configured symbol.",
   )
   assert.equal(marketMetadata.size, 0, "Rejected metadata must not be added to the market map.")
+  assert.equal(traceEntries[0]?.symbol, "BTCUSDT", "Raw metadata trace must be emitted before canonical validation rejects the mismatched symbol.")
 })
 
 
