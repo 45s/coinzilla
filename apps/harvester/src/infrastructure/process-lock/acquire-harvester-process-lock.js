@@ -4,7 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { toResult } from "@coinzilla/utils"
 
-function isProcessAlive(pid) {
+export function isHarvesterProcessAlive(pid) {
   try {
     process.kill(pid, 0)
     return true
@@ -68,9 +68,13 @@ async function readExistingOwner({ lockPath }) {
 }
 
 function isSameLockOwner({ currentOwner, existingOwner }) {
-  return currentOwner?.token === existingOwner.token &&
+  return typeof existingOwner?.token === "string" &&
+    existingOwner.token.trim() !== "" &&
+    typeof existingOwner?.hostname === "string" &&
+    currentOwner?.token === existingOwner.token &&
     currentOwner?.pid === existingOwner.pid &&
-    currentOwner?.hostname?.toLowerCase() === existingOwner.hostname.toLowerCase()
+    currentOwner?.hostname?.toLowerCase() === existingOwner.hostname.toLowerCase() &&
+    currentOwner?.startedAt === existingOwner.startedAt
 }
 
 function createLockRelease({ lockPath, token }) {
@@ -100,26 +104,45 @@ alreadyReleased: true })
   }
 }
 
-async function reclaimStaleLockIfUnchanged({
+function isStaleLockOwner({ existingOwner, hostname, checkProcessAlive }) {
+  const sameHost = typeof existingOwner?.hostname === "string" &&
+    typeof hostname === "string" &&
+    existingOwner.hostname.toLowerCase() === hostname.toLowerCase()
+  const validPid = Number.isSafeInteger(existingOwner?.pid) && existingOwner.pid > 0
+  const validToken = typeof existingOwner?.token === "string" && existingOwner.token.trim() !== ""
+  const validStartTime = typeof existingOwner?.startedAt === "string" && existingOwner.startedAt.trim() !== ""
+  return sameHost && validPid && validToken && validStartTime && checkProcessAlive(existingOwner.pid) === false
+}
+
+async function readCurrentLockOwner({ lockPath }) {
+  const ownerContents = await readFile(lockPath, "utf8").catch(() => null)
+  if (ownerContents === null) {
+    return null
+  }
+  try {
+    return JSON.parse(ownerContents)
+  } catch {
+    return null
+  }
+}
+
+export async function reclaimStaleHarvesterProcessLockIfUnchanged({
   lockPath,
   hostname,
   existingOwner,
-  attempt,
-  checkProcessAlive,
+  attempt = 0,
+  checkProcessAlive = isHarvesterProcessAlive,
 }) {
-  if (attempt !== 0) {
-    return false
-  }
-  const sameHost = typeof existingOwner?.hostname === "string" &&
-    existingOwner.hostname.toLowerCase() === hostname.toLowerCase()
-  const validPid = Number.isSafeInteger(existingOwner?.pid) && existingOwner.pid > 0
-  if (!sameHost || !validPid || checkProcessAlive(existingOwner.pid)) {
+  if (attempt !== 0 || !isStaleLockOwner({
+    existingOwner,
+    hostname,
+    checkProcessAlive,
+  })) {
     return false
   }
 
   // Re-read immediately before unlinking so a replaced lock is not removed.
-  const currentOwnerContents = await readFile(lockPath, "utf8").catch(() => "null")
-  const currentOwner = JSON.parse(currentOwnerContents)
+  const currentOwner = await readCurrentLockOwner({ lockPath })
   if (!isSameLockOwner({
     currentOwner,
     existingOwner,
@@ -149,7 +172,7 @@ async function acquireLockFile({ lockPath, owner, hostname, checkProcessAlive })
       }
 
       const existingOwner = await readExistingOwner({ lockPath })
-      const reclaimed = await reclaimStaleLockIfUnchanged({
+      const reclaimed = await reclaimStaleHarvesterProcessLockIfUnchanged({
         lockPath,
         hostname,
         existingOwner,
@@ -188,7 +211,7 @@ export async function acquireHarvesterProcessLock({
   hostname = os.hostname(),
   startedAt = new Date().toISOString(),
   token = randomUUID(),
-  isProcessAlive: checkProcessAlive = isProcessAlive,
+  isProcessAlive: checkProcessAlive = isHarvesterProcessAlive,
 } = {}) {
   try {
     validateProcessLockInput({
