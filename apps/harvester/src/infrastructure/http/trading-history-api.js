@@ -199,13 +199,16 @@ function sendQueryResult({ response, result, notFound = false } = {}) {
   if (result?.ok !== true) {
     const error = result?.errors?.[0]
     const invalidQuery = error?.code === "HARVESTER_TRADING_HISTORY_QUERY_INVALID"
+    const persistenceUnavailable = error?.code === "HARVESTER_TRADING_HISTORY_PERSISTENCE_UNAVAILABLE"
     sendApiError({
       response,
-      status: invalidQuery ? 400 : 500,
+      status: invalidQuery ? 400 : persistenceUnavailable ? 503 : 500,
       code: error?.code ?? "HARVESTER_TRADING_HISTORY_QUERY_FAILED",
       message: invalidQuery
         ? "Trading-history query parameters are invalid."
-        : "Trading-history query failed.",
+        : persistenceUnavailable
+          ? "Persisted trading history is unavailable until relational history persistence is restored."
+          : "Trading-history query failed.",
     })
     return
   }
