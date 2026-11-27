@@ -534,6 +534,7 @@ function configureResidualSellThroughSubmission({
   pauses,
   completionCalls,
   symbol,
+  submitResult,
 } = {}) {
   dependencies.allocateOrderCommitments = ({ actions }) => ({
     ok: true,
@@ -544,6 +545,9 @@ function configureResidualSellThroughSubmission({
   })
   dependencies.submit = async ({ decision }) => {
     submissions.push(decision.actions)
+    if (submitResult !== undefined) {
+      return submitResult
+    }
     dependencies.state.residualSellThroughActiveOrders.push({
       clientOrderId: "residual-sell-client",
       brokerOrderId: "residual-sell-broker",
@@ -584,6 +588,7 @@ function configureResidualSellThroughDependencies(input = {}) {
     keepQuantity,
     baseAssetId,
     quoteAssetId,
+    submitResult,
   } = input
   const submissions = []
   const pauses = []
@@ -614,6 +619,7 @@ function configureResidualSellThroughDependencies(input = {}) {
     pauses,
     completionCalls,
     symbol,
+    submitResult,
   })
   return {
     submissions,
@@ -685,3 +691,74 @@ test("submits the residual SELL on reevaluation after the recovery SELL fill wit
 })
 
 
+
+
+test("preserves unknown, rejected, and blocked residual SELL outcomes without completing recovery or placing a BUY", async () => {
+  const scenarios = [
+    {
+      status: "UNKNOWN",
+      submitResult: {
+        ok: false,
+        errors: [Object.assign(
+          new Error("broker outcome unknown"),
+          { code: "UNKNOWN_SUBMISSION_OUTCOME" },
+        )],
+      },
+    },
+    {
+      status: "REJECTED",
+      submitResult: {
+        ok: false,
+        errors: [Object.assign(
+          new Error("broker rejected residual SELL"),
+          { code: "BROKER_REJECTED" },
+        )],
+      },
+    },
+    {
+      status: "BLOCKED",
+      submitResult: {
+        ok: true,
+        data: {
+          deferred: true,
+          reason: "SUBMISSION_BLOCKED",
+          submittedOrders: [],
+        },
+      },
+    },
+  ]
+  for (const scenario of scenarios) {
+    const dependencies = createDependencies()
+    const tracked = configureResidualSellThroughDependencies({
+      dependencies,
+      symbol: "DOGEUSDT",
+      activeQuantity: "2.8",
+      sellQuantity: "1.7",
+      keepQuantity: 1,
+      price: "0.05719",
+      baseAssetId: "asset:DOGE",
+      quoteAssetId: "asset:USDT",
+      submitResult: scenario.submitResult,
+    })
+    const evaluate = createLatestTransitionEvaluator(dependencies)
+    const result = await evaluate({
+      symbol: "DOGEUSDT",
+      shutdownRecoveryOnly: true,
+    })
+
+    assert.equal(tracked.submissions.length, 1, "Each broker outcome must preserve one residual SELL attempt.")
+    assert.equal(tracked.submissions[0][0].side, "SELL")
+    assert.equal(tracked.submissions[0][0].quantity, "1.7")
+    assert.equal(tracked.completionCalls.count, 0, "An unresolved broker outcome must not complete recovery.")
+    assert.equal(dependencies.state.completedRecoverySellSymbols.has("DOGEUSDT"), true)
+    assert.equal(tracked.submissions[0].some((action) => action.side === "BUY"), false)
+    if (scenario.status === "BLOCKED") {
+      assert.equal(result.ok, true)
+      assert.equal(result.data.deferred, true)
+      assert.equal(result.data.reason, "SUBMISSION_BLOCKED")
+    } else {
+      assert.equal(result.ok, false)
+      assert.equal(result.errors[0], scenario.submitResult.errors[0])
+    }
+  }
+})
