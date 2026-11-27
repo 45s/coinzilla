@@ -1879,8 +1879,15 @@ test("fails closed when process Journal publisher lacks write-only flush capabil
         writeFailed: false,
         writeErrorCount: 0,
       },
-      flush: async () => ({ ok: true, durable: true }),
-      close: async () => ({ ok: true, closed: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+      close: async () => ({
+        ok: true,
+        closed: true,
+        durable: true,
+      }),
     }),
     start: async ({ eventPublisher }) => {
       flushResult = await eventPublisher.flushWrites()
@@ -1896,7 +1903,11 @@ test("fails closed when process Journal publisher lacks write-only flush capabil
         }),
       }
     },
-    logger: { info() {}, system() {}, error() {} },
+    logger: {
+      info() {},
+      system() {},
+      error() {},
+    },
     registerSignalHandler: () => {},
   })
 
