@@ -146,6 +146,11 @@ function createEngineDependencies({
     broker,
     strategyPolicy,
     appConfig,
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({ ok: true, durable: true }),
+      flushWrites: async () => ({ ok: true, durable: true }),
+    },
     getPortfolio: () => portfolio,
     getRecoveryLedger: () => recoveryLedger,
     getMarketMetadata: () => marketMetadata,
