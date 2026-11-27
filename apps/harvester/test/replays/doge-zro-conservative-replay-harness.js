@@ -301,7 +301,7 @@ function createDogeReplayCanonicalFill({ executionFill, brokerOrderId, order }) 
   const quoteQuantity = multiplyDecimal({
     left: executionFill.price,
     right: executionFill.quantity,
-  })
+  });
   return new Fill({
     tradeId: String(executionFill.tradeId ?? executionFill.id),
     brokerOrderId,
