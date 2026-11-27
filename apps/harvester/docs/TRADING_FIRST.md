@@ -111,7 +111,6 @@ These are execution safeguards, not a demand to build a comprehensive production
 
 The following are deferred whenever the trading application is broken. They MUST NOT be prioritized, expanded, or used as a prerequisite for trading repair. A narrowly scoped existing safeguard may be fixed only when its concrete defect directly causes incorrect or unsafe trading:
 
-
 - Runtime restoration/replay of Portfolio, RecoveryLedger, OrderRegistry and reservations remains disabled. ADR-0001 durable facts already persist order intents/outcomes, fills, recovery-cycle outcomes, safety/operator controls and process boundaries, but the offline candidate projection is not yet accepted for runtime use.
 - Full process-restart recovery, account-wide reconciliation readiness and exactly-once crash/restart guarantees (ADR-0001 Steps 8 parity and 9).
 - Comprehensive reconciliation of all historical exchange executions and long-term account history.
