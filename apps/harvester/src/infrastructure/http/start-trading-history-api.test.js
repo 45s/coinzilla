@@ -312,7 +312,42 @@ test("Scenario Runner host marks runtime simulation executable only with a verif
 })
 
 
-test("executes a production-flow scenario through the local Harvester HTTP API on Windows", { skip: process.platform !== "win32" }, async () => {
+async function waitForScenarioRun({ apiBase, runId }) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const response = await fetch(`${apiBase}/runs/${encodeURIComponent(runId)}`)
+    assert.equal(response.status, 200,
+      "The local HTTP API must expose the accepted run for authoritative status recovery.")
+    const envelope = await response.json()
+    if (["Completed", "Failed", "Cancelled", "Timed out", "Blocked"].includes(envelope.data.status)) {
+      return envelope.data
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+  return null
+}
+
+async function executeScenarioThroughApi({ apiBase, scenario }) {
+  const response = await fetch(`${apiBase}/runs`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      strategyId: "RS",
+      scenarioId: scenario.id,
+      input: scenario.defaultInput,
+    }),
+  })
+  assert.equal(response.status, 202,
+    `The local HTTP API must accept scenario ${scenario.id}.`)
+  const envelope = await response.json()
+  return waitForScenarioRun({
+    apiBase,
+    runId: envelope.data.runId,
+  })
+}
+
+test("executes every executable RS production-flow scenario through the local Harvester HTTP API on Windows", { skip: process.platform !== "win32" }, async () => {
   const eventBus = new EventBus()
   const service = await startTradingHistoryApi({
     database: createDatabase(),
@@ -331,46 +366,28 @@ test("executes a production-flow scenario through the local Harvester HTTP API o
     assert.equal(catalogResponse.status, 200,
       "The local Harvester API must expose the scenario catalogue on Windows.")
     const catalogEnvelope = await catalogResponse.json()
-    const scenario = catalogEnvelope.data
+    const scenarios = catalogEnvelope.data
       .find((strategy) => strategy.strategyId === "RS")
-      .scenarios.find((item) => item.id === "RS-RUNTIME-SELL-SUBMISSION-001")
-    assert.equal(scenario.executable, true,
-      "Windows local composition must expose the trusted simulation-only runtime scenario without Linux tooling.")
-    assert.equal(scenario.executionStatus, "EXECUTABLE",
-      "The Windows local simulation path must be executable rather than Linux-sandbox blocked.")
-
-    const submitResponse = await fetch(`${apiBase}/runs`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        strategyId: "RS",
-        scenarioId: scenario.id,
-        input: scenario.defaultInput,
-      }),
-    })
-    assert.equal(submitResponse.status, 202,
-      "The local HTTP API must accept a valid Windows simulation run.")
-    const acceptedEnvelope = await submitResponse.json()
-    let result = null
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-      const runResponse = await fetch(`${apiBase}/runs/${encodeURIComponent(acceptedEnvelope.data.runId)}`)
-      assert.equal(runResponse.status, 200,
-        "The local HTTP API must expose the accepted run for authoritative status recovery.")
-      const runEnvelope = await runResponse.json()
-      if (["Completed", "Failed", "Cancelled", "Timed out", "Blocked"].includes(runEnvelope.data.status)) {
-        result = runEnvelope.data
-        break
-      }
-      await new Promise((resolve) => setTimeout(resolve, 20))
+      .scenarios.filter((scenario) => scenario.executable === true)
+    assert.equal(scenarios.length, 12,
+      "All twelve current RS production-flow scenarios must be executable in local Windows simulation.")
+    for (const scenario of scenarios) {
+      const result = await executeScenarioThroughApi({
+        apiBase,
+        scenario,
+      })
+      assert.ok(result, `Scenario ${scenario.id} must reach a terminal state.`)
+      assert.equal(result.status, "Completed",
+        `Scenario ${scenario.id} must complete its production-flow simulation.`)
+      assert.equal(result.output.passed, true,
+        `Scenario ${scenario.id} must satisfy its expected assertions.`)
+      assert.ok(result.output.assertions.length > 0,
+        `Scenario ${scenario.id} must return its assertion evidence.`)
+      assert.ok(result.output.trace.length > 0,
+        `Scenario ${scenario.id} must return its execution trace.`)
+      assert.equal(result.replayProvenance.verified, false,
+        "Local simulation must not imply trusted exact-replay provenance.")
     }
-
-    assert.ok(result, "The Windows simulation worker must reach a terminal run state through the HTTP API.")
-    assert.equal(result.status, "Completed",
-      "The Windows local worker must complete a production-flow scenario in a separate process.")
-    assert.equal(result.output.passed, true,
-      "The Windows local worker must return the production runtime scenario assertions.")
-    assert.equal(result.replayProvenance.verified, false,
-      "Local simulation execution must not imply trusted exact-replay provenance.")
   } finally {
     await service.close()
     await eventBus.close()
