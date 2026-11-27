@@ -439,7 +439,10 @@ test("marks Journal degraded and reports a rejected write-only flush", async () 
     journalFactory: () => ({
       start: async () => ({ ok: true }),
       flushWrites: async () => { throw failure },
-      close: async () => ({ ok: true, closed: true }),
+      close: async () => ({
+        ok: true,
+        closed: true,
+      }),
     }),
   })
 
