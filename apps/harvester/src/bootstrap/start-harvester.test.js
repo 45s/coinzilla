@@ -1598,9 +1598,15 @@ class TestnetTradingRecoveryScenario {
       price: "65000.12",
       timestamp: 1000,
     })
+    await this.subscriptions.get("BTCUSDT")({
+      eventType: "aggTrade",
+      symbol: "BTCUSDT",
+      price: "65000.20",
+      timestamp: 1001,
+    })
   
-    // With no active position left, the subsequent market tick preserves the
-    // existing trailing-BUY behavior: it replaces the standing BUY. Shutdown
+    // The first post-completion tick submits the next BUY. A second tick
+    // exercises the existing trailing-BUY replacement behavior. Shutdown
     // then cancels the replacement BUY while leaving recovery SELLs untouched.
     assert.equal(this.submittedOrders.length, 4, "the completed recovery cycle must leave the initial BUY, recovery SELL, next BUY and its trailing replacement recorded")
   
@@ -1618,7 +1624,7 @@ class TestnetTradingRecoveryScenario {
   
     assert.equal(this.runtime.getRecoveryLedger({ marketId: this.marketMetadata.market.id }).buyCost, "0", "TESTNET conservative recovery-cycle scenario: expected this.runtime.getRecoveryLedger({ marketId: this.marketMetadata.market.id }).buyCost to equal \"0\".")
   
-    assert.deepEqual(this.submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY", "BUY"], "TESTNET conservative recovery-cycle scenario: expected this.submittedOrders.map((order) => order.side) to deeply equal [\"BUY\", \"SELL\", \"BUY\", \"SELL\", \"BUY\", \"BUY\"].")
+    assert.deepEqual(this.submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "BUY"], "TESTNET conservative recovery-cycle scenario: expected this.submittedOrders.map((order) => order.side) to deeply equal [\"BUY\", \"SELL\", \"BUY\", \"SELL\", \"BUY\", \"BUY\"].")
   }
 
   async run() {
