@@ -298,3 +298,9 @@ The durable RS STOP fact retains `scope: ACCOUNT` because the safety-fact schema
 Market-scoped blockers remain local to their symbol. The ADR-0008 Recovery Seller SELL exception is limited to the documented market-level strategy safety pause and never bypasses a generic account blocker. The owner-approved RS STOP exception is a distinct strategy-purpose rule and does not override any independent `scope: ACCOUNT` blocker.
 
 Do not confuse an account open-order audit classification of `BLOCKED` with this safety gate. ADR-0004 remains authoritative: external orders stay unowned and untouched; `IGNORE` permits scoped continuation, while `BLOCK` prevents trading only on the affected market.
+
+## Offline Recovery Seller Journal replay boundary
+
+The test-first contract permits replay only for terminal, fully owned Recovery Seller BUY orders/fills with valid position/cycle identity. Offline account reconciliation must include RS Portfolio base-quantity and quote-cash-flow deltas without treating RS inventory as Conservative inventory.
+
+Active or UNKNOWN RS BUY orders remain deferred until canonical order reconciliation. RS SELL orders/fills remain deferred until durable mixed-sell allocation evidence is available. Offline audit evidence must not resolve an RS STOP or authorize restart. This is read-only Journal/account reconciliation, not exchange access or operational acceptance.

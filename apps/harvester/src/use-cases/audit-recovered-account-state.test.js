@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { Asset, Balance, CanonicalOrder, Commission, Fill, Market, Money, Order, Quantity } from "@coinzilla/entities"
 import { AccountSnapshot } from "../domain/account/account-snapshot.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { projectHarvesterJournalRecovery } from "../infrastructure/journal/project-harvester-journal-recovery-with-deferrals.js"
 import { restoreHarvesterJournalState } from "./restore-harvester-journal-state.js"
@@ -83,7 +84,7 @@ function createOpeningRecords() {
   
   
   
-function createCommissionBaselineRecord() {
+function createCommissionBaselineRecord({ lineNumber = 5 } = {}) {
   return record("account.snapshot_captured", {
     phase: "COMMISSION_BASELINE",
     sourceTime: 1000,
@@ -93,10 +94,10 @@ function createCommissionBaselineRecord() {
       locked: "0.25", 
       total: "1" }],
     auditReasons: [],
-  }, 5)
+  }, lineNumber)
 }
 
-function createBuyFillRecord({ thirdAssetCommission }) {
+function createBuyFillRecord({ thirdAssetCommission, lineOffset = 0 }) {
   return record("execution.fill_applied", {
     fillId: "binance:BTCUSDT:trade-1",
     tradeId: "trade-1",
@@ -126,10 +127,10 @@ function createBuyFillRecord({ thirdAssetCommission }) {
       }] : []),
     ],
     commissionStatus: "COMPLETE",
-  }, thirdAssetCommission ? 6 : 5)
+  }, (thirdAssetCommission ? 6 : 5) + lineOffset)
 }
 
-function createSellCycleRecords({ freeQuantity, thirdAssetCommission }) {
+function createSellCycleRecords({ freeQuantity, thirdAssetCommission, lineOffset = 0 }) {
   return [
     record("order.submission_requested", {
       clientOrderId: "h-BTCUSDT-sell-1",
@@ -139,7 +140,7 @@ function createSellCycleRecords({ freeQuantity, thirdAssetCommission }) {
       price: "102.757352941176470588",
       quantity: "0.4896",
       status: "PENDING",
-    }, thirdAssetCommission ? 7 : 6),
+    }, (thirdAssetCommission ? 7 : 6) + lineOffset),
     record("order.submitted", {
       clientOrderId: "h-BTCUSDT-sell-1",
       brokerOrderId: "9002",
@@ -149,7 +150,7 @@ function createSellCycleRecords({ freeQuantity, thirdAssetCommission }) {
       price: "102.757352941176470588",
       quantity: "0.4896",
       status: "FILLED",
-    }, thirdAssetCommission ? 8 : 7),
+    }, (thirdAssetCommission ? 8 : 7) + lineOffset),
     record("execution.fill_applied", {
       fillId: "binance:BTCUSDT:trade-2",
       tradeId: "trade-2",
@@ -163,7 +164,7 @@ function createSellCycleRecords({ freeQuantity, thirdAssetCommission }) {
       liquidityRole: "MAKER",
       commissions: [],
       commissionStatus: "COMPLETE",
-    }, thirdAssetCommission ? 9 : 8),
+    }, (thirdAssetCommission ? 9 : 8) + lineOffset),
     record("recovery.cycle_completed", {
       symbol: "BTCUSDT",
       marketId: "binance:BTCUSDT",
@@ -174,26 +175,58 @@ function createSellCycleRecords({ freeQuantity, thirdAssetCommission }) {
       
       
       realizedNetProfit: thirdAssetCommission ? "0.24" : "0.25",
-    }, thirdAssetCommission ? 10 : 9),
+    }, (thirdAssetCommission ? 10 : 9) + lineOffset),
   ]
 }
 
-function createClosingRecords({ thirdAssetCommission }) {
+
+function getClosingBaseBalance({ recoverySellerBuy }) {
+  if (recoverySellerBuy) {
+    return "0.11"
+  }
+  return "0.01"
+}
+
+function getClosingQuoteBalance({ thirdAssetCommission, recoverySellerBuy }) {
+  if (recoverySellerBuy) {
+    return thirdAssetCommission ? "990.24" : "990.25"
+  }
+  return thirdAssetCommission ? "1000.24" : "1000.25"
+}
+
+function getClosingRecordLineNumber({ thirdAssetCommission, lineOffset }) {
+  const baseLineNumber = thirdAssetCommission ? 11 : 10
+  return baseLineNumber + lineOffset
+}
+
+function createClosingRecords({ thirdAssetCommission, recoverySellerBuy = false, lineOffset = 0 }) {
+  const baseBalance = getClosingBaseBalance({ recoverySellerBuy })
+  const quoteBalance = getClosingQuoteBalance({
+    thirdAssetCommission,
+    recoverySellerBuy,
+  })
+  const closingLineNumber = getClosingRecordLineNumber({
+    thirdAssetCommission,
+    lineOffset,
+  })
+  const stoppedLineNumber = closingLineNumber + 1
   return [
     record("account.snapshot_captured", {
       phase: "CLOSING",
       sourceTime: 2000,
       auditStatus: "COMPLETE",
       balances: [
-        { asset: "BTC", 
-          free: "0.01", 
-          locked: "0", 
-          total: "0.01" },
+        {
+          asset: "BTC",
+          free: baseBalance,
+          locked: "0",
+          total: baseBalance,
+        },
         {
           asset: "USDT",
-          free: thirdAssetCommission ? "1000.24" : "1000.25",
+          free: quoteBalance,
           locked: "0",
-          total: thirdAssetCommission ? "1000.24" : "1000.25",
+          total: quoteBalance,
         },
         ...(thirdAssetCommission ? [{
           asset: "BNB",
@@ -203,31 +236,331 @@ function createClosingRecords({ thirdAssetCommission }) {
         }] : []),
       ],
       auditReasons: [],
-    }, thirdAssetCommission ? 11 : 10),
+    }, closingLineNumber),
     record("harvester.stopped", {
-      
       reason: "SIGTERM",
       outcome: "success",
-    }, thirdAssetCommission ? 12 : 11),
+    }, stoppedLineNumber),
   ]
 }
 
-const recoveryProjection = ({
-  freeQuantity = "0.01",
-  thirdAssetCommission = false,
-  includeCommissionBaseline = true,
-} = {}) => {
+function createRecoverySellerBuyFillRecord({
+  ownership,
+  clientOrderId,
+  brokerOrderId,
+  fillId,
+  tradeId,
+  quantity,
+  quoteQuantity,
+  lineNumber,
+}) {
+  return record("execution.fill_applied", {
+    fillId,
+    tradeId,
+    brokerOrderId,
+    clientOrderId,
+    symbol: "BTCUSDT",
+    side: "BUY",
+    price: "100",
+    quantity,
+    quoteQuantity,
+    liquidityRole: "MAKER",
+    commissions: [],
+    commissionStatus: "COMPLETE",
+    ...ownership,
+  }, lineNumber)
+}
+
+function createRecoverySellerBuyRecords({
+  status = "FILLED",
+  includeFill = true,
+} = {}) {
+  const ownership = {
+    purpose: "RECOVERY_BUY",
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-1",
+    cycleId: "rs-cycle-1",
+  }
+  const clientOrderId = "rs-BTCUSDT-buy-1"
+  const brokerOrderId = "9003"
+  const intent = {
+    clientOrderId,
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    price: "100",
+    quantity: "0.1",
+    ...ownership,
+  }
   const records = [
-    ...createOpeningRecords(),
-    ...(thirdAssetCommission && includeCommissionBaseline ? [createCommissionBaselineRecord()] : []),
-    createBuyFillRecord({ thirdAssetCommission }),
-    ...createSellCycleRecords({ freeQuantity, 
-      thirdAssetCommission }),
-    ...createClosingRecords({ thirdAssetCommission }),
+    record("order.submission_requested", {
+      ...intent,
+      status: "PENDING",
+    }, 5),
+    record("order.submitted", {
+      ...intent,
+      brokerOrderId,
+      status,
+    }, 6),
   ]
-  return projectHarvesterJournalRecovery({ records })
+  if (includeFill) {
+    records.push(createRecoverySellerBuyFillRecord({
+      ownership,
+      clientOrderId,
+      brokerOrderId,
+      fillId: "binance:BTCUSDT:trade-rs-buy-1",
+      tradeId: "trade-rs-buy-1",
+      quantity: "0.06",
+      quoteQuantity: "6",
+      lineNumber: 7,
+    }))
+    records.push(createRecoverySellerBuyFillRecord({
+      ownership,
+      clientOrderId,
+      brokerOrderId,
+      fillId: "binance:BTCUSDT:trade-rs-buy-2",
+      tradeId: "trade-rs-buy-2",
+      quantity: "0.04",
+      quoteQuantity: "4",
+      lineNumber: 8,
+    }))
+  }
+  return records
+}
+function createRecoverySellerSellRecords() {
+  const ownership = {
+    purpose: "RECOVERY_SELL",
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-1",
+    cycleId: "rs-cycle-1",
+  }
+  const clientOrderId = "rs-BTCUSDT-sell-1"
+  const brokerOrderId = "9004"
+  const intent = {
+    clientOrderId,
+    symbol: "BTCUSDT",
+    side: "SELL",
+    type: "LIMIT",
+    price: "100",
+    quantity: "0.05",
+    ...ownership,
+  }
+  return [
+    record("order.submission_requested", {
+      ...intent,
+      status: "PENDING",
+    }, 5),
+    record("order.submitted", {
+      ...intent,
+      brokerOrderId,
+      status: "FILLED",
+    }, 6),
+    record("execution.fill_applied", {
+      fillId: "binance:BTCUSDT:trade-rs-sell-1",
+      tradeId: "trade-rs-sell-1",
+      brokerOrderId,
+      clientOrderId,
+      symbol: "BTCUSDT",
+      side: "SELL",
+      price: "100",
+      quantity: "0.05",
+      quoteQuantity: "5",
+      liquidityRole: "MAKER",
+      commissions: [],
+      commissionStatus: "COMPLETE",
+      ...ownership,
+    }, 7),
+  ]
 }
 
+
+function getRecoverySellerOrderRecords(options) {
+  if (options.recoverySellerBuy) {
+    return createRecoverySellerBuyRecords({
+      status: options.recoverySellerBuyStatus,
+      includeFill: options.recoverySellerBuyFill,
+    })
+  }
+  if (options.recoverySellerSell) {
+    return createRecoverySellerSellRecords()
+  }
+  return []
+}
+
+function getCommissionBaselineRecords(options) {
+  if (!options.thirdAssetCommission || !options.includeCommissionBaseline) {
+    return []
+  }
+  let lineNumber = 5
+  if (options.recoverySellerBuy) {
+    lineNumber = 9
+  } else if (options.recoverySellerSell) {
+    lineNumber = 8
+  }
+  return [createCommissionBaselineRecord({ lineNumber })]
+}
+
+function getRecoveryProjectionLineOffset({ recoverySellerBuy, recoverySellerSell }) {
+  if (recoverySellerBuy) {
+    return 5
+  }
+  if (recoverySellerSell) {
+    return 4
+  }
+  return 0
+}
+
+function createRecoveryProjectionRecords(options) {
+  const lineOffset = getRecoveryProjectionLineOffset(options)
+  return [
+    ...createOpeningRecords(),
+    ...getRecoverySellerOrderRecords(options),
+    ...getCommissionBaselineRecords(options),
+    createBuyFillRecord({
+      thirdAssetCommission: options.thirdAssetCommission,
+      lineOffset,
+    }),
+    ...createSellCycleRecords({
+      freeQuantity: options.freeQuantity,
+      thirdAssetCommission: options.thirdAssetCommission,
+      lineOffset,
+    }),
+    ...createClosingRecords({
+      thirdAssetCommission: options.thirdAssetCommission,
+      recoverySellerBuy: options.recoverySellerBuy && options.recoverySellerBuyFill,
+      lineOffset,
+    }),
+  ]
+}
+
+
+function hasThirdAssetCommission(fill) {
+  return fill.commissions.some(({ asset }) => asset === "BNB")
+}
+
+function shiftCommissionBaselineSequence({ accountSnapshot, sequence }) {
+  if (accountSnapshot.phase !== "COMMISSION_BASELINE") {
+    return accountSnapshot
+  }
+  return {
+    ...accountSnapshot,
+    sequence,
+  }
+}
+
+function isNotAsset({ balance, assetCode }) {
+  return balance.asset !== assetCode
+}
+
+function removeAssetFromPreflightSnapshot({ entry, assetCode }) {
+  if (entry.phase !== "PREFLIGHT") {
+    return entry
+  }
+  return {
+    ...entry,
+    balances: entry.balances.filter((balance) => isNotAsset({ balance, assetCode })),
+  }
+}
+
+function createEthMarket() {
+  const ethAsset = new Asset({
+    id: "binance:ETH",
+    code: "ETH",
+  })
+  return new Market({
+    venue: "binance",
+    symbol: "ETHUSDT",
+    baseAsset: ethAsset,
+    quoteAsset: market.quoteAsset,
+  })
+}
+
+function addEthBalanceToPreflightProjection({ projection }) {
+  return {
+    ...projection,
+    data: {
+      ...projection.data,
+      accountSnapshots: projection.data.accountSnapshots.map((entry) => {
+        if (entry.phase !== "PREFLIGHT") {
+          return entry
+        }
+        return {
+          ...entry,
+          balances: [...entry.balances, {
+            asset: "ETH",
+            free: "0.5",
+            locked: "0",
+            total: "0.5",
+          }],
+        }
+      }),
+    },
+  }
+}
+
+function createExternalEthOrder({ ethMarket }) {
+  return new CanonicalOrder({
+    clientOrderId: "manual-eth-sell",
+    brokerOrderId: "9900",
+    market: ethMarket,
+    side: "SELL",
+    type: "LIMIT",
+    limitPrice: new Money({
+      amount: "10",
+      asset: market.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "0.1",
+      asset: ethMarket.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: ethMarket.baseAsset,
+    }),
+    status: "OPEN",
+  })
+}
+
+function createEthAccountSnapshot({ ethAsset }) {
+  return new AccountSnapshot({
+    sourceTime: 3000,
+    balances: [
+      new Balance({
+        free: new Quantity({
+          amount: "0.01",
+          asset: market.baseAsset,
+        }),
+        locked: new Quantity({
+          amount: "0",
+          asset: market.baseAsset,
+        }),
+      }),
+      new Balance({
+        free: new Quantity({
+          amount: "1000.25",
+          asset: market.quoteAsset,
+        }),
+        locked: new Quantity({
+          amount: "0",
+          asset: market.quoteAsset,
+        }),
+      }),
+      new Balance({
+        free: new Quantity({
+          amount: "0.4",
+          asset: ethAsset,
+        }),
+        locked: new Quantity({
+          amount: "0.1",
+          asset: ethAsset,
+        }),
+      }),
+    ],
+  })
+}
+const recoveryProjection = (options = {}) => projectHarvesterJournalRecovery({
+  records: createRecoveryProjectionRecords(options),
+})
 const restoreState = (options) => {
   const projection = recoveryProjection(options)
   assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join('; '))
@@ -367,6 +700,62 @@ asset: market.baseAsset }),
   status: "OPEN",
 })
 
+test("replays terminal Recovery Seller BUY fills and includes their inventory in offline account audit", () => {
+  const { projection, restored } = restoreState({ recoverySellerBuy: true })
+  const recoverySellerPosition = restored.portfolio.getPosition({
+    marketId: market.id,
+    strategyId: StrategyId.RECOVERY_SELLER,
+  })
+  assert.equal(recoverySellerPosition.totalBaseQuantity.amount, "0.1")
+  const buyExecution = restored.recoverySellerBuyExecutionByCycle.get("rs-cycle-1")
+  assert.equal(buyExecution.quantity, "0.1")
+  assert.equal(buyExecution.quoteQuantity, "10")
+  assert.equal(buyExecution.fillIds.size, 2)
+
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
+    currentAccountSnapshot: snapshot({
+      btcFree: "0.11",
+      usdtFree: "990.25",
+    }),
+    openOrders: [],
+    markets: [market],
+  })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.balancesChecked, 2)
+  assert.equal(result.data.recoverySellerPositionsChecked, 1)
+})
+
+test("keeps Recovery Seller SELL fill replay deferred without mixed-sell allocation evidence", () => {
+  const projection = recoveryProjection({ recoverySellerSell: true })
+  assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join("; "))
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([["BTCUSDT", market]]),
+  })
+
+  assert.equal(restored.ok, false)
+  assert.match(restored.errors?.[0]?.message ?? "", /Recovery Seller Journal replay is deferred/)
+})
+
+test("keeps an unresolved Recovery Seller BUY order deferred until canonical reconciliation", () => {
+  const projection = recoveryProjection({
+    recoverySellerBuy: true,
+    recoverySellerBuyStatus: "NEW",
+    recoverySellerBuyFill: false,
+  })
+  assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join("; "))
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([["BTCUSDT", market]]),
+  })
+
+  assert.equal(restored.ok, false)
+  assert.match(restored.errors?.[0]?.message ?? "", /Recovery Seller Journal replay is deferred/)
+})
+
 test("accepts balances and reservations that exactly match replayed strategy ownership", () => {
   const { projection, restored } = restoreState()
   const result = auditRecoveredAccountState({
@@ -396,22 +785,22 @@ bnbLocked: "0.25" }),
   })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.recoverySellerPositionsChecked, 0)
   assert.equal(result.data.balancesChecked, 3)
 })
 
 test("fails closed when the third-asset baseline is journaled after the applied fill", () => {
   const { projection, restored } = restoreState({ thirdAssetCommission: true })
-  const fill = restored.journalFills.find(({ commissions }) =>
-    commissions.some(({ asset }) => asset === "BNB"))
+  const fill = restored.journalFills.find(hasThirdAssetCommission)
   const lateBaselineProjection = {
     ...projection,
     data: {
       ...projection.data,
       accountSnapshots: projection.data.accountSnapshots.map((accountSnapshot) =>
-        accountSnapshot.phase === "COMMISSION_BASELINE"
-          ? { ...accountSnapshot,
-sequence: fill.sequence + 1 }
-          : accountSnapshot
+        shiftCommissionBaselineSequence({
+          accountSnapshot,
+          sequence: fill.sequence + 1,
+        })
       ),
     },
   }
@@ -714,72 +1103,14 @@ usdtLocked: "100" }),
   )
 })
 
+
 test("keeps an unrelated external order unowned and does not block the reconciled market", () => {
-  const ethAsset = new Asset({ id: "binance:ETH",
-code: "ETH" })
-  const ethMarket = new Market({
-    venue: "binance",
-    symbol: "ETHUSDT",
-    baseAsset: ethAsset,
-    quoteAsset: market.quoteAsset,
-  })
+  const ethMarket = createEthMarket()
+  const ethAsset = ethMarket.baseAsset
   const { projection, restored } = restoreState()
-  const expandedProjection = {
-    ...projection,
-    data: {
-      ...projection.data,
-      accountSnapshots: projection.data.accountSnapshots.map((entry) =>
-        entry.phase === "PREFLIGHT"
-          ? {
-              ...entry,
-              balances: [...entry.balances, {
-                asset: "ETH",
-                free: "0.5",
-                locked: "0",
-                total: "0.5",
-              }],
-            }
-          : entry
-      ),
-    },
-  }
-  const externalOrder = new CanonicalOrder({
-    clientOrderId: "manual-eth-sell",
-    brokerOrderId: "9900",
-    market: ethMarket,
-    side: "SELL",
-    type: "LIMIT",
-    limitPrice: new Money({ amount: "10",
-asset: market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.1",
-asset: ethAsset }),
-    executedQuantity: new Quantity({ amount: "0",
-asset: ethAsset }),
-    status: "OPEN",
-  })
-  const currentAccountSnapshot = new AccountSnapshot({
-    sourceTime: 3000,
-    balances: [
-      new Balance({
-        free: new Quantity({ amount: "0.01",
-asset: market.baseAsset }),
-        locked: new Quantity({ amount: "0",
-asset: market.baseAsset }),
-      }),
-      new Balance({
-        free: new Quantity({ amount: "1000.25",
-asset: market.quoteAsset }),
-        locked: new Quantity({ amount: "0",
-asset: market.quoteAsset }),
-      }),
-      new Balance({
-        free: new Quantity({ amount: "0.4",
-asset: ethAsset }),
-        locked: new Quantity({ amount: "0.1",
-asset: ethAsset }),
-      }),
-    ],
-  })
+  const expandedProjection = addEthBalanceToPreflightProjection({ projection })
+  const externalOrder = createExternalEthOrder({ ethMarket })
+  const currentAccountSnapshot = createEthAccountSnapshot({ ethAsset })
   const result = auditRecoveredAccountState({
     projection: expandedProjection,
     recoveredState: resolveRestoredOrdersAsFilled({ recoveredState: restored }),
@@ -788,14 +1119,12 @@ asset: ethAsset }),
     markets: [market, ethMarket],
     targetMarket: market,
   })
-
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.deepEqual(result.data.blockedMarkets, ["ETHUSDT"])
   assert.equal(result.data.targetMarketBlocked, false)
   assert.equal(result.data.unownedOpenOrders.length, 1)
   assert.equal(result.data.unownedOpenOrders[0].symbol, "ETHUSDT")
 })
-
 test("fails closed when a relevant market asset is absent from the current account snapshot", () => {
   const { projection, restored } = restoreState()
   const currentAccountSnapshot = new AccountSnapshot({
@@ -828,10 +1157,7 @@ test("fails closed when the durable baseline omits a relevant market asset", () 
     data: {
       ...projection.data,
       accountSnapshots: projection.data.accountSnapshots.map((entry) =>
-        entry.phase === "PREFLIGHT"
-          ? { ...entry,
-balances: entry.balances.filter(({ asset }) => asset !== "BTC") }
-          : entry
+        removeAssetFromPreflightSnapshot({ entry, assetCode: "BTC" })
       ),
     },
   }
