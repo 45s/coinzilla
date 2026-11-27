@@ -382,7 +382,10 @@ force: true }))
 
 test("fails closed after the fact stream is synced but before its manifest checkpoint is appended", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
   let loseFactSyncAcknowledgement = false
   const factPath = path.join(directory, "facts.jsonl")
   const fileSystem = {
@@ -439,7 +442,10 @@ test("fails closed after the fact stream is synced but before its manifest check
 
 test("classifies ledger integrity failures separately from uncertain append acknowledgements", async (t) => {
   const directory = await createDirectory()
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
   const initializedStore = createStore(directory)
   const initialized = await initializedStore.initialize()
   assert.equal(initialized.ok, true, "The isolated store must initialize before its manifest is made stale.")
