@@ -1948,7 +1948,7 @@
       "branches": 83.22,
       "functions": 96
     },
-    "note": "The original 30 critical-module floors retain their measured baseline provenance. The seven additional critical modules introduced by release PR #1662 were measured from its develop source head and then re-measured with all 37 modules enforced in workflow run 44966859719; their per-module baseline and minimum values are recorded in moduleCoverage. The start-provider-accounts.js module was separately measured from develop 6405aafa1824e61de7fee420f54b436eed30cb5e in workflow run 45934755515 (Harvester job 140295275348); its measured baseline is lines 92.78%, branches 76.83%, functions 97.87%, with policy floors 90%, 75%, and 95%. The Recovery Seller STOP workflow and resolver were measured from develop source SHA 2a030b960ba43a6911a98b2f5b2662b04eef5453 in workflow run 46041844024 (Harvester job 140651244165), before their implementation changes; measured baselines and non-weakened minimum floors are recorded in moduleCoverage. Exact implementation-head coverage from run 46045551059 (Harvester job 140663786408): STOP workflow 96.53% lines / 93.22% branches / 100% functions; STOP resolver 98.78% lines / 92.45% branches / 100% functions. The three offline Recovery Seller BUY replay/account-audit modules were baselined from test-only PR #1938 head 40b63d6af69703ba896cb844a1eea6a5cf0faac4 (coverage workflow run 46040222360, Harvester job 140645766306), with source base develop d9330f58c2238afa8d2b0a7ff20734faaec93032. A source comparison to develop 21f32ad24719875a20cc7ef38c76dfc16beed085 found no changes in these three modules, so the measured values remain the exact develop-source baseline."
+    "note": "The original 30 critical-module floors retain their measured baseline provenance. The seven additional critical modules introduced by release PR #1662 were measured from its develop source head and then re-measured with all 37 modules enforced in workflow run 44966859719; their per-module baseline and minimum values are recorded in moduleCoverage. The start-provider-accounts.js module was separately measured from develop 6405aafa1824e61de7fee420f54b436eed30cb5e in workflow run 45934755515 (Harvester job 140295275348); its measured baseline is lines 92.78%, branches 76.83%, functions 97.87%, with policy floors 90%, 75%, and 95%. The Recovery Seller STOP workflow and resolver were measured from develop source SHA 2a030b960ba43a6911a98b2f5b2662b04eef5453 in workflow run 46041844024 (Harvester job 140651244165), before their implementation changes; measured baselines and non-weakened minimum floors are recorded in moduleCoverage. Exact implementation-head coverage from run 46045551059 (Harvester job 140663786408): STOP workflow 96.53% lines / 93.22% branches / 100% functions; STOP resolver 98.78% lines / 92.45% branches / 100% functions. The three offline Recovery Seller BUY replay/account-audit modules were baselined from test-only PR #1938 head 40b63d6af69703ba896cb844a1eea6a5cf0faac4 (coverage workflow run 46040222360, Harvester job 140645766306), with source base develop d9330f58c2238afa8d2b0a7ff20734faaec93032. A source comparison to develop 21f32ad24719875a20cc7ef38c76dfc16beed085 found no changes in these three modules, so the measured values remain the exact develop-source baseline. Exact PR #1939 head dc6665d961570d4b3513486fbeef9313808c39d8 coverage run 46056521344 (Harvester job 140700245057) enforced the expanded 53-module inventory; all critical module floors passed."
   },
   "moduleCoverage": [
     {
@@ -2990,9 +2990,9 @@
         "functions": 90
       },
       "latestObserved": {
-        "lines": 90.55,
-        "branches": 77.92,
-        "functions": 96.08
+        "lines": 91.56,
+        "branches": 80.72,
+        "functions": 98.04
       }
     }
   ],
@@ -3012,19 +3012,19 @@
     ]
   },
   "latestCoverageMeasurement": {
-    "measuredAt": "2026-11-27T19:01:29Z",
+    "measuredAt": "2026-11-27T19:26:09Z",
     "branch": "fix/harvester/offline-rs-buy-replay-implementation-20261127",
-    "prHeadSha": "b1c94acbbb031ddbc7a36b887077590f7c880af4",
+    "prHeadSha": "dc6665d961570d4b3513486fbeef9313808c39d8",
     "baseDevelopSha": "21f32ad24719875a20cc7ef38c76dfc16beed085",
-    "workflowRunId": 46053482269,
-    "harvesterJobId": 140690489937,
+    "workflowRunId": 46056521344,
+    "harvesterJobId": 140700245057,
     "aggregate": {
-      "lines": 91.28,
-      "branches": 84.38,
-      "functions": 96.13
+      "lines": 91.31,
+      "branches": 84.42,
+      "functions": 96.15
     },
-    "checkedCriticalModuleCount": 50,
+    "checkedCriticalModuleCount": 53,
     "gatePassed": true,
-    "note": "This run measured all three new source modules, but the inventory did not yet include their per-module floors. The next exact-head coverage run must enforce the expanded 53-module inventory."
+    "note": "Exact PR #1939 head coverage enforced all 53 critical module floors and passed. The read-only Binance TESTNET integration was skipped by workflow configuration; no exchange operations were performed."
   }
 }
