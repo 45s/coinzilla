@@ -133,7 +133,11 @@ export async function reclaimStaleHarvesterProcessLockIfUnchanged({
   attempt = 0,
   checkProcessAlive = isHarvesterProcessAlive,
 }) {
-  if (attempt !== 0 || !isStaleLockOwner({ existingOwner, hostname, checkProcessAlive })) {
+  if (attempt !== 0 || !isStaleLockOwner({
+    existingOwner,
+    hostname,
+    checkProcessAlive,
+  })) {
     return false
   }
 
