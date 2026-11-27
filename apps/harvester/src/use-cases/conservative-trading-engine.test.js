@@ -1622,6 +1622,36 @@ function createBuyExecutionEvidence({
   }
 }
 
+test("keeps a pre-existing BUY untouched while planning the recovery SELL for its active Position", async () => {
+  const seeded = makeSeededRecoveryState()
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    seedExistingBuy: true,
+    baseFreeBalance: "1",
+  })
+  const buyOrdersBeforeEvaluation = harness.engine.getOrders().filter((order) => order.side === "BUY")
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  const ordersAfterEvaluation = harness.engine.getOrders()
+  const buyOrdersAfterEvaluation = ordersAfterEvaluation.filter((order) => order.side === "BUY")
+  const recoverySellOrders = ordersAfterEvaluation.filter((order) =>
+    order.side === "SELL" && order.status === "OPEN")
+
+  assert.equal(result.ok, true, "A pre-existing BUY must not prevent the recovery strategy from evaluating the active Position.")
+  assert.equal(buyOrdersAfterEvaluation.length, buyOrdersBeforeEvaluation.length, "An active recovery Position must not create another standing BUY.")
+  assert.equal(recoverySellOrders.length, 1, "The active Position must still receive exactly one recovery SELL while the pre-existing BUY remains untouched.")
+  assert.equal(buyOrdersAfterEvaluation[0].clientOrderId, buyOrdersBeforeEvaluation[0].clientOrderId, "The existing BUY identity must remain unchanged while recovery SELL coverage is established.")
+})
+
 test("treats decimal-formatted zero as no execution in recovery SELL cancellation reconciliation", async () => {
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
