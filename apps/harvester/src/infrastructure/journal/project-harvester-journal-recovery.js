@@ -1,4 +1,5 @@
 import { addDecimal, assertDecimalString, compareDecimal, toResult } from "@coinzilla/utils"
+import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import { validateRecoverySellerSubmissionOwnership } from "../../domain/orders/recovery-seller-submission-ownership.js"
 
 const EVENT = Object.freeze({
@@ -1035,7 +1036,7 @@ sequence })
   }
   if (
     order.side === "SELL" &&
-    order.strategyId !== "RECOVERY_SELLER" &&
+    order.strategyId !== StrategyId.RECOVERY_SELLER &&
     compareDecimal({
       left: cumulativeFillQuantity,
       right: order.quantity,

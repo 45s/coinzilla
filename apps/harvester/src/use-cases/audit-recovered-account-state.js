@@ -642,24 +642,7 @@ function createExpectedOrderCommitments({ recoveredState }) {
   }
 }
 
-function createUnownedOpenOrderCommitment({
-  order,
-  identity,
-  brokerOrderId,
-  symbol,
-  marketsBySymbol,
-}) {
-  const externalMarket = marketsBySymbol.get(symbol)
-  if (!externalMarket) {
-    throw new Error(`Canonical Market metadata is missing for unowned open order ${symbol}`)
-  }
-  const actualStatus = normalizeOrderStatus({ status: order.status })
-  if (!["OPEN", "PARTIALLY_FILLED"].includes(actualStatus)) {
-    throw new Error(`Unowned exchange order has an unsupported open status: ${brokerOrderId}`)
-  }
-  if (!["LIMIT", "LIMIT_MAKER"].includes(order.type)) {
-    throw new Error(`Unowned exchange order has an unsupported commitment type: ${brokerOrderId}`)
-  }
+function validateUnownedOrderQuantities({ identity, brokerOrderId }) {
   const originalQuantity = requireAmount({
     value: identity.originalQuantity,
     field: `Unowned order ${brokerOrderId}.originalQuantity`,
@@ -678,6 +661,10 @@ function createUnownedOpenOrderCommitment({
   }) <= 0) {
     throw new Error(`Unowned exchange order has no positive remaining quantity: ${brokerOrderId}`)
   }
+  return remainingQuantity
+}
+
+function validateUnownedOrderPrice({ order, brokerOrderId }) {
   const actualPrice = requireAmount({
     value: getOrderPrice({ order }),
     field: `Unowned order ${brokerOrderId}.price`,
@@ -688,6 +675,35 @@ function createUnownedOpenOrderCommitment({
   }) <= 0) {
     throw new Error(`Unowned exchange order price must be positive: ${brokerOrderId}`)
   }
+  return actualPrice
+}
+
+function createUnownedOpenOrderCommitment({
+  order,
+  identity,
+  brokerOrderId,
+  symbol,
+  marketsBySymbol,
+}) {
+  const externalMarket = marketsBySymbol.get(symbol)
+  if (!externalMarket) {
+    throw new Error(`Canonical Market metadata is missing for unowned open order ${symbol}`)
+  }
+  const actualStatus = normalizeOrderStatus({ status: order.status })
+  if (!["OPEN", "PARTIALLY_FILLED"].includes(actualStatus)) {
+    throw new Error(`Unowned exchange order has an unsupported open status: ${brokerOrderId}`)
+  }
+  if (!["LIMIT", "LIMIT_MAKER"].includes(order.type)) {
+    throw new Error(`Unowned exchange order has an unsupported commitment type: ${brokerOrderId}`)
+  }
+  const remainingQuantity = validateUnownedOrderQuantities({
+    identity,
+    brokerOrderId,
+  })
+  const actualPrice = validateUnownedOrderPrice({
+    order,
+    brokerOrderId,
+  })
   if (!["BUY", "SELL"].includes(order.side)) {
     throw new Error(`Unowned exchange order has an unsupported side: ${brokerOrderId}`)
   }
