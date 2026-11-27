@@ -342,6 +342,14 @@ h1 span {
   color: #9aa6b8;
 }
 
+.service-state.online {
+  color: #70d9b4;
+}
+
+.service-state.offline {
+  color: #d3a36c;
+}
+
 .health-note {
   display: flex;
   align-items: flex-start;
