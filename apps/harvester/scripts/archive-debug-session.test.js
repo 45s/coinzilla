@@ -101,7 +101,54 @@ async function createFixture() {
   }
 }
 
-function archiveDependencies({ fixture, overrides = {} } = {}) {
+async function assertPublishedArchive({ directory, remote, expectedIdentityStatus } = {}) {
+  assert.equal(remote, ARCHIVE_REMOTE, "Archive publication must target the configured private archive repository")
+  const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
+  assert.deepEqual(manifest.includedDirectories, ["logs", "recovery-facts"], "Debug archives must contain only logs and recovery facts")
+  assert.deepEqual(manifest.excludedPaths, [
+    "data/** (all databases and backups)",
+    "logs/cumulative/**",
+  ], "Debug archives must declare databases and cumulative logs excluded")
+  assert.equal(manifest.logRuntimeSessionId, RUNTIME_SESSION_ID, "Selected log evidence must identify the completed TESTNET runtime session")
+  assert.equal(
+    manifest.runtimeIdentity.status,
+    expectedIdentityStatus,
+    "Archive manifest must explicitly state whether the log and recovery evidence share a runtime identity",
+  )
+  assert.equal(
+    manifest.runtimeIdentity.correlation,
+    expectedIdentityStatus === "matched"
+      ? "same-runtime-session"
+      : "independent-evidence-do-not-correlate",
+    "Mismatched evidence must never be represented as one correlated runtime session",
+  )
+  assert.equal(manifest.recoveryRuntimeSessionId, expectedIdentityStatus === "matched" ? RUNTIME_SESSION_ID : OTHER_SESSION_ID)
+  assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "Archive manifest must preserve the latest committed recovery checkpoint digest")
+  assert.deepEqual(manifest.logSelection, {
+    cumulative: "excluded",
+    sessions: "newest-completed-TESTNET-session-only; gzip-compressed",
+  }, "Debug archive manifest must mark cumulative logs excluded and selected session logs gzip-compressed")
+  assert.equal(
+    await readFile(path.join(directory, "data_commit_hash"), "utf8"),
+    `${DATA_COMMIT_HASH}\n`,
+    "Published checkpoint identity file must match the recovery-facts manifest",
+  )
+  assert.equal(
+    gunzipSync(await readFile(path.join(directory, "logs/sessions/2026-11-24_testnet/terminal.log.gz"))).toString("utf8"),
+    "selected TESTNET session evidence",
+    "Selected completed TESTNET log must be preserved in gzip form",
+  )
+  await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-20_old")), { code: "ENOENT" }, "Older sessions must not be copied into the debug archive")
+  await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-25_live")), { code: "ENOENT" }, "LIVE session evidence must never enter a TESTNET debug archive")
+  await assert.rejects(readdir(path.join(directory, "logs/cumulative")), { code: "ENOENT" }, "Cumulative logs must be excluded from the debug archive")
+  await assert.rejects(readdir(path.join(directory, "data")), { code: "ENOENT" }, "Database and backup data must be excluded from the debug archive")
+  return {
+    commit: REMOTE_COMMIT,
+    fileCount: manifest.files.length + 1,
+  }
+}
+
+function archiveDependencies({ fixture, overrides = {}, expectedIdentityStatus = "matched" } = {}) {
   return {
     packageDirectory: fixture.packageDirectory,
     lockDirectory: fixture.lockDirectory,
@@ -114,43 +161,11 @@ function archiveDependencies({ fixture, overrides = {} } = {}) {
     args: [],
     now: () => new Date(CREATED_AT),
     createArchiveId: () => ARCHIVE_ID,
-    publishArchiveFn: async ({
+    publishArchiveFn: ({ directory, remote }) => assertPublishedArchive({
       directory,
-      remote
-    }) => {
-      assert.equal(remote, ARCHIVE_REMOTE, "Archive publication must target the configured private archive repository")
-      const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
-      assert.deepEqual(manifest.includedDirectories, ["logs", "recovery-facts"], "Debug archives must contain only logs and recovery facts")
-      assert.deepEqual(manifest.excludedPaths, [
-        "data/** (all databases and backups)",
-        "logs/cumulative/**",
-      ], "Debug archives must declare databases and cumulative logs excluded")
-      assert.equal(manifest.logRuntimeSessionId, RUNTIME_SESSION_ID, "Selected log evidence must identify the completed TESTNET runtime session")
-      assert.equal(manifest.recoveryRuntimeSessionId, RUNTIME_SESSION_ID, "Recovery facts must identify the same runtime session as the logs")
-      assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "Archive manifest must preserve the latest committed recovery checkpoint digest")
-      assert.deepEqual(manifest.logSelection, {
-        cumulative: "excluded",
-        sessions: "newest-completed-TESTNET-session-only; gzip-compressed",
-      }, "Debug archive manifest must mark cumulative logs excluded and selected session logs gzip-compressed")
-      assert.equal(
-        await readFile(path.join(directory, "data_commit_hash"), "utf8"),
-        `${DATA_COMMIT_HASH}\n`,
-        "Published checkpoint identity file must match the recovery-facts manifest",
-      )
-      assert.equal(
-        gunzipSync(await readFile(path.join(directory, "logs/sessions/2026-11-24_testnet/terminal.log.gz"))).toString("utf8"),
-        "selected TESTNET session evidence",
-        "Selected completed TESTNET log must be preserved in gzip form",
-      )
-      await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-20_old")), { code: "ENOENT" }, "Older sessions must not be copied into the debug archive")
-      await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-25_live")), { code: "ENOENT" }, "LIVE session evidence must never enter a TESTNET debug archive")
-      await assert.rejects(readdir(path.join(directory, "logs/cumulative")), { code: "ENOENT" }, "Cumulative logs must be excluded from the debug archive")
-      await assert.rejects(readdir(path.join(directory, "data")), { code: "ENOENT" }, "Database and backup data must be excluded from the debug archive")
-      return {
-        commit: REMOTE_COMMIT,
-        fileCount: manifest.files.length + 1
-      }
-    },
+      remote,
+      expectedIdentityStatus,
+    }),
   }
 }
 
@@ -183,7 +198,7 @@ test("publishes only the selected TESTNET session and recovery facts", async (t)
   }
 })
 
-test("refuses to combine logs and recovery facts from different runtime sessions", async (t) => {
+test("publishes mismatched log and recovery evidence as independent sources with an explicit warning", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
@@ -192,11 +207,56 @@ test("refuses to combine logs and recovery facts from different runtime sessions
   const filename = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
   const facts = (await readFile(filename, "utf8")).trim().split("\n").map((line) => JSON.parse(line))
   facts.at(-1).runtimeSessionId = OTHER_SESSION_ID
-  await writeFile(filename, jsonLines(facts), "utf8")
+  const mismatchedFactsContent = jsonLines(facts)
+  await writeFile(filename, mismatchedFactsContent, "utf8")
+  const progressMessages = []
+  const result = await runHarvesterDebugArchive({
+    ...archiveDependencies({
+      fixture,
+      expectedIdentityStatus: "mismatched",
+    }),
+    onProgress: (message) => progressMessages.push(message),
+  })
+  assert.equal(result.remoteCommit, REMOTE_COMMIT, "Independently valid mismatched evidence must still be published")
+  assert.ok(
+    progressMessages.some((message) => message.includes("WARNING: log-session and recovery-facts runtimeSessionId values differ.")),
+    "The operator must be warned about the identity mismatch before publication",
+  )
+  assert.ok(
+    progressMessages.some((message) => message.includes("independently; do not correlate them as one runtime session.")),
+    "The warning must explicitly prohibit cross-session correlation",
+  )
+  assert.equal(
+    await readFile(filename, "utf8"),
+    mismatchedFactsContent,
+    "Publishing mismatched evidence must leave the original recovery-facts source unchanged",
+  )
+})
+
+test("still rejects an invalid recovery-facts checkpoint instead of publishing mismatched evidence", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true
+  }))
+  const filename = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
+  const originalFacts = await readFile(filename, "utf8")
+  const facts = originalFacts.trim().split("\n").map((line) => JSON.parse(line))
+  facts.at(-1).digest = "f".repeat(64)
+  const invalidFactsContent = jsonLines(facts)
+  await writeFile(filename, invalidFactsContent, "utf8")
   await assert.rejects(
-    runHarvesterDebugArchive(archiveDependencies({ fixture })),
-    /runtime identities do not match/i,
-    "Archive must reject log and recovery-fact evidence from different runtime sessions",
+    runHarvesterDebugArchive(archiveDependencies({
+      fixture,
+      expectedIdentityStatus: "mismatched",
+    })),
+    /latest recovery-facts manifest does not match/i,
+    "An identity mismatch must not weaken recovery-facts integrity validation",
+  )
+  assert.equal(
+    await readFile(filename, "utf8"),
+    invalidFactsContent,
+    "Archive failure must leave the invalid source ledger unchanged for diagnosis",
   )
 })
 
