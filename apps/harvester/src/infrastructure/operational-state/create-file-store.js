@@ -291,6 +291,11 @@ async function collectMissingOperationalStateDirectories({ store }) {
 }
 
 async function syncOperationalStateDirectory({ store, directory }) {
+  // Node.js cannot open directory handles on Windows. File contents are still
+  // fsynced individually; directory-entry fsync is available only on POSIX.
+  if (process.platform === "win32") {
+    return
+  }
   const handle = await store.fileSystem.open(directory, "r")
   try {
     await handle.sync()
