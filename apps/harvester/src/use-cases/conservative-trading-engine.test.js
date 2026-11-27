@@ -1629,6 +1629,10 @@ test("keeps a pre-existing BUY untouched while planning the recovery SELL for it
     seedExistingBuy: true,
     baseFreeBalance: "1",
   })
+  const initialPosition = seeded.portfolio.getPosition({
+    marketId: market.id,
+    strategyId: StrategyId.COIN_GRABBER,
+  })
   const buyOrdersBeforeEvaluation = harness.engine.getOrders().filter((order) => order.side === "BUY")
 
   const result = await harness.engine.processMarketPrice({
@@ -1649,6 +1653,16 @@ test("keeps a pre-existing BUY untouched while planning the recovery SELL for it
   assert.equal(buyOrdersAfterEvaluation.length, buyOrdersBeforeEvaluation.length, "An active recovery Position must not create another standing BUY.")
   assert.equal(recoverySellOrders.length, 1, "The active Position must still receive exactly one recovery SELL while the pre-existing BUY remains untouched.")
   assert.equal(buyOrdersAfterEvaluation[0].clientOrderId, buyOrdersBeforeEvaluation[0].clientOrderId, "The existing BUY identity must remain unchanged while recovery SELL coverage is established.")
+  assert.equal(harness.orders.length, 1, "Exactly one broker call may be made: the recovery SELL, with no new BUY submission.")
+  assert.equal(harness.orders[0].side, "SELL", "The sole broker call must establish recovery SELL coverage.")
+  assert.equal(harness.orders[0].clientOrderId, recoverySellOrders[0].clientOrderId, "The broker-submitted recovery SELL must retain the same canonical clientOrderId as OrderRegistry.")
+  const currentPosition = harness.getCurrentPortfolio().getPosition({
+    marketId: market.id,
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  assert.equal(currentPosition.positionId, initialPosition.positionId, "Recovery evaluation must preserve the active Position identity.")
+  assert.equal(harness.getCurrentRecoveryLedger().buyCost, seeded.recoveryLedger.buyCost, "Recovery evaluation must not reset or replace the active RecoveryLedger cycle cost.")
+  assert.equal(harness.getCurrentRecoveryLedger().netSellProceeds, seeded.recoveryLedger.netSellProceeds, "Recovery evaluation must not release BUY admission by mutating cycle proceeds.")
 })
 
 test("treats decimal-formatted zero as no execution in recovery SELL cancellation reconciliation", async () => {
