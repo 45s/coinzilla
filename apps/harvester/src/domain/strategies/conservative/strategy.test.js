@@ -317,7 +317,7 @@ test("does not duplicate an already active BUY on repeated price events", () => 
   assert.deepEqual(decision.actions, [])
 })
 
-test("creates a recovery SELL and the next standing BUY from actual filled inventory", () => {
+test("plans only a recovery SELL while a filled Position remains active", () => {
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
     marketPrice,
@@ -328,23 +328,17 @@ test("creates a recovery SELL and the next standing BUY from actual filled inven
     marketMetadata,
     lastBuyPrice: "0.1",
   })
-  assert.equal(decision.actions.length, 2)
-  assert.equal(decision.actions.find((action) => action.side === "SELL").purpose, "RECOVERY_SELL")
-  assert.deepEqual(decision.actions.map(({ side, price, quantity }) => ({
-    side,
-price,
-quantity,
-  })), [
-    { side: "SELL",
-price: "0.102",
-quantity: "99" },
-    { side: "BUY",
-price: "0.099",
-quantity: "100" },
-  ])
+  assert.deepEqual(decision.actions, [{
+    side: "SELL",
+    purpose: "RECOVERY_SELL",
+    type: "LIMIT_MAKER",
+    price: "0.102",
+    quantity: "99",
+    reason: "RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT",
+    requiredNetProceeds: "10.01",
+  }], "An active recovery Position must not produce a next standing BUY.")
 })
-
-test("allows the next BUY only after the recovery SELL is acknowledged", () => {
+test("blocks the next BUY while an acknowledged recovery SELL remains open", () => {
   const { portfolio, recoveryLedger } = makeBoughtState()
 
   for (const status of ["OPEN", "PARTIALLY_FILLED"]) {
@@ -370,23 +364,16 @@ test("allows the next BUY only after the recovery SELL is acknowledged", () => {
 
     assert.deepEqual(
       decision.actions,
-      [{
-        side: "BUY",
-        type: "LIMIT_MAKER",
-        price: "0.099",
-        quantity: "100",
-        reason: "NEXT_STANDING_BUY",
-      }],
-      `An acknowledged ${  status  } recovery SELL may coexist with exactly one next standing BUY.`,
+      [],
+      `An acknowledged ${status} recovery SELL must not release the BUY gate before cycle completion.`,
     )
     assert.equal(
       decision.action,
-      "PLACE_ORDERS",
-      `The strategy must keep the next BUY eligible after recovery SELL acknowledgement: ${  status}`,
+      "NO_ACTION",
+      `The strategy must wait for full recovery-cycle completion; current SELL status: ${status}`,
     )
   }
 })
-
 test("blocks the next BUY while the recovery SELL acknowledgement is pending or unknown", () => {
   const { portfolio, recoveryLedger } = makeBoughtState()
 
@@ -461,7 +448,7 @@ marketMetadata,
   assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
 })
 
-function assertInvestmentCapScenario({ investment, expectedBuy }) {
+function assertInvestmentCapScenario({ investment }) {
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
     marketPrice,
@@ -484,28 +471,18 @@ function assertInvestmentCapScenario({ investment, expectedBuy }) {
     reason: "RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT",
     requiredNetProceeds: "10.01",
   }
-  const expectedNextStandingBuy = {
-    side: "BUY",
-    type: "LIMIT_MAKER",
-    price: "0.099",
-    quantity: "100",
-    reason: "NEXT_STANDING_BUY",
-  }
-
   assert.deepEqual(
     decision.actions,
-    expectedBuy
-      ? [expectedRecoverySell, expectedNextStandingBuy]
-      : [expectedRecoverySell],
+    [expectedRecoverySell],
+    "Investment limits must not make a new BUY eligible while the recovery Position remains active.",
   )
   assert.equal(decision.action, "PLACE_ORDERS")
 }
 
-test("respects investment-cap equality and both sides of the BUY eligibility boundary", () => {
+test("keeps recovery SELL eligible while investment limits cannot reopen BUY during an active cycle", () => {
   for (const scenario of [
     {
       investment: 19.9,
-      expectedBuy: true,
     },
     {
       investment: 19.901,
@@ -513,7 +490,6 @@ test("respects investment-cap equality and both sides of the BUY eligibility bou
     },
     {
       investment: 19.899,
-      expectedBuy: false,
     },
     {
       investment: 15,

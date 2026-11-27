@@ -3998,62 +3998,43 @@ test("serializes concurrent market updates while an initial BUY acknowledgement 
   assert.equal(activeOrders[0].status, "OPEN")
 })
 
-test("replaces the recovery SELL before submitting the next standing BUY after a completed BUY", async () => {
+test("does not submit a next standing BUY while the Conservative recovery cycle remains active", async () => {
   const seeded = makeSeededRecoveryState()
   const {
     engine,
     orders,
-    cancellationIds,
-    pauses
+    pauses,
   } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
   })
 
-  await engine.processMarketPrice({
+  const initialEvaluation = await engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
       symbol: "DOGEUSDT",
       price: "100",
-      timestamp: 1
-    },
-  })
-  const previousSell = engine.getOrders().find((order) => order.side === "SELL")
-  const completedBuy = engine.getOrders().find((order) => order.side === "BUY")
-  assert.ok(previousSell)
-  assert.ok(completedBuy)
-
-  const transition = await engine.processUserDataEvent({
-    event: {
-      executionType: "TRADE",
-      executedOrder: makeFilledOrder({ order: completedBuy }),
-      fill: makeBuyFill({
-        order: completedBuy,
-        tradeId: "next-buy-completion-ordering",
-        price: "99.95",
-        quantity: "1",
-        quoteQuantity: "99.95",
-      }),
+      timestamp: 1,
     },
   })
 
-  assert.equal(transition.ok, true)
-  assert.equal(transition.data.reevaluate, true)
-  assert.deepEqual(cancellationIds, [previousSell.brokerOrderId])
+  assert.equal(initialEvaluation.ok, true, "The engine must evaluate the active recovery cycle successfully.")
+  assert.deepEqual(
+    orders.map(({ side }) => side),
+    ["SELL"],
+    "The engine must submit the recovery SELL but must not submit a next standing BUY while the Position is active.",
+  )
 
-  // Bootstrap handles this reevaluation directly from the same serialized
-  // user-data callback; no new market-price event is needed.
   const reevaluation = await engine.evaluateLatest({ symbol: "DOGEUSDT" })
-  assert.equal(reevaluation.ok, true)
-  assert.deepEqual(orders.slice(-2).map(({ side }) => side), ["SELL", "BUY"])
-
-  const activeOrders = engine.getOrders().filter((order) => ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
-  assert.deepEqual(activeOrders.map(({ side }) => side).sort(), ["BUY", "SELL"])
-  assert.deepEqual(pauses, [])
+  assert.equal(reevaluation.ok, true, "Repeated evaluation must remain safe while recovery is unresolved.")
+  assert.deepEqual(
+    orders.map(({ side }) => side),
+    ["SELL"],
+    "Repeated/re-entrant evaluation must not bypass the no-new-BUY recovery invariant or duplicate the recovery SELL.",
+  )
+  assert.deepEqual(pauses, [], "The BUY admission rule must not create a market safety pause.")
 })
-
-
 function createShutdownBuyRaceState({ seeded }) {
   return {
     stopping: {
