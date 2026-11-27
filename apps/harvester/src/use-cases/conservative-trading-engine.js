@@ -4535,7 +4535,8 @@ async function getTrailingBuyReplacementCandidate({ context, symbol, marketPrice
     metadata,
   })
   if (positionSkip) {
-    return { result: positionSkip }
+    // Skip only trailing-BUY replacement; recovery SELL evaluation must continue.
+    return { result: await context.evaluateLatestTransition({ symbol }) }
   }
   const trigger = evaluateTrailingBuyTrigger({
     context,
