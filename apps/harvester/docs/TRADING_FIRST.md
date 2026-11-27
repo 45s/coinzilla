@@ -16,7 +16,7 @@ No LIVE or TESTNET exchange writes are authorized during engineering preparation
 
 ## Startup open-order ownership
 
-The implemented ownership boundary is defined by [ADR-0004](./architecture/decisions/0004-startup-open-orders-are-external.md) and merged in [PR #1166](https://github.com/45s/coinzilla/pull/1166). Every unmatched order in the startup snapshot is external to the new process; apply the configured per-market `IGNORE`/`BLOCK` policy. Do not adopt or manage startup orders. Later unmatched `h-` execution reports remain fail-closed. See [Journal Operations](./JOURNAL_OPERATIONS.md#external-open-orders-and-strategy-eligibility) for detailed runtime behavior.
+The implemented ownership boundary is defined by [ADR-0004](./architecture/decisions/0004-startup-open-orders-are-external.md) and merged in [PR #1166](https://github.com/45s/coinzilla/pull/1166). Every unmatched order in the startup snapshot is external to the new process; apply the configured per-market `IGNORE`/`BLOCK` policy. Do not adopt or manage startup orders. Later unmatched execution reports are matched against the current process's generated order-ID namespace: prior-session `h-` IDs are external and follow the configured external-order policy; unmatched IDs in the current process namespace remain fail-closed. See [Journal Operations](./JOURNAL_OPERATIONS.md#external-open-orders-and-strategy-eligibility) for detailed runtime behavior.
 
 ## Selected safety work — high-volatility protection (#1016)
 
