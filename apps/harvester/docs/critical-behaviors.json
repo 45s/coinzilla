@@ -1282,7 +1282,9 @@
         "src/use-cases/record-safety-control-facts.js",
         "src/use-cases/resolve-offline-user-data-account-blockers.js",
         "src/use-cases/resolve-user-data-account-blockers.helpers.js",
-        "src/use-cases/resolve-user-data-account-blockers.js"
+        "src/use-cases/resolve-user-data-account-blockers.js",
+        "src/use-cases/create-recovery-seller-stop-workflow.js",
+        "src/use-cases/resolve-recovery-seller-stop.js"
       ],
       "integrationRequired": false,
       "tests": [
@@ -1477,11 +1479,6 @@
           "kind": "failure"
         },
         {
-          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
-          "name": "clears RS STOP only after explicit operator evidence is durably recorded",
-          "kind": "normal"
-        },
-        {
           "path": "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
           "name": "rejects structured user-data resolution when the Recovery Seller STOP reason has conflicting provenance",
           "kind": "failure"
@@ -1540,6 +1537,26 @@
           "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
           "name": "propagates a failed terminal-order reconciliation acknowledgement",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "durable STOP resolution leaves both admission gates closed pending controlled restart",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "restores resolved RS STOP as pending controlled restart rather than clearing on process restart",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/resolve-recovery-seller-stop.test.js",
+          "name": "rejects caller-supplied operator identity without OS authentication",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/record-safety-control-facts.test.js",
+          "name": "rejects unauthenticated direct Recovery Seller STOP resolution",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "offline-only",
@@ -1551,8 +1568,10 @@
         "Authenticate the operator against the executing OS account and persist operator ID, authentication method, action ID, reason, exact target blocker set, and evidence digest in every OPERATOR_ACTION fact.",
         "Allow retries only for the exact same operator/action/reason/blocker-set/evidence tuple; resume partial multi-blocker appends and verify exact per-blocker durable readback.",
         "User-data ACCOUNT blockers cannot be resolved by generic reconciliation or legacy operator-action facts; the verified projector enforces structured operator metadata against the original raised producer.",
-        "Recovery Seller STOP uses its dedicated producer and resolver; legacy untagged facts retain that resolver by the reserved reason, while an explicit USER_DATA_EVENT_HANDLER producer always takes precedence over a colliding reason.",
-        "Classify Recovery Seller STOP only by its dedicated producer provenance; a colliding reason string from user-data events must remain under the user-data account-resolution contract."
+        "Classify Recovery Seller STOP only by its dedicated producer provenance; a colliding reason string from user-data events must remain under the user-data account-resolution contract.",
+        "Recovery Seller STOP resolution requires an OS-account-authenticated principal and persists operator ID, OS_ACCOUNT method, unique action ID, printable reason, exact blocker set and independent evidence digest.",
+        "Durable STOP resolution first raises a dedicated controlled-restart blocker; the original blocker may be resolved only after that pending blocker is durable. Both BUY and SELL admission remain closed pending explicit fresh-PREFLIGHT acceptance.",
+        "A resolved Recovery Seller STOP without a controlled-restart acceptance fact is restored as STOPPED after process restart. The ordinary STOP resolver cannot clear the pending controlled-restart blocker."
       ]
     },
     {

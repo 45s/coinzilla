@@ -128,7 +128,13 @@ test("durable STOP resolution leaves both admission gates closed pending control
   assert.equal(workflow.isBuyAdmissionBlocked(), true)
   assert.equal(workflow.isSellAdmissionBlocked(), true)
   assert.equal(workflow.isResolutionPendingRestart(), true)
-  assert.equal(workflow.getBlockerId(), blockerId)
+  assert.notEqual(workflow.getBlockerId(), blockerId)
+  assert.equal(workflow.getBlockerId(), result.data.pendingRestartBlockerId)
+  assert.equal(result.data.controlledRestartRequired, true)
+  assert.equal(
+    read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RAISED").length,
+    2,
+  )
   assert.equal(
     read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length,
     1,
@@ -188,9 +194,9 @@ test("keeps account admission blocked when durable STOP resolution persistence f
   assert.equal(result.ok, false)
   assert.equal(workflow.getStopState().status, "STOPPED")
   assert.equal(workflow.isBuyAdmissionBlocked(), true)
-  assert.equal(workflow.isSellAdmissionBlocked(), false,
-    "A failed resolution must preserve the durable STOP without reclassifying it as unverified.")
-  assert.equal(workflow.getBlockerId(), blockerId)
+  assert.equal(workflow.isSellAdmissionBlocked(), true,
+    "Once the pending-restart blocker is durable, both sides remain blocked even if original resolution fails.")
+  assert.equal(workflow.getBlockerId(), result.data.pendingRestartBlockerId)
   assert.equal(
     read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length,
     0,

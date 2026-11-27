@@ -244,7 +244,7 @@ test("requires structured operator action for user-data ACCOUNT blocker resoluti
   }
 })
 
-test("keeps Recovery Seller STOP exclusive to its dedicated legacy operator action", () => {
+test("keeps Recovery Seller STOP producer-qualified and preserves pending restart blockers", () => {
   const raisedBlocker = {
     blockerId,
     producer: "RECOVERY_SELLER_STOP_WORKFLOW",
@@ -293,9 +293,29 @@ test("keeps Recovery Seller STOP exclusive to its dedicated legacy operator acti
 
   assert.equal(legacy.ok, true, legacy.errors?.map(({ message }) => message).join("; "))
   assert.deepEqual(legacy.data.stickySafetyBlockers, [])
-  assert.equal(structured.ok, false, "The account-wide user-data resolver must not clear Recovery Seller STOP.")
+  assert.equal(structured.ok, true, structured.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual(structured.data.stickySafetyBlockers, [])
   assert.equal(legacyUnattributed.ok, true, "Legacy untagged Recovery Seller STOP facts retain their dedicated resolver")
   assert.deepEqual(legacyUnattributed.data.stickySafetyBlockers, [])
+  const pendingBlockerId = "d".repeat(64)
+  const pending = projectHarvesterOperationalState({
+    records: [
+      ...recordsFor(structuredResolution),
+      record(7, "SAFETY_BLOCKER_RAISED", {
+        blockerId: pendingBlockerId,
+        producer: "RECOVERY_SELLER_STOP_WORKFLOW",
+        scope: "ACCOUNT",
+        symbol: null,
+        reason: "RECOVERY_SELLER_STOP_RESTART_PENDING",
+        evidenceDigest: "e".repeat(64),
+      }, `safety-blocker-raised:${pendingBlockerId}`),
+    ],
+  })
+  assert.equal(pending.ok, true, pending.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual(
+    pending.data.stickySafetyBlockers.map(({ reason }) => reason),
+    ["RECOVERY_SELLER_STOP_RESTART_PENDING"],
+  )
 })
 
 test("rejects structured user-data resolution when the Recovery Seller STOP reason has conflicting provenance", () => {

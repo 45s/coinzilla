@@ -112,6 +112,18 @@ test("persists an explicit operator STOP resolution before returning a clear sta
   assert.equal(result.data.record.factType, "SAFETY_BLOCKER_RESOLVED")
   assert.equal(result.data.record.data.resolution, "OPERATOR_ACTION")
   assert.equal(result.data.record.data.resolvedBy, "operator:operator-45s:rs-stop-reset-1")
+  assert.equal(result.data.record.data.operatorAuthMethod, "OS_ACCOUNT")
+  assert.equal(result.data.record.data.operatorId, "operator-45s")
+  assert.equal(result.data.pendingRestartBlockerId.length, 64)
+  assert.equal(result.data.resolutionPendingRestart, true)
+  const read = await fixture.operationalStateStore.readAll()
+  assert.equal(
+    read.data.records.filter((record) =>
+      record.factType === "SAFETY_BLOCKER_RAISED" &&
+      record.data?.reason === "RECOVERY_SELLER_STOP_RESTART_PENDING"
+    ).length,
+    1,
+  )
 })
 
 test("does not persist or clear STOP when reconciliation or accounting evidence is incomplete", async (t) => {
