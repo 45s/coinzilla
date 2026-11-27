@@ -440,6 +440,11 @@ test("keeps recovery-input failures separate from owned order and fill reconcili
   )
 })
 
+function countRecoveryInputCalls({ calls, symbol } = {}) {
+  const expectedCall = `recovery-input:${symbol}`
+  return calls.filter((call) => call === expectedCall).length
+}
+
 function assertFourMarketRecoveryInputBlockers({ error, symbols } = {}) {
   const diagnostics = error?.shutdownDiagnostics?.markets ?? []
   assert.deepEqual(
@@ -448,7 +453,10 @@ function assertFourMarketRecoveryInputBlockers({ error, symbols } = {}) {
     "Shutdown diagnostics must preserve every configured market in deterministic order.",
   )
   for (const symbol of symbols) {
-    const blockers = getMarketBlockersFromShutdownError({ error, symbol })
+    const blockers = getMarketBlockersFromShutdownError({
+      error,
+      symbol,
+    })
     assert.ok(
       hasBlockerWithPrefix({
         blockers,
@@ -468,7 +476,10 @@ function assertFourMarketRecoveryInputBlockers({ error, symbols } = {}) {
 test("retains recovery-input blockers independently for all four configured markets", async () => {
   const symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT"]
   const calls = []
-  const engine = createFakeEngine({ calls, symbols })
+  const engine = createFakeEngine({
+    calls,
+    symbols,
+  })
   engine.reconcileRecoverySellsForShutdown = async ({ symbols: requestedSymbols } = {}) => {
     const [symbol] = requestedSymbols
     calls.push(`recovery-input:${symbol}`)
@@ -484,16 +495,25 @@ test("retains recovery-input blockers independently for all four configured mark
       )],
     }
   }
-  const participant = createParticipant({ engine, calls })
+  const participant = createParticipant({
+    engine,
+    calls,
+  })
 
   participant.beginShutdown()
   await assert.rejects(
     participant.waitUntilSafe(),
-    (error) => assertFourMarketRecoveryInputBlockers({ error, symbols }),
+    (error) => assertFourMarketRecoveryInputBlockers({
+      error,
+      symbols,
+    }),
   )
 
   assert.deepEqual(
-    symbols.map((symbol) => calls.filter((call) => call === `recovery-input:${symbol}`).length),
+    symbols.map((symbol) => countRecoveryInputCalls({
+      calls,
+      symbol,
+    })),
     [1, 1, 1, 1],
     "Every configured market must be attempted even when each market reports unavailable recovery input.",
   )

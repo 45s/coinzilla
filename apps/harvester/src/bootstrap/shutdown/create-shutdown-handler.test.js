@@ -530,7 +530,10 @@ test("retains shared services when four-market shutdown proof is blocked", async
     fixture.stop({
       beforeSharedServicesStop: async () => calls.push("operator-control-stop"),
     }),
-    (error) => assertFourMarketShutdownFailure({ error, symbols }),
+    (error) => assertFourMarketShutdownFailure({
+      error,
+      symbols,
+    }),
   )
 
   assert.equal(calls.includes("market-intake-stop"), false)
