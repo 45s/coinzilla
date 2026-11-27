@@ -413,3 +413,43 @@ test("executes every executable RS production-flow scenario through the local Ha
     await eventBus.close()
   }
 })
+
+test("starts the runtime API without relational history persistence and marks history queries unavailable", async () => {
+  const eventBus = new EventBus()
+  let serverInput
+  const service = await startTradingHistoryApi({
+    eventBus,
+    env: {
+      TRADING_MODE: "testnet",
+    },
+    logger: {
+      info() {},
+      warn() {},
+    },
+    startServer: async (input) => {
+      serverInput = input
+      return {
+        address: {
+          address: "127.0.0.1",
+          port: 4201,
+        },
+        close: async () => {},
+      }
+    },
+  })
+
+  assert.equal(serverInput.queries.getSummary().ok, false,
+    "Persisted-history metadata must not claim success without its relational database.")
+  assert.equal(serverInput.queries.getSummary().errors[0].code,
+    "HARVESTER_TRADING_HISTORY_PERSISTENCE_UNAVAILABLE",
+    "Missing history persistence must have an explicit stable error code.")
+  for (const method of ["listOrders", "getOrder", "listFills", "getFill", "listCommissions"]) {
+    const result = serverInput.queries[method]()
+    assert.equal(result.ok, false, `${method} must remain unavailable without relational persistence.`)
+    assert.equal(result.errors[0].code, "HARVESTER_TRADING_HISTORY_PERSISTENCE_UNAVAILABLE",
+      `${method} must report the same explicit history-persistence failure.`)
+  }
+
+  await service.close()
+  await eventBus.close()
+})

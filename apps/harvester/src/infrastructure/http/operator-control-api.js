@@ -1,3 +1,5 @@
+import { isLocalDashboardOrigin } from "./is-local-dashboard-origin.js"
+
 const ACTOR = Object.freeze({
   id: "local-dashboard",
   roles: Object.freeze(["trading-operator"]),
@@ -32,10 +34,6 @@ const COMMANDS = Object.freeze({
 })
 
 const MAX_BODY_BYTES = 8_192
-const LOCAL_ORIGINS = new Set([
-  "http://127.0.0.1:4200",
-  "http://localhost:4200",
-])
 
 function sendJson({ response, status, body } = {}) {
   if (response.destroyed || response.writableEnded) {
@@ -185,7 +183,7 @@ function parseCommand({ body } = {}) {
 
 function validateCommandOrigin({ request, response } = {}) {
   const { origin } = request.headers
-  if (!origin || LOCAL_ORIGINS.has(origin)) {
+  if (!origin || isLocalDashboardOrigin(origin)) {
     return true
   }
   sendFailure({

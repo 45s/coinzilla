@@ -122,6 +122,47 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
   }
 }
 
+test("does not bind the production local API for an injected runtime adapter unless explicitly requested", async () => {
+  const errors = []
+  const result = await main({
+    env: {
+      TRADING_MODE: "testnet",
+      NODE_ENV: "test",
+      HARVESTER_API_PORT: "not-a-port",
+    },
+    loadConfig: async () => createTradingHistoryTestConfig(),
+    createEventBus: () => new EventBus(),
+    createJournalService: createDisabledJournalService,
+    acquireProcessLock: async () => ({
+      ok: true,
+      release: async () => ({
+        ok: true,
+        released: true,
+      }),
+    }),
+    prepareOrderHistoryPersistence: async () => null,
+    start: async () => ({
+      connected: false,
+      stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+        data: { durableProcessStopAcknowledged: true },
+      }),
+    }),
+    registerSignalHandler() {},
+    logger: {
+      info() {},
+      system() {},
+      warn() {},
+      error: (entry) => errors.push(entry),
+    },
+  })
+
+  assert.ok(result?.runtime, "An injected runtime adapter must still start normally.")
+  assert.deepEqual(errors, [],
+    "The production local API must not bind as an implicit side effect of an injected runtime adapter.")
+})
+
 test("starts the trading-history API with Harvester and closes it before the shared database", async () => {
   const calls = []
   const handlers = {}
@@ -215,4 +256,21 @@ test("keeps Harvester trading startup successful when the optional API cannot bi
   await handlers.SIGTERM()
   assert.ok(calls.includes("runtime-stop"), "Harvester must remain available for normal shutdown.")
   assert.ok(calls.includes("database"), "Normal persistence cleanup must continue after optional API startup failure.")
+})
+
+test("starts runtime monitoring when relational trading-history persistence is unavailable", async () => {
+  const calls = []
+  const handlers = {}
+  const result = await main(createMainOptions({
+    database: null,
+    calls,
+    handlers,
+  }))
+
+  assert.ok(result?.runtime, "Relational history unavailability must not prevent Harvester runtime startup.")
+  assert.ok(calls.includes("api-start"),
+    "Harvester must still start its local runtime API so Dashboard monitoring remains available.")
+  await handlers.SIGTERM()
+  assert.ok(calls.includes("runtime-stop"), "Harvester must retain its normal runtime shutdown.")
+  assert.ok(calls.includes("api-close"), "The local runtime API must participate in normal shutdown.")
 })
