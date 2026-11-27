@@ -1173,6 +1173,9 @@ test("acquires the process lock before starting Journal and releases it after cl
             return {
               ok: true,
               status: "STOPPED",
+              data: {
+                durableProcessStopAcknowledged: true,
+              },
             }
           },
         }
@@ -1239,6 +1242,7 @@ test("retains the process lock when runtime shutdown throws", async () => {
     await signalHandler()
     assert.equal(releaseCalls, 0)
     assert.equal(process.exitCode, 1)
+    process.exitCode = 0
   } finally {
     process.exitCode = previousExitCode
   }
@@ -2116,6 +2120,7 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
       calls.includes("logger-error"),
       "The failed shutdown attempt must report the exact safety blocker while leaving required runtime services connected.",
     )
+    process.exitCode = 0
   } finally {
     process.exitCode = previousExitCode
   }
