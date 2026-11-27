@@ -4,7 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import { toResult } from "@coinzilla/utils"
 
-function isProcessAlive(pid) {
+export function isHarvesterProcessAlive(pid) {
   try {
     process.kill(pid, 0)
     return true
@@ -68,9 +68,13 @@ async function readExistingOwner({ lockPath }) {
 }
 
 function isSameLockOwner({ currentOwner, existingOwner }) {
-  return currentOwner?.token === existingOwner.token &&
+  return typeof existingOwner?.token === "string" &&
+    existingOwner.token.trim() !== "" &&
+    typeof existingOwner?.hostname === "string" &&
+    currentOwner?.token === existingOwner.token &&
     currentOwner?.pid === existingOwner.pid &&
-    currentOwner?.hostname?.toLowerCase() === existingOwner.hostname.toLowerCase()
+    currentOwner?.hostname?.toLowerCase() === existingOwner.hostname.toLowerCase() &&
+    currentOwner?.startedAt === existingOwner.startedAt
 }
 
 function createLockRelease({ lockPath, token }) {
@@ -100,12 +104,12 @@ alreadyReleased: true })
   }
 }
 
-async function reclaimStaleLockIfUnchanged({
+export async function reclaimStaleHarvesterProcessLockIfUnchanged({
   lockPath,
   hostname,
   existingOwner,
-  attempt,
-  checkProcessAlive,
+  attempt = 0,
+  checkProcessAlive = isHarvesterProcessAlive,
 }) {
   if (attempt !== 0) {
     return false
@@ -113,7 +117,9 @@ async function reclaimStaleLockIfUnchanged({
   const sameHost = typeof existingOwner?.hostname === "string" &&
     existingOwner.hostname.toLowerCase() === hostname.toLowerCase()
   const validPid = Number.isSafeInteger(existingOwner?.pid) && existingOwner.pid > 0
-  if (!sameHost || !validPid || checkProcessAlive(existingOwner.pid)) {
+  const validToken = typeof existingOwner?.token === "string" && existingOwner.token.trim() !== ""
+  const validStartTime = typeof existingOwner?.startedAt === "string" && existingOwner.startedAt.trim() !== ""
+  if (!sameHost || !validPid || !validToken || !validStartTime || checkProcessAlive(existingOwner.pid)) {
     return false
   }
 
@@ -149,7 +155,7 @@ async function acquireLockFile({ lockPath, owner, hostname, checkProcessAlive })
       }
 
       const existingOwner = await readExistingOwner({ lockPath })
-      const reclaimed = await reclaimStaleLockIfUnchanged({
+      const reclaimed = await reclaimStaleHarvesterProcessLockIfUnchanged({
         lockPath,
         hostname,
         existingOwner,
@@ -188,7 +194,7 @@ export async function acquireHarvesterProcessLock({
   hostname = os.hostname(),
   startedAt = new Date().toISOString(),
   token = randomUUID(),
-  isProcessAlive: checkProcessAlive = isProcessAlive,
+  isProcessAlive: checkProcessAlive = isHarvesterProcessAlive,
 } = {}) {
   try {
     validateProcessLockInput({
