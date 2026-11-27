@@ -616,6 +616,10 @@ function createLinuxSandboxLauncherFixture() {
   }
 }
 
+function assertTrustedNodeRuntimeBind({ spawned }) {
+  assertTrustedNodeRuntimeBind({ spawned })
+}
+
 test("Linux sandbox launcher attests the OS profile and applies cgroup, seccomp and IPC", async () => {
   const fixture = createLinuxSandboxLauncherFixture()
   const returned = fixture.launcher({
