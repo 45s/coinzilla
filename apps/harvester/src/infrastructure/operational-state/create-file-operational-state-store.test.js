@@ -38,7 +38,7 @@ const digestRecord = (record) => {
   return createHash("sha256").update(canonicalStringify(body), "utf8").digest("hex")
 }
 const readLines = async (filePath) => (await readFile(filePath, "utf8")).trimEnd().split("\n")
-function createDirectorySyncRecordingFileSystem({ directories, syncedDirectories }) {
+function createDirectorySyncRecordingFileSystem({ directories, syncedDirectories, failDirectory = null, syncError = new Error("simulated directory fsync failure") }) {
   const directorySet = new Set(directories)
   return {
     ...fsPromises,
@@ -52,6 +52,9 @@ function createDirectorySyncRecordingFileSystem({ directories, syncedDirectories
         writeFile: (...writeArguments) => handle.writeFile(...writeArguments),
         sync: async () => {
           syncedDirectories.push(filePath)
+          if (filePath === failDirectory) {
+            throw syncError
+          }
           return handle.sync()
         },
         close: () => handle.close(),
@@ -902,4 +905,33 @@ test("initialization fsyncs newly created directory entries before durable ackno
   assert.equal(initialized.data.durable, true)
   assert.deepEqual(syncedDirectories, [root, nested, directory],
     "Parent entries for newly created directories and the ledger files must be fsynced before acknowledgement")
+})
+
+
+test("directory fsync failure prevents durable genesis acknowledgement", async (t) => {
+  const root = await createDirectory()
+  t.after(() => rm(root, {
+    recursive: true,
+    force: true,
+  }))
+  const directory = path.join(root, "ledger")
+  const syncError = new Error("simulated parent directory fsync failure")
+  const syncedDirectories = []
+  const fileSystem = createDirectorySyncRecordingFileSystem({
+    directories: [root, directory],
+    syncedDirectories,
+    failDirectory: root,
+    syncError,
+  })
+  const store = createStore(directory, { fileSystem })
+
+  const initialized = await store.initializeIfEmpty()
+
+  assert.equal(initialized.ok, false,
+    "Genesis must not be acknowledged when the newly created ledger path is not durable")
+  assert.equal(initialized.errors[0].code, "DURABLE_FACTS_COMMIT_UNCERTAIN")
+  assert.equal(syncedDirectories[0], root,
+    "The failed fsync must be the parent directory that owns the new ledger entry")
+  assert.equal((await store.verify()).ok, false,
+    "The store must remain fenced after the uncertain initialization outcome")
 })
