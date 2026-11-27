@@ -2015,9 +2015,14 @@ function createStopPersistenceFailureAssertions({ output, expected }) {
       expected: true,
     }),
     createAssertion({
-      name: "the production runtime blocks subsequent account admission",
-      actual: output.terminalSell?.postFailureAdmissionBlocked,
-      expected: true,
+      name: "the production runtime keeps RS BUY admission blocked after STOP persistence fails",
+      actual: output.terminalSell?.postFailureBuyAdmissionBlocked,
+      expected: expected.postFailureBuyAdmissionBlocked,
+    }),
+    createAssertion({
+      name: "the production runtime keeps RS SELL admission blocked after STOP persistence fails",
+      actual: output.terminalSell?.postFailureSellAdmissionBlocked,
+      expected: expected.postFailureSellAdmissionBlocked,
     }),
     createAssertion({
       name: "the production runtime submits no follow-up order after STOP persistence fails",
