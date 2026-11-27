@@ -7731,6 +7731,17 @@ test("reconciles recovered orders without canceling or replacing any exchange or
     harness,
     result,
   })
+  await harness.engine.processBookTicker({
+    symbol: "DOGEUSDT",
+    bookTicker: {
+      symbol: "DOGEUSDT",
+      bestBidPrice: "99.99",
+      bestBidQuantity: "1",
+      bestAskPrice: "100.01",
+      bestAskQuantity: "1",
+      timestamp: 2,
+    },
+  })
 
   const reevaluation = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
