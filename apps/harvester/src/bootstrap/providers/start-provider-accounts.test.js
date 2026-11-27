@@ -2,6 +2,16 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { startProviderAccounts } from "./start-provider-accounts.js"
 
+function durableProcessStopResult() {
+  return {
+    ok: true,
+    status: "STOPPED",
+    data: {
+            durableProcessStopAcknowledged: true,
+          },
+  }
+}
+
 function createProvider({
   providerInstanceId,
   providerType,
@@ -178,9 +188,7 @@ function createAccountRuntimeFixtures({
     stopMarketData: async () => ({ ok: true }),
     stop: async () => {
       starts.push(`stop:${provider.providerInstanceId}`)
-      return {
-        ok: true,
-      }
+      return durableProcessStopResult()
     },
   }))
 }
@@ -295,7 +303,7 @@ function createShutdownTrackingProviderStarter(shutdownOrder) {
       startMarketData: async () => ({ ok: true }),
       stop: async () => {
         shutdownOrder.push(`runtime:${providerInstanceId}`)
-        return { ok: true }
+        return durableProcessStopResult()
       },
       stopMarketData: async () => {
         shutdownOrder.push(`market-data:${providerInstanceId}`)
@@ -321,7 +329,7 @@ function createStopTrackingProviderStarter({ stopCalls, firstStopAttempts }) {
           }
         }
       }
-      return { ok: true }
+      return durableProcessStopResult()
     },
   })
 }
@@ -340,10 +348,18 @@ test("stops market-data intake only after each account runtime completes shutdow
     }),
   ]
   const shutdownOrder = []
+  const releasedLocks = []
   const runtime = await startProviderAccounts({
     providers,
     appConfig: appConfigForProviderSubset(providers),
     env: { TRADING_MODE: "testnet" },
+    releaseProviderLock: async (providerInstanceId) => {
+      releasedLocks.push(providerInstanceId)
+      return {
+        ok: true,
+        released: true,
+      }
+    },
     start: createShutdownTrackingProviderStarter(shutdownOrder),
   })
 
@@ -356,6 +372,8 @@ test("stops market-data intake only after each account runtime completes shutdow
     "runtime:first",
     "market-data:first",
   ], "Market-data intake must remain active until each account's strategy shutdown has completed safely.")
+  assert.deepEqual(releasedLocks, [],
+    "Active account locks must remain held until the outer process cleanup completes.")
 })
 
 
@@ -463,9 +481,7 @@ function createSecondAccountFailureStarter({
       stopMarketData: async () => ({ ok: true }),
       stop: async () => {
         stopCalls.push(account)
-        return {
-          ok: true,
-        }
+        return durableProcessStopResult()
       },
     }
   }
@@ -513,7 +529,7 @@ test("transfers process-wide ownership to the first successfully started optiona
         tradingEnabled: true,
         startMarketData: async () => ({ ok: true }),
         stopMarketData: async () => ({ ok: true }),
-        stop: async () => ({ ok: true }),
+        stop: async () => durableProcessStopResult(),
       }
     },
   })
@@ -582,7 +598,7 @@ function createFailedSecondAccountStarter({ startupError, stopped }) {
       stopMarketData: async () => ({ ok: true }),
       stop: async () => {
         stopped.push(account)
-        return { ok: true }
+        return durableProcessStopResult()
       },
     }
   }
@@ -669,7 +685,7 @@ test("retains a failed account lock when startup cleanup is not confirmed", asyn
         startMarketData: async () => ({ ok: true }),
         stopMarketData: async () => ({ ok: true }),
         stop: async () => ({
-          ok: true,
+          ...durableProcessStopResult(),
         }),
       }
     },
@@ -701,7 +717,8 @@ test("retains a failed account lock when startup cleanup is not confirmed", asyn
   assert.deepEqual(retainedLocks, ["second"])
   assert.deepEqual(releasedLocks, [])
   assert.equal((await runtime.stop()).ok, true)
-  assert.deepEqual(releasedLocks, ["first"])
+  assert.deepEqual(releasedLocks, [],
+    "The active account lock must remain held until outer process cleanup completes.")
 })
 
 test("isolates an optional provider market-data startup failure", async () => {
@@ -732,7 +749,7 @@ test("isolates an optional provider market-data startup failure", async () => {
         },
         stop: async () => {
           calls.push(`stop-runtime:${providerInstanceId}`)
-          return { ok: true }
+          return durableProcessStopResult()
         },
       }
     },
@@ -768,6 +785,7 @@ test("fails startup when no configured account can start", async () => {
       },
       releaseProviderLock: async () => ({
         ok: true,
+        released: true,
       }),
       appConfig: appConfigForProviderSubset([
         createProvider({ providerInstanceId: "first",
@@ -783,7 +801,7 @@ test("fails startup when no configured account can start", async () => {
 })
 
 
-test("releases only accounts whose runtime shutdown is confirmed", async () => {
+test("keeps all provider locks held until outer cleanup after an unconfirmed runtime stop", async () => {
   const providers = [
     createProvider({
       providerInstanceId: "first",
@@ -808,7 +826,10 @@ test("releases only accounts whose runtime shutdown is confirmed", async () => {
     }),
     releaseProviderLock: async (providerInstanceId) => {
       releasedLocks.push(providerInstanceId)
-      return { ok: true }
+      return {
+        ok: true,
+        released: true,
+      }
     },
     appConfig: appConfigForProviderSubset(providers),
     env: { TRADING_MODE: "testnet" },
@@ -816,11 +837,11 @@ test("releases only accounts whose runtime shutdown is confirmed", async () => {
 
   const firstStop = await runtime.stop()
   assert.equal(firstStop.ok, false)
-  assert.deepEqual(releasedLocks, ["second"])
+  assert.deepEqual(releasedLocks, [])
   const secondStop = await runtime.stop()
   assert.equal(secondStop.ok, true)
   assert.deepEqual(stopCalls, ["second", "first", "first"])
-  assert.deepEqual(releasedLocks, ["second", "first"])
+  assert.deepEqual(releasedLocks, [])
 })
 
 test("rejects multi-provider startup without explicit market-data ownership before starting accounts", async () => {
@@ -913,4 +934,224 @@ test("passes both strategy routes to one provider while deduplicating its market
     },
   ], "A shared provider account must retain both independently owned strategy routes")
   assert.deepEqual(starts[0].executionSymbols, ["BTCUSDT"], "The shared market must be subscribed only once")
+})
+
+test("retains an account lock when runtime stop does not confirm STOPPED status", async () => {
+  const providers = [
+    createProvider({
+      providerInstanceId: "first",
+      providerType: "binance",
+      accountId: "account-one",
+    }),
+    createProvider({
+      providerInstanceId: "second",
+      providerType: "binance",
+      accountId: "account-two",
+    }),
+  ]
+  const releasedLocks = []
+  const stoppedMarketData = []
+  const runtime = await startProviderAccounts({
+    providers,
+    appConfig: appConfigForProviderSubset(providers),
+    env: { TRADING_MODE: "testnet" },
+    releaseProviderLock: async (providerInstanceId) => {
+      releasedLocks.push(providerInstanceId)
+      return {
+        ok: true,
+        released: true,
+      }
+    },
+    start: async (input) => ({
+      startMarketData: async () => ({ ok: true }),
+      stopMarketData: async () => {
+        stoppedMarketData.push(input.providerIdentity.providerInstanceId)
+        return { ok: true }
+      },
+      stop: async () => input.providerIdentity.providerInstanceId === "first"
+        ? { ok: true }
+        : durableProcessStopResult(),
+    }),
+  })
+
+  const result = await runtime.stop()
+
+  assert.equal(result.ok, false,
+    "An account runtime without an explicit STOPPED outcome must make aggregate shutdown incomplete.")
+  assert.deepEqual(releasedLocks, [],
+    "No active provider account lock may be released before outer process cleanup.")
+  assert.deepEqual(stoppedMarketData, ["second"],
+    "Market-data intake for an account with an ambiguous runtime stop must remain untouched.")
+})
+
+test("propagates a missing provider durable stop acknowledgement to the aggregate runtime", async () => {
+  const providers = [
+    createProvider({
+      providerInstanceId: "first",
+      providerType: "binance",
+      accountId: "account-one",
+    }),
+    createProvider({
+      providerInstanceId: "second",
+      providerType: "binance",
+      accountId: "account-two",
+    }),
+  ]
+  const releasedLocks = []
+  const runtime = await startProviderAccounts({
+    providers,
+    appConfig: appConfigForProviderSubset(providers),
+    env: { TRADING_MODE: "testnet" },
+    releaseProviderLock: async (providerInstanceId) => {
+      releasedLocks.push(providerInstanceId)
+      return {
+        ok: true,
+        released: true,
+      }
+    },
+    start: async (input) => ({
+      startMarketData: async () => ({ ok: true }),
+      stopMarketData: async () => ({ ok: true }),
+      stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+        data: {
+          durableProcessStopAcknowledged: input.providerIdentity.providerInstanceId === "first",
+        },
+      }),
+    }),
+  })
+
+  const result = await runtime.stop()
+
+  assert.equal(result.ok, true,
+    "Provider runtimes may stop successfully even when the optional durable-facts acknowledgement is unavailable.")
+  assert.equal(result.data.durableProcessStopAcknowledged, false,
+    "The aggregate runtime must not invent a durable PROCESS_STOPPED acknowledgement when one account omits it.")
+  assert.deepEqual(releasedLocks, [],
+    "Provider locks must remain held until the outer Journal-backed cleanup and logger-close stages complete.")
+})
+
+async function createMultiProviderShutdownFixture(providers) {
+  const runtimeStopCalls = {
+    first: 0,
+    second: 0,
+  }
+  const marketDataStopCalls = {
+    first: 0,
+    second: 0,
+  }
+  let providerLockReleaseCalls = 0
+  const runtime = await startProviderAccounts({
+    providers,
+    appConfig: appConfigForProviderSubset(providers),
+    env: { TRADING_MODE: "testnet" },
+    releaseProviderLock: async () => {
+      providerLockReleaseCalls += 1
+      return {
+        ok: true,
+        released: true,
+      }
+    },
+    start: async ({ providerIdentity }) => {
+      const { providerInstanceId } = providerIdentity
+      return {
+        startMarketData: async () => ({ ok: true }),
+        stopMarketData: async () => {
+          marketDataStopCalls[providerInstanceId] += 1
+          return { ok: true }
+        },
+        stop: async () => {
+          runtimeStopCalls[providerInstanceId] += 1
+          if (
+            providerInstanceId === "second" &&
+            runtimeStopCalls[providerInstanceId] === 1
+          ) {
+            return { ok: true }
+          }
+          return durableProcessStopResult()
+        },
+      }
+    },
+  })
+  return {
+    runtime,
+    runtimeStopCalls,
+    marketDataStopCalls,
+    getProviderLockReleaseCalls: () => providerLockReleaseCalls,
+  }
+}
+
+test("defers provider lock release until outer cleanup and retries only incomplete account shutdown stages", async () => {
+  const providers = [
+    createProvider({
+      providerInstanceId: "first",
+      providerType: "binance",
+      accountId: "account-one",
+    }),
+    createProvider({
+      providerInstanceId: "second",
+      providerType: "binance",
+      accountId: "account-two",
+    }),
+  ]
+  const { runtime, runtimeStopCalls, marketDataStopCalls, getProviderLockReleaseCalls } =
+    await createMultiProviderShutdownFixture(providers)
+
+  const firstStop = await runtime.stop()
+  assert.equal(firstStop.ok, false)
+  const retryStop = await runtime.stop()
+  assert.equal(retryStop.ok, true)
+  assert.deepEqual(runtimeStopCalls, {
+    first: 1,
+    second: 2,
+  })
+  assert.deepEqual(marketDataStopCalls, {
+    first: 1,
+    second: 1,
+  })
+  assert.equal(getProviderLockReleaseCalls(), 0,
+    "Active provider locks must be released only by the outer process shutdown after all cleanup succeeds.")
+})
+
+test("propagates durable process-stop acknowledgement from every provider runtime", async () => {
+  const providers = [
+    createProvider({
+      providerInstanceId: "first",
+      providerType: "binance",
+      accountId: "account-one",
+    }),
+    createProvider({
+      providerInstanceId: "second",
+      providerType: "binance",
+      accountId: "account-two",
+    }),
+  ]
+  const runtime = await startProviderAccounts({
+    providers,
+    appConfig: appConfigForProviderSubset(providers),
+    env: { TRADING_MODE: "testnet" },
+    releaseProviderLock: async () => ({
+      ok: true,
+      released: true,
+    }),
+    start: async () => ({
+      startMarketData: async () => ({ ok: true }),
+      stopMarketData: async () => ({ ok: true }),
+      stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+        data: {
+            durableProcessStopAcknowledged: true,
+          },
+      }),
+    }),
+  })
+
+  const result = await runtime.stop()
+
+  assert.equal(result.ok, true,
+    "Multi-account shutdown must complete when every provider runtime confirms durable PROCESS_STOPPED.")
+  assert.equal(result.data.durableProcessStopAcknowledged, true,
+    "The aggregate runtime must propagate durable acknowledgement to the outer process-shutdown barrier.")
 })

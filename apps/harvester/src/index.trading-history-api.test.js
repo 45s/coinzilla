@@ -12,7 +12,7 @@ function createDisabledJournalService() {
       disabled: true,
     }),
     status: {
-      state: "disabled",
+      enabled: false,
     },
     flush: async () => ({
       ok: true,
@@ -41,6 +41,28 @@ function createTradingHistoryTestConfig() {
   }
 }
 
+async function startDefaultTradingHistoryApi({
+  database,
+  calls,
+  suppliedDatabase,
+  environment,
+  eventBus,
+  operator,
+} = {}) {
+  assert.deepEqual(operator, { facade: "shared-harvester-operator" }, "The local API must receive the same operator facade exposed by the running Harvester runtime.")
+  assert.equal(suppliedDatabase, database, "The API must reuse Harvester's existing relational database connection.")
+  assert.equal(environment, "testnet", "The API environment must come from Harvester's selected runtime configuration.")
+  assert.equal(typeof eventBus?.subscribe, "function", "The WebSocket adapter must share Harvester's existing EventBus.")
+  calls.push("api-start")
+  return {
+    address: {
+      address: "127.0.0.1",
+      port: 4201,
+    },
+    close: async () => { calls.push("api-close") },
+  }
+}
+
 function createMainOptions({ database, calls, handlers, startTradingHistoryApi } = {}) {
   return {
     env: {
@@ -57,28 +79,25 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
     createJournalService: createDisabledJournalService,
     acquireProcessLock: async () => ({
       ok: true,
-      release: async () => ({
-        ok: true,
-        released: true,
-      }),
+      release: async () => {
+        calls.push("lock-release")
+        return {
+          ok: true,
+          released: true,
+        }
+      },
     }),
     prepareOrderHistoryPersistence: async () => ({
       relationalDatabase: database,
     }),
-    startTradingHistoryApi: startTradingHistoryApi ?? (async ({ database: suppliedDatabase, environment, eventBus, operator }) => {
-      assert.deepEqual(operator, { facade: "shared-harvester-operator" }, "The local API must receive the same operator facade exposed by the running Harvester runtime.");
-      assert.equal(suppliedDatabase, database, "The API must reuse Harvester's existing relational database connection.")
-      assert.equal(environment, "testnet", "The API environment must come from Harvester's selected runtime configuration.")
-      assert.equal(typeof eventBus?.subscribe, "function", "The WebSocket adapter must share Harvester's existing EventBus.")
-      calls.push("api-start")
-      return {
-        address: {
-          address: "127.0.0.1",
-          port: 4201,
-        },
-        close: async () => { calls.push("api-close") },
-      }
-    }),
+    startTradingHistoryApi: startTradingHistoryApi ?? ((input) => startDefaultTradingHistoryApi({
+      database,
+      calls,
+      suppliedDatabase: input.database,
+      environment: input.environment,
+      eventBus: input.eventBus,
+      operator: input.operator,
+    })),
     start: async () => ({
       getOperator: () => ({ facade: "shared-harvester-operator" }),
       stop: async () => {
@@ -86,6 +105,7 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
         return {
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }
       },
     }),
@@ -124,6 +144,52 @@ test("starts the trading-history API with Harvester and closes it before the sha
   await handlers.SIGTERM()
   assert.ok(calls.indexOf("runtime-stop") < calls.indexOf("api-close"), "The API must remain available until the Harvester runtime has stopped.")
   assert.ok(calls.indexOf("api-close") < calls.indexOf("database"), "The API listener must close before Harvester closes its shared database.")
+})
+
+test("retains persistence and process ownership when trading-history API close explicitly fails", async () => {
+  const calls = []
+  const handlers = {}
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  const database = {
+    state: "connected",
+    async close() {
+      calls.push("database")
+      database.state = "closed"
+    },
+  }
+
+  try {
+    const result = await main(createMainOptions({
+      database,
+      calls,
+      handlers,
+      startTradingHistoryApi: async () => ({
+        address: {
+          address: "127.0.0.1",
+          port: 4201,
+        },
+        close: async () => {
+          calls.push("api-close")
+          return {
+            ok: false,
+            errors: [new Error("API listener did not close")],
+          }
+        },
+      }),
+    }))
+
+    assert.ok(result?.runtime)
+    await handlers.SIGTERM()
+    assert.ok(calls.includes("api-close"))
+    assert.equal(calls.includes("database"), false,
+      "Persistence must remain open when the API listener close is not confirmed.")
+    assert.equal(calls.includes("lock-release"), false,
+      "The process lock must remain held when the API listener close is not confirmed.")
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
 })
 
 test("keeps Harvester trading startup successful when the optional API cannot bind", async () => {

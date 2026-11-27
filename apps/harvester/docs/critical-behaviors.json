@@ -27,7 +27,9 @@
     "src/use-cases/resolve-offline-user-data-account-blockers.js",
     "src/use-cases/resolve-user-data-account-blockers.helpers.js",
     "src/use-cases/resolve-user-data-account-blockers.js",
-    "src/use-cases/restore-harvester-operational-state.js"
+    "src/use-cases/restore-harvester-operational-state.js",
+    "src/bootstrap/providers/",
+    "src/bootstrap/providers/start-provider-accounts.js"
   ],
   "behaviors": [
     {
@@ -857,104 +859,6 @@
       ]
     },
     {
-      "id": "SHUTDOWN_PROCESS_OWNERSHIP",
-      "title": "Shutdown ordering, process-lock retention and safe release",
-      "sourceModules": [
-        "src/index.js",
-        "src/infrastructure/process-lock/acquire-harvester-process-locks.js",
-        "src/infrastructure/process-lock/acquire-harvester-process-lock.js",
-        "src/infrastructure/process/harvester-process-shutdown.js",
-        "src/bootstrap/shutdown/create-shutdown-handler.js",
-        "src/bootstrap/shutdown/create-conservative-shutdown-participant.js",
-        "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.js",
-        "src/infrastructure/process/create-harvester-process-identity.js",
-        "src/use-cases/create-conservative-shutdown-safety.js"
-      ],
-      "tests": [
-        {
-          "path": "src/index.test.js",
-          "name": "acquires the process lock before starting Journal and releases it after clean shutdown",
-          "kind": "normal"
-        },
-        {
-          "path": "src/index.test.js",
-          "name": "retains the process lock when runtime shutdown throws",
-          "kind": "failure"
-        },
-        {
-          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
-          "name": "acquires an exclusive lock and releases it idempotently",
-          "kind": "normal"
-        },
-        {
-          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
-          "name": "refuses to remove a lock whose ownership token changed",
-          "kind": "failure"
-        },
-        {
-          "path": "src/index.test.js",
-          "name": "retains Journal, EventBus, process lock and logger when strategy shutdown safety is unresolved",
-          "kind": "integration"
-        },
-        {
-          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
-          "name": "does not reclaim a malformed lock file",
-          "kind": "failure"
-        },
-        {
-          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
-          "name": "treats a missing lock file as an idempotent release",
-          "kind": "failure"
-        },
-        {
-          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
-          "name": "does not remove a replacement lock after a stale-owner race",
-          "kind": "failure"
-        },
-        {
-          "path": "src/use-cases/create-conservative-shutdown-safety.test.js",
-          "name": "drains in-flight transitions before clearing deferred evaluations for shutdown",
-          "kind": "failure"
-        },
-        {
-          "path": "src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js",
-          "name": "waits for the serialized engine shutdown barrier before cancelling owned BUYs",
-          "kind": "failure"
-        },
-        {
-          "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
-          "name": "does not overlap a retry with a timed-out participant operation that ignores abort",
-          "kind": "failure"
-        },
-        {
-          "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
-          "name": "bounds repeated successful safety proofs when the marker remains invalidated",
-          "kind": "failure"
-        },
-        {
-          "path": "src/bootstrap/shutdown/create-shutdown-handler.test.js",
-          "name": "bounds a pending CLOSING audit phase and retains shared services",
-          "kind": "failure"
-        },
-        {
-          "path": "src/bootstrap/create-harvester-stop.test.js",
-          "name": "bounds pending durable PROCESS_STOPPED and prevents overlapping retries",
-          "kind": "failure"
-        },
-        {
-          "path": "test/replays/ada-conservative-recovery-replay.test.js",
-          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
-          "kind": "integration"
-        }
-      ],
-      "runtimeStatus": "active",
-      "integrationRequired": true,
-      "invariants": [
-        "Acquire process ownership before starting Journal/runtime; release it only after shutdown and cleanup are confirmed.",
-        "Gate BUY, cancel only current-process owned BUYs, reconcile fills/cancellations and prove recovery SELL coverage; if proof or CLOSING durability fails, retain required services and fail closed."
-      ]
-    },
-    {
       "id": "ACCOUNT_COMMITMENT_ALLOCATION",
       "title": "Cross-market account-level quote/base reservation and inventory allocation",
       "runtimeStatus": "active",
@@ -1599,6 +1503,182 @@
         "Recovery Seller STOP uses its dedicated producer and resolver; legacy untagged facts retain that resolver by the reserved reason, while an explicit USER_DATA_EVENT_HANDLER producer always takes precedence over a colliding reason.",
         "Classify Recovery Seller STOP only by its dedicated producer provenance; a colliding reason string from user-data events must remain under the user-data account-resolution contract."
       ]
+    },
+    {
+      "id": "SHUTDOWN_PROCESS_OWNERSHIP",
+      "title": "Shutdown ordering, process-lock retention and safe release",
+      "sourceModules": [
+        "src/index.js",
+        "src/infrastructure/process-lock/acquire-harvester-process-locks.js",
+        "src/infrastructure/process-lock/acquire-harvester-process-lock.js",
+        "src/infrastructure/process/harvester-process-shutdown.js",
+        "src/bootstrap/shutdown/create-shutdown-handler.js",
+        "src/bootstrap/shutdown/create-conservative-shutdown-participant.js",
+        "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.js",
+        "src/infrastructure/process/create-harvester-process-identity.js",
+        "src/use-cases/create-conservative-shutdown-safety.js",
+        "src/bootstrap/providers/start-provider-accounts.js"
+      ],
+      "tests": [
+        {
+          "path": "src/index.test.js",
+          "name": "acquires the process lock before starting Journal and releases it after clean shutdown",
+          "kind": "normal"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "retains the process lock when runtime shutdown throws",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
+          "name": "acquires an exclusive lock and releases it idempotently",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
+          "name": "refuses to remove a lock whose ownership token changed",
+          "kind": "failure"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "retains Journal, EventBus, process lock and logger when strategy shutdown safety is unresolved",
+          "kind": "integration"
+        },
+        {
+          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
+          "name": "does not reclaim a malformed lock file",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
+          "name": "treats a missing lock file as an idempotent release",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
+          "name": "does not remove a replacement lock after a stale-owner race",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-conservative-shutdown-safety.test.js",
+          "name": "drains in-flight transitions before clearing deferred evaluations for shutdown",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js",
+          "name": "waits for the serialized engine shutdown barrier before cancelling owned BUYs",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
+          "name": "does not overlap a retry with a timed-out participant operation that ignores abort",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
+          "name": "bounds repeated successful safety proofs when the marker remains invalidated",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-shutdown-handler.test.js",
+          "name": "bounds a pending CLOSING audit phase and retains shared services",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/create-harvester-stop.test.js",
+          "name": "bounds pending durable PROCESS_STOPPED and prevents overlapping retries",
+          "kind": "failure"
+        },
+        {
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
+          "kind": "integration"
+        },
+        {
+          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
+          "name": "propagates a missing provider durable stop acknowledgement to the aggregate runtime",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
+          "name": "propagates durable process-stop acknowledgement from every provider runtime",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "retains all shared resources and the process lock when the final EventBus flush fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "bounds a hung EventBus flush and retains the process lock without overlapping retries",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "retains the process lock when observability cleanup exceeds its deadline",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "retains the process lock when process logger close fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "exits the child process only after Journal shutdown and real process-lock release",
+          "kind": "integration"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "retains the process lock when release acknowledgement is ambiguous",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
+          "name": "retains an account lock when runtime stop does not confirm STOPPED status",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
+          "name": "defers provider lock release until outer cleanup and retries only incomplete account shutdown stages",
+          "kind": "failure"
+        },
+        {
+          "path": "src/index.trading-history-api.test.js",
+          "name": "retains persistence and process ownership when trading-history API close explicitly fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "retains the process lock when startup logger cleanup fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "retains the process lock when startup EventBus flush is not confirmed",
+          "kind": "failure"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "retains the process lock when startup logger returns an explicit failure",
+          "kind": "failure"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "reports an ambiguous process-lock release after startup logger cleanup",
+          "kind": "failure"
+        }
+      ],
+      "runtimeStatus": "active",
+      "integrationRequired": true,
+      "invariants": [
+        "Acquire process ownership before starting Journal/runtime; release it only after shutdown and cleanup are confirmed.",
+        "Gate BUY, cancel only current-process owned BUYs, reconcile fills/cancellations and prove recovery SELL coverage; if proof or CLOSING durability fails, retain required services and fail closed.",
+        "Bound EventBus flush, notification close, observability cleanup, logger close and lock release; retain process ownership on any failure/timeout, and retry pending operations without overlap.",
+        "Every started provider runtime must return ok:true and status:STOPPED before the aggregate runtime may report STOPPED; active account locks remain held until outer cleanup. The aggregate durable PROCESS_STOPPED acknowledgement is true only when every started provider confirms it. When the Operational State Store is absent, the outer handler must pass the enabled Journal-backed STOPPED barrier; if an enabled store's PROCESS_STOPPED append fails or times out, shutdown is incomplete. Release the final process-lock group only after all required cleanup and logger-close stages succeed."
+      ]
     }
   ],
   "coverageBaseline": {
@@ -1614,7 +1694,7 @@
       "branches": 83.22,
       "functions": 96
     },
-    "note": "The original 30 critical-module floors retain their measured baseline provenance. The seven additional critical modules introduced by release PR #1662 were measured from its develop source head and then re-measured with all 37 modules enforced in workflow run 44966859719; their per-module baseline and minimum values are recorded in moduleCoverage."
+    "note": "The original 30 critical-module floors retain their measured baseline provenance. The seven additional critical modules introduced by release PR #1662 were measured from its develop source head and then re-measured with all 37 modules enforced in workflow run 44966859719; their per-module baseline and minimum values are recorded in moduleCoverage. The start-provider-accounts.js module was separately measured from develop 6405aafa1824e61de7fee420f54b436eed30cb5e in workflow run 45934755515 (Harvester job 140295275348); its measured baseline is lines 92.78%, branches 76.83%, functions 97.87%, with policy floors 90%, 75%, and 95%."
   },
   "moduleCoverage": [
     {
@@ -1990,9 +2070,9 @@
         "functions": 90
       },
       "latestObserved": {
-        "lines": 85.67,
-        "branches": 80.93,
-        "functions": 93.9
+        "lines": 84.37,
+        "branches": 80.71,
+        "functions": 94.12
       }
     },
     {
@@ -2497,6 +2577,24 @@
         "lines": 100,
         "branches": 100,
         "functions": 100
+      }
+    },
+    {
+      "path": "src/bootstrap/providers/start-provider-accounts.js",
+      "baseline": {
+        "lines": 92.78,
+        "branches": 76.83,
+        "functions": 97.87
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 75,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 93.1,
+        "branches": 78.57,
+        "functions": 97.92
       }
     }
   ],

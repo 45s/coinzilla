@@ -15,7 +15,10 @@ import { StrategyId } from "./domain/strategies/strategy-ids.js"
 const disabledJournalService = () => ({
   ready: Promise.resolve({ ok: true,
     disabled: true }),
-  status: { state: "disabled" },
+  status: {
+    state: "disabled",
+    enabled: false,
+  },
   flush: async () => ({ ok: true,
     durable: true }),
   close: async () => ({ ok: true,
@@ -65,6 +68,12 @@ const main = (options = {}) => {
     },
   })
 }
+const confirmedRuntimeStopResult = () => ({
+  ok: true,
+  status: "STOPPED",
+  data: { durableProcessStopAcknowledged: true },
+})
+
 const runMain = (options = {}) => main(options)
 
 const createTestAppConfig = ({ operatorControlEnabled = false, allowedUserIds = [] } = {}) => {
@@ -74,6 +83,59 @@ const createTestAppConfig = ({ operatorControlEnabled = false, allowedUserIds = 
     allowedUserIds,
   }
   return config
+}
+
+function createStartupFailureCleanupOptions({
+  calls,
+  releaseResult,
+  closeLogger,
+  logger,
+  eventBusFlushResult = { ok: true },
+}) {
+  return {
+    acquireProcessLock: async () => ({
+      ok: true,
+      release: async () => {
+        calls.push("lock-release")
+        return releaseResult
+      },
+    }),
+    createEventBus: () => ({
+      publish: () => ({ ok: true }),
+      flush: async () => eventBusFlushResult,
+      close: async () => {
+        calls.push("eventBus.close")
+        return {
+          ok: true,
+          closed: true,
+        }
+      },
+    }),
+    createJournalService: () => ({
+      status: { enabled: false },
+      ready: Promise.resolve({
+        ok: false,
+        errors: [new Error("Journal readiness failed")],
+      }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+      close: async () => {
+        calls.push("journal.close")
+        return {
+          ok: true,
+          closed: true,
+          disabled: true,
+        }
+      },
+    }),
+    start: async () => {
+      throw new Error("Runtime must not start before Journal readiness succeeds.")
+    },
+    closeLogger,
+    logger,
+  }
 }
 
 test("constructs and injects durable operational state for enabled RS while CG restart recovery is disabled", async () => {
@@ -229,8 +291,19 @@ test("logs startup failures as one structured logger argument", async () => {
 
   const previousExitCode = process.exitCode
   process.exitCode = 0
+  let processLockReleaseCalls = 0
   try {
     await runMain({
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => {
+          processLockReleaseCalls += 1
+          return {
+            ok: true,
+            released: true,
+          }
+        },
+      }),
       start: async () => { throw error },
       logger,
     })
@@ -242,7 +315,8 @@ test("logs startup failures as one structured logger argument", async () => {
     assert.equal(startupFailures[0].data.errorDetails.name, "Error")
     assert.equal(startupFailures[0].data.errorDetails.message, "configuration failed")
     assert.match(startupFailures[0].data.errorDetails.stack, /configuration failed/)
-    assert.ok(calls.some((call) => call.data?.message === "observability shutdown incomplete"), "the process lock must remain held when runtime shutdown cannot be confirmed")
+    assert.equal(processLockReleaseCalls, 0,
+      "The process lock must remain held when runtime startup was attempted but did not complete.")
     assert.equal(process.exitCode, 1)
   } finally {
     process.exitCode = previousExitCode
@@ -295,8 +369,19 @@ test("preserves nested AggregateError details in startup diagnostics", async () 
   const error = new AggregateError([rootError], "startup and cleanup failed")
   const previousExitCode = process.exitCode
   process.exitCode = 0
+  let processLockReleaseCalls = 0
   try {
     await runMain({
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => {
+          processLockReleaseCalls += 1
+          return {
+            ok: true,
+            released: true,
+          }
+        },
+      }),
       start: async () => { throw error },
       logger: {
         info() {},
@@ -310,7 +395,8 @@ test("preserves nested AggregateError details in startup diagnostics", async () 
     assert.equal(startupFailures[0].errorDetails.message, "startup and cleanup failed")
     assert.equal(startupFailures[0].errorDetails.errors[0].message, "broker request failed")
     assert.match(startupFailures[0].errorDetails.errors[0].stack, /broker request failed/)
-    assert.ok(calls.some((call) => call.message === "observability shutdown incomplete"), "the process lock must remain held when runtime shutdown cannot be confirmed")
+    assert.equal(processLockReleaseCalls, 0,
+      "The process lock must remain held when runtime startup was attempted but did not complete.")
     assert.equal(process.exitCode, 1)
   } finally {
     process.exitCode = previousExitCode
@@ -469,6 +555,7 @@ test("publishes process started and stopped events for Binance trading startup",
       stop: async () => ({
         ok: true,
         status: "STOPPED",
+        data: { durableProcessStopAcknowledged: true },
       }),
     }),
     registerSignalHandler: (...signalHandlerArguments) => {
@@ -582,6 +669,7 @@ test("publishes stopped before closing Journal, then closes EventBus", async () 
         closed: true,
       }
     },
+    flush: async () => ({ ok: true }),
   }
   const journalService = {
     close: async () => {
@@ -603,10 +691,7 @@ test("publishes stopped before closing Journal, then closes EventBus", async () 
       subscriptions: [],
       stop: async () => {
         operations.push("runtime.stop")
-        return {
-          ok: true,
-          status: "STOPPED",
-        }
+        return confirmedRuntimeStopResult()
       },
     }),
     registerSignalHandler: (...signalHandlerArguments) => {
@@ -641,6 +726,7 @@ test("continues EventBus cleanup when Journal close fails", async () => {
       return { ok: true,
         closed: true }
     },
+    flush: async () => ({ ok: true }),
   }
   const journalService = {
     close: async () => {
@@ -664,6 +750,7 @@ test("continues EventBus cleanup when Journal close fails", async () => {
         return {
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }
       },
       }),
@@ -695,6 +782,7 @@ test("reports EventBus timeout and preserves Journal close result", async () => 
         timedOut: true,
         errors: [new Error("EventBus close timed out")] }
     },
+    flush: async () => ({ ok: true }),
   }
   const journalService = {
     close: async () => {
@@ -720,6 +808,7 @@ test("reports EventBus timeout and preserves Journal close result", async () => 
         return {
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }
       },
       }),
@@ -749,9 +838,17 @@ test("coalesces repeated shutdown signals into one cleanup operation", async () 
     publish: (event) => { operations.push(`publish:${event.name}`); return { ok: true,
         event } },
     close: async () => { operations.push("eventBus.close"); return { ok: true } },
+    flush: async () => ({ ok: true }),
   }
   const journalService = {
-    close: async () => { operations.push("journal.close"); return { ok: true } },
+    close: async () => {
+      operations.push("journal.close")
+      return {
+        ok: true,
+        closed: true,
+        durable: true,
+      }
+    },
   }
   await main({
     createEventBus: () => eventBus,
@@ -767,6 +864,7 @@ test("coalesces repeated shutdown signals into one cleanup operation", async () 
         return {
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }
       },
     }),
@@ -795,6 +893,7 @@ test("closes observability after publishing startup failure", async () => {
     publish: (event) => { operations.push(`publish:${event.name}`); return { ok: true,
         event } },
     close: async () => { operations.push("eventBus.close"); return { ok: true } },
+    flush: async () => ({ ok: true }),
   }
   const journalService = {
     close: async () => { operations.push("journal.close"); return { ok: true } },
@@ -822,6 +921,145 @@ test("closes observability after publishing startup failure", async () => {
 })
 
 
+test("reports an ambiguous process-lock release after startup logger cleanup", async () => {
+  const diagnostics = []
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main(createStartupFailureCleanupOptions({
+      calls,
+      releaseResult: { ok: true },
+      closeLogger: async () => {
+        calls.push("logger.close")
+      },
+      logger: {
+        info() {},
+        debug() {},
+        error: ({ message }) => diagnostics.push(message),
+      },
+    }))
+    assert.equal(process.exitCode, 1)
+    assert.deepEqual(calls, [
+      "journal.close",
+      "eventBus.close",
+      "logger.close",
+      "lock-release",
+    ])
+    assert.ok(
+      diagnostics.includes("observability shutdown incomplete"),
+      "An ambiguous lock-release result must be reported as incomplete cleanup.",
+    )
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+
+
+
+test("retains the process lock when startup logger cleanup fails", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main(createStartupFailureCleanupOptions({
+      calls,
+      releaseResult: {
+        ok: true,
+        released: true,
+      },
+      closeLogger: async () => {
+        calls.push("logger.close")
+        throw new Error("Logger close failed")
+      },
+      logger: {
+        info() {},
+        debug() {},
+        error() {},
+      },
+    }))
+    assert.deepEqual(calls, [
+      "journal.close",
+      "eventBus.close",
+      "logger.close",
+    ], "The process lock must remain held when logger shutdown is not confirmed.")
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("retains the process lock when startup EventBus flush is not confirmed", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main(createStartupFailureCleanupOptions({
+      calls,
+      releaseResult: {
+        ok: true,
+        released: true,
+      },
+      eventBusFlushResult: {
+        ok: false,
+        errors: [new Error("EventBus flush failed")],
+      },
+      closeLogger: async () => {
+        calls.push("logger.close")
+      },
+      logger: {
+        info() {},
+        debug() {},
+        error() {},
+      },
+    }))
+    assert.deepEqual(calls, [
+      "journal.close",
+      "eventBus.close",
+      "logger.close",
+    ], "The process lock must remain held when startup EventBus flush is not confirmed.")
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("retains the process lock when startup logger returns an explicit failure", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main(createStartupFailureCleanupOptions({
+      calls,
+      releaseResult: {
+        ok: true,
+        released: true,
+      },
+      closeLogger: async () => {
+        calls.push("logger.close")
+        return {
+          ok: false,
+          errors: [new Error("Logger close failed")],
+        }
+      },
+      logger: {
+        info() {},
+        debug() {},
+        error() {},
+      },
+    }))
+    assert.deepEqual(calls, [
+      "journal.close",
+      "eventBus.close",
+      "logger.close",
+    ], "The process lock must remain held when logger close returns an explicit failure.")
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
 test("writes and durably closes a JSONL session in the injected Journal directory", async () => {
   const previousExitCode = process.exitCode
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-journal-session-"))
@@ -843,6 +1081,7 @@ test("writes and durably closes a JSONL session in the injected Journal director
         stop: async () => ({
         ok: true,
         status: "STOPPED",
+        data: { durableProcessStopAcknowledged: true },
       }),
       }),
       registerSignalHandler: (...signalHandlerArguments) => {
@@ -1107,7 +1346,8 @@ test("releases the trading process lock only after runtime and Journal shutdown"
         flush: async () => ({ ok: true,
           durable: true }),
         close: async () => { sequence.push("journal-close"); return { ok: true,
-            closed: true } },
+            closed: true,
+            durable: true } },
       }),
       start: async () => ({
         connected: true,
@@ -1118,6 +1358,7 @@ test("releases the trading process lock only after runtime and Journal shutdown"
           return {
             ok: true,
             status: "STOPPED",
+            data: { durableProcessStopAcknowledged: true },
           }
         },
       }),
@@ -1158,7 +1399,8 @@ test("acquires the process lock before starting Journal and releases it after cl
           flush: async () => ({ ok: true,
             durable: true }),
           close: async () => { sequence.push("journal-close"); return { ok: true,
-              closed: true } },
+              closed: true,
+              durable: true } },
         }
       },
       start: async (input) => {
@@ -1173,6 +1415,9 @@ test("acquires the process lock before starting Journal and releases it after cl
             return {
               ok: true,
               status: "STOPPED",
+              data: {
+                durableProcessStopAcknowledged: true,
+              },
             }
           },
         }
@@ -1239,6 +1484,7 @@ test("retains the process lock when runtime shutdown throws", async () => {
     await signalHandler()
     assert.equal(releaseCalls, 0)
     assert.equal(process.exitCode, 1)
+    process.exitCode = 0
   } finally {
     process.exitCode = previousExitCode
   }
@@ -1355,10 +1601,22 @@ test("closes diagnostic log transports after runtime, Journal, and EventBus shut
         ok: true,
         event,
       }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
       close: async () => { operations.push("eventBus.close"); return { ok: true } },
     }),
     createJournalService: () => ({
-      close: async () => { operations.push("journal.close"); return { ok: true } },
+      status: { enabled: true },
+      close: async () => {
+        operations.push("journal.close")
+        return {
+          ok: true,
+          closed: true,
+          durable: true,
+        }
+      },
     }),
     start: async () => ({
       connected: false,
@@ -1367,6 +1625,7 @@ test("closes diagnostic log transports after runtime, Journal, and EventBus shut
         return {
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }
       },
     }),
@@ -1451,6 +1710,7 @@ const captureProcessProvenanceScenario = async () => {
         stop: async () => ({
         ok: true,
         status: "STOPPED",
+        data: { durableProcessStopAcknowledged: true },
       }),
       }
     },
@@ -1528,6 +1788,7 @@ test("preserves terminal Journal write-failure classification at the Harvester c
         stop: async () => ({
         ok: true,
         status: "STOPPED",
+        data: { durableProcessStopAcknowledged: true },
       }),
       }
     },
@@ -1651,6 +1912,7 @@ test("requires Journal readiness and publishes process provenance before trading
         stop: async () => ({
         ok: true,
         status: "STOPPED",
+        data: { durableProcessStopAcknowledged: true },
       }),
       }
     },
@@ -2116,6 +2378,7 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
       calls.includes("logger-error"),
       "The failed shutdown attempt must report the exact safety blocker while leaving required runtime services connected.",
     )
+    process.exitCode = 0
   } finally {
     process.exitCode = previousExitCode
   }
@@ -2316,7 +2579,6 @@ function createDelayedJournalProcessIdentity() {
 
 after(() => {
   // Tests exercise startup failures that intentionally set the process exit code.
-  // Clear application side effects after all assertions; the test runner still
-  // reports assertion failures independently.
-  process.exitCode = undefined
+  // Reset it after assertions; the test runner reports assertion failures independently.
+  process.exitCode = 0
 })
