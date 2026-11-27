@@ -142,12 +142,12 @@ function verifyTrustedExecutable({ path, realpathSync, statSync, readFileSync })
 
 function resolveDelegatedCgroupParent({ readFileSync, realpathSync, accessSync }) {
   const unified = readFileSync("/proc/self/cgroup", "utf8")
-    .split("\\n")
+    .split("\n")
     .find((line) => line.startsWith("0::"))
   if (!unified) {
     throw new Error("Scenario sandbox requires a unified cgroup v2 hierarchy")
   }
-  const relativePath = unified.slice(3).replace(/^\\/+/, "")
+  const relativePath = unified.slice(3).replace(/^\/+/, "")
   if (relativePath.split("/").includes("..")) {
     throw new Error("Invalid current cgroup path")
   }
@@ -157,11 +157,11 @@ function resolveDelegatedCgroupParent({ readFileSync, realpathSync, accessSync }
   }
   const controllers = readFileSync(join(parentPath, "cgroup.controllers"), "utf8")
     .trim()
-    .split(/\\s+/)
+    .split(/\s+/)
   const enabled = readFileSync(join(parentPath, "cgroup.subtree_control"), "utf8")
     .trim()
-    .split(/\\s+/)
-    .map((controller) => controller.replace(/^\\+/, ""))
+    .split(/\s+/)
+    .map((controller) => controller.replace(/^\+/, ""))
   for (const controller of ["memory", "cpu", "pids"]) {
     if (!controllers.includes(controller) || !enabled.includes(controller)) {
       throw new Error("Scenario cgroup controller is not delegated and enabled: " + controller)
@@ -184,7 +184,7 @@ function createCgroupSettings({ memoryLimitBytes }) {
 function writeAndVerifyCgroupSettings({ path, settings, writeFileSync, readFileSync }) {
   for (const [name, value] of settings) {
     const filePath = join(path, name)
-    writeFileSync(filePath, value + "\\n", "utf8")
+    writeFileSync(filePath, value + "\n", "utf8")
     const actual = readFileSync(filePath, "utf8").trim()
     if (actual !== value) {
       throw new Error("Scenario cgroup did not apply required setting: " + name)
@@ -196,7 +196,7 @@ function cleanupScenarioCgroup({ path, existsSync, writeFileSync, rmdirSync }) {
   const killPath = join(path, "cgroup.kill")
   if (existsSync(killPath)) {
     try {
-      writeFileSync(killPath, "1\\n", "utf8")
+      writeFileSync(killPath, "1\n", "utf8")
     } catch {}
   }
   try {
@@ -795,7 +795,6 @@ export function createLinuxBubblewrapSandboxLauncher(options = {}) {
     accessSync: accessSyncNative,
     mkdirSync: mkdirSyncNative,
     writeFileSync: writeFileSyncNative,
-    existsSync: existsSyncNative,
     rmdirSync: rmdirSyncNative,
     randomUUID: randomUUIDNative,
     ...options,
