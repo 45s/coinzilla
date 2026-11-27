@@ -298,8 +298,13 @@ test("forwards the original dust-completion failure while retaining the fail-clo
     keepQuantity: 1,
     minProfit: 0.01,
   }
-  dependencies.pause = async (input) => { pauses.push(input) }
-  dependencies.completeRecoveryCycle = async () => ({ ok: false, errors: [failure] })
+  dependencies.pause = async (input) => {
+    pauses.push(input)
+  }
+  dependencies.completeRecoveryCycle = async () => ({
+    ok: false,
+    errors: [failure],
+  })
   dependencies.strategyPolicy.evaluate = () => ({
     actions: [],
     reason: "RESIDUAL_DUST",

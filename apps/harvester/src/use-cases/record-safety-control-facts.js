@@ -46,13 +46,20 @@ function createStrategyMarketControlFact({
     throw new TypeError("Strategy market-control error evidence is allowed only as an Error on PAUSE")
   }
   const pauseData = action === "PAUSE"
-    ? mapStrategyPausedData({ symbol, reason, error }).data
+    ? mapStrategyPausedData({
+      symbol,
+      reason,
+      error,
+    }).data
     : undefined
   const prefix = action === "PAUSE" ? "strategy-market-paused:" : "strategy-market-resumed:"
   return {
     factId: prefix + transitionId,
     factType: action === "PAUSE" ? "STRATEGY_MARKET_PAUSED" : "STRATEGY_MARKET_RESUMED",
-    data: pauseData ?? { symbol, reason },
+    data: pauseData ?? {
+      symbol,
+      reason,
+    },
   }
 }
 
