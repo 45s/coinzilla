@@ -646,3 +646,141 @@ test("fails closed when Conservative recovery admission accounting contains an i
   assert.equal(result.allowed, false)
   assert.equal(result.reason, "CONSERVATIVE_RECOVERY_STATE_UNAVAILABLE")
 })
+
+
+test("blocks Recovery Seller BUY spending while its STOP is durably active", () => {
+  const dependencies = createVolatilityProtectedDependencies()
+  dependencies.isRecoverySellerBuyAdmissionBlocked = () => true
+  dependencies.isRecoverySellerSellAdmissionBlocked = () => false
+  const result = createSubmissionGate(dependencies)({
+    order: createOrder({ side: "BUY" }),
+    purpose: "RECOVERY_BUY",
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-position-1",
+      cycleId: "rs-cycle-1",
+    },
+  })
+
+  assert.equal(result.allowed, false,
+    "A durable Recovery Seller STOP must block new RS BUY spending.")
+  assert.equal(result.reason, "RECOVERY_SELLER_STOP_BUY_GATE_ACTIVE",
+    "The final submission gate must identify the RS investment-only STOP.")
+})
+
+test("allows the first owned Recovery Seller SELL while durable STOP blocks BUYs", () => {
+  const dependencies = createVolatilityProtectedDependencies()
+  dependencies.isRecoverySellerBuyAdmissionBlocked = () => true
+  dependencies.isRecoverySellerSellAdmissionBlocked = () => false
+  const result = createSubmissionGate(dependencies)({
+    order: createOrder({ side: "SELL" }),
+    purpose: "RECOVERY_SELL",
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-position-1",
+      cycleId: "rs-cycle-1",
+    },
+  })
+
+  assert.deepEqual(result, { allowed: true },
+    "A persisted RS STOP must not block an independently eligible first recovery SELL.")
+})
+
+test("blocks Recovery Seller SELL while STOP persistence is unverified", () => {
+  const dependencies = createVolatilityProtectedDependencies()
+  dependencies.isRecoverySellerBuyAdmissionBlocked = () => true
+  dependencies.isRecoverySellerSellAdmissionBlocked = () => true
+  const result = createSubmissionGate(dependencies)({
+    order: createOrder({ side: "SELL" }),
+    purpose: "RECOVERY_SELL",
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-position-1",
+      cycleId: "rs-cycle-1",
+    },
+  })
+
+  assert.equal(result.allowed, false,
+    "No RS order may pass while STOP persistence is pending or unverified.")
+  assert.equal(result.reason, "RECOVERY_SELLER_STOP_PERSISTENCE_UNVERIFIED",
+    "The gate must distinguish unverified STOP persistence from a durable investment STOP.")
+})
+
+test("blocks RS submission while SELL persistence gate is active even if BUY gate is clear", () => {
+  const dependencies = createVolatilityProtectedDependencies()
+  dependencies.isRecoverySellerBuyAdmissionBlocked = () => false
+  dependencies.isRecoverySellerSellAdmissionBlocked = () => true
+  const result = createSubmissionGate(dependencies)({
+    order: createOrder({ side: "SELL" }),
+    purpose: "RECOVERY_SELL",
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-position-1",
+      cycleId: "rs-cycle-1",
+    },
+  })
+
+  assert.equal(result.allowed, false,
+    "An explicitly pending or unverified SELL persistence gate must block even with BUY admission clear.")
+  assert.equal(result.reason, "RECOVERY_SELLER_STOP_PERSISTENCE_UNVERIFIED")
+})
+
+test("fails closed when RS STOP BUY gate is active but SELL persistence gate is unavailable", () => {
+  const dependencies = createVolatilityProtectedDependencies()
+  dependencies.isRecoverySellerBuyAdmissionBlocked = () => true
+  const result = createSubmissionGate(dependencies)({
+    order: createOrder({ side: "SELL" }),
+    purpose: "RECOVERY_SELL",
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-position-1",
+      cycleId: "rs-cycle-1",
+    },
+  })
+
+  assert.equal(result.allowed, false,
+    "An active RS STOP cannot authorize recovery SELL when persistence verification is unavailable.")
+  assert.equal(result.reason, "RECOVERY_SELLER_STOP_PERSISTENCE_UNVERIFIED")
+})
+
+test("generic ACCOUNT blockers still block a Recovery Seller recovery SELL", () => {
+  const dependencies = createVolatilityProtectedDependencies()
+  dependencies.getAccountSafetyBlocker = () => ({
+    scope: "ACCOUNT",
+    reason: "USER_DATA_RECONCILIATION_REQUIRED",
+    blockerId: "account-blocker-1",
+  })
+  dependencies.isRecoverySellerBuyAdmissionBlocked = () => true
+  dependencies.isRecoverySellerSellAdmissionBlocked = () => false
+  const result = createSubmissionGate(dependencies)({
+    order: createOrder({ side: "SELL" }),
+    purpose: "RECOVERY_SELL",
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-position-1",
+      cycleId: "rs-cycle-1",
+    },
+  })
+
+  assert.equal(result.allowed, false,
+    "The RS-specific SELL exception must never bypass an independent generic ACCOUNT blocker.")
+  assert.equal(result.reason, "ACCOUNT_SAFETY_BLOCKER_ACTIVE")
+})
+
+test("Recovery Seller STOP does not block Conservative orders", () => {
+  const dependencies = createVolatilityProtectedDependencies()
+  dependencies.isRecoverySellerBuyAdmissionBlocked = () => true
+  dependencies.isRecoverySellerSellAdmissionBlocked = () => false
+  dependencies.isVolatilityProtectionEnabledForSymbol = () => false
+  const result = createSubmissionGate(dependencies)({
+    order: createOrder({ side: "BUY" }),
+    purpose: "STANDING_BUY",
+    ownership: {
+      strategyId: StrategyId.COIN_GRABBER,
+      positionId: "cg-position-1",
+    },
+  })
+
+  assert.deepEqual(result, { allowed: true },
+    "An RS investment STOP must remain strategy-scoped and must not stop Conservative orders.")
+})

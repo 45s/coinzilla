@@ -254,8 +254,8 @@ test("production RS STOP blocks new BUY spending while allowing an eligible firs
     "The higher-price dispatch must still submit an eligible first recovery SELL.")
   assert.equal(result.output.stopAdmissionChecks.stopStateStatus, "STOPPED",
     "The STOP must remain latched after the recovery SELL is submitted.")
-  assert.equal(result.output.stopAdmissionChecks.accountAdmissionBlocked, true,
-    "Account admission must remain blocked for additional BUY spending.")
+  assert.equal(result.output.stopAdmissionChecks.sellAdmissionBlocked, false,
+    "A durably persisted RS STOP must leave the first recovery SELL gate available.")
   assert.equal(result.output.action.side, "SELL",
     "The result must contain the eligible recovery SELL action.")
   assert.equal(result.output.submitted, true,
@@ -284,8 +284,10 @@ test("production RS runtime fails closed when terminal reconciliation persistenc
     "The account STOP must be durably appended in the run-local operational store.")
   assert.equal(result.output.terminalSell.marketPaused, true,
     "The affected market must be paused after reconciliation persistence fails.")
-  assert.equal(result.output.accountAdmissionBlocked, true,
-    "Account admission must remain blocked after the terminal reconciliation failure.")
+  assert.equal(result.output.buyAdmissionBlocked, true,
+    "RS BUY admission must remain blocked after the terminal reconciliation failure.")
+  assert.equal(result.output.sellAdmissionBlocked, false,
+    "A durable RS STOP must not block the first eligible recovery SELL.")
   assert.equal(result.output.reservedSellCycle.clientOrderId,
     result.output.terminalSell.clientOrderId,
     "The sole-SELL reservation must remain held until reconciliation commits.")
@@ -321,12 +323,12 @@ test("production RS runtime fails closed when account STOP persistence fails aft
     "The failure path must retain the canonical under-target FILLED SELL STOP reason.")
   assert.equal(result.output.terminalSell.eventWorkflowFailedClosed, true,
     "The terminal event must fail closed when account STOP persistence is unavailable.")
-  assert.equal(result.output.terminalSell.accountAdmissionBlocked, true,
-    "The STOP workflow must block account admission before attempting persistence.")
+  assert.equal(result.output.terminalSell.sellAdmissionBlocked, true,
+    "The STOP workflow must block SELL admission until the STOP fact is durably acknowledged.")
   assert.equal(result.output.terminalSell.buyAdmissionBlocked, true,
     "The STOP workflow must block new BUY spending even if durable STOP persistence fails.")
-  assert.equal(result.output.terminalSell.postFailureAdmissionBlocked, true,
-    "The production runtime must continue blocking account admission after persistence fails.")
+  assert.equal(result.output.terminalSell.postFailureSellAdmissionBlocked, true,
+    "The production runtime must continue blocking SELL admission after persistence fails.")
   assert.equal(result.output.terminalSell.postFailureSubmittedOrderCount, 0,
     "The production runtime must submit no further orders while account STOP persistence is unresolved.")
   assert.equal(result.output.terminalSell.postFailureActionSubmitted, false,
@@ -416,8 +418,10 @@ test("production RS runtime fails closed before broker submission when SELL inte
     "An unresolved SELL submission must latch the run-local account STOP.")
   assert.equal(result.output.reservedSellCycle, null,
     "A SELL cycle must not be reserved before durable submission intent succeeds.")
-  assert.equal(result.output.accountAdmissionBlocked, true,
-    "Failed intent persistence must keep account BUY admission blocked.")
+  assert.equal(result.output.buyAdmissionBlocked, true,
+    "Failed intent persistence must keep RS BUY admission blocked.")
+  assert.equal(result.output.sellAdmissionBlocked, false,
+    "After durable STOP acknowledgement, the first recovery SELL remains eligible.")
 })
 
 
@@ -443,8 +447,10 @@ test("production RS runtime fails closed when broker acknowledgement outcome per
     "An acknowledged-but-unconfirmed submission must latch the run-local account STOP.")
   assert.notEqual(result.output.reservedSellCycle, null,
     "The sole-SELL reservation must remain retained while the submission outcome is unresolved.")
-  assert.equal(result.output.accountAdmissionBlocked, true,
-    "Account BUY admission must remain blocked while broker outcome persistence is unresolved.")
+  assert.equal(result.output.buyAdmissionBlocked, true,
+    "RS BUY admission must remain blocked while broker outcome persistence is unresolved.")
+  assert.equal(result.output.sellAdmissionBlocked, false,
+    "A durably persisted STOP leaves the first recovery SELL gate available.")
 })
 
 
@@ -470,8 +476,10 @@ test("production RS runtime keeps account admission blocked when both outcome an
     "The failed STOP append must not be reported as durable.")
   assert.notEqual(result.output.reservedSellCycle, null,
     "The SELL reservation must remain retained while broker outcome and STOP persistence are unresolved.")
-  assert.equal(result.output.accountAdmissionBlocked, true,
-    "The in-memory account admission latch must stay active despite STOP persistence failure.")
+  assert.equal(result.output.buyAdmissionBlocked, true,
+    "The in-memory RS BUY latch must stay active despite STOP persistence failure.")
+  assert.equal(result.output.sellAdmissionBlocked, true,
+    "The in-memory RS SELL latch must stay active while STOP persistence is unresolved.")
 })
 
 
@@ -498,8 +506,10 @@ test("production RS runtime persists UNKNOWN and blocks BUY admission after brok
     "An ambiguous broker outcome must latch the account STOP.")
   assert.notEqual(result.output.reservedSellCycle, null,
     "The sole-SELL reservation must remain held pending reconciliation.")
-  assert.equal(result.output.accountAdmissionBlocked, true,
-    "BUY admission must remain blocked after the broker transport exception.")
+  assert.equal(result.output.buyAdmissionBlocked, true,
+    "RS BUY admission must remain blocked after the broker transport exception.")
+  assert.equal(result.output.sellAdmissionBlocked, false,
+    "A durably persisted STOP must leave the first recovery SELL gate available.")
 })
 
 
@@ -523,6 +533,8 @@ test("production RS runtime fails closed when sole-SELL reservation callback fai
     "The failed reservation callback must not leave a cycle reservation.")
   assert.equal(result.output.stopFactAppended, true,
     "Reservation failure must latch account STOP.")
-  assert.equal(result.output.accountAdmissionBlocked, true,
-    "BUY admission must remain blocked after reservation failure.")
+  assert.equal(result.output.buyAdmissionBlocked, true,
+    "RS BUY admission must remain blocked after reservation failure.")
+  assert.equal(result.output.sellAdmissionBlocked, false,
+    "A durable STOP must leave the first recovery SELL gate available.")
 })

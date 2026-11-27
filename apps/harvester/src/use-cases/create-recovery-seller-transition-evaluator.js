@@ -42,7 +42,8 @@ function validateSnapshot(snapshot) {
   }
   if (typeof snapshot.strategyStopped !== "boolean" ||
       typeof snapshot.marketPaused !== "boolean" ||
-      typeof snapshot.reconciliationComplete !== "boolean") {
+      typeof snapshot.reconciliationComplete !== "boolean" ||
+      typeof snapshot.sellAdmissionBlocked !== "boolean") {
     throw new TypeError("Recovery Seller transition snapshot requires explicit readiness flags")
   }
   return snapshot
@@ -66,6 +67,7 @@ function canEvaluateSell({ snapshot }) {
   return snapshot.activeOrders.length === 0 &&
     snapshot.cycleState?.status === "ACCUMULATING" &&
     snapshot.strategyStopped === false &&
+    snapshot.sellAdmissionBlocked === false &&
     snapshot.marketPaused === false &&
     snapshot.reconciliationComplete === true &&
     hasRecoveryInventory({

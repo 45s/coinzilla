@@ -179,7 +179,7 @@ export const scenarios = [
       },
       {
         path: "src/bootstrap/start-harvester.test.js",
-        name: "restores a persisted account STOP and keeps a restarted account observation-only",
+        name: "restores a persisted RS STOP and keeps a restarted runtime observation-only",
         kind: "normal",
       },
     ],
