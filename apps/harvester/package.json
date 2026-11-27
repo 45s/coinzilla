@@ -20,6 +20,7 @@
   "config": {
     "targetedTestFiles": [
       "scripts/archive-debug-session.test.js",
+      "scripts/assert-harvester-process-stopped.test.js",
       "scripts/archive-testnet-session.test.js",
       "scripts/capture-harvester-archive-process-identity.test.js",
       "scripts/reset-operational-state.test.js",

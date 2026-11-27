@@ -369,7 +369,13 @@ async function readLatestRecoveryCheckpoint(recoveryFactsDirectory) {
   }
 }
 
-async function createArchiveManifest({ directory, createdAt, logRuntimeSessionId, onFileHashed } = {}) {
+async function createArchiveManifest({
+  directory,
+  createdAt,
+  logRuntimeSessionId,
+  recoveryRuntimeSessionId,
+  onFileHashed,
+} = {}) {
   const files = await listRegularFiles({ directory })
   const entries = []
   let completedBytes = 0
@@ -407,7 +413,13 @@ async function createArchiveManifest({ directory, createdAt, logRuntimeSessionId
     },
     dataCommitHash,
     logRuntimeSessionId,
-    recoveryRuntimeSessionId: recoveryCheckpoint.runtimeSessionId,
+    recoveryRuntimeSessionId,
+    runtimeIdentity: {
+      status: logRuntimeSessionId === recoveryRuntimeSessionId ? "matched" : "mismatched",
+      correlation: logRuntimeSessionId === recoveryRuntimeSessionId
+        ? "same-runtime-session"
+        : "independent-evidence-do-not-correlate",
+    },
     recoveryFactSequence: recoveryCheckpoint.sequence,
     files: entries,
   }
@@ -675,18 +687,20 @@ async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive
   return logSessionIdentity
 }
 
-function assertArchiveSessionIdentityMatches({ logSessionIdentity, recoveryCheckpoint } = {}) {
-  if (logSessionIdentity.runtimeSessionId !== recoveryCheckpoint.runtimeSessionId) {
-    throw new Error("Selected TESTNET log session and recovery-facts runtime identities do not match; refusing to publish mixed-session evidence.")
-  }
-}
-
 async function writeAndVerifyLocalArchive({ localArchive, createdAt, logSessionIdentity, onProgress } = {}) {
   const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(localArchive, "recovery-facts"))
-  assertArchiveSessionIdentityMatches({
-    logSessionIdentity,
-    recoveryCheckpoint,
-  })
+  const runtimeIdentityMatches = logSessionIdentity.runtimeSessionId === recoveryCheckpoint.runtimeSessionId
+  if (!runtimeIdentityMatches) {
+    reportProgress(
+      onProgress,
+      [
+        "WARNING: log-session and recovery-facts runtimeSessionId values differ.",
+        `  log session: ${logSessionIdentity.runtimeSessionId}`,
+        `  recovery facts (latest): ${recoveryCheckpoint.runtimeSessionId}`,
+        "  Both sources will be preserved independently; do not correlate them as one runtime session.",
+      ].join("\n"),
+    )
+  }
   await writeFile(
     path.join(localArchive, "data_commit_hash"),
     `${recoveryCheckpoint.dataCommitHash}\n`,
@@ -705,6 +719,7 @@ async function writeAndVerifyLocalArchive({ localArchive, createdAt, logSessionI
     directory: localArchive,
     createdAt,
     logRuntimeSessionId: logSessionIdentity.runtimeSessionId,
+    recoveryRuntimeSessionId: recoveryCheckpoint.runtimeSessionId,
     onFileHashed: ({
       completedFiles,
       totalFiles: hashTotal,
