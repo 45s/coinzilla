@@ -2303,41 +2303,37 @@ test("does not cancel a recovery SELL when cancellation intent publication is st
 })
 
 
+function createRecoverySellCancellationFlushFailurePublisher({ state } = {}) {
+  return {
+    publish: () => ({ ok: true }),
+    flushWrites: async () => {
+      state.flushCount += 1
+      return state.flushCount === 3
+        ? {
+          ok: false,
+          errors: [new Error("recovery SELL cancellation intent Journal flush failed")],
+        }
+        : {
+          ok: true,
+          durable: true,
+        }
+    },
+  }
+}
+
 test("does not cancel a recovery SELL when its durable cancellation intent flush fails", async () => {
-  let flushCount = 0
+  const durabilityState = { flushCount: 0 }
   let cancelCalls = 0
   const seeded = makeSeededRecoveryState()
-  const publishedEvents = []
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     seedExistingBuy: true,
     baseFreeBalance: "1",
     onCancelOrderStarted: () => { cancelCalls += 1 },
-    eventPublisher: {
-      publish: (event) => {
-        publishedEvents.push({
-          name: event.name,
-          side: event.data?.side,
-          clientOrderId: event.data?.clientOrderId,
-        })
-        return { ok: true }
-      },
-      flushWrites: async () => {
-        flushCount += 1
-        return flushCount === 3
-          ? {
-            ok: false,
-            errors: [new Error(
-              `journal sync failed after publications: ${JSON.stringify(publishedEvents)}`,
-            )]
-          }
-          : {
-            ok: true,
-            durable: true
-          }
-      },
-    },
+    eventPublisher: createRecoverySellCancellationFlushFailurePublisher({
+      state: durabilityState,
+    }),
   })
 
   const started = await harness.engine.processMarketPrice({
@@ -2349,7 +2345,7 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
     },
   })
   assert.equal(started.ok, true, started.errors?.[0]?.message ?? "The pre-existing BUY and active Position must still allow the initial recovery SELL evaluation.")
-  assert.equal(flushCount, 2, "The recovery decision evidence and recovery SELL submission intent must both be durable; the pre-existing BUY must remain untouched.")
+  assert.equal(durabilityState.flushCount, 2, "The recovery decision evidence and recovery SELL submission intent must both be durable; the pre-existing BUY must remain untouched.")
 
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
   const result = await harness.engine.processUserDataEvent({
@@ -2367,7 +2363,7 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
   })
 
   assert.equal(result.ok, false, "A non-durable recovery SELL cancellation intent must fail before broker cancellation.")
-  assert.equal(flushCount, 3, "The failed third flush must be the recovery SELL cancellation-intent durability barrier.")
+  assert.equal(durabilityState.flushCount, 3, "The failed third flush must be the recovery SELL cancellation-intent durability barrier.")
   assert.equal(cancelCalls, 0, "The broker must not receive a cancellation request when its durable intent cannot be committed.")
   assert.ok(harness.pauses.includes("RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE"), "The market must remain paused when the recovery SELL cancellation intent is not durable.")
   assert.equal(harness.engine.getOrders().find((order) => order.side === "SELL").status, "OPEN", "The existing recovery SELL must remain OPEN when cancellation intent persistence fails.")
@@ -7684,31 +7680,40 @@ function createRecoveredOrderFixtures() {
   }
 }
 
-async function createRecoveredOrderHarness({ fixtures }) {
+function createRecoveredOrderAccountingState() {
   let portfolio = new Portfolio()
   let recoveryLedger = RecoveryLedger.empty({ market })
+  return {
+    getPortfolio: () => portfolio,
+    getRecoveryLedger: () => recoveryLedger,
+    updateTradingAccounting: async ({ fill }) => {
+      const { portfolio: nextPortfolio } = portfolio.applyFill({
+        strategyId: StrategyId.COIN_GRABBER,
+        fill,
+      })
+      const { ledger: nextRecoveryLedger } = recoveryLedger.applyFill({
+        strategyId: StrategyId.COIN_GRABBER,
+        fill,
+      })
+      portfolio = nextPortfolio
+      recoveryLedger = nextRecoveryLedger
+      return {
+        ok: true,
+        data: { applied: true },
+      }
+    },
+  }
+}
+
+async function createRecoveredOrderHarness({ fixtures }) {
+  const accounting = createRecoveredOrderAccountingState()
   const positionId = createPositionId({
     marketId: market.id,
     strategyId: StrategyId.COIN_GRABBER,
   })
   const harness = await createHarness({
     initialBook: false,
-    getPortfolio: () => portfolio,
-    getRecoveryLedger: () => recoveryLedger,
-    updateTradingAccounting: async ({ fill }) => {
-      portfolio = portfolio.applyFill({
-        strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      }).portfolio
-      recoveryLedger = recoveryLedger.applyFill({
-        strategyId: StrategyId.COIN_GRABBER,
-        fill,
-      }).ledger
-      return {
-        ok: true,
-        data: { applied: true },
-      }
-    },
+    ...accounting,
     initialState: {
       orderRegistry: new OrderRegistry({
         orders: [fixtures.buyOwnedOrder, fixtures.sellOwnedOrder],
