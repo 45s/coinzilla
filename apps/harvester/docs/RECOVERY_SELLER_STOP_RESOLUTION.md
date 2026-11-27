@@ -39,3 +39,5 @@ A separate controlled restart must perform fresh authoritative reconciliation an
 ## Verification
 
 The implementation branch is synchronized with the latest `develop` before exact-head CI. This is an offline resolution workflow only; no LIVE/TESTNET or operational restart acceptance is implied.
+
+The read-only operator STOP status reports the current STOP state, durable blocker ID, `requiresControlledRestart`, and BUY/SELL admission-gate states. A CLEAR durable STOP with `requiresControlledRestart: true` means the resolution fact is durable but the current process remains blocked.

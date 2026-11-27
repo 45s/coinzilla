@@ -104,7 +104,10 @@ function validateReconciliationMetadata({
     auditedMarkets: reconciliation.auditedMarkets,
   })
   validateReconciliationCompleteness(reconciliation)
-  validateReconciliationFreshness({ capturedAt: reconciliation.capturedAt, now })
+  validateReconciliationFreshness({
+    capturedAt: reconciliation.capturedAt,
+    now,
+  })
 }
 
 function validateAccountingEvidence(accounting) {
@@ -131,10 +134,23 @@ function validateStopResolutionEvidence({
   if (typeof blockerId !== "string" || !/^[a-f0-9]{64}$/.test(blockerId)) {
     throw new TypeError("Recovery Seller STOP resolution requires the exact durable blocker identity")
   }
-  validateAuthenticatedOperator({ operatorIdentity, operatorId })
-  validateResolutionAction({ actionId, resolutionReason, causeFixed })
-  ensure.object({ value: reconciliation, name: "reconciliation" })
-  ensure.object({ value: accounting, name: "accounting" })
+  validateAuthenticatedOperator({
+    operatorIdentity,
+    operatorId,
+  })
+  validateResolutionAction({
+    actionId,
+    resolutionReason,
+    causeFixed,
+  })
+  ensure.object({
+    value: reconciliation,
+    name: "reconciliation",
+  })
+  ensure.object({
+    value: accounting,
+    name: "accounting",
+  })
   validateReconciliationMetadata({
     reconciliation,
     operatorId,
@@ -209,8 +225,58 @@ function createResolutionEvidence({
  * @param {boolean} input.causeFixed True only after the underlying cause is fixed.
  * @param {object} input.reconciliation Authoritative order/fill/balance reconciliation evidence.
  * @param {object} input.accounting Verified Portfolio/legacy/reservation accounting evidence.
- * @returns {Promise<object>} Result containing the clear state only after durable acknowledgement.
- */
+ * @returns {Promise<object>} Result containinfunction prepareRecoverySellerStopResolution(input) {
+  validateStopResolutionEvidence({
+    blockerId: input.blockerId,
+    operatorIdentity: input.operatorIdentity,
+    operatorId: input.operatorId,
+    actionId: input.actionId,
+    resolutionReason: input.resolutionReason,
+    causeFixed: input.causeFixed,
+    reconciliation: input.reconciliation,
+    accounting: input.accounting,
+    now: input.now(),
+  })
+  const nextStopState = resolveRecoverySellerStopState({
+    state: input.stopState,
+    operatorId: input.operatorId,
+    actionId: input.actionId,
+    causeFixed: input.causeFixed,
+    reconciliation: input.reconciliation,
+    accounting: input.accounting,
+  })
+  const evidence = createResolutionEvidence({
+    operatorIdentity: input.operatorIdentity,
+    operatorId: input.operatorId,
+    actionId: input.actionId,
+    resolutionReason: input.resolutionReason,
+    causeFixed: input.causeFixed,
+    reconciliation: input.reconciliation,
+    accounting: input.accounting,
+  })
+  const evidenceDigest = createHash("sha256")
+    .update(JSON.stringify(evidence))
+    .digest("hex")
+  return {
+    nextStopState,
+    evidenceDigest,
+  }
+}
+
+async function persistRecoverySellerStopResolution(input) {
+  return recordSafetyBlockerResolved({
+    operationalStateStore: input.operationalStateStore,
+    blockerId: input.blockerId,
+    resolvedBy: `operator:${input.operatorId}:${input.actionId}`,
+    resolution: "OPERATOR_ACTION",
+    evidenceDigest: input.evidenceDigest,
+    operatorIdentity: input.operatorIdentity,
+    operatorId: input.operatorId,
+    actionId: input.actionId,
+    resolutionReason: input.resolutionReason,
+    actionBlockerIds: [input.blockerId],
+  })
+}
 
 export async function resolveRecoverySellerStop({
   operationalStateStore,
@@ -226,60 +292,36 @@ export async function resolveRecoverySellerStop({
   now = () => new Date(),
 } = {}) {
   try {
-    validateStopResolutionEvidence({
-      blockerId,
-      operatorIdentity,
-      operatorId,
-      actionId,
-      resolutionReason,
-      causeFixed,
-      reconciliation,
-      accounting,
-      now: now(),
-    })
-    const nextStopState = resolveRecoverySellerStopState({
-      state: stopState,
-      operatorId,
-      actionId,
-      causeFixed,
-      reconciliation,
-      accounting,
-    })
-    const evidence = createResolutionEvidence({
-      operatorIdentity,
-      operatorId,
-      actionId,
-      resolutionReason,
-      causeFixed,
-      reconciliation,
-      accounting,
-    })
-    const evidenceDigest = createHash("sha256")
-      .update(JSON.stringify(evidence))
-      .digest("hex")
-    const persisted = await recordSafetyBlockerResolved({
+    const input = {
       operationalStateStore,
       blockerId,
-      resolvedBy: `operator:${operatorId}:${actionId}`,
-      resolution: "OPERATOR_ACTION",
-      evidenceDigest,
+      stopState,
       operatorIdentity,
       operatorId,
       actionId,
       resolutionReason,
-      actionBlockerIds: [blockerId],
+      causeFixed,
+      reconciliation,
+      accounting,
+      now,
+    }
+    const prepared = prepareRecoverySellerStopResolution(input)
+    const persisted = await persistRecoverySellerStopResolution({
+      ...input,
+      evidenceDigest: prepared.evidenceDigest,
     })
-    if (persisted?.ok !== true || persisted.data?.record?.factType !== "SAFETY_BLOCKER_RESOLVED") {
+    if (persisted?.ok !== true ||
+        persisted.data?.record?.factType !== "SAFETY_BLOCKER_RESOLVED") {
       return persisted?.ok === false
         ? persisted
         : toResult({ error: new Error("Recovery Seller STOP resolution was not durably acknowledged") })
     }
     return toResult({
       data: {
-        stopState: nextStopState,
+        stopState: prepared.nextStopState,
         record: persisted.data.record,
         duplicate: persisted.data.duplicate === true,
-        evidenceDigest,
+        evidenceDigest: prepared.evidenceDigest,
       },
     })
   } catch (error) {

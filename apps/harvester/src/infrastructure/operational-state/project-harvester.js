@@ -549,7 +549,10 @@ function hasStructuredOperatorActionMetadata(data) {
 }
 
 
-function validateStructuredRecoverySellerStopResolution({ raisedBlocker, resolution }) {
+function validateStructuredRecoverySellerStopResolution({
+        raisedBlocker,
+        resolution,
+      }) {
   const validOperator = typeof resolution.operatorId === "string" &&
     /^[A-Za-z0-9][A-Za-z0-9._@-]{2,127}$/.test(resolution.operatorId) &&
     resolution.operatorAuthMethod === "OS_ACCOUNT"

@@ -141,29 +141,43 @@ async function verifyResolutionReadback({
   return resolvedRecord
 }
 
-async function executeResolution({
-  parsed,
-  operatorIdentity,
-  env,
-  cwd,
-  readContext,
-  createStore,
-  createWorkflow,
-  writeOutput,
-}) {
-  const contextText = await readContext(path.resolve(cwd, parsed.contextPath), "utf8")
+
+async function readResolutionContext({ parsed, cwd, readContext }) {
+  const contextText = await readContext(
+    path.resolve(cwd, parsed.contextPath),
+    "utf8",
+  )
   const context = JSON.parse(contextText)
   validateResolutionContext(context)
-  const operationalStateStore = await createStore({ context, env })
-  const workflowResult = await createWorkflow({ operationalStateStore })
+  return context
+}
+
+async function createResolutionWorkflow({ context, env, createStore, createWorkflow }) {
+  const operationalStateStore = await createStore({
+    context,
+    env,
+  })
+  const workflowResult = await createWorkflow({
+    operationalStateStore,
+  })
   if (workflowResult?.ok !== true) {
-    throw new Error(workflowResult?.errors?.[0]?.message ?? "Recovery Seller STOP workflow could not be created")
+    throw new Error(
+      workflowResult?.errors?.[0]?.message ??
+        "Recovery Seller STOP workflow could not be created",
+    )
   }
   const workflow = workflowResult.data
   if (workflow.getBlockerId() !== context.blockerId) {
     throw new Error("STOP resolution context blocker ID does not match the active durable STOP")
   }
-  const reconciliation = {
+  return {
+    operationalStateStore,
+    workflow,
+  }
+}
+
+function createReconciliationEvidence({ context, parsed, operatorIdentity }) {
+  return {
     ...context.reconciliation,
     operatorId: parsed.operatorId,
     operatorAuthMethod: operatorIdentity.authMethod,
@@ -171,6 +185,14 @@ async function executeResolution({
     resolutionReason: parsed.resolutionReason,
     blockerIds: [context.blockerId],
   }
+}
+
+async function resolveAndVerify({ workflow, operationalStateStore, context, parsed, operatorIdentity }) {
+  const reconciliation = createReconciliationEvidence({
+    context,
+    parsed,
+    operatorIdentity,
+  })
   const result = await workflow.resolve({
     operatorIdentity,
     operatorId: parsed.operatorId,
@@ -181,7 +203,9 @@ async function executeResolution({
     accounting: context.accounting,
   })
   if (result?.ok !== true) {
-    throw new Error(result?.errors?.[0]?.message ?? "Recovery Seller STOP resolution failed")
+    throw new Error(
+      result?.errors?.[0]?.message ?? "Recovery Seller STOP resolution failed",
+    )
   }
   const resolvedRecord = await verifyResolutionReadback({
     operationalStateStore,
@@ -191,6 +215,13 @@ async function executeResolution({
     resolutionReason: parsed.resolutionReason,
     evidenceDigest: result.data.evidenceDigest,
   })
+  return {
+    result,
+    resolvedRecord,
+  }
+}
+
+function createResolutionSummary({ context, parsed, operatorIdentity, workflow, resolvedRecord }) {
   const requiresControlledRestart = workflow.requiresControlledRestart?.() === true
   const admissionBlocked = {
     buy: workflow.isBuyAdmissionBlocked?.() === true,
@@ -199,7 +230,7 @@ async function executeResolution({
   if (!requiresControlledRestart || !admissionBlocked.buy || !admissionBlocked.sell) {
     throw new Error("STOP resolution must leave both in-process admission gates blocked for controlled restart")
   }
-  const summary = {
+  return {
     ok: true,
     data: {
       blockerId: context.blockerId,
@@ -215,6 +246,43 @@ async function executeResolution({
       tradingResumed: false,
     },
   }
+}
+
+async function executeResolution({
+  parsed,
+  operatorIdentity,
+  env,
+  cwd,
+  readContext,
+  createStore,
+  createWorkflow,
+  writeOutput,
+}) {
+  const context = await readResolutionContext({
+    parsed,
+    cwd,
+    readContext,
+  })
+  const { operationalStateStore, workflow } = await createResolutionWorkflow({
+    context,
+    env,
+    createStore,
+    createWorkflow,
+  })
+  const { resolvedRecord } = await resolveAndVerify({
+    workflow,
+    operationalStateStore,
+    context,
+    parsed,
+    operatorIdentity,
+  })
+  const summary = createResolutionSummary({
+    context,
+    parsed,
+    operatorIdentity,
+    workflow,
+    resolvedRecord,
+  })
   writeOutput(JSON.stringify(summary, null, 2))
   return 0
 }

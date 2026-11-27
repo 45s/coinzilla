@@ -74,14 +74,25 @@ function createHarness({ activeBlockerId = blockerId } = {}) {
     },
   }
   const operationalStateStore = {
-    readAll: async () => ({ ok: true, data: { records: [record] } }),
+    readAll: async () => ({
+      ok: true,
+      data: {
+        records: [record],
+      },
+    }),
   }
   const workflow = {
     getBlockerId: () => activeBlockerId,
     resolve: async (evidence) => {
       resolveCalls += 1
       receivedEvidence = evidence
-      return { ok: true, data: { record, evidenceDigest: record.data.evidenceDigest } }
+      return {
+        ok: true,
+        data: {
+          record,
+          evidenceDigest: record.data.evidenceDigest,
+        },
+      }
     },
     requiresControlledRestart: () => true,
     isBuyAdmissionBlocked: () => true,
@@ -104,7 +115,10 @@ function createHarness({ activeBlockerId = blockerId } = {}) {
       createStoreCalls += 1
       return operationalStateStore
     },
-    createWorkflow: async () => ({ ok: true, data: workflow }),
+    createWorkflow: async () => ({
+      ok: true,
+      data: workflow,
+    }),
   }
 }
 
@@ -148,7 +162,10 @@ test("reports durable STOP resolution while keeping readiness blocked and not re
   assert.equal(summary.data.durableReadbackVerified, true)
   assert.equal(summary.data.readiness, "BLOCKED")
   assert.equal(summary.data.requiresControlledRestart, true)
-  assert.deepEqual(summary.data.admissionBlocked, { buy: true, sell: true })
+  assert.deepEqual(summary.data.admissionBlocked, {
+    buy: true,
+    sell: true,
+  })
   assert.equal(summary.data.runtimeStateReset, false)
   assert.equal(summary.data.tradingResumed, false)
 })

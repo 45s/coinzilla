@@ -241,6 +241,78 @@ function createStopResolver({
   }
 }
 
+
+function createRecoverySellerStopWorkflowApi({
+  operationalStateStore,
+  getStopSnapshot,
+  setStopSnapshot,
+  setBuyAdmissionBlocked,
+  setSellAdmissionBlocked,
+  setRequiresControlledRestart,
+  getBuyAdmissionBlocked,
+  getSellAdmissionBlocked,
+  getRequiresControlledRestart,
+  now,
+}) {
+  return Object.freeze({
+    latch: createStopLatch({
+      operationalStateStore,
+      getStopSnapshot,
+      setStopSnapshot,
+      setBuyAdmissionBlocked,
+      setSellAdmissionBlocked,
+      setRequiresControlledRestart,
+    }),
+    resolve: createStopResolver({
+      operationalStateStore,
+      getStopSnapshot,
+      setStopSnapshot,
+      setBuyAdmissionBlocked,
+      setSellAdmissionBlocked,
+      setRequiresControlledRestart,
+      now,
+    }),
+    getStopState: () => getStopSnapshot().stopState,
+    getState: () => getStopSnapshot().stopState,
+    getBlockerId: () => getStopSnapshot().blockerId,
+    isBuyAdmissionBlocked: getBuyAdmissionBlocked,
+    isSellAdmissionBlocked: getSellAdmissionBlocked,
+    requiresControlledRestart: getRequiresControlledRestart,
+  })
+}
+
+function createRecoverySellerStopWorkflowState({ blocker }) {
+  let snapshot = {
+    stopState: createRestoredStopState({ blocker }),
+    blockerId: blocker?.data?.blockerId ?? null,
+  }
+  let buyAdmissionBlocked = Boolean(blocker)
+  let sellAdmissionBlocked = false
+  let requiresControlledRestart = false
+  const getStopSnapshot = () => snapshot
+  const setStopSnapshot = (next) => {
+    snapshot = Object.freeze(next)
+  }
+  const setBuyAdmissionBlocked = (blocked) => {
+    buyAdmissionBlocked = blocked === true
+  }
+  const setSellAdmissionBlocked = (blocked) => {
+    sellAdmissionBlocked = blocked === true
+  }
+  const setRequiresControlledRestart = (required) => {
+    requiresControlledRestart = required === true
+  }
+  return {
+    getStopSnapshot,
+    setStopSnapshot,
+    setBuyAdmissionBlocked,
+    setSellAdmissionBlocked,
+    setRequiresControlledRestart,
+    getBuyAdmissionBlocked: () => buyAdmissionBlocked,
+    getSellAdmissionBlocked: () => sellAdmissionBlocked,
+    getRequiresControlledRestart: () => requiresControlledRestart,
+  }
+}
 export async function createRecoverySellerStopWorkflow({
   operationalStateStore,
   now = () => new Date(),
@@ -253,56 +325,19 @@ export async function createRecoverySellerStopWorkflow({
     if (read?.ok !== true || !Array.isArray(read.data?.records)) {
       return read?.ok === false
         ? read
-        : toResult({ error: new Error("Recovery Seller STOP startup requires a verified Operational State Store snapshot") })
+        : toResult({
+          error: new Error("Recovery Seller STOP startup requires a verified Operational State Store snapshot"),
+        })
     }
     const blocker = resolveActiveRecoverySellerBlocker({
       records: read.data.records,
     })
-    let snapshot = {
-      stopState: createRestoredStopState({ blocker }),
-      blockerId: blocker?.data?.blockerId ?? null,
-    }
-    let buyAdmissionBlocked = Boolean(blocker)
-    let sellAdmissionBlocked = false
-    let requiresControlledRestart = false
-    const getStopSnapshot = () => snapshot
-    const setStopSnapshot = (next) => {
-      snapshot = Object.freeze(next)
-    }
-    const setBuyAdmissionBlocked = (blocked) => {
-      buyAdmissionBlocked = blocked === true
-    }
-    const setSellAdmissionBlocked = (blocked) => {
-      sellAdmissionBlocked = blocked === true
-    }
-    const setRequiresControlledRestart = (required) => {
-      requiresControlledRestart = required === true
-    }
+    const state = createRecoverySellerStopWorkflowState({ blocker })
     return toResult({
-      data: Object.freeze({
-        latch: createStopLatch({
-          operationalStateStore,
-          getStopSnapshot,
-          setStopSnapshot,
-          setBuyAdmissionBlocked,
-          setSellAdmissionBlocked,
-          setRequiresControlledRestart,
-        }),
-        resolve: createStopResolver({
-          operationalStateStore,
-          getStopSnapshot,
-          setStopSnapshot,
-          setBuyAdmissionBlocked,
-          setSellAdmissionBlocked,
-          setRequiresControlledRestart,
-          now,
-        }),
-        getStopState: () => snapshot.stopState,
-        getState: () => snapshot.stopState,
-        getBlockerId: () => snapshot.blockerId,
-        isBuyAdmissionBlocked: () => buyAdmissionBlocked,
-        isSellAdmissionBlocked: () => sellAdmissionBlocked,
-        requiresControlledRestart: () => requiresControlledRestart,
+      data: createRecoverySellerStopWorkflowApi({
+        operationalStateStore,
+        ...state,
+        now,
       }),
     })
   } catch (error) {

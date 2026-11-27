@@ -442,7 +442,10 @@ test("Recovery Seller STOP is observable but cannot be cleared through the opera
   assert.equal(status.data.stopState.status, "STOPPED")
   assert.equal(status.data.blockerId, "rs-stop-blocker-1")
   assert.equal(status.data.requiresControlledRestart, true)
-  assert.deepEqual(status.data.admissionBlocked, { buy: true, sell: true })
+  assert.deepEqual(status.data.admissionBlocked, {
+    buy: true,
+    sell: true,
+  })
   assert.equal(operator.resolveRecoverySellerStop, undefined)
 })
 

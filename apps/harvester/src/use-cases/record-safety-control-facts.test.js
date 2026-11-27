@@ -298,7 +298,7 @@ test("requires authenticated structured operator action to resolve Recovery Sell
   const operatorId = "operator-45s"
   const actionId = "rs-stop-action-001"
   const resolutionReason = "Cause fixed and authoritative reconciliation completed"
-  const resolvedBy = "operator:" + operatorId + ":" + actionId
+  const resolvedBy = `operator:${operatorId}:${actionId}`
   const legacy = await recordSafetyBlockerResolved({
     operationalStateStore,
     blockerId,

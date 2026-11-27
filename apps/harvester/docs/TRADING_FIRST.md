@@ -306,3 +306,5 @@ Recovery Seller STOP resolution is an offline, authenticated local OS-account ac
 Run `node scripts/recovery-seller-stop.js --context <evidence.json> --operator-id <local-user> --action-id <unique-id> --resolution-reason <text> --cause-fixed` from the Harvester package. The context file is operator-reviewed offline evidence; the command does not query exchanges or submit/cancel orders.
 
 Durable resolution does not clear in-process BUY/SELL admission gates, reset runtime state, restart the process, or resume trading. The current process remains blocked and reports `requiresControlledRestart: true`. A separate controlled restart must perform fresh authoritative reconciliation and PREFLIGHT before execution. Telegram STOP status remains read-only.
+
+The read-only operator STOP status reports `requiresControlledRestart` and both BUY/SELL admission-gate states so an operator can verify that durable resolution has not resumed execution.
