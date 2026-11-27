@@ -390,7 +390,10 @@ test("executes every executable RS production-flow scenario through the local Ha
         apiBase,
         scenario,
       })
-      assertScenarioRunSucceeded({ scenario, result })
+      assertScenarioRunSucceeded({
+        scenario,
+        result,
+      })
     }
   } finally {
     await service.close()
