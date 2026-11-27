@@ -566,7 +566,7 @@ function createLinuxSandboxLauncherFixture() {
   let spawned
   let cgroupCleanupCount = 0
   const childFixture = createSandboxChildFixture()
-  const child = childFixture.child
+  const { child } = childFixture
   const launcher = createLinuxBubblewrapSandboxLauncher({
     platform: "linux",
     repositoryRoot: "/repo",

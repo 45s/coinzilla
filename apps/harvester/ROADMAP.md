@@ -62,3 +62,11 @@ Current scenarios use simulated infrastructure and run-local state. No real brok
 - Never use this roadmap as authority for strategy rules, API contracts, or acceptance evidence.
 
 - Recovery Seller non-FILLED terminal SELLs require a durable account STOP after canonical fill reconciliation. Partial CANCELED/EXPIRED and zero-fill REJECTED outcomes remain unresolved under the account-wide STOP; canonical terminal accounting may release the terminal order reservation after all fills are reconciled. Profitable partial proceeds do not relax the STOP rule.
+
+
+
+## Scenario Runner Linux sandbox implementation — 2026-11-27
+
+PR #1913 now composes the RS simulation-only process adapter behind explicit `HARVESTER_SCENARIO_SANDBOX=linux-bubblewrap`. The launcher verifies trusted Bubblewrap/prlimit/shell/Node binaries and capabilities, then applies user/network/PID/IPC/UTS namespaces, seccomp network/child-process restrictions, a read-only runtime allowlist, worker IPC preservation, RLIMIT_CPU, and a per-run delegated cgroup v2 (256 MiB hard memory, swap disabled, one CPU quota, 64 pids/threads). The API remains fail-closed when the host lacks delegated cgroup controllers or any binary/capability check fails.
+
+Runtime scenarios are eligible for isolated simulation only; they remain PARTIAL and are not production-accepted. Required remaining gates: end-to-end adversarial OS isolation acceptance on a trusted delegated Linux runner, trusted build-artifact provenance/replay, production operational-state persistence acceptance, and the independent RS lifecycle correction in issue #1842.

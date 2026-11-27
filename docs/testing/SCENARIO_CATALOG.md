@@ -1599,3 +1599,9 @@ The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED
 The RS scenario registry now maps RS-002-006-B to an application authorizer/account-allocation regression: a registered RS partial BUY with 6 remaining at price 10 retains a 60-quote commitment; a new 10-quote BUY defers when free quote is 65. The test is not yet run on the current head. RS-002-006 / RS-002 remain PARTIAL; no scenario is VERIFIED. Full order-event lifecycle proof remains outstanding.
 
 Additional RS-002-020-B mapping: an application authorizer test asserts 20 existing exposure + 60 pending owned BUY commitment + 20 new BUY equals the 100 pair cap and is accepted. Test execution is pending; RS-002-020 / RS-002 remain PARTIAL.
+
+
+
+## Scenario Runner application-level isolation checkpoint — 2026-11-27
+
+The RS runtime application scenarios are eligible for simulation only through the explicitly enabled Linux Bubblewrap/prlimit launcher. The launcher requires delegated cgroup v2 controllers and applies hard memory/CPU/pids limits plus namespaces, seccomp, read-only runtime mounts and bounded IPC. The production API remains blocked on hosts that fail any capability check. This is not RS-001…RS-010 domain scenario evidence and does not promote a scenario to VERIFIED. End-to-end adversarial isolation and trusted build provenance remain outstanding.

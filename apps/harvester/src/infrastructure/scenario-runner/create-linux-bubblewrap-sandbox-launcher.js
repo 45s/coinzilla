@@ -754,31 +754,6 @@ function verifyLinuxSandboxRuntime({ bwrap, prlimit, execFileSync, arch }) {
   syscallNumbers({ arch })
 }
 
-function createVerifiedCgroupController({
-  cgroupController,
-  readFileSync,
-  realpathSync,
-  accessSync,
-  mkdirSync,
-  writeFileSync,
-  existsSync,
-  rmdirSync,
-  randomUUID,
-}) {
-  const controller = cgroupController ?? createLinuxCgroupController({
-    readFileSync,
-    realpathSync,
-    accessSync,
-    mkdirSync,
-    writeFileSync,
-    existsSync,
-    rmdirSync,
-    randomUUID,
-  })
-  controller.verify()
-  return controller
-}
-
 function createVerifiedSandboxTools({ options, verify }) {
   return resolveSandboxTools({
     bwrapPath: options.bwrapPath,

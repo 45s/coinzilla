@@ -103,3 +103,9 @@ The Harvester host now accepts explicit strategy registrations and builds its ca
 - Unconfirmed worker cleanup retains both the execution slot and history record; terminal status alone does not make it prunable.
 - The cancel API awaits cleanup retry and reports acceptance only after the adapter confirms termination.
 - Capacity is released only after explicit cleanup confirmation. Shutdown remains fail-closed when cleanup cannot be confirmed.
+
+
+
+## Harvester Scenario Runner Linux sandbox — 2026-11-27
+
+The Harvester API has an explicit opt-in Linux Bubblewrap/prlimit process adapter backed by a per-run delegated cgroup v2 hard memory/CPU/pids boundary. It is unavailable on hosts that do not pass the root-owned executable, namespace, seccomp, and cgroup-controller checks. This enables simulation-only runtime scenarios; production acceptance remains PARTIAL pending adversarial end-to-end isolation acceptance and trusted replay/build provenance.
