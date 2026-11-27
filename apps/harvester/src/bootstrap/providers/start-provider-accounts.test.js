@@ -914,3 +914,83 @@ test("passes both strategy routes to one provider while deduplicating its market
   ], "A shared provider account must retain both independently owned strategy routes")
   assert.deepEqual(starts[0].executionSymbols, ["BTCUSDT"], "The shared market must be subscribed only once")
 })
+
+test("retains a provider process lock when its runtime stop lacks durable acknowledgement", async () => {
+  const providers = [
+    createProvider({
+      providerInstanceId: "first",
+      providerType: "binance",
+      accountId: "account-one",
+    }),
+    createProvider({
+      providerInstanceId: "second",
+      providerType: "binance",
+      accountId: "account-two",
+    }),
+  ]
+  const releasedLocks = []
+  const runtime = await startProviderAccounts({
+    providers,
+    appConfig: appConfigForProviderSubset(providers),
+    env: { TRADING_MODE: "testnet" },
+    releaseProviderLock: async (providerInstanceId) => {
+      releasedLocks.push(providerInstanceId)
+      return { ok: true, released: true }
+    },
+    start: async (input) => ({
+      startMarketData: async () => ({ ok: true }),
+      stopMarketData: async () => ({ ok: true }),
+      stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+        data: {
+          durableProcessStopAcknowledged: input.providerIdentity.providerInstanceId === "first",
+        },
+      }),
+    }),
+  })
+
+  const result = await runtime.stop()
+
+  assert.equal(result.ok, false,
+    "Multi-account shutdown must fail closed when any provider runtime omits durable PROCESS_STOPPED acknowledgement.")
+  assert.deepEqual(releasedLocks, ["first"],
+    "Only the provider whose runtime durably confirmed STOPPED may release its account-scoped process lock.")
+})
+
+test("propagates durable process-stop acknowledgement from every provider runtime", async () => {
+  const providers = [
+    createProvider({
+      providerInstanceId: "first",
+      providerType: "binance",
+      accountId: "account-one",
+    }),
+    createProvider({
+      providerInstanceId: "second",
+      providerType: "binance",
+      accountId: "account-two",
+    }),
+  ]
+  const runtime = await startProviderAccounts({
+    providers,
+    appConfig: appConfigForProviderSubset(providers),
+    env: { TRADING_MODE: "testnet" },
+    releaseProviderLock: async () => ({ ok: true, released: true }),
+    start: async () => ({
+      startMarketData: async () => ({ ok: true }),
+      stopMarketData: async () => ({ ok: true }),
+      stop: async () => ({
+        ok: true,
+        status: "STOPPED",
+        data: { durableProcessStopAcknowledged: true },
+      }),
+    }),
+  })
+
+  const result = await runtime.stop()
+
+  assert.equal(result.ok, true,
+    "Multi-account shutdown must complete when every provider runtime confirms durable PROCESS_STOPPED.")
+  assert.equal(result.data.durableProcessStopAcknowledged, true,
+    "The aggregate runtime must propagate durable acknowledgement to the outer process-shutdown barrier.")
+})
