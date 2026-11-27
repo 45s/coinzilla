@@ -41,9 +41,9 @@ The current [Runner roadmap](../../apps/dashboard/docs/features/gc-strategy-lab/
 
 - Simulation execution is enabled only when `HARVESTER_SCENARIO_SANDBOX=linux-bubblewrap` is explicitly configured and the host passes trusted executable, namespace/seccomp and delegated cgroup v2 checks. Unverified hosts remain fail-closed.
 - PR #1887 covers the under-target FILLED SELL STOP, STOP-persistence failure and BUY-only STOP admission runtime scenarios.
-- PR #1913 adds five infrastructure-failure runtime scenarios: intent persistence, acknowledged outcome persistence, combined outcome/STOP persistence, ambiguous broker placement and sole-SELL reservation callback failure.
+- PR #1913 adds six infrastructure-failure runtime scenarios: intent persistence, acknowledged outcome persistence, combined outcome/STOP persistence, ambiguous broker placement, sole-SELL reservation callback failure and terminal-reconciliation persistence failure.
 - Runtime scenarios remain PARTIAL and simulation-only. They use run-local simulated broker and in-memory operational state; no real broker/exchange access, credentials, live account state or production persistence is authorized.
-- Remaining acceptance: manual adversarial E2E on a trusted delegated-cgroup Linux runner, production operational-state durability, trusted build-artifact provenance/exact replay, and broader terminal-reconciliation persistence plus retry/idempotency scenario coverage. Existing order-event tests include duplicate-fill regression coverage, but that does not substitute for the remaining runner-specific matrix.
+- Remaining acceptance: manual adversarial E2E on a trusted delegated-cgroup Linux runner, production operational-state durability, trusted build-artifact provenance/exact replay, and runner-specific retry/idempotency scenario coverage beyond existing duplicate-fill and exact-replay regressions.
 
 ## Recently merged fixes — follow up only through their open acceptance/evidence issues
 
