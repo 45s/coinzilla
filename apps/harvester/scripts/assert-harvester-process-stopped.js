@@ -13,10 +13,9 @@ function describeLockOwner(owner) {
   return ` (PID ${owner.pid}, host ${owner.hostname})`
 }
 
-function createBlockingLockError({ lockPath, owner, cause } = {}) {
+function createBlockingLockError({ lockPath, owner } = {}) {
   const error = new Error(
     `A Harvester process lock exists${describeLockOwner(owner)} at ${lockPath}; stop Harvester before resetting or archiving local operational data.`,
-    cause ? { cause } : undefined,
   )
   error.code = "HARVESTER_PROCESS_LOCK_EXISTS"
   return error
@@ -35,6 +34,73 @@ function validateLockOwner({ owner, lockPath } = {}) {
   )
   if (!validOwner) {
     throw new Error(`Harvester process-lock metadata is invalid; refusing to inspect or remove ${lockPath}.`)
+  }
+}
+
+async function listHarvesterProcessLockPaths({ lockDirectory } = {}) {
+  let directoryStats
+  try {
+    directoryStats = await lstat(lockDirectory)
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return []
+    }
+    throw error
+  }
+  if (directoryStats.isSymbolicLink() || !directoryStats.isDirectory()) {
+    throw new Error("Harvester process-lock directory is not a regular directory; refusing local operational-state mutation.")
+  }
+  const lockFileNames = (await readdir(lockDirectory))
+    .filter((filename) => filename.endsWith(".lock"))
+    .sort()
+  return lockFileNames.map((filename) => path.join(lockDirectory, filename))
+}
+
+async function readLockOwner({ lockPath } = {}) {
+  try {
+    const owner = JSON.parse(await readFile(lockPath, "utf8"))
+    validateLockOwner({ owner, lockPath })
+    return owner
+  } catch (error) {
+    throw new Error(
+      `Cannot safely inspect Harvester process-lock metadata at ${lockPath}; refusing local operational-state mutation.`,
+      { cause: error },
+    )
+  }
+}
+
+async function inspectHarvesterProcessLock({ lockPath, hostname, isProcessAlive } = {}) {
+  let lockStats
+  try {
+    lockStats = await lstat(lockPath)
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return
+    }
+    throw error
+  }
+  if (lockStats.isSymbolicLink() || !lockStats.isFile()) {
+    throw createBlockingLockError({ lockPath })
+  }
+
+  const owner = await readLockOwner({ lockPath })
+  let reclaimed
+  try {
+    reclaimed = await reclaimStaleHarvesterProcessLockIfUnchanged({
+      lockPath,
+      hostname,
+      existingOwner: owner,
+      attempt: 0,
+      checkProcessAlive: isProcessAlive,
+    })
+  } catch (error) {
+    throw new Error(
+      `Cannot safely inspect Harvester process owner${describeLockOwner(owner)} at ${lockPath}; refusing local operational-state mutation.`,
+      { cause: error },
+    )
+  }
+  if (!reclaimed) {
+    throw createBlockingLockError({ lockPath, owner })
   }
 }
 
@@ -60,66 +126,12 @@ export async function assertHarvesterProcessStopped({
     throw new TypeError("isProcessAlive must be a function")
   }
 
-  let directoryStats
-  try {
-    directoryStats = await lstat(lockDirectory)
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      return
-    }
-    throw error
-  }
-  if (directoryStats.isSymbolicLink() || !directoryStats.isDirectory()) {
-    throw new Error("Harvester process-lock directory is not a regular directory; refusing local operational-state mutation.")
-  }
-
-  const entries = (await readdir(lockDirectory, { withFileTypes: true }))
-    .filter((entry) => entry.name.endsWith(".lock"))
-    .sort((first, second) => first.name.localeCompare(second.name))
-
-  for (const entry of entries) {
-    const lockPath = path.join(lockDirectory, entry.name)
-    let lockStats
-    try {
-      lockStats = await lstat(lockPath)
-    } catch (error) {
-      if (error?.code === "ENOENT") {
-        continue
-      }
-      throw error
-    }
-    if (lockStats.isSymbolicLink() || !lockStats.isFile()) {
-      throw createBlockingLockError({ lockPath })
-    }
-
-    let owner
-    try {
-      owner = JSON.parse(await readFile(lockPath, "utf8"))
-      validateLockOwner({ owner, lockPath })
-    } catch (error) {
-      throw new Error(
-        `Cannot safely inspect Harvester process-lock metadata at ${lockPath}; refusing local operational-state mutation.`,
-        { cause: error },
-      )
-    }
-
-    let reclaimed
-    try {
-      reclaimed = await reclaimStaleHarvesterProcessLockIfUnchanged({
-        lockPath,
-        hostname,
-        existingOwner: owner,
-        attempt: 0,
-        checkProcessAlive: isProcessAlive,
-      })
-    } catch (error) {
-      throw new Error(
-        `Cannot safely inspect Harvester process owner${describeLockOwner(owner)} at ${lockPath}; refusing local operational-state mutation.`,
-        { cause: error },
-      )
-    }
-    if (!reclaimed) {
-      throw createBlockingLockError({ lockPath, owner })
-    }
+  const lockPaths = await listHarvesterProcessLockPaths({ lockDirectory })
+  for (const lockPath of lockPaths) {
+    await inspectHarvesterProcessLock({
+      lockPath,
+      hostname,
+      isProcessAlive,
+    })
   }
 }
