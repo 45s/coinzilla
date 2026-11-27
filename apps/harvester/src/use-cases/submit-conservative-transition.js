@@ -110,12 +110,18 @@ function finalizeSubmissionResult({ dependencies, context, result, deferredActio
 }
 
 export async function handleEvaluationFailure({ dependencies, symbol, error } = {}) {
+  const recoveryEvidenceFailure = error?.code === "RECOVERY_DECISION_EVIDENCE_PERSISTENCE_FAILED"
+  const originalError = recoveryEvidenceFailure && error.cause instanceof Error
+    ? error.cause
+    : error
   await dependencies.pause({
     symbol,
-    reason: "STRATEGY_EVALUATION_FAILED",
-    error,
+    reason: recoveryEvidenceFailure
+      ? "RECOVERY_DECISION_EVIDENCE_PERSISTENCE_FAILED"
+      : "STRATEGY_EVALUATION_FAILED",
+    error: originalError,
   })
-  return toResult({ error })
+  return toResult({ error: originalError })
 }
 
 export async function submitConservativeTransition({ dependencies, context, allocation, balances } = {}) {

@@ -236,25 +236,20 @@ right: order.originalQuantity.amount }) !== 0) {
   }
 }
 
-function observeDurableIntentPublication({ published, eventName, logger }) {
-  if (published && typeof published.then === "function") {
-    Promise.resolve(published).then(
-      (result) => {
-        if (result?.ok === false) {
-          logger?.error?.({
-            message: "Harvester durable intent publication was rejected asynchronously",
-            eventName,
-            errors: result.errors,
-          })
-        }
-      },
-      (error) => logger?.error?.({
-        message: "Harvester durable intent publication promise rejected",
-        eventName,
-        error,
-      }),
-    )
-    return undefined
+function observeDurableIntentPublication({ published, eventName, dataResult } = {}) {
+  if (published?.pending === true ||
+      (published && typeof published.then === "function")) {
+    // A custom asynchronous EventBus observer is optional for an initial BUY:
+    // do not await it or turn an otherwise durable operational submission into
+    // a failure. Recovery SELL and cancellation intents remain fail-closed,
+    // because their Journal evidence must exist before changing exchange state.
+    if (eventName === HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED &&
+        dataResult?.data?.side === "BUY") {
+      return toResult({ data: { skipped: true } })
+    }
+    return toResult({
+      error: new TypeError("Durable recovery lifecycle intent publication must complete synchronously before Journal flush"),
+    })
   }
   if (published?.ok === false) {
     return published
@@ -266,13 +261,13 @@ function observeDurableIntentPublication({ published, eventName, logger }) {
 }
 
 async function flushDurableIntent({ eventPublisher }) {
-  if (typeof eventPublisher?.flush !== "function") {
+  if (typeof eventPublisher?.flushWrites !== "function") {
     return toResult({
-      error: new TypeError("Trading intent requires a durable Journal flush capability"),
+      error: new TypeError("Trading intent requires a durable Journal write-only flush capability"),
     })
   }
   try {
-    const flushed = await eventPublisher.flush()
+    const flushed = await eventPublisher.flushWrites()
     if (flushed?.ok !== true || flushed?.durable !== true) {
       return flushed?.ok === false
         ? flushed
@@ -284,7 +279,7 @@ async function flushDurableIntent({ eventPublisher }) {
   }
 }
 
-function createDurableIntentPublisher({ eventPublisher, logger } = {}) {
+function createDurableIntentPublisher({ eventPublisher } = {}) {
   return async ({ eventName, dataResult } = {}) => {
     const published = publishLifecycleEvent({
       eventPublisher,
@@ -294,7 +289,7 @@ function createDurableIntentPublisher({ eventPublisher, logger } = {}) {
     const publicationResult = observeDurableIntentPublication({
       published,
       eventName,
-      logger,
+      dataResult,
     })
     if (publicationResult) {
       return publicationResult
@@ -420,7 +415,7 @@ function readActiveStrategySafetyPauseBuyOrders({ state, symbol }) {
     }))
 }
 
-async function persistStrategySafetyPauseFact({ callback, symbol, reason }) {
+async function persistStrategySafetyPauseFact({ callback, symbol, reason, error }) {
   if (typeof callback !== "function") {
     return {
       persisted: null,
@@ -431,16 +426,17 @@ async function persistStrategySafetyPauseFact({ callback, symbol, reason }) {
     const result = await callback({
       symbol,
       reason,
+      ...(error === undefined ? {} : { error }),
     })
     const persisted = result?.ok === true && result.data?.durable === true
     return {
       persisted,
       errors: persisted ? [] : result?.errors ?? [new Error("Strategy safety pause fact was not durably committed")],
     }
-  } catch (error) {
+  } catch (pauseError) {
     return {
       persisted: false,
-      errors: [error],
+      errors: [pauseError],
     }
   }
 }
@@ -606,6 +602,7 @@ async function prepareStrategySafetyPause({
       callback: onOperationalStateStrategyMarketPaused,
       symbol,
       reason,
+      error,
     })
     pauseFactPersisted = fact.persisted
     failures.push(...fact.errors)
@@ -808,6 +805,7 @@ const CANCELLING_STRATEGY_PAUSE_REASONS = new Set([
   "ACCOUNT_INTEGRITY_FAILURE",
   "CANCELED_ORDER_NOT_REGISTERED",
   "RECONCILIATION_PENDING_ORDER_OUTCOME",
+  "RECOVERY_DECISION_EVIDENCE_PERSISTENCE_FAILED",
 ])
 
 function shouldCancelOwnedBuysForStrategyPause({ reason, error } = {}) {
@@ -1591,6 +1589,125 @@ function createAcknowledgedOrderLifecycleHandler({
   }
 }
 
+function getRecoverySellDeferralPublicationError({ publication } = {}) {
+  if (publication?.ok === true) {
+    return undefined
+  }
+  return publication?.errors?.[0] ?? new Error("Recovery SELL deferral evidence publication failed")
+}
+
+function getRecoverySellDeferralFlushError({ flushed } = {}) {
+  if (flushed?.ok === true && flushed?.durable === true) {
+    return undefined
+  }
+  return flushed?.errors?.[0] ?? new Error("Recovery SELL deferral evidence was not durably journaled")
+}
+
+async function persistRecoverySellDeferralEvidence({ eventPublisher, publication } = {}) {
+  const publicationError = getRecoverySellDeferralPublicationError({ publication })
+  if (publicationError) {
+    return publicationError
+  }
+  if (typeof eventPublisher?.flushWrites !== "function") {
+    return new TypeError("Recovery SELL deferral evidence requires a write-only durable Journal flush capability")
+  }
+  try {
+    return getRecoverySellDeferralFlushError({
+      flushed: await eventPublisher.flushWrites(),
+    })
+  } catch (error) {
+    return error
+  }
+}
+
+function publishDeferredOrderEvidence({ eventPublisher, order, purpose, registered, reason, recoverySell } = {}) {
+  try {
+    const publication = publishSubmissionDeferral({
+      eventPublisher,
+      order,
+      reason: reason ?? "SUBMISSION_NOT_ALLOWED",
+      ...(recoverySell
+        ? {
+          purpose,
+          registered,
+        }
+        : {}),
+    })
+    return { publication }
+  } catch (error) {
+    if (!recoverySell) {
+      throw error
+    }
+    return { publicationError: error }
+  }
+}
+
+function removeDeferredPendingOrder({ state, order, registered } = {}) {
+  if (!registered) {
+    return
+  }
+  const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
+  if (!removal.removed) {
+    throw new Error("Cannot remove a pending order deferred before broker submission")
+  }
+  state.registry = removal.registry
+}
+
+function createSubmissionDeferredHandler({ state, pause, eventPublisher } = {}) {
+  return async ({ order, registered, purpose, reason, errors, error } = {}) => {
+    const recoverySell = order.side === "SELL" && purpose === "RECOVERY_SELL"
+    const publicationResult = registered || recoverySell
+      ? publishDeferredOrderEvidence({
+        eventPublisher,
+        order,
+        purpose,
+        registered,
+        reason,
+        recoverySell,
+      })
+      : {}
+    removeDeferredPendingOrder({
+      state,
+      order,
+      registered,
+    })
+    state.deferredEvaluations.add(order.market.symbol)
+    const persistenceError = publicationResult.publicationError ??
+      (recoverySell
+        ? await persistRecoverySellDeferralEvidence({
+          eventPublisher,
+          publication: publicationResult.publication,
+        })
+        : undefined)
+    const intentError = reason === "ORDER_INTENT_NOT_DURABLE"
+      ? error ?? errors?.[0] ?? new Error("Durable order-submission intent was not committed")
+      : undefined
+    const pauseError = intentError ?? persistenceError
+    if (pauseError) {
+      await pause({
+        symbol: order.market.symbol,
+        reason: intentError
+          ? "ORDER_INTENT_NOT_DURABLE"
+          : "RECOVERY_SELL_DEFERRAL_EVIDENCE_PERSISTENCE_FAILED",
+        error: pauseError,
+      })
+    }
+    if (persistenceError) {
+      throw persistenceError
+    }
+  }
+}
+
+function createOrderValidationFailureHandler({ pause } = {}) {
+  return async ({ order, error }) => {
+    await pause({
+      symbol: order.market.symbol,
+      reason: "STRATEGY_ORDER_VALIDATION_FAILED",
+      error,
+    })
+  }
+}
+
 function createSubmissionLifecycleCallbacks({
   state,
   publishDurableIntent,
@@ -1600,28 +1717,11 @@ function createSubmissionLifecycleCallbacks({
   logger,
 } = {}) {
   return {
-    onSubmissionDeferred: async ({ order, registered, reason, errors, error } = {}) => {
-      if (registered) {
-        publishSubmissionDeferral({
-          eventPublisher,
-          order,
-          reason: reason ?? "SUBMISSION_NOT_ALLOWED",
-        })
-        const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
-        if (!removal.removed) {
-          throw new Error("Cannot remove a pending order deferred before broker submission")
-        }
-        state.registry = removal.registry
-        if (reason === "ORDER_INTENT_NOT_DURABLE") {
-          await pause({
-            symbol: order.market.symbol,
-            reason: "ORDER_INTENT_NOT_DURABLE",
-            error: error ?? errors?.[0] ?? new Error("Durable order-submission intent was not committed"),
-          })
-        }
-      }
-      state.deferredEvaluations.add(order.market.symbol)
-    },
+    onSubmissionDeferred: createSubmissionDeferredHandler({
+      state,
+      pause,
+      eventPublisher,
+    }),
     onPendingOrder: createPendingOrderLifecycleHandler({
       state,
       publishDurableIntent,
@@ -1634,13 +1734,7 @@ function createSubmissionLifecycleCallbacks({
       reconcileFilledAcknowledgement,
       logger,
     }),
-    onOrderValidationFailure: async ({ order, error }) => {
-      await pause({
-        symbol: order.market.symbol,
-        reason: "STRATEGY_ORDER_VALIDATION_FAILED",
-        error,
-      })
-    },
+    onOrderValidationFailure: createOrderValidationFailureHandler({ pause }),
   }
 }
 
@@ -2499,7 +2593,6 @@ function createConservativeEnginePublishingContext({ context } = {}) {
   } = context.dependencies
   context.publishDurableIntent = createDurableIntentPublisher({
     eventPublisher,
-    logger,
   })
   context.publishRecoveryCycleNotCompleted = createRecoveryCycleNotCompletedPublisher({
     eventPublisher,
@@ -5535,10 +5628,12 @@ async function reconcileOwnedOrdersTransition({ context, options }) {
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
 
 
-function publishSubmissionDeferral({ eventPublisher, order, reason } = {}) {
+function publishSubmissionDeferral({ eventPublisher, order, reason, purpose, registered } = {}) {
   const dataResult = mapOrderSubmissionDeferredData({
     order,
     reason,
+    purpose,
+    registered,
   })
   if (dataResult?.ok !== true) {
     publishLifecycleEvent({

@@ -131,6 +131,18 @@ function createSubmissionCallbacks({ calls, intentResult, outcomeResult }) {
   }
 }
 
+const durableTestEventPublisher = Object.freeze({
+  publish: () => ({ ok: true }),
+  flush: async () => ({
+    ok: true,
+    durable: true,
+  }),
+  flushWrites: async () => ({
+    ok: true,
+    durable: true,
+  }),
+})
+
 function createEngineDependencies({
   broker,
   brokerState,
@@ -146,6 +158,7 @@ function createEngineDependencies({
     broker,
     strategyPolicy,
     appConfig,
+    eventPublisher: durableTestEventPublisher,
     getPortfolio: () => portfolio,
     getRecoveryLedger: () => recoveryLedger,
     getMarketMetadata: () => marketMetadata,

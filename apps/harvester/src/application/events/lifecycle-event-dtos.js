@@ -544,17 +544,263 @@ const mapStrategyDecisionInputs = (inputs) => {
   }
 }
 
-/** Map an actionable strategy decision; NO_ACTION evaluations are not journal events. */
+/** Map a strategy decision; no-action recovery decisions require explicit evidence. */
+function mapOptionalRecoveryDecimal({ value, field } = {}) {
+  if (value === undefined) {
+    return undefined
+  }
+  return requireDecimalString({
+    value,
+    field,
+  })
+}
+
+function mapRecoveryInventoryDispositionDecimals({ value } = {}) {
+  const decimalFields = [
+    ["quantity", "recoveryEvidence.inventoryDisposition.quantity"],
+    ["minimumQuantity", "recoveryEvidence.inventoryDisposition.minimumQuantity"],
+    ["minimumNotional", "recoveryEvidence.inventoryDisposition.minimumNotional"],
+    ["quantityStepSize", "recoveryEvidence.inventoryDisposition.quantityStepSize"],
+    ["maximumQuantity", "recoveryEvidence.inventoryDisposition.maximumQuantity"],
+    ["maximumNotional", "recoveryEvidence.inventoryDisposition.maximumNotional"],
+    ["evaluatedQuantity", "recoveryEvidence.inventoryDisposition.evaluatedQuantity"],
+    ["evaluatedNotional", "recoveryEvidence.inventoryDisposition.evaluatedNotional"],
+    ["evaluatedPrice", "recoveryEvidence.inventoryDisposition.evaluatedPrice"],
+    ["requiredPrice", "recoveryEvidence.inventoryDisposition.requiredPrice"],
+    ["maximumPrice", "recoveryEvidence.inventoryDisposition.maximumPrice"],
+  ]
+  const mapped = {}
+  for (const [key, field] of decimalFields) {
+    const decimal = mapOptionalRecoveryDecimal({
+      value: value[key],
+      field,
+    })
+    if (decimal !== undefined) {
+      mapped[key] = decimal
+    }
+  }
+  return mapped
+}
+
+function mapRecoveryInventoryDisposition({ value } = {}) {
+  if (value === undefined || value === null) {
+    return null
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("recoveryEvidence.inventoryDisposition must be an object or null")
+  }
+  const allowedFields = new Set([
+    "status",
+    "reason",
+    "quantity",
+    "minimumQuantity",
+    "minimumNotional",
+    "quantityStepSize",
+    "maximumQuantity",
+    "maximumNotional",
+    "evaluatedQuantity",
+    "evaluatedNotional",
+    "evaluatedPrice",
+    "requiredPrice",
+    "maximumPrice",
+  ])
+  if (Object.keys(value).some((key) => !allowedFields.has(key))) {
+    throw new TypeError("recoveryEvidence.inventoryDisposition contains unsupported fields")
+  }
+  const mapped = {
+    status: requireString({
+      value: value.status,
+      field: "recoveryEvidence.inventoryDisposition.status",
+    }),
+  }
+  if (value.reason !== undefined) {
+    mapped.reason = requireString({
+      value: value.reason,
+      field: "recoveryEvidence.inventoryDisposition.reason",
+    })
+  }
+  return {
+    ...mapped,
+    ...mapRecoveryInventoryDispositionDecimals({ value }),
+  }
+}
+
+function mapRecoveryFilterConstraint({ value } = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("recoveryEvidence.filterSnapshot.constraints entries must be objects")
+  }
+  return {
+    type: requireString({
+      value: value.type,
+      field: "recoveryEvidence.filterSnapshot.constraints.type",
+    }),
+    status: requireString({
+      value: value.status,
+      field: "recoveryEvidence.filterSnapshot.constraints.status",
+    }),
+    value: value.value === null
+      ? null
+      : requireDecimalString({
+        value: value.value,
+        field: "recoveryEvidence.filterSnapshot.constraints.value",
+      }),
+    assetCode: value.assetCode === null
+      ? null
+      : requireString({
+        value: value.assetCode,
+        field: "recoveryEvidence.filterSnapshot.constraints.assetCode",
+      }),
+  }
+}
+
+function mapRecoveryFilterSnapshot({ value } = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("recoveryEvidence.filterSnapshot must be an object")
+  }
+  if (!Array.isArray(value.constraints) || typeof value.available !== "boolean") {
+    throw new TypeError("recoveryEvidence.filterSnapshot must include constraints and availability")
+  }
+  return {
+    capturedAt: mapOptionalEvidenceTimestamp({
+      value: value.capturedAt,
+      field: "recoveryEvidence.filterSnapshot.capturedAt",
+    }),
+    version: mapOptionalEvidenceVersion({
+      value: value.version,
+      field: "recoveryEvidence.filterSnapshot.version",
+    }),
+    evaluationTimestamp: mapOptionalEvidenceTimestamp({
+      value: value.evaluationTimestamp,
+      field: "recoveryEvidence.filterSnapshot.evaluationTimestamp",
+    }),
+    captureSource: requireString({
+      value: value.captureSource,
+      field: "recoveryEvidence.filterSnapshot.captureSource",
+    }),
+    available: value.available,
+    constraints: mapArrayWithIndex({
+      values: value.constraints,
+      mapper: ({ value: constraint }) => mapRecoveryFilterConstraint({
+        value: constraint,
+      }),
+    }),
+  }
+}
+
+function mapRecoveryPlannedSell({ value } = {}) {
+  if (value === undefined || value === null) {
+    return null
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("recoveryEvidence.plannedSell must be an object or null")
+  }
+  if (value.side !== "SELL") {
+    throw new TypeError("recoveryEvidence.plannedSell.side must be SELL")
+  }
+  return {
+    side: "SELL",
+    type: requireString({
+      value: value.type,
+      field: "recoveryEvidence.plannedSell.type",
+    }),
+    price: requireDecimalString({
+      value: value.price,
+      field: "recoveryEvidence.plannedSell.price",
+    }),
+    quantity: requireDecimalString({
+      value: value.quantity,
+      field: "recoveryEvidence.plannedSell.quantity",
+    }),
+    notional: requireDecimalString({
+      value: value.notional,
+      field: "recoveryEvidence.plannedSell.notional",
+    }),
+    reason: requireString({
+      value: value.reason,
+      field: "recoveryEvidence.plannedSell.reason",
+    }),
+  }
+}
+
+function mapStrategyRecoveryEvidenceQuantities({ value } = {}) {
+  return {
+    activeQuantity: requireDecimalString({
+      value: value.activeQuantity,
+      field: "recoveryEvidence.activeQuantity",
+    }),
+    keepQuantity: requireDecimalString({
+      value: value.keepQuantity,
+      field: "recoveryEvidence.keepQuantity",
+    }),
+    residualQuantity: requireDecimalString({
+      value: value.residualQuantity,
+      field: "recoveryEvidence.residualQuantity",
+    }),
+    candidateQuantity: requireDecimalString({
+      value: value.candidateQuantity,
+      field: "recoveryEvidence.candidateQuantity",
+    }),
+    sellableQuantity: requireDecimalString({
+      value: value.sellableQuantity,
+      field: "recoveryEvidence.sellableQuantity",
+    }),
+    evaluatedPrice: requireDecimalString({
+      value: value.evaluatedPrice,
+      field: "recoveryEvidence.evaluatedPrice",
+    }),
+    residualNotional: requireDecimalString({
+      value: value.residualNotional,
+      field: "recoveryEvidence.residualNotional",
+    }),
+    candidateNotional: requireDecimalString({
+      value: value.candidateNotional,
+      field: "recoveryEvidence.candidateNotional",
+    }),
+    sellableNotional: requireDecimalString({
+      value: value.sellableNotional,
+      field: "recoveryEvidence.sellableNotional",
+    }),
+  }
+}
+
+function mapStrategyRecoveryEvidence({ value } = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("recoveryEvidence must be an object")
+  }
+  const inventoryDisposition = mapRecoveryInventoryDisposition({
+    value: value.inventoryDisposition,
+  })
+  const plannedSell = mapRecoveryPlannedSell({
+    value: value.plannedSell,
+  })
+  return {
+    status: requireString({
+      value: value.status,
+      field: "recoveryEvidence.status",
+    }),
+    reason: requireString({
+      value: value.reason,
+      field: "recoveryEvidence.reason",
+    }),
+    ...mapStrategyRecoveryEvidenceQuantities({ value }),
+    filterSnapshot: mapRecoveryFilterSnapshot({
+      value: value.filterSnapshot,
+    }),
+    ...(inventoryDisposition === null ? {} : { inventoryDisposition }),
+    ...(plannedSell === null ? {} : { plannedSell }),
+  }
+}
+
 export const mapStrategyDecisionData = (input = {}) =>
   mapData({
     input,
     operation: "Strategy-decision event mapping",
-    mapper: ({ strategy, symbol, referencePrice, reason, inputs, actions }) => {
+    mapper: ({ strategy, symbol, referencePrice, reason, inputs, actions, recoveryEvidence }) => {
       if (strategy !== "CONSERVATIVE") {
         throw new TypeError("strategy must be CONSERVATIVE")
       }
-      if (!Array.isArray(actions) || actions.length === 0) {
-        throw new TypeError("strategy decision must contain at least one actionable order")
+      if (!Array.isArray(actions) || (actions.length === 0 && recoveryEvidence === undefined)) {
+        throw new TypeError("strategy decision must contain actions or recovery evidence")
       }
       return {
         strategy,
@@ -568,6 +814,9 @@ export const mapStrategyDecisionData = (input = {}) =>
         }),
         ...(typeof reason === "string" && reason.trim() ? { reason: reason.trim().slice(0, 160) } : {}),
         ...(inputs === undefined ? {} : { inputs: mapStrategyDecisionInputs(inputs) }),
+        ...(recoveryEvidence === undefined ? {} : {
+          recoveryEvidence: mapStrategyRecoveryEvidence({ value: recoveryEvidence }),
+        }),
         actions: mapArrayWithIndex({
           values: actions,
           mapper: ({ value: action, index }) => ({
@@ -1903,6 +2152,32 @@ function mapMarketTradingRuleConstraints({ constraints }) {
   })
 }
 
+function mapOptionalEvidenceTimestamp({ value, field } = {}) {
+  if (value === undefined || value === null) {
+    return null
+  }
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new TypeError([field, " must be a non-negative safe integer timestamp or null"].join(""))
+  }
+  return value
+}
+
+function mapOptionalEvidenceVersion({ value, field } = {}) {
+  if (value === undefined || value === null) {
+    return null
+  }
+  if (typeof value === "string") {
+    return requireString({
+      value,
+      field,
+    })
+  }
+  if (Number.isSafeInteger(value) && value >= 0) {
+    return value
+  }
+  throw new TypeError("Evidence version must be a string, non-negative safe integer, or null")
+}
+
 function mapMarketTradingRulesFields({ metadata }) {
   const market = metadata?.market
   const tradingRules = metadata?.tradingRules
@@ -1933,6 +2208,14 @@ function mapMarketTradingRulesFields({ metadata }) {
       value: metadata.orderType,
       field: "metadata.orderType",
     }),
+    metadataCapturedAt: mapOptionalEvidenceTimestamp({
+      value: metadata.metadataCapturedAt,
+      field: "metadata.metadataCapturedAt",
+    }),
+    metadataVersion: mapOptionalEvidenceVersion({
+      value: metadata.metadataVersion,
+      field: "metadata.metadataVersion",
+    }),
     supportedOrderTypes: mapArrayWithIndex({
       values: metadata.supportedOrderTypes,
       mapper: ({ value: type, index }) => requireString({
@@ -1959,7 +2242,7 @@ export const mapOrderSubmissionDeferredData = (input = {}) =>
   mapData({
     input,
     operation: "Order-submission-deferred event mapping",
-    mapper: ({ order, reason }) => {
+    mapper: ({ order, reason, purpose, registered }) => {
       const boundedReason = requireString({
         value: reason,
         field: "reason",
@@ -1967,9 +2250,26 @@ export const mapOrderSubmissionDeferredData = (input = {}) =>
       if (!/^[A-Z][A-Z0-9_]{0,63}$/.test(boundedReason)) {
         throw new TypeError("reason must be a bounded uppercase deferral code")
       }
-      return {
+      const mapped = {
         ...requireOrderFacts({ order }),
         reason: boundedReason,
       }
+      if (purpose !== undefined) {
+        const boundedPurpose = requireString({
+          value: purpose,
+          field: "purpose",
+        })
+        if (boundedPurpose !== "RECOVERY_SELL") {
+          throw new TypeError("purpose must be RECOVERY_SELL when supplied")
+        }
+        mapped.purpose = boundedPurpose
+      }
+      if (registered !== undefined) {
+        if (typeof registered !== "boolean") {
+          throw new TypeError("registered must be a boolean when supplied")
+        }
+        mapped.registered = registered
+      }
+      return mapped
     },
   })
