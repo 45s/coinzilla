@@ -451,7 +451,7 @@ test("gates BUYs before canceling only registered BUYs and reconciles cancellati
     strategyPolicy: {
       ...conservativeStrategyPolicy,
       evaluate: () => {
-        throw new Error("forced strategy evaluation failure")
+        throw failure
       },
     },
     hasUnownedOpenOrdersForSymbol: () => true,
