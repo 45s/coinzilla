@@ -3,7 +3,7 @@
 **Audit baseline:** `develop` `137bbf64df3518f81b948a95a586d4daee38400c`
 **Git tree:** `0969c57a8a91b575d41818f9c3a1b539b7756c89`
 **Review date:** 2026-11-27
-**Status:** current inventory, source dispositions, and report-only helper-name baseline verified on `develop` `137bbf64df3518f81b948a95a586d4daee38400c`; implementation/report head `3275ebc615cb670295345e188107ee58b988fd99` passed exact-head CI. The final evidence-refresh commit requires its own exact-head CI; issue #1582 remains open for user review/merge.
+**Status:** current inventory, source dispositions, and report-only helper-name baseline verified against pinned `develop` `137bbf64df3518f81b948a95a586d4daee38400c`; exact-head verification is tracked in live PR #1952 and issue #1582. Issue #1582 remains open for user review/merge.
 
 ## Source inventory baseline
 
