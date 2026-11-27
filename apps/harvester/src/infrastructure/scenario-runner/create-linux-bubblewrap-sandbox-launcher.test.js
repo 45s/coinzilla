@@ -41,7 +41,8 @@ function createLauncherHarness() {
       path,
       sha256: "a".repeat(64),
     }),
-    execFileSync: (executable, args) => {
+    execFileSync: (...execArguments) => {
+      const [executable, args] = execArguments
       if (args[0] === "--version" && executable === "/usr/bin/bwrap") {
         return "bubblewrap 0.8.0"
       }
