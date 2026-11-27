@@ -84,17 +84,14 @@ field: "directory" })
     absoluteDirectory,
     logPath: path.join(absoluteDirectory, FACTS_FILE_NAME),
     manifestPath: path.join(absoluteDirectory, MANIFEST_FILE_NAME),
-    writeUncertain: false,
+    writeBlocked: null,
   }
 }
 
 function createOperationalStateStoreCoordination({ store }) {
-  const assertNoUncertainWrite = () => {
-    if (store.writeUncertain) {
-      throw createError(
-        "A previous Operational State Store record write has an uncertain commit outcome; create a fresh store instance and verify before proceeding",
-        "DURABLE_FACTS_COMMIT_UNCERTAIN",
-      )
+  const assertStoreWritable = () => {
+    if (store.writeBlocked) {
+      throw store.writeBlocked
     }
   }
 
@@ -119,7 +116,7 @@ function createOperationalStateStoreCoordination({ store }) {
     await syncFile(store.manifestPath)
   }
 
-  return { assertNoUncertainWrite,
+  return { assertStoreWritable,
 serialize,
 syncStreams }
 }
@@ -298,13 +295,13 @@ function createOperationalStateGenesisRecord({ store }) {
   }
 }
 
-async function initializeOperationalStateStore({ store, assertNoUncertainWrite, syncStreams, verifyState }) {
+async function initializeOperationalStateStore({ store, assertStoreWritable, syncStreams, verifyState }) {
   const writeState = {
     factWriteStarted: false,
     manifestWriteStarted: false,
   }
   try {
-    assertNoUncertainWrite()
+    assertStoreWritable()
     await prepareOperationalStateDirectory({ store })
     const genesisRecord = createOperationalStateGenesisRecord({ store })
     await writeOperationalStateGenesisFact({ store,
@@ -330,8 +327,8 @@ async function initializeOperationalStateStore({ store, assertNoUncertainWrite, 
     })
   } catch (error) {
     if (writeState.factWriteStarted || writeState.manifestWriteStarted) {
-      store.writeUncertain = true
       error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
+      store.writeBlocked = error
     } else if (!error.code) {
       error.code = "DURABLE_FACTS_INITIALIZATION_FAILED"
     }
@@ -339,9 +336,9 @@ async function initializeOperationalStateStore({ store, assertNoUncertainWrite, 
   }
 }
 
-async function initializeOperationalStateStoreIfEmpty({ store, assertNoUncertainWrite, syncStreams, verifyState }) {
+async function initializeOperationalStateStoreIfEmpty({ store, assertStoreWritable, syncStreams, verifyState }) {
   try {
-    assertNoUncertainWrite()
+    assertStoreWritable()
     let directoryStat
     try {
       directoryStat = await store.fileSystem.lstat(store.absoluteDirectory)
@@ -351,7 +348,7 @@ async function initializeOperationalStateStoreIfEmpty({ store, assertNoUncertain
       }
       return await createInitialOperationalStateLedger({
         store,
-        assertNoUncertainWrite,
+        assertStoreWritable,
         syncStreams,
         verifyState,
       })
@@ -366,7 +363,7 @@ async function initializeOperationalStateStoreIfEmpty({ store, assertNoUncertain
     if (entries.length === 0) {
       return await createInitialOperationalStateLedger({
         store,
-        assertNoUncertainWrite,
+        assertStoreWritable,
         syncStreams,
         verifyState,
       })
@@ -395,10 +392,10 @@ async function initializeOperationalStateStoreIfEmpty({ store, assertNoUncertain
   }
 }
 
-async function createInitialOperationalStateLedger({ store, assertNoUncertainWrite, syncStreams, verifyState }) {
+async function createInitialOperationalStateLedger({ store, assertStoreWritable, syncStreams, verifyState }) {
   const initialized = await initializeOperationalStateStore({
     store,
-    assertNoUncertainWrite,
+    assertStoreWritable,
     syncStreams,
     verifyState,
   })
@@ -414,10 +411,10 @@ async function createInitialOperationalStateLedger({ store, assertNoUncertainWri
   })
 }
 
-function createOperationalStateStoreInitializeIfEmpty({ store, serialize, assertNoUncertainWrite, syncStreams, verifyState }) {
+function createOperationalStateStoreInitializeIfEmpty({ store, serialize, assertStoreWritable, syncStreams, verifyState }) {
   return () => serialize(() => initializeOperationalStateStoreIfEmpty({
     store,
-    assertNoUncertainWrite,
+    assertStoreWritable,
     syncStreams,
     verifyState,
   }))
@@ -426,13 +423,13 @@ function createOperationalStateStoreInitializeIfEmpty({ store, serialize, assert
 function createOperationalStateStoreInitializer({
   store,
   serialize,
-  assertNoUncertainWrite,
+  assertStoreWritable,
   syncStreams,
   verifyState,
 }) {
   return () => serialize(() => initializeOperationalStateStore({
     store,
-    assertNoUncertainWrite,
+    assertStoreWritable,
     syncStreams,
     verifyState,
   }))
@@ -552,14 +549,19 @@ async function writeOperationalStateManifestCheckpoint({ store, state, record, w
 }
 
 function handleOperationalStateAppendFailure({ store, writeState, error }) {
-  if (
-    writeState.factWriteStarted ||
-    writeState.manifestWriteStarted ||
-    writeState.syncFailed ||
-    writeState.integrityFailed
-  ) {
-    store.writeUncertain = true
+  if (writeState.factWriteStarted || writeState.manifestWriteStarted) {
     error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
+    store.writeBlocked = error
+  } else if (writeState.integrityFailed) {
+    if (!error.code) {
+      error.code = "DURABLE_FACTS_INTEGRITY_FAILED"
+    }
+    store.writeBlocked = error
+  } else if (writeState.syncFailed) {
+    if (!error.code) {
+      error.code = "DURABLE_FACTS_VERIFICATION_FAILED"
+    }
+    store.writeBlocked = error
   } else if (!error.code) {
     error.code = "DURABLE_FACTS_APPEND_FAILED"
   }
@@ -623,7 +625,7 @@ writeState })
   return createCommittedOperationalStateAppendResult({ verified })
 }
 
-async function appendOperationalStateFact({ store, assertNoUncertainWrite, syncStreams, verifyState, fact }) {
+async function appendOperationalStateFact({ store, assertStoreWritable, syncStreams, verifyState, fact }) {
   const writeState = {
     factWriteStarted: false,
     manifestWriteStarted: false,
@@ -631,7 +633,7 @@ async function appendOperationalStateFact({ store, assertNoUncertainWrite, syncS
     integrityFailed: false,
   }
   try {
-    assertNoUncertainWrite()
+    assertStoreWritable()
     await synchronizeOperationalStateBeforeAppend({ syncStreams,
 writeState })
     const state = await verifyOperationalStateBeforeAppend({ verifyState,
@@ -667,13 +669,13 @@ error })
 function createOperationalStateStoreAppender({
   store,
   serialize,
-  assertNoUncertainWrite,
+  assertStoreWritable,
   syncStreams,
   verifyState,
 }) {
   return (fact) => serialize(() => appendOperationalStateFact({
     store,
-    assertNoUncertainWrite,
+    assertStoreWritable,
     syncStreams,
     verifyState,
     fact,
@@ -683,13 +685,13 @@ function createOperationalStateStoreAppender({
 function createOperationalStateStoreVerificationOperation({
   store,
   serialize,
-  assertNoUncertainWrite,
+  assertStoreWritable,
   syncStreams,
   verifyState,
 }) {
   return () => serialize(async () => {
     try {
-      assertNoUncertainWrite()
+      assertStoreWritable()
       await syncStreams()
       const state = await verifyState()
       return toResult({
@@ -702,11 +704,11 @@ function createOperationalStateStoreVerificationOperation({
         },
       })
     } catch (error) {
-      if (error.code !== "ENOENT" && error.code !== "DURABLE_FACTS_COMMIT_UNCERTAIN") {
-        store.writeUncertain = true
+      if (error.code !== "ENOENT") {
         if (!error.code) {
           error.code = "DURABLE_FACTS_INTEGRITY_FAILED"
         }
+        store.writeBlocked = error
       }
       return toResult({ error })
     }
@@ -716,13 +718,13 @@ function createOperationalStateStoreVerificationOperation({
 function createOperationalStateStoreReadAllOperation({
   store,
   serialize,
-  assertNoUncertainWrite,
+  assertStoreWritable,
   syncStreams,
   verifyState,
 }) {
   return () => serialize(async () => {
     try {
-      assertNoUncertainWrite()
+      assertStoreWritable()
       await syncStreams()
       const state = await verifyState()
       return toResult({
@@ -734,11 +736,11 @@ function createOperationalStateStoreReadAllOperation({
         },
       })
     } catch (error) {
-      if (error.code !== "ENOENT" && error.code !== "DURABLE_FACTS_COMMIT_UNCERTAIN") {
-        store.writeUncertain = true
+      if (error.code !== "ENOENT") {
         if (!error.code) {
           error.code = "DURABLE_FACTS_INTEGRITY_FAILED"
         }
+        store.writeBlocked = error
       }
       return toResult({ error })
     }
