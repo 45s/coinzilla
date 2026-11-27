@@ -1346,7 +1346,7 @@ test("fails closed when active recovery SELL commitments exceed sellable Positio
       side: "SELL",
       status: "OPEN",
       remainingQuantity: new Quantity({
-        amount: "99",
+        amount: "100",
         asset: baseAsset,
       }),
     }],
