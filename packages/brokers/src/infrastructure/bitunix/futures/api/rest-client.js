@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto"
+import { createHmac, randomBytes } from "node:crypto"
 import { ensure, SystemCustomError } from "@coinzilla/utils"
 import { createRestSignature } from "../../common/auth/create-rest-signature.js"
 import { quoteDepthLevelNumbers } from "./quote-depth-level-numbers.js"
@@ -9,6 +9,7 @@ const MIN_REQUEST_INTERVAL_MS_BY_PATH = Object.freeze({
   "/api/v1/futures/trade/flash_close_position": 200,
 })
 const RATE_LIMITERS = new Map()
+const RATE_LIMITER_KEY_SECRET = randomBytes(32)
 
 const ERROR_CODES = Object.freeze({
   authentication: "BITUNIX_FUTURES_AUTHENTICATION_REQUIRED",
@@ -324,10 +325,10 @@ function validateExchangeEnvelope({ payload, request }) {
 }
 
 /** Signed and unsigned REST transport for the official Bitunix USDT Futures API. */
-// Keep a stable, non-reversible Map identity without retaining the API key itself
-// for the lifetime of the process-wide shared rate-limiter registry.
 function createRateLimiterKey({ apiKey }) {
-  return createHash("sha256").update(apiKey).digest("hex")
+  return createHmac("sha256", RATE_LIMITER_KEY_SECRET)
+    .update(apiKey, "utf8")
+    .digest("hex")
 }
 
 function getSharedRateLimiter({ apiKey, rateLimitNow, sleepFn }) {
