@@ -288,19 +288,6 @@ export function assertRecoverySellerEvaluatorConfigured({
   }
 }
 
-function getRecoverySellerAccountBlocker({ recoverySellerStopWorkflow } = {}) {
-  const isBlocked = recoverySellerStopWorkflow?.isAccountAdmissionBlocked?.() === true ||
-    recoverySellerStopWorkflow?.getState?.().status === "STOPPED"
-  if (!isBlocked) {
-    return null
-  }
-  return Object.freeze({
-    scope: "ACCOUNT",
-    reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
-    blockerId: recoverySellerStopWorkflow?.getBlockerId?.() ?? null,
-  })
-}
-
 function getUserDataAccountBlocker({ userDataState = {} } = {}) {
   const requiresSafetyHalt = userDataState.accountingFailed === true ||
     userDataState.requiresReconciliation === true ||
@@ -318,23 +305,19 @@ function getUserDataAccountBlocker({ userDataState = {} } = {}) {
 
 export function getHarvesterAccountSafetyBlocker({
   userDataState = {},
-  recoverySellerStopWorkflow,
 } = {}) {
-  return getRecoverySellerAccountBlocker({ recoverySellerStopWorkflow }) ??
-    getUserDataAccountBlocker({ userDataState })
+  return getUserDataAccountBlocker({ userDataState })
 }
 
 function createHarvesterTradingEngineSafetyCallbacks({
   userDataState,
   accountSnapshotManagerRef,
-  recoverySellerStopWorkflow,
   logger,
 }) {
   return {
     canTrade: () => userDataState.ready,
     getAccountSafetyBlocker: () => getHarvesterAccountSafetyBlocker({
       userDataState,
-      recoverySellerStopWorkflow,
     }),
     hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
     onUnownedExternalOrderObserved: ({ order } = {}) => {
@@ -405,7 +388,6 @@ function createHarvesterTradingEngineOptions(options = {}) {
     ...createHarvesterTradingEngineSafetyCallbacks({
       userDataState: options.userDataState,
       accountSnapshotManagerRef: options.accountSnapshotManagerRef,
-      recoverySellerStopWorkflow: options.recoverySellerStopWorkflow,
       logger: options.logger,
     }),
     ...createHarvesterTradingEngineOperationalCallbacks(options),

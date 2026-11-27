@@ -2691,6 +2691,10 @@ function createConservativeEngineSubmissionContext({ context } = {}) {
     isVolatilityProtectionEnabledForSymbol: context.isVolatilityProtectionEnabledForSymbol,
     hasBlockingOpenOrdersForSymbol: context.hasBlockingOpenOrdersForSymbol,
     getAccountSafetyBlocker: dependencies.getAccountSafetyBlocker,
+    isRecoverySellerBuyAdmissionBlocked: () =>
+      dependencies.recoverySellerStopWorkflow?.isBuyAdmissionBlocked?.() === true,
+    isRecoverySellerSellAdmissionBlocked: () =>
+      dependencies.recoverySellerStopWorkflow?.isSellAdmissionBlocked?.() === true,
     isPostOnlyOrderCrossing,
     isShutdownRecoverySubmissionAllowed: () => context.shutdownRecoverySubmission.allowed,
   })
