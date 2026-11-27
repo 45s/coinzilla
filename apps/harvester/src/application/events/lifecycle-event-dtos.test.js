@@ -601,7 +601,25 @@ test("maps local submission deferrals with a bounded reason and exact client-ord
       reason: "MARKET_BOOK_STALE",
     },
   })
+  const recoverySell = mapOrderSubmissionDeferredData({
+    order: {
+      ...canonicalOrderFacts,
+      side: "SELL",
+    },
+    reason: "UNOWNED_OPEN_ORDERS_PRESENT",
+    purpose: "RECOVERY_SELL",
+    registered: true,
+  })
+  assert.equal(recoverySell.ok, true)
+  assert.equal(recoverySell.data.purpose, "RECOVERY_SELL")
+  assert.equal(recoverySell.data.registered, true)
   assert.equal(mapOrderSubmissionDeferredData({
+    order: canonicalOrderFacts,
+    reason: "UNOWNED_OPEN_ORDERS_PRESENT",
+    purpose: "CONSERVATIVE_BUY",
+    registered: true,
+  }).ok, false)
+    assert.equal(mapOrderSubmissionDeferredData({
     order: canonicalOrderFacts,
     reason: "raw broker error with unbounded diagnostics",
   }).ok, false)

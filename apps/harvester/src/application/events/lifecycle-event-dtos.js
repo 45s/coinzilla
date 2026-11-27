@@ -2242,7 +2242,7 @@ export const mapOrderSubmissionDeferredData = (input = {}) =>
   mapData({
     input,
     operation: "Order-submission-deferred event mapping",
-    mapper: ({ order, reason }) => {
+    mapper: ({ order, reason, purpose, registered }) => {
       const boundedReason = requireString({
         value: reason,
         field: "reason",
@@ -2250,9 +2250,26 @@ export const mapOrderSubmissionDeferredData = (input = {}) =>
       if (!/^[A-Z][A-Z0-9_]{0,63}$/.test(boundedReason)) {
         throw new TypeError("reason must be a bounded uppercase deferral code")
       }
-      return {
+      const mapped = {
         ...requireOrderFacts({ order }),
         reason: boundedReason,
       }
+      if (purpose !== undefined) {
+        const boundedPurpose = requireString({
+          value: purpose,
+          field: "purpose",
+        })
+        if (boundedPurpose !== "RECOVERY_SELL") {
+          throw new TypeError("purpose must be RECOVERY_SELL when supplied")
+        }
+        mapped.purpose = boundedPurpose
+      }
+      if (registered !== undefined) {
+        if (typeof registered !== "boolean") {
+          throw new TypeError("registered must be a boolean when supplied")
+        }
+        mapped.registered = registered
+      }
+      return mapped
     },
   })
