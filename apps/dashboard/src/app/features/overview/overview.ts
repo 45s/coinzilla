@@ -137,7 +137,7 @@ export class OverviewComponent implements OnInit, OnDestroy {
       socket.addEventListener('open', () => {
         if (this.socket !== socket || this.destroyed) return;
         this.socketState.set('connected');
-        void this.checkApiStatus();
+        if (this.reconnectAttempt > 0) void this.checkApiStatus();
       });
       socket.addEventListener('message', (event: MessageEvent) => {
         if (this.socket !== socket || this.destroyed || typeof event.data !== 'string') return;
