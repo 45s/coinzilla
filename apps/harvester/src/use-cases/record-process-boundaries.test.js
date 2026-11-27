@@ -192,18 +192,69 @@ test("validates every durable process identity field and accepts explicitly unkn
   const invalidIdentities = [
     null,
     [],
-    { ...processIdentity, application: "other" },
-    { ...processIdentity, runtimeSessionId: "another-session" },
-    { ...processIdentity, version: " " },
-    { ...processIdentity, processId: 0 },
-    { ...processIdentity, startedAt: "not-a-timestamp" },
-    { ...processIdentity, source: null },
-    { ...processIdentity, unexpected: true },
-    { ...processIdentity, source: { ...processIdentity.source, unexpected: true } },
-    { ...processIdentity, source: { ...processIdentity.source, branch: 42 } },
-    { ...processIdentity, source: { ...processIdentity.source, commit: "A".repeat(40) } },
-    { ...processIdentity, source: { ...processIdentity.source, workingTree: "maybe" } },
-    { ...processIdentity, source: { ...processIdentity.source, metadataSource: "unknown" } },
+    {
+      ...processIdentity,
+      application: "other",
+    },
+    {
+      ...processIdentity,
+      runtimeSessionId: "another-session",
+    },
+    {
+      ...processIdentity,
+      version: " ",
+    },
+    {
+      ...processIdentity,
+      processId: 0,
+    },
+    {
+      ...processIdentity,
+      startedAt: "not-a-timestamp",
+    },
+    {
+      ...processIdentity,
+      source: null,
+    },
+    {
+      ...processIdentity,
+      unexpected: true,
+    },
+    {
+      ...processIdentity,
+      source: {
+        ...processIdentity.source,
+        unexpected: true,
+      },
+    },
+    {
+      ...processIdentity,
+      source: {
+        ...processIdentity.source,
+        branch: 42,
+      },
+    },
+    {
+      ...processIdentity,
+      source: {
+        ...processIdentity.source,
+        commit: "A".repeat(40),
+      },
+    },
+    {
+      ...processIdentity,
+      source: {
+        ...processIdentity.source,
+        workingTree: "maybe",
+      },
+    },
+    {
+      ...processIdentity,
+      source: {
+        ...processIdentity.source,
+        metadataSource: "unknown",
+      },
+    },
   ]
 
   for (const identity of invalidIdentities) {
