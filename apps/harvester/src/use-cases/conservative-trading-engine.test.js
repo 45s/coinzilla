@@ -11484,10 +11484,10 @@ async function createRecoverySellDeferralHarness({ failDeferralFlush = false } =
       },
       flushWrites: async () => {
         flushCount += 1
-        if (flushCount === 1) {
+        if (flushCount === 2) {
           hasExternalOrder = true
         }
-        if (failDeferralFlush && flushCount === 2) {
+        if (failDeferralFlush && flushCount === 3) {
           return {
             ok: false,
             errors: [failure],
@@ -11520,7 +11520,7 @@ test("durably records a blocked recovery SELL with its purpose and registration 
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
-  assert.equal(scenario.getFlushCount(), 2)
+  assert.equal(scenario.getFlushCount(), 3)
   assert.deepEqual(scenario.harness.orders, [])
   assert.equal(scenario.harness.engine.getOrders().length, 0)
   assert.deepEqual(scenario.harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
@@ -11544,7 +11544,7 @@ test("pauses a blocked recovery SELL when its deferral evidence cannot be durabl
 
   assert.equal(result.ok, false)
   assert.equal(result.errors[0], scenario.failure)
-  assert.equal(scenario.getFlushCount(), 2)
+  assert.equal(scenario.getFlushCount(), 3)
   assert.deepEqual(scenario.harness.orders, [])
   assert.equal(scenario.harness.engine.getOrders().length, 0)
   assert.ok(scenario.harness.pauses.includes("RECOVERY_SELL_DEFERRAL_EVIDENCE_PERSISTENCE_FAILED"))
