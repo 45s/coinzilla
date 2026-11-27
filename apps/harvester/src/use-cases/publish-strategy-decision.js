@@ -340,17 +340,30 @@ function assertRecoveryDecisionFlushSucceeded({ flushed } = {}) {
   }
 }
 
+function createRecoveryDecisionEvidencePersistenceError(error) {
+  const failure = new Error("Recovery strategy decision evidence could not be durably persisted", {
+    cause: error,
+  })
+  failure.name = "RecoveryDecisionEvidencePersistenceError"
+  failure.code = "RECOVERY_DECISION_EVIDENCE_PERSISTENCE_FAILED"
+  return failure
+}
+
 async function flushRecoveryDecisionEvidence({ eventPublisher, publication, recoveryEvidence } = {}) {
   if (recoveryEvidence === undefined) {
     return publication
   }
-  assertRecoveryDecisionPublicationSucceeded({ publication })
-  assertRecoveryDecisionFlushCapability({ eventPublisher })
-  const flushed = await eventPublisher.flushWrites()
-  assertRecoveryDecisionFlushSucceeded({ flushed })
-  return {
-    ok: true,
-    durable: true,
+  try {
+    assertRecoveryDecisionPublicationSucceeded({ publication })
+    assertRecoveryDecisionFlushCapability({ eventPublisher })
+    const flushed = await eventPublisher.flushWrites()
+    assertRecoveryDecisionFlushSucceeded({ flushed })
+    return {
+      ok: true,
+      durable: true,
+    }
+  } catch (error) {
+    throw createRecoveryDecisionEvidencePersistenceError(error)
   }
 }
 
