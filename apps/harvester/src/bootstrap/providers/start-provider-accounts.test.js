@@ -1015,6 +1015,47 @@ test("propagates a missing provider durable stop acknowledgement to the aggregat
     "Each provider lock is released only after its own runtime stop succeeds; the outer process lock remains gated by the aggregate acknowledgement or Journal fallback.")
 })
 
+test("retries ambiguous provider lock release without repeating completed runtime cleanup", async () => {
+  const provider = createProvider({
+    providerInstanceId: "first",
+    providerType: "binance",
+    accountId: "account-one",
+  })
+  const releaseResults = [
+    { ok: true },
+    { ok: true, released: true },
+  ]
+  let runtimeStopCalls = 0
+  let marketDataStopCalls = 0
+  const runtime = await startProviderAccounts({
+    providers: [provider],
+    appConfig: appConfigForProviderSubset([provider]),
+    env: { TRADING_MODE: "testnet" },
+    releaseProviderLock: async () => releaseResults.shift(),
+    start: async () => ({
+      startMarketData: async () => ({ ok: true }),
+      stopMarketData: async () => {
+        marketDataStopCalls += 1
+        return { ok: true }
+      },
+      stop: async () => {
+        runtimeStopCalls += 1
+        return durableProcessStopResult()
+      },
+    }),
+  })
+
+  const firstStop = await runtime.stop()
+  assert.equal(firstStop.ok, false,
+    "An ok result without an explicit release acknowledgement must retain the account lock.")
+  const retryStop = await runtime.stop()
+  assert.equal(retryStop.ok, true)
+  assert.equal(runtimeStopCalls, 1,
+    "A confirmed runtime stop must not be repeated while retrying lock release.")
+  assert.equal(marketDataStopCalls, 1,
+    "A confirmed market-data stop must not be repeated while retrying lock release.")
+})
+
 test("propagates durable process-stop acknowledgement from every provider runtime", async () => {
   const providers = [
     createProvider({

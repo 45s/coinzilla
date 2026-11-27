@@ -869,6 +869,16 @@
           "path": "src/bootstrap/providers/start-provider-accounts.test.js",
           "name": "retains an account lock when runtime stop does not confirm STOPPED status",
           "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
+          "name": "retries ambiguous provider lock release without repeating completed runtime cleanup",
+          "kind": "failure"
+        },
+        {
+          "path": "src/index.trading-history-api.test.js",
+          "name": "retains persistence and process ownership when trading-history API close explicitly fails",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
