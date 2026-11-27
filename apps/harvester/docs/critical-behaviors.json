@@ -2631,6 +2631,60 @@
         "branches": 78.57,
         "functions": 97.92
       }
+    },
+    {
+      "path": "src/bootstrap/providers/create-exchange-account-readers.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/bootstrap/providers/resolve-execution-symbols-by-provider.js",
+      "baseline": {
+        "lines": 97.55,
+        "branches": 95.7,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 90,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 97.55,
+        "branches": 95.7,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/bootstrap/providers/resolve-market-data-symbols-by-provider.js",
+      "baseline": {
+        "lines": 87.86,
+        "branches": 89.86,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 85,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 87.86,
+        "branches": 89.86,
+        "functions": 100
+      }
     }
   ],
   "runtimeScope": {
@@ -2649,17 +2703,17 @@
     ]
   },
   "latestCoverageMeasurement": {
-    "measuredAt": "2026-11-23T06:42:22Z",
-    "branch": "fix/harvester/1362-archive-reconstruction-preflight-20261123",
-    "prHeadSha": "a3350692af668f78d15e7dc03b07c1b3491a00df",
-    "workflowRunId": 45125806219,
-    "harvesterJobId": 137529748875,
+    "measuredAt": "2026-11-27T15:50:49Z",
+    "branch": "fix/harvester/1923-provider-bootstrap-critical-inventory-sync",
+    "prHeadSha": "27044b40ac6f0bd8f1fe3d064a20163bca9830b7",
+    "workflowRunId": 46028341253,
+    "harvesterJobId": 140605433799,
     "aggregate": {
-      "lines": 90.57,
-      "branches": 83.66,
-      "functions": 96.05
+      "lines": 91.24,
+      "branches": 84.38,
+      "functions": 96.1
     },
-    "checkedCriticalModuleCount": 42,
+    "checkedCriticalModuleCount": 50,
     "gatePassed": true
   }
 }
