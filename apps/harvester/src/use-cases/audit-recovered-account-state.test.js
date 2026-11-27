@@ -824,8 +824,14 @@ test("sorts multiple unowned open-order commitments deterministically", () => {
       usdtLocked: "200",
     }),
     openOrders: [
-      externalOrder({ brokerOrderId: "9003", clientOrderId: "external-9003" }),
-      externalOrder({ brokerOrderId: "9002", clientOrderId: "external-9002" }),
+      externalOrder({
+        brokerOrderId: "9003",
+        clientOrderId: "external-9003",
+      }),
+      externalOrder({
+        brokerOrderId: "9002",
+        clientOrderId: "external-9002",
+      }),
     ],
     markets: [market],
   })
