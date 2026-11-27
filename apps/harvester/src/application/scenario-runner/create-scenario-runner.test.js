@@ -645,15 +645,20 @@ test("runner records complete immutable provenance and replays the original scen
 
   assert.equal(completedOriginal.sourceRevision, sourceRevision,
     "Every run must record the exact source revision supplied by its owning runtime.")
-  assert.deepEqual(completedOriginal.replayProvenance, replayProvenance,
-    "Every run must retain the complete verified source, dependency, build, runtime and registry provenance.")
+  assert.equal(completedOriginal.replayProvenance.verified, false,
+    "Matching identity hashes and a caller-supplied verified flag must not count as trusted build-artifact provenance.")
+  assert.ok(completedOriginal.replayProvenance.missing.includes(
+    "caller-supplied verified replay provenance claim is not trusted"),
+  "The run must explain that its caller-supplied verification claim was rejected.")
+  assert.deepEqual(completedOriginal.replayProvenance.identity, replayProvenance.identity,
+    "The run must retain supplied provenance identity fields for diagnostics without trusting them.")
   assert.equal(typeof completedOriginal.inputSha256, "string",
     "Every run must retain a digest of its exact unredacted input snapshot.")
   const replay = runner.replay(original.runId)
   const completedReplay = await runner.waitForRun(replay.runId)
 
-  assert.equal(completedReplay.status, SCENARIO_RUN_STATUS.COMPLETED,
-    "A replay may execute only when the original source revision matches the active runtime revision.")
+  assert.equal(completedReplay.status, SCENARIO_RUN_STATUS.BLOCKED,
+    "Exact replay must remain blocked until a trusted build-artifact verifier is integrated.")
   assert.equal(completedReplay.replayOfRunId, original.runId,
     "A replay must retain an explicit link to its original run.")
   assert.equal(completedReplay.sourceRevision, sourceRevision,
@@ -665,11 +670,7 @@ test("runner records complete immutable provenance and replays the original scen
       market: "ZROUSDT",
       investment: "100",
     },
-    {
-      market: "ZROUSDT",
-      investment: "100",
-    },
-  ], "The adapter must receive the same original input for the initial run and its replay.")
+  ], "The adapter must not receive replay inputs until trusted build-artifact provenance is verified.")
 })
 
 test("runner blocks exact replay when immutable build and dependency provenance is unavailable", async () => {
