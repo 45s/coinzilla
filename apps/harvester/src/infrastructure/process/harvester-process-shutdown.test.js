@@ -307,9 +307,6 @@ test("requires a Journal-backed STOPPED event when PROCESS_STOPPED was not durab
          data: { durableProcessStopAcknowledged: false },
         }),
       },
-      logger: {
-        error: () => calls.push("log-error"),
-      },
       eventPublisher: {
         publish: () => {
           calls.push("publish-stopped")
@@ -321,9 +318,6 @@ test("requires a Journal-backed STOPPED event when PROCESS_STOPPED was not durab
           calls.push("event-bus-flush")
           return { ok: true }
         },
-      },
-      telegramNotifications: {
-        close: async () => calls.push("telegram-close"),
       },
       journalService: {
         status: { enabled: true },

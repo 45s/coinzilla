@@ -356,7 +356,10 @@ function publishStoppedEvent({ eventPublisher, reason }) {
       }),
     })
   } catch (error) {
-    return { ok: false, errors: [error] }
+    return {
+      ok: false,
+      errors: [error],
+    }
   }
 }
 
@@ -406,7 +409,10 @@ function publishStoppedLifecycleEvent({
     durableProcessStopAcknowledged,
   })
   if (prerequisiteError) {
-    return { ok: false, error: prerequisiteError }
+    return {
+      ok: false,
+      error: prerequisiteError,
+    }
   }
   if (!publisherAvailable) {
     try {
@@ -429,7 +435,10 @@ function publishStoppedLifecycleEvent({
     logger,
   })
   if (publicationError) {
-    return { ok: false, error: publicationError }
+    return {
+      ok: false,
+      error: publicationError,
+    }
   }
   shutdownState.set("stopped-event", { status: "completed" })
   return { ok: true }
