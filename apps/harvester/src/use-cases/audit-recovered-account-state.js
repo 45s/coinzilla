@@ -950,7 +950,7 @@ function prepareExpectedAccountBalances({
   }
 }
 
-function prepareRecoveredAccountAudit({ options }) {
+function validateRecoveredAuditPreflight({ options }) {
   const {
     projection,
     recoveredState,
@@ -973,14 +973,32 @@ function prepareRecoveredAccountAudit({ options }) {
   if (validationResult) {
     return { validationResult }
   }
-  const tradeHistoryAudit = auditTradeHistory({
-    requireCompleteTradeHistory,
-    tradeHistoryScope,
+  return {
+    tradeHistoryAudit: auditTradeHistory({
+      requireCompleteTradeHistory,
+      tradeHistoryScope,
+      recoveredState,
+      exchangeTradeHistory,
+      targetMarket,
+      currentAccountSnapshot,
+    }),
+  }
+}
+
+function prepareRecoveredAccountAudit({ options }) {
+  const preflight = validateRecoveredAuditPreflight({ options })
+  if (preflight.validationResult) {
+    return preflight
+  }
+  const {
+    projection,
     recoveredState,
-    exchangeTradeHistory,
-    targetMarket,
     currentAccountSnapshot,
-  })
+    openOrders,
+    markets,
+    targetMarket,
+  } = options
+  const { tradeHistoryAudit } = preflight
   const balanceContext = prepareExpectedAccountBalances({
     projection,
     recoveredState,
