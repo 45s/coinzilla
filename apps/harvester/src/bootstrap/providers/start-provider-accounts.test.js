@@ -987,7 +987,10 @@ test("propagates a missing provider durable stop acknowledgement to the aggregat
     env: { TRADING_MODE: "testnet" },
     releaseProviderLock: async (providerInstanceId) => {
       releasedLocks.push(providerInstanceId)
-      return { ok: true, released: true }
+      return {
+        ok: true,
+        released: true,
+      }
     },
     start: async (input) => ({
       startMarketData: async () => ({ ok: true }),
