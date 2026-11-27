@@ -4177,7 +4177,7 @@ async function createShutdownBuyRaceScenario() {
     scenario,
   })
   scenario.harness = harness
-  await harness.engine.processMarketPrice({
+  const initialEvaluation = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
       symbol: "DOGEUSDT",
@@ -4185,11 +4185,12 @@ async function createShutdownBuyRaceScenario() {
       timestamp: 1,
     },
   })
+  assert.equal(initialEvaluation.ok, true, initialEvaluation.errors?.[0]?.message)
   scenario.originalRecoverySell = harness.engine.getOrders().find((order) => order.side === "SELL")
   scenario.buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
   scenario.buyOrderRef.current = scenario.buyOrder
-  assert.ok(scenario.originalRecoverySell)
-  assert.ok(scenario.buyOrder)
+  assert.ok(scenario.originalRecoverySell, "The active Position must establish a recovery SELL before the pre-existing BUY's late fills.")
+  assert.ok(scenario.buyOrder, "The pre-existing BUY must remain available for the shutdown cancellation race.")
   return scenario
 }
 
@@ -4199,8 +4200,8 @@ function assertShutdownBuyRaceAccounting({ scenario, seeded }) {
     ["shutdown-buy-partial-fill", "shutdown-buy-final-fill"],
     "Both real BUY fills must be applied exactly once even when the final fill races cancellation.",
   )
-  assert.equal(scenario.portfolioRef.current.appliedFillIds.length, 3)
-  assert.equal(scenario.ledgerRef.current.appliedFillIds.length, 3)
+  assert.equal(scenario.portfolioRef.current.appliedFillIds.length, 3, "Portfolio must contain the original seeded fill plus each distinct late BUY fill exactly once.")
+  assert.equal(scenario.ledgerRef.current.appliedFillIds.length, 3, "RecoveryLedger must contain the same exact three canonical fill identities as Portfolio.")
   assert.equal(
     scenario.portfolioRef.current.getPosition({ strategyId: StrategyId.COIN_GRABBER,
       marketId: market.id,
@@ -4211,6 +4212,7 @@ function assertShutdownBuyRaceAccounting({ scenario, seeded }) {
       }).baseQuantity.amount,
       right: scenario.buyOrder.originalQuantity.amount,
     }),
+    "The final Position quantity must include the complete pre-existing BUY execution exactly once.",
   )
 }
 
