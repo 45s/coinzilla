@@ -2307,6 +2307,7 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
   let flushCount = 0
   let cancelCalls = 0
   const seeded = makeSeededRecoveryState()
+  let lastPublishedEventName
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
@@ -2314,13 +2315,16 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
     baseFreeBalance: "1",
     onCancelOrderStarted: () => { cancelCalls += 1 },
     eventPublisher: {
-      publish: () => ({ ok: true }),
+      publish: (event) => {
+        lastPublishedEventName = event.name
+        return { ok: true }
+      },
       flushWrites: async () => {
         flushCount += 1
         return flushCount === 2
           ? {
             ok: false,
-            errors: [new Error("journal sync failed")]
+            errors: [new Error(`journal sync failed after ${lastPublishedEventName}`)]
           }
           : {
             ok: true,
@@ -7677,6 +7681,7 @@ function createRecoveredOrderFixtures() {
 async function createRecoveredOrderHarness({ fixtures }) {
   const harness = await createHarness({
     initialBook: false,
+    portfolioBaseQuantityBaseline: "1",
     initialState: {
       orderRegistry: new OrderRegistry({
         orders: [fixtures.buyOwnedOrder, fixtures.sellOwnedOrder],
@@ -11469,7 +11474,7 @@ test("durably records a blocked recovery SELL with its purpose and registration 
     },
   })
 
-  assert.equal(result.ok, true)
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(scenario.getFlushCount(), 2)
   assert.deepEqual(scenario.harness.orders, [])
   assert.equal(scenario.harness.engine.getOrders().length, 0)
