@@ -557,7 +557,6 @@ async function createHarnessFromOptions(options = {}) {
     brokerState.canonicalOrdersByClientId.set(order.clientOrderId, order)
     if (order.brokerOrderId) {
       brokerState.acknowledgedOrdersById.set(order.brokerOrderId, order)
-      brokerState.acknowledgedFillsByOrder.set(order.brokerOrderId, [])
     }
   }
   const state = createHarnessMutableState({ options: effectiveOptions })
@@ -2157,7 +2156,7 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
       publish: () => ({ ok: true }),
       flush: async () => {
         flushCount += 1
-        return flushCount === 3
+        return flushCount === 2
           ? {
             ok: false,
             errors: [new Error("journal sync failed")]
@@ -2179,7 +2178,7 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
     },
   })
   assert.equal(started.ok, true)
-  assert.equal(flushCount, 2)
+  assert.equal(flushCount, 1)
 
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
   const result = await harness.engine.processUserDataEvent({
@@ -2197,7 +2196,7 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
   })
 
   assert.equal(result.ok, false)
-  assert.equal(flushCount, 3)
+  assert.equal(flushCount, 2)
   assert.equal(cancelCalls, 0)
   assert.ok(harness.pauses.includes("RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE"))
   assert.equal(harness.engine.getOrders().find((order) => order.side === "SELL").status, "OPEN")
@@ -4529,7 +4528,7 @@ test("fails closed when shutdown recovery SELL cancellation or replacement submi
     },
     {
       name: "replacement-submit",
-      placeOrderFailureAfterCount: 2,
+      placeOrderFailureAfterCount: 1,
     },
   ]) {
     await runShutdownRecoveryFailureScenario({
@@ -5966,6 +5965,7 @@ test("suppresses trailing BUY repricing while an actual active Position exists",
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     seedExistingBuy: true,
+    baseFreeBalance: "1",
   })
 
   const first = await harness.engine.processMarketPrice({
@@ -6001,7 +6001,8 @@ test("suppresses trailing BUY repricing while an actual active Position exists",
 
   assert.equal(repricingEvaluations, 0, "the trailing repricing policy must not run with active inventory")
   assert.deepEqual(harness.cancellationIds, [], "an active Position must prevent trailing cancellation")
-  assert.equal(harness.orders.filter((order) => order.side === "BUY").length, 1)
+  assert.equal(harness.orders.filter((order) => order.side === "BUY").length, 0, "No replacement BUY may be submitted while the Position is active.")
+  assert.equal(harness.orders.filter((order) => order.side === "SELL").length, 1, "Recovery SELL evaluation must continue while trailing BUY repricing is skipped.")
   assert.equal(harness.engine.getOrders().find((order) => order.side === "BUY").clientOrderId, initialBuy.clientOrderId)
 })
 
@@ -6481,7 +6482,7 @@ function createRecoveryOnlyStrategyPolicy(observedReferences) {
         ...input,
         pairConfig: {
           ...input.pairConfig,
-          orderQuantity: 0.1,
+          orderQuantity: 1.1,
           keepQuantity: 1,
         },
       })
@@ -6550,7 +6551,7 @@ test("a fully filled BUY keeps subsequent evaluations in recovery-only mode whil
   const observedReferences = []
   const harness = await createHarness({
     strategyPolicy: createRecoveryOnlyStrategyPolicy(observedReferences),
-    accountingApplied: false,
+    accountingApplied: true,
   })
   await fillInitialRecoveryOnlyBuy({
     harness,
@@ -8545,6 +8546,7 @@ test("shutdown cancellation applies partial BUY fills before confirming cancella
     initialState: { orderRegistry: new OrderRegistry({ orders: [buyOrder] }) },
     eventPublisher: { publish: () => ({ ok: true }) },
     cancelWithFill: true,
+    accountingApplied: true,
   })
 
   const result = await engine.cancelOwnedBuyOrdersForShutdown()
