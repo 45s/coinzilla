@@ -5040,6 +5040,7 @@ async function createRecoverySellCancellationRaceFixture() {
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
+    seedExistingBuy: true,
     baseFreeBalance: "1",
     cancelWithFill: true,
     cancelOrderGate,
