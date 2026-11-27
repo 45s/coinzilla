@@ -153,3 +153,26 @@ test("launcher retains child cleanup handle when seccomp setup and cgroup cleanu
   assert.equal(harness.getSpawnCount(), 1)
   assert.equal(harness.getCleanupCount(), 1)
 })
+
+
+test("launcher retains cleanup-only handle when spawn and cgroup cleanup fail", () => {
+  const cleanupError = new Error("cgroup directory removal failed")
+  const harness = createLauncherHarness({ cleanupError })
+
+  assert.throws(() => harness.launcher({
+    workerPath: "/trusted/repository/apps/harvester/src/infrastructure/scenario-runner/scenario-worker.js",
+    stdio: ["ignore", "ignore", "ignore", "ipc"],
+    sandboxProfile: SANDBOX_PROFILE,
+  }), (error) => {
+    assert.match(error.message, /cgroup cleanup could not be confirmed/i)
+    assert.equal(error.sandboxCleanupError, cleanupError)
+    assert.equal(error.sandboxCleanupHandle.exitCode, 0,
+      "A cleanup-only handle must not be mistaken for a live child process")
+    assert.equal(typeof error.sandboxCleanupHandle.sandboxCleanup, "function",
+      "The cgroup cleanup function must remain reachable for retry")
+    return true
+  })
+
+  assert.equal(harness.getSpawnCount(), 1)
+  assert.equal(harness.getCleanupCount(), 1)
+})
