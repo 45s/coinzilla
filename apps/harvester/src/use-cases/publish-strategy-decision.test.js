@@ -4,9 +4,8 @@ import { publishStrategyDecision } from "./publish-strategy-decision.js"
 
 const test = (...args) => nodeTest(`[publish-strategy-decision.test.js] ${args[0]}`, ...args.slice(1))
 
-test("keeps residual notional distinct from a zero exchange-rounded candidate notional", () => {
-  const events = []
-  const dependencies = {
+function createRecoveryDecisionDependencies({ events } = {}) {
+  return {
     eventPublisher: {
       publish: (event) => {
         events.push(event)
@@ -19,7 +18,10 @@ test("keeps residual notional distinct from a zero exchange-rounded candidate no
       },
     },
   }
-  const context = {
+}
+
+function createQuantityIncrementDustContext() {
+  return {
     decision: {
       strategy: "CONSERVATIVE",
       reason: "RESIDUAL_DUST",
@@ -69,10 +71,13 @@ test("keeps residual notional distinct from a zero exchange-rounded candidate no
     },
     effectiveActions: [],
   }
+}
 
+test("keeps residual notional distinct from a zero exchange-rounded candidate notional", () => {
+  const events = []
   publishStrategyDecision({
-    dependencies,
-    context,
+    dependencies: createRecoveryDecisionDependencies({ events }),
+    context: createQuantityIncrementDustContext(),
   })
 
   assert.equal(events.length, 1)
