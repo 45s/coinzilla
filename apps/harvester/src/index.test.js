@@ -764,7 +764,7 @@ test("coalesces repeated shutdown signals into one cleanup operation", async () 
     flush: async () => ({ ok: true }),
   }
   const journalService = {
-    close: async () => { operations.push("journal.close"); return { ok: true } },
+    close: async () => { operations.push("journal.close"); return { ok: true, closed: true, durable: true } },
   }
   await main({
     createEventBus: () => eventBus,
@@ -1172,7 +1172,8 @@ test("releases the trading process lock only after runtime and Journal shutdown"
         flush: async () => ({ ok: true,
           durable: true }),
         close: async () => { sequence.push("journal-close"); return { ok: true,
-            closed: true } },
+            closed: true,
+            durable: true } },
       }),
       start: async () => ({
         connected: true,
@@ -1426,6 +1427,7 @@ test("closes diagnostic log transports after runtime, Journal, and EventBus shut
         ok: true,
         event,
       }),
+      flush: async () => ({ ok: true, durable: true }),
       close: async () => { operations.push("eventBus.close"); return { ok: true } },
     }),
     createJournalService: () => ({
