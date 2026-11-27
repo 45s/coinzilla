@@ -2182,13 +2182,20 @@ test("does not cancel a recovery SELL when cancellation intent publication is st
       publish: (event) => event.name === "order.cancel_requested" ? pendingPublication : ({ ok: true }),
       flush: async () => {
         flushCalls += 1
-        return { ok: true, durable: true }
+        return {
+          ok: true,
+          durable: true,
+        }
       },
     },
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
-    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
   })
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
   const result = await harness.engine.processUserDataEvent({
