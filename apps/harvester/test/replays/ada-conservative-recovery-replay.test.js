@@ -73,6 +73,13 @@ async function fillAdaBuy({
   fillQuantity,
   cumulativeExecutedQuantity,
 }) {
+  const fillOccurrence = replay.receivedLifecycleEvents.filter(
+    ({ name }) => name === "execution.fill_applied",
+  ).length + 1
+  const fillApplied = replay.waitForLifecycleEvent({
+    eventName: "execution.fill_applied",
+    occurrence: fillOccurrence,
+  })
   await replay.publishOrderFill({
     order,
     price,
@@ -82,15 +89,16 @@ async function fillAdaBuy({
     commissionAmount: "0.05",
     commissionAsset: "ADA",
   })
+  await fillApplied
   assert.equal(
     replay.receivedExecutionReports.at(-1)?.fill.id,
     tradeId,
-    "the replay must record the normalized BUY execution before evaluating the next order",
+    "the replay must record and apply the normalized BUY execution before evaluating the next order",
   )
 }
 
 async function submitAdaFirstBuyAndWait({ replay, initialBuy }) {
-  const firstSellSubmission = replay.waitForSubmittedOrder("SELL")
+  const firstSellSubmission = waitForAdaOrder({ replay, side: "SELL" })
   await fillAdaBuy({
     replay,
     order: initialBuy,
@@ -109,7 +117,7 @@ async function submitAdaFirstBuyAndWait({ replay, initialBuy }) {
 }
 
 async function submitAdaLateBuyFillAndWait({ replay, firstSell, initialBuy }) {
-  const replacementSellSubmission = replay.waitForSubmittedOrder("SELL", 2)
+  const replacementSellSubmission = waitForAdaOrder({ replay, side: "SELL", occurrence: 2 })
   await fillAdaBuy({
     replay,
     order: initialBuy,
