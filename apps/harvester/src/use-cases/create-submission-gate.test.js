@@ -258,54 +258,44 @@ test("allows a Conservative BUY only after recovery basis and cycle totals have 
 
 
 test("blocks a Conservative BUY while an owned recovery SELL remains active after accounting totals reset", () => {
-  const dependencies = createDependencies()
-  dependencies.state.shutdownBuyGate = false
-  dependencies.canTrade = () => true
-  dependencies.isStopping = () => false
-  dependencies.state.registry = {
-    getActiveOrders: () => [{
-      clientOrderId: "doge-recovery-sell",
-      brokerOrderId: "broker-doge-recovery-sell",
-      market: { id: "binance:DOGEUSDT" },
-      side: "SELL",
-      status: "OPEN",
-    }],
-    getOwnership: () => ({
-      strategyId: StrategyId.COIN_GRABBER,
-      purpose: "RECOVERY_SELL",
-    }),
-  }
-  dependencies.getPortfolio = () => ({
-    getPosition: () => ({
-      quantity: { amount: "0" },
-      spent: { amount: "0" },
-    }),
-  })
-  dependencies.getRecoveryLedger = () => ({
-    buyCost: "0",
-    netSellProceeds: "0",
-  })
+  for (const status of ACTIVE_RECOVERY_SELL_STATUSES) {
+    const { dependencies, activeOrder } = createActiveRecoverySellDependencies({
+      status,
+      clientOrderId: `doge-recovery-sell-${status}`,
+    })
+    dependencies.getPortfolio = () => ({
+      getPosition: () => ({
+        positionId: CONSERVATIVE_POSITION_ID,
+        quantity: { amount: "0" },
+        spent: { amount: "0" },
+      }),
+    })
+    dependencies.getRecoveryLedger = () => ({
+      buyCost: "0",
+      netSellProceeds: "0",
+    })
 
-  const result = createSubmissionGate(dependencies)({
-    order: {
-      ...createOrder({ side: "BUY" }),
-      market: {
-        id: "binance:DOGEUSDT",
-        symbol: "DOGEUSDT",
+    const result = createSubmissionGate(dependencies)({
+      order: {
+        ...createOrder({ side: "BUY" }),
+        market: {
+          id: CONSERVATIVE_MARKET_ID,
+          symbol: "DOGEUSDT",
+        },
       },
-    },
-    purpose: "STANDING_BUY",
-  })
+      purpose: "STANDING_BUY",
+    })
 
-  assert.deepEqual(result, {
-    allowed: false,
-    reason: "CONSERVATIVE_RECOVERY_CYCLE_ACTIVE",
-    details: {
-      symbol: "DOGEUSDT",
-      activeRecoverySellClientOrderId: "doge-recovery-sell",
-      activeRecoverySellStatus: "OPEN",
-    },
-  }, "An unresolved owned recovery SELL must keep BUY admission closed even if an inconsistent accounting snapshot looks reset.")
+    assert.deepEqual(result, {
+      allowed: false,
+      reason: "CONSERVATIVE_RECOVERY_CYCLE_ACTIVE",
+      details: {
+        symbol: "DOGEUSDT",
+        activeRecoverySellClientOrderId: activeOrder.clientOrderId,
+        activeRecoverySellStatus: status,
+      },
+    }, `An owned ${status} recovery SELL must keep BUY admission closed even when Position and RecoveryLedger projections appear reset.`)
+  }
 })
 
 test("does not apply the Conservative recovery BUY gate to Recovery Seller orders", () => {
