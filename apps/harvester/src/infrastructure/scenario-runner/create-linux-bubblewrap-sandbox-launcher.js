@@ -140,7 +140,10 @@ function verifyTrustedExecutableDirectories({ path, statSync }) {
 
 function verifyTrustedExecutable({ path, realpathSync, statSync, readFileSync }) {
   const canonicalPath = realpathSync(path)
-  verifyTrustedExecutableDirectories({ path: canonicalPath, statSync })
+  verifyTrustedExecutableDirectories({
+    path: canonicalPath,
+    statSync,
+  })
   const stat = statSync(canonicalPath)
   if (!stat.isFile() || stat.uid !== 0 || (stat.mode & 0o022) !== 0) {
     throw new Error(`Sandbox executable is not a trusted root-owned, non-writable file: ${path}`)
@@ -545,7 +548,10 @@ function createBubblewrapArguments({ workerPath, repositoryRoot, nodeExecutable,
     existsSync,
     realpathSync,
   })
-  addNodeRuntimeBind({ args, nodeExecutable })
+  addNodeRuntimeBind({
+    args,
+    nodeExecutable,
+  })
   args.push("--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp")
   addWorkspaceBinds({
     args,
