@@ -2308,6 +2308,8 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
   let cancelCalls = 0
   const seeded = makeSeededRecoveryState()
   let lastPublishedEventName
+  let lastPublishedEventSide
+  let lastPublishedClientOrderId
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
@@ -2317,6 +2319,8 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
     eventPublisher: {
       publish: (event) => {
         lastPublishedEventName = event.name
+        lastPublishedEventSide = event.data?.side
+        lastPublishedClientOrderId = event.data?.clientOrderId
         return { ok: true }
       },
       flushWrites: async () => {
@@ -2324,7 +2328,7 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
         return flushCount === 2
           ? {
             ok: false,
-            errors: [new Error(`journal sync failed after ${lastPublishedEventName}`)]
+            errors: [new Error(`journal sync failed after ${lastPublishedEventName} side=${lastPublishedEventSide} clientOrderId=${lastPublishedClientOrderId}`)]
           }
           : {
             ok: true,
@@ -11394,7 +11398,7 @@ function assertExternalOrderLocalDeferral({ result, harness, flushCount, journal
     "A local deferral must not be misclassified as a broker rejection or ambiguous outcome.")
 }
 
-function createRecoverySellDeferralStrategyPolicy() {
+function createRecoverySellDeferralStrategyPolicy({ positionId } = {}) {
   return {
     evaluate: ({ marketPrice }) => ({
       strategy: "CONSERVATIVE",
@@ -11405,7 +11409,7 @@ function createRecoverySellDeferralStrategyPolicy() {
         side: "SELL",
         purpose: "RECOVERY_SELL",
         strategyId: StrategyId.COIN_GRABBER,
-        positionId: "position:cg:dogeusdt",
+        positionId,
         type: "LIMIT_MAKER",
         price: "100",
         quantity: "1",
@@ -11421,6 +11425,10 @@ function createRecoverySellDeferralStrategyPolicy() {
 
 async function createRecoverySellDeferralHarness({ failDeferralFlush = false } = {}) {
   const seeded = makeSeededRecoveryState()
+  const positionId = seeded.portfolio.getPosition({
+    marketId: market.id,
+    strategyId: StrategyId.COIN_GRABBER,
+  }).positionId
   let hasExternalOrder = false
   let flushCount = 0
   const journalEvents = []
@@ -11429,7 +11437,7 @@ async function createRecoverySellDeferralHarness({ failDeferralFlush = false } =
   const harness = await createHarness({
     appConfig: withExternalOrdersPolicy("block"),
     hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
-    strategyPolicy: createRecoverySellDeferralStrategyPolicy(),
+    strategyPolicy: createRecoverySellDeferralStrategyPolicy({ positionId }),
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
