@@ -506,7 +506,7 @@
         },
         {
           "path": "src/use-cases/conservative-trading-engine.test.js",
-          "name": "an immediately-filled BUY keeps subsequent evaluations in recovery-only mode",
+          "name": "a fully filled BUY keeps subsequent evaluations in recovery-only mode while its SELL remains open",
           "kind": "integration"
         },
         {
