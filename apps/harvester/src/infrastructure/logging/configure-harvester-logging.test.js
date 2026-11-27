@@ -922,7 +922,10 @@ test("compacts rejected lifecycle lines and retains the rejection reason", () =>
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
   transport.write({
     timestamp: "2026-11-26T21:45:17",
     level: "info",
@@ -940,8 +943,16 @@ test("compacts rejected lifecycle lines and retains the rejection reason", () =>
       detail: "Insufficient quote balance",
     },
   })
-  assert.match(written, /🟡 CG REJECTED LINKUSDT BUY 2 @ 9\.244 \| Insufficient quote balance/)
-  assert.doesNotMatch(written, /#3215105/)
+  assert.match(
+    written,
+    /🟡 CG REJECTED LINKUSDT BUY 2 @ 9\.244 \| Insufficient quote balance/,
+    "A rejection summary must retain the strategy, market, exact order facts, and actionable rejection reason.",
+  )
+  assert.doesNotMatch(
+    written,
+    /#3215105/,
+    "A compact rejection line must omit the broker order ID to prioritize the rejection context.",
+  )
   output.destroy()
 })
 
@@ -949,7 +960,10 @@ test("abbreviates Operational State Store wording in the terminal", () => {
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => { written += chunk.toString() })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
   transport.write({
     timestamp: "2026-11-26T21:45:18",
     level: "info",
@@ -958,7 +972,15 @@ test("abbreviates Operational State Store wording in the terminal", () => {
       message: "Operational State Store verified",
     },
   })
-  assert.match(written, /OSS verified/)
-  assert.doesNotMatch(written, /Operational State Store/)
+  assert.match(
+    written,
+    /OSS verified/,
+    "Operator-facing console summaries must abbreviate the long Operational State Store name.",
+  )
+  assert.doesNotMatch(
+    written,
+    /Operational State Store/,
+    "The full store name must not consume terminal space in operator-facing summaries.",
+  )
   output.destroy()
 })
