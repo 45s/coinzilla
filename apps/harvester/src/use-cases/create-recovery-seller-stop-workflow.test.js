@@ -57,7 +57,7 @@ function validResolutionEvidence() {
   }
 }
 
-test("persists a global RS STOP before exposing the stopped state", async (t) => {
+test("persists an RS investment STOP before exposing the stopped state", async (t) => {
   const { operationalStateStore, workflow } = await createWorkflow(t)
   const result = await workflow.latch({
     explanation: "The RS BUY acknowledgement timed out",
@@ -69,7 +69,9 @@ test("persists a global RS STOP before exposing the stopped state", async (t) =>
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(result.data.durable, true)
   assert.equal(workflow.getStopState().status, "STOPPED")
-  assert.equal(workflow.isAccountAdmissionBlocked(), true)
+  assert.equal(workflow.isBuyAdmissionBlocked(), true)
+  assert.equal(workflow.isSellAdmissionBlocked(), false,
+    "A durably persisted RS STOP blocks BUY admission but leaves the first SELL gate available.")
   assert.equal(workflow.getBlockerId(), result.data.blockerId)
   const read = await operationalStateStore.readAll()
   assert.equal(
@@ -94,7 +96,9 @@ test("restores a persisted RS STOP and does not append a duplicate blocker", asy
   assert.equal(first.ok, true)
   assert.equal(restored.ok, true)
   assert.equal(restored.data.getStopState().status, "STOPPED")
-  assert.equal(restored.data.isAccountAdmissionBlocked(), true)
+  assert.equal(restored.data.isBuyAdmissionBlocked(), true)
+  assert.equal(restored.data.isSellAdmissionBlocked(), false,
+    "A restored durable STOP must leave the first recovery SELL independently eligible.")
   assert.equal(restored.data.getBlockerId(), first.data.blockerId)
   assert.equal(duplicate.data.duplicate, true)
   assert.equal(
@@ -114,7 +118,8 @@ test("clears RS STOP only after explicit operator evidence is durably recorded",
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(workflow.getStopState().status, "CLEAR")
-  assert.equal(workflow.isAccountAdmissionBlocked(), false)
+  assert.equal(workflow.isBuyAdmissionBlocked(), false)
+  assert.equal(workflow.isSellAdmissionBlocked(), false)
   assert.equal(workflow.getBlockerId(), null)
   assert.equal(
     read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length,
@@ -157,7 +162,9 @@ test("keeps account admission blocked when durable STOP resolution persistence f
 
   assert.equal(result.ok, false)
   assert.equal(workflow.getStopState().status, "STOPPED")
-  assert.equal(workflow.isAccountAdmissionBlocked(), true)
+  assert.equal(workflow.isBuyAdmissionBlocked(), true)
+  assert.equal(workflow.isSellAdmissionBlocked(), false,
+    "A failed resolution must preserve the durable STOP without reclassifying it as unverified.")
   assert.equal(workflow.getBlockerId(), blockerId)
   assert.equal(
     read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length,
@@ -186,12 +193,13 @@ test("keeps RS STOP clear when its blocker cannot be durably persisted", async (
 
   assert.equal(result.ok, false)
   assert.equal(created.data.getStopState().status, "CLEAR")
-  assert.equal(created.data.isAccountAdmissionBlocked(), true)
+  assert.equal(created.data.isBuyAdmissionBlocked(), true)
+  assert.equal(created.data.isSellAdmissionBlocked(), true)
   assert.equal(created.data.getBlockerId(), null)
 })
 
 
-test("closes account admission before awaiting durable STOP persistence", async (t) => {
+test("closes RS BUY and SELL admission before awaiting durable STOP persistence", async (t) => {
   const operationalStateStore = await createStore(t)
   const append = operationalStateStore.append.bind(operationalStateStore)
   const finishAppends = []
@@ -221,7 +229,9 @@ test("closes account admission before awaiting durable STOP persistence", async 
     explanation: "A concurrent caller cannot create a second account STOP",
   })
 
-  assert.equal(workflow.isAccountAdmissionBlocked(), true)
+  assert.equal(workflow.isBuyAdmissionBlocked(), true)
+  assert.equal(workflow.isSellAdmissionBlocked(), true,
+    "SELL admission must remain closed while STOP persistence is pending.")
   assert.equal(workflow.getStopState().status, "CLEAR")
   await appendStarted
   await new Promise((resolve) => setImmediate(resolve))
@@ -232,7 +242,9 @@ test("closes account admission before awaiting durable STOP persistence", async 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(duplicateResult.ok, true, duplicateResult.errors?.[0]?.message)
   assert.equal(workflow.getStopState().status, "STOPPED")
-  assert.equal(workflow.isAccountAdmissionBlocked(), true)
+  assert.equal(workflow.isBuyAdmissionBlocked(), true)
+  assert.equal(workflow.isSellAdmissionBlocked(), false,
+    "After durable acknowledgement, only the RS BUY gate remains blocked.")
   assert.equal(workflow.getBlockerId(), result.data.blockerId)
   const read = await operationalStateStore.readAll()
   assert.equal(
@@ -256,6 +268,7 @@ test("does not restore Recovery Seller STOP from a user-data blocker with the sa
 
   assert.equal(created.ok, true, created.errors?.[0]?.message)
   assert.equal(created.data.getStopState().status, "CLEAR", "Recovery Seller STOP restoration must use producer provenance")
-  assert.equal(created.data.isAccountAdmissionBlocked(), false, "A user-data blocker is owned by the account admission workflow")
+  assert.equal(created.data.isBuyAdmissionBlocked(), false, "A user-data blocker is owned by the account admission workflow")
+  assert.equal(created.data.isSellAdmissionBlocked(), false, "A user-data blocker must not be claimed by the RS STOP workflow")
   assert.equal(created.data.getBlockerId(), null, "The Recovery Seller workflow must not claim the user-data blocker")
 })

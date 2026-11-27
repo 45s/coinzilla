@@ -1,6 +1,10 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
-import { createOperationalStateCallbacks, resumeHarvesterDeferredStrategyEvaluations } from "./harvester-runtime-setup.js"
+import {
+  createOperationalStateCallbacks,
+  getHarvesterAccountSafetyBlocker,
+  resumeHarvesterDeferredStrategyEvaluations,
+} from "./harvester-runtime-setup.js"
 
 const test = (...args) => nodeTest(`[harvester-runtime-setup.test.js] ${args[0]}`, ...args.slice(1))
 
@@ -139,4 +143,36 @@ test("forwards original strategy pause failure to the durable operational-state 
 
   assert.equal(recorded.error, failure, "The callback must forward the exact Error object without flattening or replacing it.")
   assert.equal(recorded.symbol, "DOGEUSDT", "The durable recorder must retain the affected market.")
+})
+
+
+test("Recovery Seller STOP is not exposed as a generic ACCOUNT blocker", () => {
+  const blocker = getHarvesterAccountSafetyBlocker({
+    userDataState: {},
+    recoverySellerStopWorkflow: {
+      getState: () => ({ status: "STOPPED" }),
+      isBuyAdmissionBlocked: () => true,
+    },
+  })
+
+  assert.equal(blocker, null,
+    "The strategy-purpose RS investment STOP must not become a generic account-wide blocker.")
+})
+
+test("a generic user-data ACCOUNT blocker remains active alongside Recovery Seller STOP", () => {
+  const blocker = getHarvesterAccountSafetyBlocker({
+    userDataState: {
+      accountingFailed: true,
+    },
+    recoverySellerStopWorkflow: {
+      getState: () => ({ status: "STOPPED" }),
+      isBuyAdmissionBlocked: () => true,
+    },
+  })
+
+  assert.deepEqual(blocker, {
+    scope: "ACCOUNT",
+    reason: "USER_DATA_RECONCILIATION_REQUIRED",
+    blockerId: null,
+  }, "A generic account-integrity blocker must retain precedence over the RS-specific STOP.")
 })

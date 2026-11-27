@@ -218,7 +218,7 @@ test("does not evaluate SELL before the first recovery Position exists", async (
   assert.equal(submitted.action.side, "BUY")
 })
 
-test("allows an eligible first SELL while account admission blocks new BUYs", async () => {
+test("allows an eligible first SELL while the RS STOP blocks new BUY spending", async () => {
   let submitted
   const stoppedSnapshot = Object.freeze({
     ...snapshot,
@@ -344,4 +344,53 @@ test("does not submit when an owned active order is awaiting reconciliation", as
   assert.equal(result.decision.outcome, "WAIT")
   assert.equal(sellEvaluations, 0)
   assert.equal(submitted, false)
+})
+
+
+test("does not evaluate a first recovery SELL while STOP persistence is unverified", async () => {
+  let sellEvaluations = 0
+  let submitted = false
+  const pendingStopSnapshot = Object.freeze({
+    ...snapshot,
+    stopState: Object.freeze({
+      status: "CLEAR",
+      decision: null,
+    }),
+    buyAdmissionBlocked: true,
+    sellAdmissionBlocked: true,
+    strategyStopped: false,
+  })
+  const evaluate = createRecoverySellerTransitionEvaluator({
+    getSnapshot: async () => pendingStopSnapshot,
+    evaluateSellDecision: () => {
+      sellEvaluations += 1
+      return createSellDecision()
+    },
+    evaluateBuyDecision: () => createBuyDecision({
+      outcome: "WAIT",
+    }),
+    submitOrder: async () => {
+      submitted = true
+      return {
+        ok: true,
+        data: {
+          submitted: true,
+        },
+      }
+    },
+  })
+
+  const result = await evaluate({
+    symbol: marketPrice.symbol,
+    marketPrice,
+    marketMetadata,
+    pairConfig: {},
+  })
+
+  assert.equal(result.decision.outcome, "WAIT",
+    "The transition must wait while the STOP durability boundary is unresolved.")
+  assert.equal(sellEvaluations, 0,
+    "The SELL policy must not run before the STOP fact is durably acknowledged.")
+  assert.equal(submitted, false,
+    "No order may be submitted while STOP persistence is unverified.")
 })
