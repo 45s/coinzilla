@@ -301,6 +301,7 @@ test("blocks a Conservative BUY while an owned recovery SELL remains active afte
     allowed: false,
     reason: "CONSERVATIVE_RECOVERY_CYCLE_ACTIVE",
     details: {
+      symbol: "DOGEUSDT",
       activeRecoverySellClientOrderId: "doge-recovery-sell",
       activeRecoverySellStatus: "OPEN",
     },

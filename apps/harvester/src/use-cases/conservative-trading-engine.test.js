@@ -510,9 +510,25 @@ function createSeededOpenBuyOrderRegistry({ orderRegistry = OrderRegistry.empty(
     },
   }).registry
   const openOrder = new CanonicalOrder({
-    ...pendingOrder,
+    clientOrderId: "seeded-conservative-standing-buy",
     brokerOrderId: "seeded-conservative-standing-buy-broker",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "99",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
     status: "OPEN",
+    createdAt: 1,
     acknowledgedAt: 2,
     updatedAt: 2,
   })
@@ -6443,7 +6459,6 @@ test("an immediately-filled BUY keeps subsequent evaluations in recovery-only mo
   const harness = await createHarness({
     strategyPolicy,
     immediateFilledAcknowledgement: true,
-    accountingApplied: true,
     getAcknowledgedFills: ({ order }) => [makeBuyFill({
       order,
       tradeId: `recovery-only-buy-${order.clientOrderId}`,
