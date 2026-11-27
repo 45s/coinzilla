@@ -580,7 +580,7 @@ function createSandboxResourceArguments({
   existsSync,
   realpathSync,
 }) {
-  const addressSpaceArgument = \`--as=\${MEMORY_ADDRESS_SPACE_LIMIT_BYTES}:\${MEMORY_ADDRESS_SPACE_LIMIT_BYTES}\`
+  const addressSpaceArgument = `--as=${MEMORY_ADDRESS_SPACE_LIMIT_BYTES}:${MEMORY_ADDRESS_SPACE_LIMIT_BYTES}`
   return [
     addressSpaceArgument,
     "--cpu=30:30",
