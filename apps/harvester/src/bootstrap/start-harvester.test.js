@@ -1976,11 +1976,18 @@ async function createPersistedAccountStopForRestart({ directory, store } = {}) {
   })
   assert.equal(processStarted.ok, true, processStarted.errors?.[0]?.message)
 
-  await seedAccountBlocker({ store })
+  const workflowResult = await createRecoverySellerStopWorkflow({
+    operationalStateStore: store,
+  })
+  assert.equal(workflowResult.ok, true, "The startup fixture must create a Recovery Seller STOP workflow.")
+  const latched = await workflowResult.data.latch({
+    explanation: "Integration test: restore an unresolved RS investment STOP before startup",
+  })
+  assert.equal(latched.ok, true, "The integration fixture must durably persist the RS STOP.")
 
   const stopped = await recordProcessStopped({
     operationalStateStore: store,
-    reason: "TEST_CLEAN_STOP_WITH_ACCOUNT_BLOCKER",
+    reason: "TEST_CLEAN_STOP_WITH_RS_STOP",
     clean: true,
   })
   assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
@@ -1991,24 +1998,16 @@ async function createPersistedAccountStopForRestart({ directory, store } = {}) {
   })
   const restartRead = await restartStore.readAll()
   assert.equal(restartRead.ok, true, "The simulated restart must verify the same ledger under a new process session.")
-  const persistedAccountBlocker = restartRead.data.records.find((record) =>
-    record.factType === "SAFETY_BLOCKER_RAISED" &&
-    record.data?.scope === "ACCOUNT" &&
-    record.data?.reason === "ACCOUNT_RECONCILIATION_REQUIRED"
-  )
-  assert.ok(persistedAccountBlocker,
-    "The restart fixture must contain a durable generic ACCOUNT blocker.")
   const restoredWorkflow = await createRecoverySellerStopWorkflow({
     operationalStateStore: restartStore,
   })
   assert.equal(restoredWorkflow.ok, true, restoredWorkflow.errors?.[0]?.message)
-  assert.equal(restoredWorkflow.data.isBuyAdmissionBlocked(), false,
-    "A generic ACCOUNT blocker must not be restored as an RS investment STOP.")
+  assert.equal(restoredWorkflow.data.isBuyAdmissionBlocked(), true,
+    "A fresh process-session workflow must restore the durable RS investment BUY gate.")
   assert.equal(restoredWorkflow.data.isSellAdmissionBlocked(), false,
-    "A generic ACCOUNT blocker must not be converted into the RS persistence-pending gate.")
+    "A restored durable RS STOP must leave the first eligible recovery SELL gate available.")
   return restartStore
 }
-
 async function seedAccountBlocker({ store, config = appConfig, includeProcessHistory = false } = {}) {
   if (includeProcessHistory) {
     const baseline = await recordConfigurationBaseline({
@@ -2211,7 +2210,7 @@ test("allows only an observation-only restart after account resolution and verif
   }
 })
 
-test("restores a persisted account STOP and keeps a restarted account observation-only", async () => {
+test("restores a persisted RS investment STOP and keeps BUY admission blocked after restart", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []
   const broker = createRsOnlyStartupBroker({ calls })
@@ -2247,8 +2246,21 @@ test("restores a persisted account STOP and keeps a restarted account observatio
       },
     })
 
-    assert.equal(result.tradingEnabled, false, "A restored account STOP must prevent trading from being re-enabled after restart.")
-    assert.equal(result.executionEnabled, false, "A restored account STOP must keep every execution route disabled.")
+    assert.equal(result.tradingEnabled, true,
+      "A strategy-scoped RS STOP must not turn the entire account into an observation-only runtime.")
+    assert.equal(result.executionEnabled, true,
+      "The RS runtime must remain available for reconciliation and its independently gated first recovery SELL.")
+    const restoredWorkflow = await createRecoverySellerStopWorkflow({
+      operationalStateStore: restartStore,
+    })
+    assert.equal(restoredWorkflow.ok, true, restoredWorkflow.errors?.[0]?.message)
+    assert.equal(restoredWorkflow.data.getStopState().status, "STOPPED",
+      "Restart must not implicitly clear the durable RS STOP.")
+    assert.equal(restoredWorkflow.data.isBuyAdmissionBlocked(), true,
+      "Restart must preserve the RS investment BUY gate.")
+    assert.equal(restoredWorkflow.data.isSellAdmissionBlocked(), false,
+      "After durable restore, the first recovery SELL remains independently eligible.")
+
     await result.processMarketPrice({
       symbol: "LINEAUSDT",
       priceEvent: {
@@ -2257,8 +2269,10 @@ test("restores a persisted account STOP and keeps a restarted account observatio
         timestamp: 2,
       },
     })
-    assert.equal(strategyEvaluationCount, 0, "A restored account STOP must prevent market-data strategy evaluation.")
-    assert.equal(calls.some((call) => typeof call === "object" && call.side), false, "An observation-only restart must not submit broker orders.")
+    assert.equal(strategyEvaluationCount, 1,
+      "The RS runtime may continue evaluating existing inventory while the STOP remains latched.")
+    assert.equal(calls.some((call) => typeof call === "object" && call.side), false,
+      "The test transition is WAIT-only; the durable STOP must not cause an automatic order.")
     await result.stop()
   } finally {
     await rm(directory, {
