@@ -1593,6 +1593,52 @@ function createAcknowledgedOrderLifecycleHandler({
   }
 }
 
+async function persistRecoverySellDeferralEvidence({ eventPublisher, publication } = {}) {
+  if (publication?.ok !== true) {
+    return publication?.errors?.[0] ?? new Error("Recovery SELL deferral evidence publication failed")
+  }
+  if (typeof eventPublisher?.flushWrites !== "function") {
+    return new TypeError("Recovery SELL deferral evidence requires a write-only durable Journal flush capability")
+  }
+  try {
+    const flushed = await eventPublisher.flushWrites()
+    if (flushed?.ok === true && flushed?.durable === true) {
+      return undefined
+    }
+    return flushed?.errors?.[0] ?? new Error("Recovery SELL deferral evidence was not durably journaled")
+  } catch (error) {
+    return error
+  }
+}
+
+function publishDeferredOrderEvidence({ eventPublisher, order, purpose, registered, reason, recoverySell } = {}) {
+  try {
+    const publication = publishSubmissionDeferral({
+      eventPublisher,
+      order,
+      reason: reason ?? "SUBMISSION_NOT_ALLOWED",
+      ...(recoverySell ? { purpose, registered } : {}),
+    })
+    return { publication }
+  } catch (error) {
+    if (!recoverySell) {
+      throw error
+    }
+    return { publicationError: error }
+  }
+}
+
+function removeDeferredPendingOrder({ state, order, registered } = {}) {
+  if (!registered) {
+    return
+  }
+  const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
+  if (!removal.removed) {
+    throw new Error("Cannot remove a pending order deferred before broker submission")
+  }
+  state.registry = removal.registry
+}
+
 function createSubmissionLifecycleCallbacks({
   state,
   publishDurableIntent,
@@ -1604,47 +1650,25 @@ function createSubmissionLifecycleCallbacks({
   return {
     onSubmissionDeferred: async ({ order, registered, purpose, reason, errors, error } = {}) => {
       const recoverySell = order.side === "SELL" && purpose === "RECOVERY_SELL"
-      let publication
-      let persistenceError
-      if (registered || recoverySell) {
-        try {
-          publication = publishSubmissionDeferral({
-            eventPublisher,
-            order,
-            reason: reason ?? "SUBMISSION_NOT_ALLOWED",
-            ...(recoverySell ? { purpose, registered } : {}),
-          })
-        } catch (failure) {
-          if (!recoverySell) {
-            throw failure
-          }
-          persistenceError = failure
-        }
-      }
-      if (registered) {
-        const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
-        if (!removal.removed) {
-          throw new Error("Cannot remove a pending order deferred before broker submission")
-        }
-        state.registry = removal.registry
-      }
+      const publicationResult = registered || recoverySell
+        ? publishDeferredOrderEvidence({
+          eventPublisher,
+          order,
+          purpose,
+          registered,
+          reason,
+          recoverySell,
+        })
+        : {}
+      removeDeferredPendingOrder({ state, order, registered })
       state.deferredEvaluations.add(order.market.symbol)
-      if (recoverySell && persistenceError === undefined) {
-        if (publication?.ok !== true) {
-          persistenceError = publication?.errors?.[0] ?? new Error("Recovery SELL deferral evidence publication failed")
-        } else if (typeof eventPublisher?.flushWrites !== "function") {
-          persistenceError = new TypeError("Recovery SELL deferral evidence requires a write-only durable Journal flush capability")
-        } else {
-          try {
-            const flushed = await eventPublisher.flushWrites()
-            if (flushed?.ok !== true || flushed?.durable !== true) {
-              persistenceError = flushed?.errors?.[0] ?? new Error("Recovery SELL deferral evidence was not durably journaled")
-            }
-          } catch (failure) {
-            persistenceError = failure
-          }
-        }
-      }
+      const persistenceError = publicationResult.publicationError ??
+        (recoverySell
+          ? await persistRecoverySellDeferralEvidence({
+            eventPublisher,
+            publication: publicationResult.publication,
+          })
+          : undefined)
       const intentError = reason === "ORDER_INTENT_NOT_DURABLE"
         ? error ?? errors?.[0] ?? new Error("Durable order-submission intent was not committed")
         : undefined
