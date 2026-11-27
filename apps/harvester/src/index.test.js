@@ -1667,51 +1667,70 @@ const createProcessProvenanceIdentity = () => ({
   apiSecret: "must-not-be-copied",
 })
 
-const captureProcessProvenanceScenario = async () => {
+function createProcessProvenanceScenarioContext() {
   const operations = []
   const events = []
   const contexts = []
   const processIdentity = createProcessProvenanceIdentity()
-  let journalFlushCalls = 0
-  const eventBus = createProvenanceEventBus({
+  return {
+    operations,
     events,
-    operations,
-  })
-  const logger = createProvenanceLogger({
     contexts,
-    operations,
-  })
+    processIdentity,
+    eventBus: createProvenanceEventBus({
+      events,
+      operations,
+    }),
+    logger: createProvenanceLogger({
+      contexts,
+      operations,
+    }),
+  }
+}
+
+const captureProcessProvenanceScenario = async () => {
+  const scenario = createProcessProvenanceScenarioContext()
+  let journalFlushCalls = 0
+  let journalWriteFlushCalls = 0
 
   await main({
-    processIdentity,
-    logger,
+    processIdentity: scenario.processIdentity,
+    logger: scenario.logger,
     createEventBus: () => {
-      operations.push("eventBus.create")
-      return eventBus
+      scenario.operations.push("eventBus.create")
+      return scenario.eventBus
     },
     acquireProcessLock: async () => {
-      operations.push("processLock.acquire")
-      return { ok: true,
-        release: async () => ({ ok: true,
-          released: true }) }
+      scenario.operations.push("processLock.acquire")
+      return {
+        ok: true,
+        release: async () => ({
+          ok: true,
+          released: true,
+        }),
+      }
     },
     createJournalService: () => createProvenanceJournal({
-      operations,
+      operations: scenario.operations,
       onFlush: () => { journalFlushCalls += 1 },
+      onWriteFlush: () => { journalWriteFlushCalls += 1 },
     }),
     start: async ({ eventPublisher }) => {
-      operations.push("runtime.start")
+      scenario.operations.push("runtime.start")
       await eventPublisher.flush()
+      const writeFlushResult = await eventPublisher.flushWrites()
+      assert.equal(writeFlushResult.ok, true, "The process publisher must expose the Journal write-only flush.")
+      assert.equal(writeFlushResult.durable, true, "The process publisher must preserve durable write confirmation.")
       return {
         connected: false,
         tradingEnabled: false,
         strategyMode: "read-only",
         subscriptions: [],
         stop: async () => ({
-        ok: true,
-        status: "STOPPED",
-        data: { durableProcessStopAcknowledged: true },
-      }),
+          ok: true,
+          status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
+        }),
       }
     },
     registerSignalHandler: () => {},
@@ -1720,15 +1739,16 @@ const captureProcessProvenanceScenario = async () => {
     },
   })
   return {
-    operations,
-    events,
-    contexts,
+    operations: scenario.operations,
+    events: scenario.events,
+    contexts: scenario.contexts,
     journalFlushCalls,
+    journalWriteFlushCalls,
   }
 }
 
 test("captures process provenance before trading startup and publishes it separately from runtime startup", async () => {
-  const { operations, events, contexts, journalFlushCalls } = await captureProcessProvenanceScenario()
+  const { operations, events, contexts, journalFlushCalls, journalWriteFlushCalls } = await captureProcessProvenanceScenario()
   assert.deepEqual(
     operations.slice(0, 3),
     ["logger.context", "eventBus.create", "processLock.acquire"],
@@ -1758,6 +1778,7 @@ test("captures process provenance before trading startup and publishes it separa
   assert.deepEqual(contexts[0], events[0].data, "every shared log entry must receive the same sanitized process identity as logger context")
   assert.equal(JSON.stringify(events[0]).includes("private-value"), false, "process-start evidence must not retain sensitive values embedded in build metadata")
   assert.equal(journalFlushCalls, 1, "process provenance must be included by the existing bootstrap flush without introducing an additional Journal flush")
+  assert.equal(journalWriteFlushCalls, 1, "The write-only barrier must be wired to the process publisher.")
   assert.ok(operations.indexOf("publish:harvester.process_started") < operations.indexOf("runtime.start"), "trading bootstrap must start only after the process event has been admitted to the existing Journal/EventBus pipeline")
 })
 
@@ -1839,6 +1860,59 @@ test("classifies a failed flush as retryable only while the Journal writer is he
       error() {} },
     registerSignalHandler: () => {},
   })
+  assert.deepEqual(flushResult.recoveryFailure, {
+    category: "DURABILITY",
+    stage: "JOURNAL_FLUSH_FAILURE",
+    retryable: true,
+  })
+})
+
+test("fails closed when process Journal publisher lacks write-only flush capability", async () => {
+  let flushResult
+  await runMain({
+    createJournalService: () => ({
+      ready: Promise.resolve({ ok: true }),
+      status: {
+        state: "ready",
+        started: true,
+        closed: false,
+        writeFailed: false,
+        writeErrorCount: 0,
+      },
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+      close: async () => ({
+        ok: true,
+        closed: true,
+        durable: true,
+      }),
+    }),
+    start: async ({ eventPublisher }) => {
+      flushResult = await eventPublisher.flushWrites()
+      return {
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => ({
+          ok: true,
+          status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
+        }),
+      }
+    },
+    logger: {
+      info() {},
+      system() {},
+      error() {},
+    },
+    registerSignalHandler: () => {},
+  })
+
+  assert.equal(flushResult.ok, false, "The process publisher must fail closed without Journal write-only durability.")
+  assert.match(flushResult.errors[0].message, /write-only durable flush is unavailable/)
   assert.deepEqual(flushResult.recoveryFailure, {
     category: "DURABILITY",
     stage: "JOURNAL_FLUSH_FAILURE",
@@ -2538,12 +2612,19 @@ function createRecordingEventBus({ events }) {
 }
 
 
-function createProvenanceJournal({ operations, onFlush }) {
+function createProvenanceJournal({ operations, onFlush, onWriteFlush }) {
   operations.push("journal.create")
   return {
     ready: Promise.resolve({ ok: true }),
     flush: async () => {
       onFlush()
+      return {
+        ok: true,
+        durable: true,
+      }
+    },
+    flushWrites: async () => {
+      onWriteFlush()
       return {
         ok: true,
         durable: true,

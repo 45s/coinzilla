@@ -10,7 +10,7 @@
 | Priority / area | Canonical issue | Current status |
 | --- | --- | --- |
 | Conservative no-new-BUY-until-cycle-complete admission | [#1895](https://github.com/45s/coinzilla/issues/1895) | Implemented and merged in [PR #1899](https://github.com/45s/coinzilla/pull/1899), merge commit `95d9ab2d25aba6dee18f258ff1c8caac1312d865`; all six required workflows passed on exact PR head `6e903a822bbd3539e8f7168fab81278a0d4d7315`. |
-| 2026-11-26 Conservative TESTNET residual sell-through | [#1896](https://github.com/45s/coinzilla/issues/1896) | Implementation is on [PR #1909](https://github.com/45s/coinzilla/pull/1909), current exact head `c7e952649dd723e14f25503c502fe5a8135ccd9d`; Journal owner [PR #1911](https://github.com/45s/coinzilla/pull/1911) / capability [#1910](https://github.com/45s/coinzilla/issues/1910) merged into `develop` at `106906176c63f7a1dbcffa665371b0c878c626d2`. PR #1909's exact-head required workflows are running; do not report CI as green until they finish. Historical branch/error, broker result and DOGE/ZRO filter snapshot remain UNKNOWN; do not substitute current filters. |
+| 2026-11-26 Conservative TESTNET residual sell-through | [#1896](https://github.com/45s/coinzilla/issues/1896) | Journal write-only durability capability is merged via [PR #1911](https://github.com/45s/coinzilla/pull/1911) (`106906176c63f7a1dbcffa665371b0c878c626d2`). PR #1909 exposes the separate Harvester `flushWrites()` adapter, requires durable recovery-decision/deferral evidence before completion or broker submission, and supplies replay write-only-flush fixtures. It also uses the write-only Journal barrier for durable order/cancellation intents and rejects pending asynchronous publication without draining optional EventBus observers and verifies that an outstanding recovery SELL survives restart reconciliation without a duplicate submission. Exact-head validation and remaining forensic/evidence review are in progress. Historical error/filter snapshot remain unavailable; no historical root cause is claimed. |
 | 2026-11-26 matching trading-runtime logs | [#1897](https://github.com/45s/coinzilla/issues/1897) | Facts runtime has no matching DEBUG/TRACE/process identity/completion record; selected startup-failure logs are a separate runtime. Fix archive selection and explicit missing-log reporting. |
 | Conservative ownership and shutdown incident | [#1856](https://github.com/45s/coinzilla/issues/1856) | Fix merged in [PR #1858](https://github.com/45s/coinzilla/pull/1858). Issue remains open for historical exchange-identity and original-runtime evidence; do not claim the old run's final STOP/process/lock outcome without its evidence. |
 | Shutdown cleanup deadlines and process-lock release | [#1186](https://github.com/45s/coinzilla/issues/1186), [#1479](https://github.com/45s/coinzilla/issues/1479) | Implementation is merged in [PR #1891](https://github.com/45s/coinzilla/pull/1891) (head `f32781cf3ab532dd3f9a27984f3cb40a0f4e36e3`). Bounded outer cleanup, Journal-backed STOPPED fallback, and explicit lock-release acknowledgements passed the recorded regression/process-lock checks. Remaining work is operational acceptance and historical process-exit/lock-release evidence in the issues; do not treat merge/CI as proof of a real shutdown. |
@@ -35,15 +35,16 @@ The source-backed [2026-11-26 reliability baseline report](docs/audits/reports/2
 
 ## Scenario Runner / GC Strategy Lab
 
-Foundation [PR #1837](https://github.com/45s/coinzilla/pull/1837) is merged. [PR #1913](https://github.com/45s/coinzilla/pull/1913) composes the simulation-only RS process adapter behind the explicitly enabled Linux Bubblewrap/prlimit sandbox.
+Foundation [PR #1837](https://github.com/45s/coinzilla/pull/1837) is merged. It does **not** make the Scenario Runner production-ready or executable.
 
-The current [Runner roadmap](../../apps/dashboard/docs/features/gc-strategy-lab/RUNNER_ROADMAP.md) is the feature-specific plan. The current boundary is:
+The current [Runner roadmap](../../apps/dashboard/docs/features/gc-strategy-lab/RUNNER_ROADMAP.md) remains the feature-specific plan. Keep execution blocked until:
 
-- Simulation execution is enabled only when `HARVESTER_SCENARIO_SANDBOX=linux-bubblewrap` is explicitly configured and the host passes trusted executable, namespace/seccomp and delegated cgroup v2 checks. Unverified hosts remain fail-closed.
-- PR #1887 covers the under-target FILLED SELL STOP, STOP-persistence failure and BUY-only STOP admission runtime scenarios.
-- PR #1913 adds six infrastructure-failure runtime scenarios: intent persistence, acknowledged outcome persistence, combined outcome/STOP persistence, ambiguous broker placement, sole-SELL reservation callback failure and terminal-reconciliation persistence failure.
-- Runtime scenarios remain PARTIAL and simulation-only. They use run-local simulated broker and in-memory operational state; no real broker/exchange access, credentials, live account state or production persistence is authorized.
-- Remaining acceptance: manual adversarial E2E on a trusted delegated-cgroup Linux runner, production operational-state durability, trusted build-artifact provenance/exact replay, and runner-specific retry/idempotency scenario coverage beyond existing duplicate-fill and exact-replay regressions.
+- production user-data event transition and terminal-fill reconciliation are exercised for profitable partial CANCELED and adverse fully FILLED SELLs in [PR #1887](https://github.com/45s/coinzilla/pull/1887);
+- under-target FILLED SELL STOP, STOP-persistence failure, and STOP buy-only admission runtime scenarios are implemented in PR #1887; other infrastructure-failure scenarios remain outstanding;
+- a trusted OS-level sandbox and matching attestation are available and verified;
+- source/build/runtime/input replay provenance and exact-head checks are complete.
+
+Current scenarios use simulated infrastructure and run-local state. No real broker/exchange access, credentials, live account state, or production persistence is authorized.
 
 ## Recently merged fixes — follow up only through their open acceptance/evidence issues
 

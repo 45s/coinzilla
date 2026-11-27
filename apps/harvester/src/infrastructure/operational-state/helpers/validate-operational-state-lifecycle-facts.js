@@ -68,9 +68,47 @@ export function validateOperatorBuyControlFact({ factType, canonicalData, factId
   }
 }
 
+function hasOnlyStrategyPauseErrorFields(error) {
+  const allowedFields = new Set(["name", "message", "code"])
+  return Object.keys(error).every((key) => allowedFields.has(key))
+}
+
+function isValidStrategyPauseErrorName(name) {
+  return typeof name === "string" && name.length > 0 && name.length <= 80
+}
+
+function isValidStrategyPauseErrorMessage(message) {
+  return typeof message === "string" && message.length <= 240
+}
+
+function isValidStrategyPauseErrorCode(code) {
+  return code === undefined ||
+    (typeof code === "string" && code.length <= 80) ||
+    Number.isSafeInteger(code)
+}
+
+function validateStrategyPauseErrorEvidence({ factType, error } = {}) {
+  if (error === undefined) {
+    return
+  }
+  if (factType !== "STRATEGY_MARKET_PAUSED") {
+    throw new TypeError("Strategy pause error evidence must be a bounded sanitized name/message/code object")
+  }
+  if (!error || typeof error !== "object" || Array.isArray(error)) {
+    throw new TypeError("Strategy pause error evidence must be a bounded sanitized name/message/code object")
+  }
+  const { name, message, code } = error
+  if (!hasOnlyStrategyPauseErrorFields(error) ||
+      !isValidStrategyPauseErrorName(name) ||
+      !isValidStrategyPauseErrorMessage(message) ||
+      !isValidStrategyPauseErrorCode(code)) {
+    throw new TypeError("Strategy pause error evidence must be a bounded sanitized name/message/code object")
+  }
+}
+
 export function validateStrategyMarketControlFact({ factType, canonicalData, factId }) {
   if (factType === "STRATEGY_MARKET_PAUSED" || factType === "STRATEGY_MARKET_RESUMED") {
-    const allowedFields = new Set(["symbol", "reason"])
+    const allowedFields = new Set(["symbol", "reason", "error"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
       throw new TypeError("Strategy market-control fact contains unsupported fields")
     }
@@ -78,8 +116,13 @@ export function validateStrategyMarketControlFact({ factType, canonicalData, fac
       throw new TypeError("Strategy market-control symbol must be canonical uppercase alphanumeric")
     }
     requireNonEmptyString({ value: canonicalData.reason,
-field: "data.reason",
-maxLength: 256 })
+      field: "data.reason",
+      maxLength: 256 })
+    const { error } = canonicalData
+    validateStrategyPauseErrorEvidence({
+      factType,
+      error,
+    })
     const prefix = factType === "STRATEGY_MARKET_PAUSED" ? "strategy-market-paused:" : "strategy-market-resumed:"
     if (!factId.startsWith(prefix) || factId.length === prefix.length) {
       throw new TypeError("Strategy market-control factId must include its unique transition identity")

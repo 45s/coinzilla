@@ -389,3 +389,127 @@ close: async () => ({ ok: true }) }),
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /must provide flush/)
 })
+
+
+test("exposes a write-only durable flush without draining the global EventBus", async () => {
+  const calls = []
+  const service = prepareOptionalJournal({
+    eventBus: new EventBus(),
+    directory: "/unused",
+    logger,
+    journalFactory: () => ({
+      start: async () => ({ ok: true }),
+      flush: async () => {
+        calls.push("global-flush")
+        return {
+          ok: true,
+          durable: true,
+        }
+      },
+      flushWrites: async () => {
+        calls.push("write-only-flush")
+        return {
+          ok: true,
+          durable: true,
+        }
+      },
+      close: async () => ({
+        ok: true,
+        closed: true,
+        durable: true,
+      }),
+    }),
+  })
+
+  assert.equal((await service.ready).ok, true, "The Journal wrapper must start before its write-only flush is exercised.")
+  const result = await service.flushWrites()
+  assert.equal(result.ok, true, "The write-only Journal flush must expose the underlying durable success.")
+  assert.equal(result.durable, true, "The write-only Journal flush must preserve the durable acknowledgement.")
+  assert.deepEqual(calls, ["write-only-flush"], "A pending EventBus handler must not drain EventBus through the global flush path.")
+  await service.close()
+})
+
+test("marks Journal degraded when write-only flush returns a failure", async () => {
+  const failure = new Error("write queue failed")
+  const service = prepareOptionalJournal({
+    eventBus: new EventBus(),
+    directory: "/unused",
+    logger,
+    journalFactory: () => ({
+      start: async () => ({ ok: true }),
+      flushWrites: async () => ({
+        ok: false,
+        errors: [failure],
+      }),
+      close: async () => ({
+        ok: true,
+        closed: true,
+      }),
+    }),
+  })
+
+  assert.equal((await service.ready).ok, true, "The Journal must start before the write-only failure is exercised.")
+  const result = await service.flushWrites()
+  assert.equal(result.ok, false, "A failed write-only Journal result must remain a failure.")
+  assert.equal(result.errors[0], failure, "The adapter must preserve the original Journal error.")
+  assert.equal(service.status.state, "degraded", "A failed write-only durability barrier must degrade Journal health.")
+  await service.close()
+})
+
+test("marks Journal degraded and reports a rejected write-only flush", async () => {
+  const failure = new Error("write queue rejected")
+  const reported = []
+  const service = prepareOptionalJournal({
+    eventBus: new EventBus(),
+    directory: "/unused",
+    logger: { error: (entry) => reported.push(entry) },
+    journalFactory: () => ({
+      start: async () => ({ ok: true }),
+      flushWrites: async () => { throw failure },
+      close: async () => ({
+        ok: true,
+        closed: true,
+      }),
+    }),
+  })
+
+  assert.equal((await service.ready).ok, true, "The Journal must start before the write-only rejection is exercised.")
+  const result = await service.flushWrites()
+  assert.equal(result.ok, false, "A rejected write-only flush must remain a failure.")
+  assert.equal(result.errors[0], failure, "The adapter must preserve the original Journal rejection.")
+  assert.equal(service.status.state, "degraded", "A failed write-only durability barrier must degrade Journal health.")
+  assert.equal(reported.length, 1, "The rejected write-only flush must be reported through structured diagnostics.")
+  assert.equal(reported[0].error, failure, "The diagnostic must preserve the original Journal rejection.")
+  await service.close()
+})
+
+test("fails closed when the underlying Journal has no write-only flush capability", async () => {
+  const calls = []
+  const service = prepareOptionalJournal({
+    eventBus: new EventBus(),
+    directory: "/unused",
+    logger,
+    journalFactory: () => ({
+      start: async () => ({ ok: true }),
+      flush: async () => {
+        calls.push("global-flush")
+        return {
+          ok: true,
+          durable: true,
+        }
+      },
+      close: async () => ({
+        ok: true,
+        closed: true,
+        durable: true,
+      }),
+    }),
+  })
+
+  assert.equal((await service.ready).ok, true, "The fake Journal must start so the missing write-only capability is the only failure.")
+  const result = await service.flushWrites()
+  assert.equal(result.ok, false, "Missing write-only persistence must be reported as failure.")
+  assert.match(result.errors[0].message, /flushWrites/, "The failure must name the missing write-only capability.")
+  assert.deepEqual(calls, [], "The wrapper must never substitute global flush when write-only flush is unavailable.")
+  await service.close()
+})

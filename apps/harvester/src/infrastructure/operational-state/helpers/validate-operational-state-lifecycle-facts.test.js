@@ -158,3 +158,36 @@ runtimeSessionId: "session-1",
     runtimeSessionId: "session-1",
   }), /unsupported fields/)
 })
+
+
+test("accepts bounded sanitized error evidence only on strategy pause facts", () => {
+  const pause = {
+    factType: "STRATEGY_MARKET_PAUSED",
+    canonicalData: {
+      symbol: "DOGEUSDT",
+      reason: "RECOVERY_CYCLE_COMPLETION_FAILED",
+      error: {
+        name: "RecoveryCompletionError",
+        message: "completion journal failed",
+        code: "RECOVERY_COMPLETION_WRITE_FAILED",
+      },
+    },
+    factId: "strategy-market-paused:transition-with-error",
+  }
+  assert.doesNotThrow(() => validateStrategyMarketControlFact(pause), "A sanitized error summary must be accepted on a pause fact.")
+  assert.throws(() => validateStrategyMarketControlFact({
+    ...pause,
+    factType: "STRATEGY_MARKET_RESUMED",
+    factId: "strategy-market-resumed:transition-with-error",
+  }), /sanitized name\/message\/code/, "A resume fact must not carry pause failure evidence.")
+  assert.throws(() => validateStrategyMarketControlFact({
+    ...pause,
+    canonicalData: {
+      ...pause.canonicalData,
+      error: {
+        ...pause.canonicalData.error,
+        stack: "raw stack",
+      },
+    },
+  }), /sanitized name\/message\/code/, "Unallowlisted stack data must be rejected.")
+})

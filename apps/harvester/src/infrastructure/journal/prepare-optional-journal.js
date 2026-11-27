@@ -32,6 +32,7 @@ function reportJournalFailure({ logger, error, errors }) {
     logger?.error?.({
       message: "Optional Harvester Journal startup failed",
       ...describeJournalError(firstError),
+      error: firstError,
       errors: originalErrors,
     })
   } catch {
@@ -74,8 +75,31 @@ function createDisabledJournal() {
       })
     },
     flush: async () => toResult({ error: new Error("Durable account audit requires an enabled Journal") }),
+    flushWrites: async () => toResult({ error: new Error("Durable recovery evidence requires an enabled Journal") }),
     close: async () => toResult({ closed: true,
 disabled: true }),
+  })
+}
+
+function createJournalInstance({ eventBus, directory, logger, journalFactory, processIdentity } = {}) {
+  const journalBaseDirectory = resolveJournalDirectory({ directory })
+  const journalDirectory = processIdentity
+    ? createHarvesterLogSessionPaths({
+      directory: journalBaseDirectory,
+      startedAt: processIdentity.startedAt,
+      runtimeSessionId: processIdentity.runtimeSessionId,
+    }).sessionDirectory
+    : journalBaseDirectory
+  return journalFactory({
+    eventBus,
+    directory: journalDirectory,
+    logger,
+    sessionIdentity: processIdentity
+      ? {
+        startedAt: processIdentity.startedAt,
+        runtimeSessionId: processIdentity.runtimeSessionId,
+      }
+      : undefined,
   })
 }
 
@@ -94,29 +118,16 @@ function startOptionalJournal({
     if (typeof journalFactory !== "function") {
       throw new TypeError("journalFactory must be a function")
     }
-    const journalBaseDirectory = resolveJournalDirectory({ directory })
-    const journalDirectory = processIdentity
-      ? createHarvesterLogSessionPaths({
-        directory: journalBaseDirectory,
-        startedAt: processIdentity.startedAt,
-        runtimeSessionId: processIdentity.runtimeSessionId,
-      }).sessionDirectory
-      : journalBaseDirectory
-    journal = journalFactory({
+    journal = createJournalInstance({
       eventBus,
-      directory: journalDirectory,
+      directory,
       logger,
-      sessionIdentity: processIdentity
-        ? {
-          startedAt: processIdentity.startedAt,
-          runtimeSessionId: processIdentity.runtimeSessionId,
-        }
-        : undefined,
+      journalFactory,
+      processIdentity,
     })
     if (!journal || typeof journal.start !== "function" || typeof journal.close !== "function") {
       throw new TypeError("Journal implementation must provide start() and close()")
     }
-
     ready = Promise.resolve()
       .then(() => journal.start())
       .then((result) => {
@@ -141,25 +152,27 @@ function startOptionalJournal({
     reportFailure({ error })
     ready = Promise.resolve(toResult({ error }))
   }
-  return { journal,
-ready }
+  return {
+    journal,
+    ready,
+  }
 }
 
-function createJournalLifecycle({ journal, ready, state, reportFailure }) {
-  const getStatus = () => {
-    const writeFailed = journal?.writeFailed === true
-    const currentState = state.current === "ready" && writeFailed ? "degraded" : state.current
-    return Object.freeze({
-      state: currentState,
-      enabled: true,
-      started: journal?.started === true,
-      writeFailed,
-      writeErrorCount: Array.isArray(journal?.writeErrors) ? journal.writeErrors.length : 0,
-      closed: journal?.closed === true,
-    })
-  }
+function getJournalStatus({ journal, state } = {}) {
+  const writeFailed = journal?.writeFailed === true
+  const currentState = state.current === "ready" && writeFailed ? "degraded" : state.current
+  return Object.freeze({
+    state: currentState,
+    enabled: true,
+    started: journal?.started === true,
+    writeFailed,
+    writeErrorCount: Array.isArray(journal?.writeErrors) ? journal.writeErrors.length : 0,
+    closed: journal?.closed === true,
+  })
+}
 
-  const flush = async () => {
+function createJournalFlush({ journal, ready, state, reportFailure } = {}) {
+  return async () => {
     const startResult = await ready
     if (!startResult.ok || !journal) {return startResult}
     if (typeof journal.flush !== "function") {
@@ -176,8 +189,35 @@ function createJournalLifecycle({ journal, ready, state, reportFailure }) {
       return toResult({ error })
     }
   }
+}
 
-  const close = async () => {
+function createJournalWriteOnlyFlush({ journal, ready, state, reportFailure } = {}) {
+  return async () => {
+    const startResult = await ready
+    if (!startResult.ok || !journal) {return startResult}
+    if (typeof journal.flushWrites !== "function") {
+      return toResult({
+        error: new TypeError("Journal implementation must provide flushWrites() for durable write-only evidence"),
+      })
+    }
+    try {
+      const result = await journal.flushWrites()
+      if (result?.ok === true && result?.durable === true) {return result}
+      state.current = "degraded"
+      if (result?.ok === false) {return result}
+      return toResult({
+        error: new TypeError("Journal flushWrites must return a durable success acknowledgement"),
+      })
+    } catch (error) {
+      state.current = "degraded"
+      reportFailure({ error })
+      return toResult({ error })
+    }
+  }
+}
+
+function createJournalClose({ journal, ready, state, reportFailure } = {}) {
+  return async () => {
     const startResult = await ready
     if (!journal) {
       state.current = "closed"
@@ -188,7 +228,6 @@ function createJournalLifecycle({ journal, ready, state, reportFailure }) {
         startupFailed: startResult?.ok !== true,
       })
     }
-
     try {
       const result = await journal.close()
       state.current = result?.ok === true ? "closed" : "close_failed"
@@ -200,14 +239,35 @@ function createJournalLifecycle({ journal, ready, state, reportFailure }) {
       return toResult({ error })
     }
   }
+}
 
+function createJournalLifecycle({ journal, ready, state, reportFailure }) {
   return Object.freeze({
     ready,
     get status() {
-      return getStatus()
+      return getJournalStatus({
+        journal,
+        state,
+      })
     },
-    flush,
-    close,
+    flush: createJournalFlush({
+      journal,
+      ready,
+      state,
+      reportFailure,
+    }),
+    flushWrites: createJournalWriteOnlyFlush({
+      journal,
+      ready,
+      state,
+      reportFailure,
+    }),
+    close: createJournalClose({
+      journal,
+      ready,
+      state,
+      reportFailure,
+    }),
   })
 }
 

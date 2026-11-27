@@ -1,16 +1,7 @@
 import { defaultLogger, toResult } from "@coinzilla/utils"
 
-/**
- * Create the application-facing EventBus publisher and a durable flush barrier.
- *
- * Publication is synchronous admission only. flush() waits for subscribers
- * (including Journal) to persist all accepted events.
- *
- * @param {{ eventBus: { publish: (event: object) => object }, flush?: () => Promise<object>, logger?: { error?: (entry: object) => void } }} input
- * @returns {{ publish: (event: object) => object, flush: () => Promise<object>, reportFailure: (input: { event?: object, error: Error }) => void }}
- */
-export function makeEventPublisher({ eventBus, flush: flushEvents, logger = defaultLogger } = {}) {
-  const reportFailure = ({ event, error }) => {
+function createFailureReporter({ logger } = {}) {
+  return ({ event, error }) => {
     try {
       logger?.error?.({
         message: "Harvester event publication failed",
@@ -22,8 +13,10 @@ export function makeEventPublisher({ eventBus, flush: flushEvents, logger = defa
       // application or trading failure.
     }
   }
+}
 
-  const publish = (event = {}) => {
+function createPublish({ eventBus, logger, reportFailure } = {}) {
+  return (event = {}) => {
     try {
       const result = eventBus.publish(event)
       if (result?.ok === true) {
@@ -53,8 +46,10 @@ export function makeEventPublisher({ eventBus, flush: flushEvents, logger = defa
       return failure
     }
   }
+}
 
-  const flush = async () => {
+function createGlobalFlush({ flushEvents, logger, reportFailure } = {}) {
+  return async () => {
     if (typeof flushEvents !== "function") {
       return toResult({ error: new TypeError("Harvester event publisher has no durable flush capability") })
     }
@@ -84,8 +79,63 @@ export function makeEventPublisher({ eventBus, flush: flushEvents, logger = defa
       return toResult({ error })
     }
   }
+}
 
-  return Object.freeze({ publish,
-    flush,
-    reportFailure })
+function createWriteOnlyFlush({ flushJournalWrites, logger, reportFailure } = {}) {
+  return async () => {
+    if (typeof flushJournalWrites !== "function") {
+      return toResult({ error: new TypeError("Harvester event publisher has no write-only durable flush capability") })
+    }
+    try {
+      const result = await flushJournalWrites()
+      if (result?.ok === true && result?.durable === true) {
+        try {
+          logger?.trace?.({ message: "Harvester event publisher write-only flush completed" })
+        } catch {
+          // Diagnostic logging must not change durable flush semantics.
+        }
+        return result
+      }
+      const errors = Array.isArray(result?.errors) && result.errors.length > 0
+        ? result.errors
+        : [new Error("Harvester write-only Journal flush did not confirm durable persistence")]
+      const failure = toResult({ errors })
+      reportFailure({ event: { name: "journal.flush_writes" },
+        error: failure.errors[0] })
+      if (result?.recoveryFailure) {
+        return {
+          ...failure,
+          recoveryFailure: result.recoveryFailure,
+        }
+      }
+      return failure
+    } catch (error) {
+      reportFailure({ event: { name: "journal.flush_writes" },
+        error })
+      return toResult({ error })
+    }
+  }
+}
+
+/** Compose synchronous EventBus publication with separate global and write-only durability barriers. */
+export function makeEventPublisher({ eventBus, flush: flushEvents, flushWrites: flushJournalWrites, logger = defaultLogger } = {}) {
+  const reportFailure = createFailureReporter({ logger })
+  return Object.freeze({
+    publish: createPublish({
+      eventBus,
+      logger,
+      reportFailure,
+    }),
+    flush: createGlobalFlush({
+      flushEvents,
+      logger,
+      reportFailure,
+    }),
+    flushWrites: createWriteOnlyFlush({
+      flushJournalWrites,
+      logger,
+      reportFailure,
+    }),
+    reportFailure,
+  })
 }

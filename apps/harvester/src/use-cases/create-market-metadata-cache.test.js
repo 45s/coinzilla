@@ -57,6 +57,8 @@ test("refreshes on first use and reuses filters only until the 30-second freshne
 
   assert.equal(first.ok, true, "The first metadata access must refresh exchange filters.")
   assert.equal(first.data.version, 1, "The first access must return the current exchange metadata.")
+  assert.equal(first.data.metadataCapturedAt, 1000)
+  assert.equal(first.data.metadataVersion, null)
   assert.equal(MARKET_METADATA_FRESHNESS_MAX_AGE_MS, 30_000, "The cache freshness window must remain bounded to thirty seconds.")
 
   currentTime = 1000 + MARKET_METADATA_FRESHNESS_MAX_AGE_MS - 1
@@ -66,6 +68,7 @@ test("refreshes on first use and reuses filters only until the 30-second freshne
     metadata,
   })
   assert.equal(cached.data.version, 1, "A fresh validated snapshot must be reused inside the freshness window.")
+  assert.equal(cached.data.metadataCapturedAt, 1000)
   assert.equal(refreshCount, 1, "A fresh cache hit must not trigger another exchange request.")
 
   currentTime = 1000 + MARKET_METADATA_FRESHNESS_MAX_AGE_MS
@@ -75,6 +78,7 @@ test("refreshes on first use and reuses filters only until the 30-second freshne
     metadata,
   })
   assert.equal(refreshed.data.version, 2, "Expired metadata must be replaced by the refreshed exchange snapshot.")
+  assert.equal(refreshed.data.metadataCapturedAt, currentTime)
   assert.equal(refreshCount, 2, "Expired metadata must cause exactly one new exchange request.")
 })
 
@@ -112,6 +116,7 @@ test("keeps freshness per symbol and lets trailing-BUY refresh force a new snaps
 
   assert.equal(forced.ok, true, "A forced metadata refresh must succeed with valid exchange filters.")
   assert.equal(forced.data.version, 3, "A forced refresh must replace the previously cached snapshot.")
+  assert.equal(forced.data.metadataCapturedAt, 1000)
   assert.equal(refreshCount, 3, "A forced refresh must bypass the freshness cache.")
 })
 
