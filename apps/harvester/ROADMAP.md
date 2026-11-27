@@ -71,3 +71,9 @@ Runtime scenarios are eligible for isolated simulation only; they remain PARTIAL
 ## Linux sandbox adversarial acceptance harness — 2026-11-27
 
 A manual self-hosted workflow `.github/workflows/harvester-scenario-sandbox-e2e.yml` now runs the real Linux sandbox boundary test on a runner labeled `scenario-sandbox`. It verifies namespace separation, secret non-forwarding, read-only filesystem, network denial, child-process denial, and the per-run cgroup hard limits. It requires a trusted Linux runner with Bubblewrap/prlimit/Node root-owned and delegated cgroup v2 `memory`, `cpu`, and `pids` controllers. It is intentionally not run on the ordinary GitHub-hosted runner. Do not close the isolation acceptance gate until the manual workflow passes on the intended deployment class.
+
+
+
+## Production RS process-adapter sandbox acceptance — 2026-11-27
+
+The manual Linux sandbox E2E exercises both an adversarial OS-boundary probe and the actual production RS process adapter/runtime evaluator inside the sandbox. It verifies a passing simulation-only SELL scenario with one simulated broker call and run-local intent/outcome facts. This is not production trading acceptance or RS domain-matrix verification; it remains pending a successful run on the trusted delegated Linux runner and trusted build provenance.

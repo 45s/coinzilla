@@ -332,3 +332,9 @@ This is implementation, not final acceptance. The GitHub-hosted CI runner lacks 
 ## Real Linux sandbox acceptance harness — 2026-11-27
 
 Added `linux-sandbox-e2e.test.js` and a manual `Harvester Scenario Runner Linux Sandbox E2E` workflow. The workflow is restricted to manual dispatch on a self-hosted Linux runner; configure a dedicated trusted runner for this acceptance task; it runs only when manually dispatched and uses no credentials or exchange access. The test launches the real Bubblewrap/prlimit/cgroup worker and checks distinct user/network/PID/IPC/UTS namespaces, mapped root UID, secret-environment omission, read-only source mounts, failed outbound network connection, denied child-process creation, and exact per-run cgroup memory/swap/CPU/pids settings. The test is skipped in ordinary CI because GitHub-hosted runners do not provide the required delegated cgroup v2 controllers. The acceptance gate remains open until this workflow passes on a trusted delegated runner.
+
+
+
+## Production RS process-adapter E2E — 2026-11-27
+
+The opt-in Linux sandbox acceptance test also constructs the production `createProcessScenarioAdapter`, requires its OS attestation, and executes `RS-RUNTIME-SELL-SUBMISSION-001` through the registered RS worker adapter. It asserts the production runtime evaluator passes, the process adapter remains `simulation-only`, exactly one simulated broker submission occurs, and run-local SELL intent/outcome facts are produced. No exchange client, credentials, live account state or production persistence are provided to this worker.

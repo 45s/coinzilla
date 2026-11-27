@@ -5,6 +5,7 @@ import { join, resolve } from "node:path"
 import test from "node:test"
 
 import { createLinuxBubblewrapSandboxLauncher } from "./create-linux-bubblewrap-sandbox-launcher.js"
+import { createProcessScenarioAdapter } from "./create-process-scenario-adapter.js"
 
 const SANDBOX_PROFILE = Object.freeze({
   networkAccess: "deny",
@@ -206,4 +207,39 @@ test("real Linux sandbox isolates namespaces, filesystem, network, child process
     child,
     timeoutMs: 5_000,
   }), true, "Sandbox worker must exit cleanly so the run cgroup can be removed")
+})
+
+
+test("real Linux sandbox runs Recovery Seller runtime simulation through the production process adapter", {
+  skip: process.env.SCENARIO_RUNNER_LINUX_SANDBOX_E2E !== "1",
+  timeout: 45_000,
+}, async () => {
+  const launcher = createLinuxBubblewrapSandboxLauncher()
+  const adapter = createProcessScenarioAdapter({
+    strategyId: "RS",
+    spawnSandboxedWorker: launcher,
+    maxOutputBytes: SANDBOX_PROFILE.maxOutputBytes,
+  })
+  assert.equal(adapter.osSandboxVerified, true, "Process adapter must accept only the real OS sandbox attestation")
+  assert.equal(adapter.executionMode, "simulation-only", "Recovery Seller runtime execution must remain simulation-only")
+  const runId = "linux-sandbox-e2e-recovery-seller"
+  try {
+    const result = await adapter.execute({
+      runId,
+      scenarioId: "RS-RUNTIME-SELL-SUBMISSION-001",
+      input: {
+        marketPrice: "12.3",
+      },
+    })
+    assert.equal(result.passed, true, "Production RS runtime evaluator must pass in the isolated worker")
+    assert.equal(result.source, "production-runtime-evaluator", "Worker must invoke the production runtime evaluator")
+    assert.equal(result.output.submitted, true, "Simulated broker must accept the scenario SELL")
+    assert.equal(result.output.brokerSubmissionCallCount, 1, "Only one simulated broker submission may occur")
+    assert.ok(result.output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_INTENT"),
+      "Run-local simulation must persist the SELL intent before broker placement")
+    assert.ok(result.output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_OUTCOME"),
+      "Run-local simulation must persist the acknowledged simulated SELL outcome")
+  } finally {
+    await adapter.cancel({ runId })
+  }
 })
