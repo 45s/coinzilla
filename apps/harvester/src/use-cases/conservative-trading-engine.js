@@ -810,6 +810,7 @@ const CANCELLING_STRATEGY_PAUSE_REASONS = new Set([
   "ACCOUNT_INTEGRITY_FAILURE",
   "CANCELED_ORDER_NOT_REGISTERED",
   "RECONCILIATION_PENDING_ORDER_OUTCOME",
+  "RECOVERY_DECISION_EVIDENCE_PERSISTENCE_FAILED",
 ])
 
 function shouldCancelOwnedBuysForStrategyPause({ reason, error } = {}) {
@@ -1676,7 +1677,9 @@ function createSubmissionLifecycleCallbacks({
       if (pauseError) {
         await pause({
           symbol: order.market.symbol,
-          reason: "ORDER_INTENT_NOT_DURABLE",
+          reason: intentError
+            ? "ORDER_INTENT_NOT_DURABLE"
+            : "RECOVERY_SELL_DEFERRAL_EVIDENCE_PERSISTENCE_FAILED",
           error: pauseError,
         })
       }
