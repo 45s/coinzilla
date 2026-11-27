@@ -1,5 +1,7 @@
 # Harvester Journal Operations
 
+> **Secondary / deferred while trading is broken (2026-11-27).** Journal and Operational State diagnostics are not the active P0 and must not delay or be presented as progress toward correct trading. Use them only when a narrowly scoped read is required to diagnose a concrete trading defect; do not expand facts, persistence, SQLite, history, or projection work.
+
 ## Read-only Operational State diagnostics
 
 When startup reports that the existing Operational State Store cannot be projected, run the diagnostic before attempting another startup:
