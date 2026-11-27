@@ -58,6 +58,7 @@ const snapshot = Object.freeze({
   pendingBuyCommitment: "0",
   activeOrders: Object.freeze([]),
   strategyStopped: false,
+  sellAdmissionBlocked: false,
   marketPaused: false,
   reconciliationComplete: true,
   lastBuyPrice: "10",
