@@ -979,6 +979,7 @@ test("reconciles a third-asset commission when the fee asset is also a market as
     recoveredState,
     currentAccountSnapshot: snapshot({
       bnbFree: "0.9999",
+      usdtFree: "1000.24",
       bnbLocked: "0",
     }),
     openOrders: [],
