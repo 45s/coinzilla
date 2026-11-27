@@ -105,10 +105,12 @@ test("sandbox setup failure reports when cgroup cleanup cannot be confirmed", ()
       "The setup error must report that sandbox resource cleanup failed")
     assert.ok(error instanceof AggregateError,
       "The setup and cleanup failures must both remain available as causes")
-    assert.equal(error.cause.name, "TypeError",
-      "The original worker-path setup error must remain the aggregate cause")
+    assert.equal(error.cause, cleanupError,
+      "The cleanup failure must remain the aggregate cause")
+    assert.equal(error.errors[0].name, "TypeError",
+      "The original worker-path setup failure must remain in the aggregate errors")
     assert.equal(error.errors[1], cleanupError,
-      "The original cgroup cleanup failure must be retained")
+      "The original cgroup cleanup failure must remain in the aggregate errors")
     return true
   }, "Sandbox setup must not hide a failed cgroup cleanup")
 
