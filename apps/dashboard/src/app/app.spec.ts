@@ -107,7 +107,9 @@ describe('AppComponent', () => {
 
     expect(renderedText, 'The dashboard shell must retain its product identity.').toContain('coinzilla');
     expect(renderedText, 'The primary navigation must retain Overview.').toContain('Overview');
-    expect(renderedText, 'The dashboard shell must identify that its data is connected to a live source.').toContain('MOCK DATA');
+    expect(renderedText, 'The dashboard shell must identify the Overview as a live Harvester view.').toContain('LIVE SYSTEM VIEW');
+    expect(renderedText, 'The Overview shell must no longer label its live data as a preview.').not.toContain('PREVIEW');
+    expect(renderedText, 'The Overview shell must not describe live data as fictional.').not.toContain('fictional demo data');
     expect(renderedText, 'Overview must show its live system-health panel.').toContain('System health');
     expect(renderedText, 'Overview must not render the removed fictional performance chart.').not.toContain('Portfolio performance');
     fixture.destroy();
