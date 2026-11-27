@@ -274,6 +274,7 @@ runDogeTradingReplayTest("completes the recovery cycle only after the SELL fill 
     timestamp: executionTimestamp,
   });
   const recoveryCycleResult = await completion
+  await dogeTradingReplay.publishMarketPrice(dogeTradingReplay.scenarioExpectations.initialPrice)
   const nextStandingBuyOrder = await nextStandingBuySubmitted
   assertOrderMatches(
     nextStandingBuyOrder,
@@ -780,6 +781,7 @@ runDogeTradingReplayTest("accounts partial recovery SELL executions and complete
     },
   });
   const recoveryCycleResult = await recoveryCompletion
+  await dogeTradingReplay.publishMarketPrice(dogeTradingReplay.scenarioExpectations.initialPrice)
   const nextStandingBuyOrder = await nextStandingBuySubmitted
   assertOrderMatches(
     nextStandingBuyOrder,
