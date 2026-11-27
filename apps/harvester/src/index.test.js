@@ -2322,7 +2322,6 @@ function createDelayedJournalProcessIdentity() {
 
 after(() => {
   // Tests exercise startup failures that intentionally set the process exit code.
-  // Clear application side effects after all assertions; the test runner still
-  // reports assertion failures independently.
-  process.exitCode = undefined
+  // Reset it after assertions; the test runner reports assertion failures independently.
+  process.exitCode = 0
 })
