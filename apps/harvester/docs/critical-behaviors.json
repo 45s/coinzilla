@@ -1259,6 +1259,11 @@
           "path": "src/use-cases/create-submission-gate.test.js",
           "name": "blocks RS submission while SELL persistence gate is active even if BUY gate is clear",
           "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "rejects a user-data ACCOUNT blocker with the RS STOP reason instead of treating it as an RS restart latch",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
@@ -1268,7 +1273,8 @@
         "A restored account blocker prevents trading readiness/activation; explicit durable resolution is required before admission can reopen.",
         "Market-scoped ownership and strategy pauses remain scoped to the affected symbol; ADR-0008's Recovery Seller SELL exception never bypasses an account blocker.",
         "External open orders are never adopted or cancelled by this gate; IGNORE and BLOCK retain their ADR-0004 per-market semantics.",
-        "After user-data ACCOUNT resolution, restart remains observation-only and requires a fresh durable account PREFLIGHT snapshot plus a clean account-wide open-order PREFLIGHT audit; this verification never reopens trading or clears Recovery Seller STOP."
+        "After user-data ACCOUNT resolution, restart remains observation-only and requires a fresh durable account PREFLIGHT snapshot plus a clean account-wide open-order PREFLIGHT audit; this verification never reopens trading or clears Recovery Seller STOP.",
+        "A USER_DATA_EVENT_HANDLER ACCOUNT blocker remains generic even when its reason equals RECOVERY_SELLER_UNEXPECTED_CONDITION; only the Recovery Seller producer or the explicitly supported legacy untagged record can use the RS STOP restart exception."
       ]
     },
     {
