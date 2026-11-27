@@ -647,8 +647,7 @@ function createWorkerExecutionPromise({
   input,
   onStarted,
 }) {
-  let execution
-  execution = createExecutionPromise({
+  const execution = createExecutionPromise({
     child,
     runId,
     signal,
