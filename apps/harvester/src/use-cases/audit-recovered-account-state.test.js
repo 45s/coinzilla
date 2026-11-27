@@ -804,6 +804,64 @@ test("accepts balances and reservations that exactly match replayed strategy own
   assert.equal(result.data.reservationsChecked, 0)
 })
 
+test("handles market-asset, malformed, negative, and missing-market Journal commissions", () => {
+  const { projection, restored } = restoreState({})
+  const recoveredState = resolveRestoredOrdersAsFilled({ recoveredState: restored })
+  const runAudit = (state) => auditRecoveredAccountState({
+    projection,
+    recoveredState: state,
+    currentAccountSnapshot: snapshot(),
+    openOrders: [],
+    markets: [market],
+  })
+  const withCommission = (commission) => ({
+    ...recoveredState,
+    journalFills: recoveredState.journalFills.map((fill, index) =>
+      index === 0 ? { ...fill, commissions: [commission] } : fill
+    ),
+  })
+  const marketAssetCommission = runAudit(withCommission({
+    assetId: market.quoteAsset.id,
+    asset: market.quoteAsset.code,
+    amount: "0.01",
+  }))
+  assert.equal(marketAssetCommission.ok, true,
+    marketAssetCommission.errors?.map(({ message }) => message).join("; "))
+
+  const negativeCommission = runAudit(withCommission({
+    assetId: feeAsset.id,
+    asset: feeAsset.code,
+    amount: "-0.001",
+  }))
+  assert.equal(negativeCommission.ok, false)
+  assert.match(negativeCommission.errors?.[0]?.message ?? "", /cannot be negative/)
+
+  const malformedFill = {
+    ...recoveredState,
+    journalFills: recoveredState.journalFills.map((fill, index) =>
+      index === 0 ? { ...fill, commissions: null } : fill
+    ),
+  }
+  const malformedCommission = runAudit(malformedFill)
+  assert.equal(malformedCommission.ok, false)
+  assert.match(malformedCommission.errors?.[0]?.message ?? "", /missing symbol or commission facts/)
+
+  const missingMarketFill = {
+    ...recoveredState,
+    journalFills: [
+      ...recoveredState.journalFills,
+      {
+        ...recoveredState.journalFills[0],
+        symbol: "ETHUSDT",
+        commissions: [],
+      },
+    ],
+  }
+  const missingMarket = runAudit(missingMarketFill)
+  assert.equal(missingMarket.ok, false)
+  assert.match(missingMarket.errors?.[0]?.message ?? "", /Canonical Market metadata is missing for recovered fill ETHUSDT/)
+})
+
 test("accounts for third-asset commission debits during recovered account reconciliation", () => {
   const { projection, restored } = restoreState({ thirdAssetCommission: true })
   const result = auditRecoveredAccountState({

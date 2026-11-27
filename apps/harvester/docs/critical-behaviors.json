@@ -1893,6 +1893,11 @@
           "path": "src/use-cases/audit-recovered-account-state.test.js",
           "name": "accepts balances and reservations that exactly match replayed strategy ownership",
           "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "handles market-asset, malformed, negative, and missing-market Journal commissions",
+          "kind": "failure"
         }
       ],
       "invariants": [
