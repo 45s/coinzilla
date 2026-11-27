@@ -41,6 +41,28 @@ function createTradingHistoryTestConfig() {
   }
 }
 
+async function startDefaultTradingHistoryApi({
+  database,
+  calls,
+  suppliedDatabase,
+  environment,
+  eventBus,
+  operator,
+} = {}) {
+  assert.deepEqual(operator, { facade: "shared-harvester-operator" }, "The local API must receive the same operator facade exposed by the running Harvester runtime.")
+  assert.equal(suppliedDatabase, database, "The API must reuse Harvester's existing relational database connection.")
+  assert.equal(environment, "testnet", "The API environment must come from Harvester's selected runtime configuration.")
+  assert.equal(typeof eventBus?.subscribe, "function", "The WebSocket adapter must share Harvester's existing EventBus.")
+  calls.push("api-start")
+  return {
+    address: {
+      address: "127.0.0.1",
+      port: 4201,
+    },
+    close: async () => { calls.push("api-close") },
+  }
+}
+
 function createMainOptions({ database, calls, handlers, startTradingHistoryApi } = {}) {
   return {
     env: {
@@ -65,20 +87,14 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
     prepareOrderHistoryPersistence: async () => ({
       relationalDatabase: database,
     }),
-    startTradingHistoryApi: startTradingHistoryApi ?? (async ({ database: suppliedDatabase, environment, eventBus, operator }) => {
-      assert.deepEqual(operator, { facade: "shared-harvester-operator" }, "The local API must receive the same operator facade exposed by the running Harvester runtime.");
-      assert.equal(suppliedDatabase, database, "The API must reuse Harvester's existing relational database connection.")
-      assert.equal(environment, "testnet", "The API environment must come from Harvester's selected runtime configuration.")
-      assert.equal(typeof eventBus?.subscribe, "function", "The WebSocket adapter must share Harvester's existing EventBus.")
-      calls.push("api-start")
-      return {
-        address: {
-          address: "127.0.0.1",
-          port: 4201,
-        },
-        close: async () => { calls.push("api-close") },
-      }
-    }),
+    startTradingHistoryApi: startTradingHistoryApi ?? ((input) => startDefaultTradingHistoryApi({
+      database,
+      calls,
+      suppliedDatabase: input.database,
+      environment: input.environment,
+      eventBus: input.eventBus,
+      operator: input.operator,
+    })),
     start: async () => ({
       getOperator: () => ({ facade: "shared-harvester-operator" }),
       stop: async () => {
