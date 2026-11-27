@@ -279,6 +279,12 @@ error: new Error("test volatility snapshot unavailable") })
   }
 }
 
+const testEventPublisher = Object.freeze({
+  publish: () => ({ ok: true }),
+  flush: async () => ({ ok: true, durable: true }),
+  flushWrites: async () => ({ ok: true, durable: true }),
+})
+
 function createHarnessEngine({
   broker,
   portfolio,
@@ -300,7 +306,7 @@ function createHarnessEngine({
     broker,
     strategyPolicy,
     appConfig,
-    eventPublisher,
+    eventPublisher: eventPublisher ?? testEventPublisher,
     ...createHarnessEnginePorts({
       portfolio,
       recoveryLedgersByMarket,
