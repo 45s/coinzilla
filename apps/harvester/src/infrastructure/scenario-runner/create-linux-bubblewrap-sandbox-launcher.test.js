@@ -142,7 +142,11 @@ test("launcher retains child cleanup handle when seccomp setup and cgroup cleanu
     sandboxProfile: SANDBOX_PROFILE,
   }), (error) => {
     assert.match(error.message, /cgroup cleanup could not be confirmed/i)
-    assert.equal(error.cause, seccompError)
+    assert.equal(error.cause, cleanupError)
+    assert.equal(error.errors[0], seccompError,
+      "The original seccomp setup failure must remain in the aggregate errors")
+    assert.equal(error.errors[1], cleanupError,
+      "The cgroup cleanup failure must remain in the aggregate errors")
     assert.equal(error.sandboxCleanupHandle, child,
       "A spawned worker must be retained when setup cleanup cannot be confirmed")
     assert.equal(error.sandboxCleanupError, cleanupError,

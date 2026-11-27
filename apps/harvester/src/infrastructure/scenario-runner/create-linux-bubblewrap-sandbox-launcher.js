@@ -667,6 +667,19 @@ function createSandboxResourceArguments({
   ]
 }
 
+function createSandboxCleanupHandle({ child, cgroup, cleanupError }) {
+  if (child) {
+    child.sandboxCleanupError = cleanupError
+    return child
+  }
+  return {
+    exitCode: 0,
+    signalCode: null,
+    sandboxCleanup: cgroup.cleanup,
+    sandboxCleanupError: cleanupError,
+  }
+}
+
 function cleanupSandboxAfterSetupFailure({ child, cgroup, error }) {
   let childKillError = null
   if (child) {
@@ -688,9 +701,16 @@ function cleanupSandboxAfterSetupFailure({ child, cgroup, error }) {
       failures.push(childKillError)
     }
     failures.push(cleanupError)
-    throw new AggregateError(failures, "Sandbox setup failed and cgroup cleanup could not be confirmed", {
-      cause: error,
+    const aggregate = new AggregateError(failures, "Sandbox setup failed and cgroup cleanup could not be confirmed", {
+      cause: cleanupError,
     })
+    aggregate.sandboxCleanupHandle = createSandboxCleanupHandle({
+      child,
+      cgroup,
+      cleanupError,
+    })
+    aggregate.sandboxCleanupError = cleanupError
+    throw aggregate
   }
   if (childKillError) {
     throw new AggregateError([error, childKillError], "Sandbox setup failed and child termination could not be confirmed", {
