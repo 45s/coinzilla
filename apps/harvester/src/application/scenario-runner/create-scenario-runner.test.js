@@ -694,3 +694,40 @@ test("runner blocks exact replay when immutable build and dependency provenance 
   assert.match(replay.diagnostics[0], /provenance.*(incomplete|unavailable)|source revision.*unknown/i,
     "A blocked replay must explain which exact source provenance is unavailable.")
 })
+
+test("runner rejects caller-supplied verified replay provenance without a trusted artifact verifier", async () => {
+  const replayProvenance = createCompleteReplayProvenance()
+  let executionCount = 0
+  const adapter = {
+    strategyId: "example",
+    execute: ({ onStarted }) => {
+      onStarted()
+      executionCount += 1
+      return { output: { executionCount } }
+    },
+    cancel: async () => true,
+  }
+  const runner = createScenarioRunner({
+    adapters: [adapter],
+    sourceRevision: replayProvenance.identity.sourceCommitSha,
+    replayProvenance,
+    createRunId: (() => {
+      let sequence = 0
+      return () => `run-untrusted-provenance-${++sequence}`
+    })(),
+  })
+  const original = runner.submit({
+    strategyId: "example",
+    scenarioId: "scenario-original",
+    input: { value: "original" },
+  })
+  await runner.waitForRun(original.runId)
+
+  const replay = runner.replay(original.runId)
+  const replayResult = await runner.waitForRun(replay.runId)
+
+  assert.equal(replayResult.status, SCENARIO_RUN_STATUS.BLOCKED,
+    "A caller-provided verified flag and matching hashes must not authorize exact replay without trusted artifact verification.")
+  assert.equal(executionCount, 1,
+    "The adapter must not execute a replay whose provenance was supplied as an untrusted claim.")
+})
