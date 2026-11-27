@@ -858,6 +858,7 @@ test("fails closed before completion or residual SELL submission when recovery e
   assert.equal(tracked.submissions.length, 0)
   assert.equal(tracked.completionCalls.count, 0)
   assert.equal(pauses.length, 1)
+  assert.equal(pauses[0].reason, "RECOVERY_DECISION_EVIDENCE_PERSISTENCE_FAILED")
   assert.equal(pauses[0].error, failure)
 })
 test("fails closed before dust cycle completion when recovery decision evidence cannot be durably flushed", async () => {
@@ -888,6 +889,7 @@ test("fails closed before dust cycle completion when recovery decision evidence 
   assert.equal(result.errors[0], failure)
   assert.equal(dependencies.state.recoveryCompletionCalls, 0)
   assert.equal(pauses.length, 1)
+  assert.equal(pauses[0].reason, "RECOVERY_DECISION_EVIDENCE_PERSISTENCE_FAILED")
   assert.equal(pauses[0].error, failure)
 })
 test("preserves unknown, rejected, and blocked residual SELL outcomes without completing recovery or placing a BUY", async () => {
