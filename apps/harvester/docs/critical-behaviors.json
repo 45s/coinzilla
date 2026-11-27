@@ -301,18 +301,8 @@
           "kind": "integration"
         },
         {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
           "kind": "integration"
         }
       ],
@@ -369,18 +359,8 @@
           "kind": "integration"
         },
         {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
           "kind": "integration"
         }
       ],
@@ -548,6 +528,26 @@
           "path": "src/use-cases/create-submission-gate.test.js",
           "name": "blocks a Conservative BUY while an owned recovery SELL remains active after accounting totals reset",
           "kind": "failure"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "blocks subsequent archived ZROUSDT BUYs while the first recovery cycle is active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "blocks subsequent archived DOGEUSDT BUYs while the first recovery cycle is active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "blocks subsequent archived ADAUSDT BUYs while the first recovery cycle is active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
@@ -592,18 +592,8 @@
           "kind": "normal"
         },
         {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
           "kind": "integration"
         }
       ],
@@ -859,21 +849,6 @@
           "kind": "failure"
         },
         {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
           "path": "src/use-cases/create-conservative-shutdown-safety.test.js",
           "name": "drains in-flight transitions before clearing deferred evaluations for shutdown",
           "kind": "failure"
@@ -902,6 +877,11 @@
           "path": "src/bootstrap/create-harvester-stop.test.js",
           "name": "bounds pending durable PROCESS_STOPPED and prevents overlapping retries",
           "kind": "failure"
+        },
+        {
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
