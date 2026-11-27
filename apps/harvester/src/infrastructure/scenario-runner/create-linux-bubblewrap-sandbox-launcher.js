@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto"
 import { execFileSync as execFileSyncNative, spawn as spawnNative } from "node:child_process"
 import { existsSync as existsSyncNative, readFileSync as readFileSyncNative, realpathSync as realpathSyncNative, statSync as statSyncNative } from "node:fs"
-import { dirname, join, posix, relative, resolve } from "node:path"
+import { join, posix, relative, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 
 const DEFAULT_MAX_OUTPUT_BYTES = 1_048_576
 const SANDBOX_ROOT = "/workspace/coinzilla"
@@ -107,6 +108,24 @@ function verifySandboxTools({ bwrap, prlimit, execFileSync }) {
   }
 }
 
+function verifySandboxCapabilities({ bwrap, prlimit, execFileSync }) {
+  execFileSync(prlimit.path, [
+    "--as=268435456:268435456",
+    "--cpu=30:30",
+    "--",
+    bwrap.path,
+    "--die-with-parent",
+    "--unshare-user",
+    "--unshare-pid",
+    "--unshare-net",
+    "--ro-bind", "/usr", "/usr",
+    "--", "/usr/bin/true",
+  ], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  })
+}
+
 function assertIsolationProfile({ profile, maxOutputBytes }) {
   const expected = {
     ...REQUIRED_SANDBOX_PROFILE,
@@ -121,20 +140,25 @@ function addReadOnlyBind({ args, source, target }) {
   args.push("--ro-bind", source, target)
 }
 
-function addDirectory({ args, directory }) {
+function addDirectory({ args, directory, seen }) {
+  if (seen?.has(directory)) {
+    return
+  }
+  seen?.add(directory)
   args.push("--dir", directory)
 }
 
-function addParentDirectories({ args, target }) {
+function addParentDirectories({ args, target, seen }) {
   const segments = target.split("/").filter(Boolean)
   let current = ""
-  for (const segment of segments.slice(0, -1)) {
+  for (const segment of segments) {
     current += `/${segment}`
-    addDirectory({ args, directory: current })
+    addDirectory({ args, directory: current, seen })
   }
 }
 
 function addSystemRuntimeBinds({ args, existsSync, realpathSync }) {
+  const createdDirectories = new Set()
   for (const source of ["/usr", "/bin", "/lib", "/lib64"]) {
     if (existsSync(source)) {
       addReadOnlyBind({
@@ -144,7 +168,7 @@ function addSystemRuntimeBinds({ args, existsSync, realpathSync }) {
       })
     }
   }
-  addDirectory({ args, directory: "/etc" })
+  addDirectory({ args, directory: "/etc", seen: createdDirectories })
   for (const source of [
     "/etc/ld.so.cache",
     "/etc/passwd",
@@ -157,6 +181,8 @@ function addSystemRuntimeBinds({ args, existsSync, realpathSync }) {
     }
   }
   if (existsSync("/etc/ssl/certs")) {
+    addDirectory({ args, directory: "/etc/ssl", seen: createdDirectories })
+    addDirectory({ args, directory: "/etc/ssl/certs", seen: createdDirectories })
     addReadOnlyBind({
       args,
       source: realpathSync("/etc/ssl/certs"),
@@ -166,16 +192,7 @@ function addSystemRuntimeBinds({ args, existsSync, realpathSync }) {
 }
 
 function addWorkspaceBinds({ args, repositoryRoot, existsSync }) {
-  const workspaceDirectories = [
-    "/workspace",
-    SANDBOX_ROOT,
-    join(SANDBOX_ROOT, "apps"),
-    join(SANDBOX_ROOT, "apps/harvester"),
-    join(SANDBOX_ROOT, "packages"),
-  ]
-  for (const directory of workspaceDirectories) {
-    addDirectory({ args, directory })
-  }
+  const createdDirectories = new Set()
   const sources = [
     ["apps/harvester/src", "apps/harvester/src"],
     ["apps/harvester/node_modules", "apps/harvester/node_modules"],
@@ -191,7 +208,7 @@ function addWorkspaceBinds({ args, repositoryRoot, existsSync }) {
       }
       continue
     }
-    addParentDirectories({ args, target })
+    addParentDirectories({ args, target, seen: createdDirectories })
     addReadOnlyBind({ args, source, target })
   }
 }
@@ -219,7 +236,6 @@ function createBubblewrapArguments({ workerPath, repositoryRoot, nodeExecutable,
     "--unshare-net",
     "--uid", "0",
     "--gid", "0",
-    "--ro-bind", realpathSync("/usr"), "/usr",
   ]
   addSystemRuntimeBinds({ args, existsSync, realpathSync })
   args.push("--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp")
@@ -339,6 +355,7 @@ export function createLinuxBubblewrapSandboxLauncher({
     verifyExecutable: verify,
   })
   verifySandboxTools({ bwrap, prlimit, execFileSync })
+  verifySandboxCapabilities({ bwrap, prlimit, execFileSync })
   syscallNumbers({ arch })
   const resolvedRepositoryRoot = realpathSync(resolve(repositoryRoot))
   const resolvedNodeExecutable = realpathSync(nodeExecutable)
