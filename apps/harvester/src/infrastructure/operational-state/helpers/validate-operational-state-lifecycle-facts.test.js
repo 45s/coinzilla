@@ -175,9 +175,9 @@ test("accepts bounded sanitized error evidence only on strategy pause facts", ()
     ...pause,
     factType: "STRATEGY_MARKET_RESUMED",
     factId: "strategy-market-resumed:transition-with-error",
-  }), /sanitized name\\/message\\/code/, "A resume fact must not carry pause failure evidence.")
+  }), /sanitized name\/message\/code/, "A resume fact must not carry pause failure evidence.")
   assert.throws(() => validateStrategyMarketControlFact({
     ...pause,
     canonicalData: { ...pause.canonicalData, error: { ...pause.canonicalData.error, stack: "raw stack" } },
-  }), /sanitized name\\/message\\/code/, "Unallowlisted stack data must be rejected.")
+  }), /sanitized name\/message\/code/, "Unallowlisted stack data must be rejected.")
 })
