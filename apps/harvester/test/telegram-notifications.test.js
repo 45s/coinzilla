@@ -18,7 +18,8 @@ disabled: true }),
 const runMain = (options = {}) => {
   const { env = {}, ...rest } = options
   return startMain({ acquireProcessLock: async () => ({ ok: true,
-release: async () => ({ ok: true }) }),
+release: async () => ({ ok: true,
+released: true }) }),
 createOperationalStateStore: () => ({ verify: async () => ({ ok: true,
 data: { valid: true,
 durableWriteSupported: true } }) }),
