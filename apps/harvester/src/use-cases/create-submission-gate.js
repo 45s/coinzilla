@@ -428,14 +428,14 @@ function getRecoverySellerStopSubmissionBlocker({
   if (ownership?.strategyId !== StrategyId.RECOVERY_SELLER) {
     return null
   }
-  if (dependencies.isRecoverySellerSellAdmissionBlocked?.() === true) {
+  if (dependencies.isRecoverySellerBuyAdmissionBlocked?.() !== true) {
+    return null
+  }
+  if (dependencies.isRecoverySellerSellAdmissionBlocked?.() !== false) {
     return defer({
       symbol,
       reason: RECOVERY_SELLER_STOP_ADMISSION_REASONS.PERSISTENCE_UNVERIFIED,
     })
-  }
-  if (dependencies.isRecoverySellerBuyAdmissionBlocked?.() !== true) {
-    return null
   }
   if (order.side === "BUY") {
     return defer({

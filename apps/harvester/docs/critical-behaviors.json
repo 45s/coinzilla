@@ -1244,6 +1244,11 @@
           "path": "src/bootstrap/user-data/subscribe-to-user-data.test.js",
           "name": "post-resolution restart accepts a reconciled owned open-orders PREFLIGHT audit",
           "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "fails closed when RS STOP BUY gate is active but SELL persistence gate is unavailable",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",

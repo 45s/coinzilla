@@ -706,6 +706,24 @@ test("blocks Recovery Seller SELL while STOP persistence is unverified", () => {
     "The gate must distinguish unverified STOP persistence from a durable investment STOP.")
 })
 
+test("fails closed when RS STOP BUY gate is active but SELL persistence gate is unavailable", () => {
+  const dependencies = createVolatilityProtectedDependencies()
+  dependencies.isRecoverySellerBuyAdmissionBlocked = () => true
+  const result = createSubmissionGate(dependencies)({
+    order: createOrder({ side: "SELL" }),
+    purpose: "RECOVERY_SELL",
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-position-1",
+      cycleId: "rs-cycle-1",
+    },
+  })
+
+  assert.equal(result.allowed, false,
+    "An active RS STOP cannot authorize recovery SELL when persistence verification is unavailable.")
+  assert.equal(result.reason, "RECOVERY_SELLER_STOP_PERSISTENCE_UNVERIFIED")
+})
+
 test("generic ACCOUNT blockers still block a Recovery Seller recovery SELL", () => {
   const dependencies = createVolatilityProtectedDependencies()
   dependencies.getAccountSafetyBlocker = () => ({
