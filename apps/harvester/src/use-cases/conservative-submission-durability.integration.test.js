@@ -148,8 +148,14 @@ function createEngineDependencies({
     appConfig,
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({ ok: true, durable: true }),
-      flushWrites: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+      flushWrites: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
     getPortfolio: () => portfolio,
     getRecoveryLedger: () => recoveryLedger,
