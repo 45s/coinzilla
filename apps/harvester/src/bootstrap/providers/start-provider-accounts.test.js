@@ -1032,6 +1032,39 @@ test("propagates a missing provider durable stop acknowledgement to the aggregat
     "Provider locks must remain held until the outer Journal-backed cleanup and logger-close stages complete.")
 })
 
+async function createMultiProviderShutdownFixture(providers) {
+  const runtimeStopCalls = { first: 0, second: 0 }
+  const marketDataStopCalls = { first: 0, second: 0 }
+  let providerLockReleaseCalls = 0
+  const runtime = await startProviderAccounts({
+    providers,
+    appConfig: appConfigForProviderSubset(providers),
+    env: { TRADING_MODE: "testnet" },
+    releaseProviderLock: async () => {
+      providerLockReleaseCalls += 1
+      return { ok: true, released: true }
+    },
+    start: async ({ providerIdentity }) => {
+      const { providerInstanceId } = providerIdentity
+      return {
+        startMarketData: async () => ({ ok: true }),
+        stopMarketData: async () => {
+          marketDataStopCalls[providerInstanceId] += 1
+          return { ok: true }
+        },
+        stop: async () => {
+          runtimeStopCalls[providerInstanceId] += 1
+          if (providerInstanceId === "second" && runtimeStopCalls[providerInstanceId] === 1) {
+            return { ok: true }
+          }
+          return durableProcessStopResult()
+        },
+      }
+    },
+  })
+  return { runtime, runtimeStopCalls, marketDataStopCalls, getProviderLockReleaseCalls: () => providerLockReleaseCalls }
+}
+
 test("defers provider lock release until outer cleanup and retries only incomplete account shutdown stages", async () => {
   const providers = [
     createProvider({
@@ -1045,61 +1078,16 @@ test("defers provider lock release until outer cleanup and retries only incomple
       accountId: "account-two",
     }),
   ]
-  const runtimeStopCalls = {
-    first: 0,
-    second: 0,
-  }
-  const marketDataStopCalls = {
-    first: 0,
-    second: 0,
-  }
-  let providerLockReleaseCalls = 0
-  const runtime = await startProviderAccounts({
-    providers,
-    appConfig: appConfigForProviderSubset(providers),
-    env: { TRADING_MODE: "testnet" },
-    releaseProviderLock: async () => {
-      providerLockReleaseCalls += 1
-      return {
-        ok: true,
-        released: true,
-      }
-    },
-    start: async (input) => {
-      const { providerInstanceId } = input.providerIdentity
-      return {
-        startMarketData: async () => ({ ok: true }),
-        stopMarketData: async () => {
-          marketDataStopCalls[providerInstanceId] += 1
-          return { ok: true }
-        },
-        stop: async () => {
-          runtimeStopCalls[providerInstanceId] += 1
-          if (
-            providerInstanceId === "second" &&
-            runtimeStopCalls[providerInstanceId] === 1
-          ) {
-            return { ok: true }
-          }
-          return durableProcessStopResult()
-        },
-      }
-    },
-  })
+  const { runtime, runtimeStopCalls, marketDataStopCalls, getProviderLockReleaseCalls } =
+    await createMultiProviderShutdownFixture(providers)
 
   const firstStop = await runtime.stop()
   assert.equal(firstStop.ok, false)
   const retryStop = await runtime.stop()
   assert.equal(retryStop.ok, true)
-  assert.deepEqual(runtimeStopCalls, {
-    first: 1,
-    second: 2,
-  })
-  assert.deepEqual(marketDataStopCalls, {
-    first: 1,
-    second: 1,
-  })
-  assert.equal(providerLockReleaseCalls, 0,
+  assert.deepEqual(runtimeStopCalls, { first: 1, second: 2 })
+  assert.deepEqual(marketDataStopCalls, { first: 1, second: 1 })
+  assert.equal(getProviderLockReleaseCalls(), 0,
     "Active provider locks must be released only by the outer process shutdown after all cleanup succeeds.")
 })
 
