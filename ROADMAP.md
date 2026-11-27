@@ -6,6 +6,8 @@
 
 > This page is an index, not a second task tracker. The full pre-cleanup roadmap was preserved at [ROOT_ROADMAP_HISTORY_2026-11-26](docs/archive/roadmap-history-2026-11-26.md#root-roadmap).
 
+> **Harvester priority override (2026-11-27):** When Harvester trading is broken, its only active P0 is restoring correct current-process trading. Recovery/restart restoration, durable facts/Journal, SQLite/relational history, projections, and account-wide history reconstruction are secondary and must not delay that fix. See [Harvester TRADING_FIRST](apps/harvester/docs/TRADING_FIRST.md), [Harvester roadmap](apps/harvester/ROADMAP.md), and incident [#1962](https://github.com/45s/coinzilla/issues/1962). The cross-workspace backlog below does not override this app-level P0.
+
 ## Active cross-workspace priorities
 
 1. **Repository-wide scenario catalog** — continue source-grounded behavior mapping and named-test traceability in [#1783](https://github.com/45s/coinzilla/issues/1783) and the [Scenario Catalog](docs/testing/SCENARIO_CATALOG.md).
