@@ -2173,19 +2173,21 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
   const sequence = []
   const lifecycleStatuses = []
   const seeded = makeSeededRecoveryState()
-  let harness
+  const harnessRef = { current: undefined }
   const durableIntentPublisher = createWriteOnlyDurableIntentPublisher({
     events,
     sequence,
     onEvent: (event) => {
-      if (event.name === "order.cancel_requested") sequence.push("publish:cancel_requested")
+      if (event.name === "order.cancel_requested") {
+        sequence.push("publish:cancel_requested")
+      }
       if (event.name === "order.cancelled") {
-        const registered = harness.engine.getOrders().find((order) => order.clientOrderId === event.data.clientOrderId)
+        const registered = harnessRef.current.engine.getOrders().find((order) => order.clientOrderId === event.data.clientOrderId)
         assert.equal(registered.status, "CANCELED", "The cancellation lifecycle event must follow the canonical terminal order state.")
       }
     },
   })
-  harness = await createHarness({
+  const harness = await createHarness({
     logger: {
       info: (entry) => {
         if (entry.orderLifecycle === true) {
@@ -2201,6 +2203,7 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
     onCancelOrderStarted: () => sequence.push("broker:cancel"),
     eventPublisher: durableIntentPublisher.eventPublisher,
   })
+  harnessRef.current = harness
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
