@@ -4,7 +4,7 @@
 
 ## Current status — 2026-11-26
 
-The Scenario Runner foundation is merged, but production execution remains fail-closed. PR #1887 adds a production-flow runtime scenario for an under-target fully FILLED SELL, including full terminal-fill reconciliation and durable simulated account STOP. The catalogue remains non-executable without a trusted OS sandbox and matching attestation; general infrastructure-failure, complete replay-provenance and end-to-end acceptance coverage remain outstanding.
+The Scenario Runner foundation is merged, but production execution remains fail-closed. PR #1887 is merged with under-target fully FILLED SELL, STOP-persistence failure and BUY-only STOP admission runtime scenarios. Draft PR #1913 adds a test-first failure case for durable SELL-intent persistence before broker placement. The catalogue remains non-executable without a trusted OS sandbox and matching attestation; broader infrastructure-failure, complete replay-provenance and end-to-end acceptance coverage remain outstanding.
 
 ## Approved branch-only refactoring and agent preflight
 

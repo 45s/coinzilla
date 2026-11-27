@@ -309,6 +309,7 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
   assert.deepEqual(catalog.map((scenario) => scenario.id), [
     "RS-004-011",
     "RS-RUNTIME-SELL-SUBMISSION-001",
+    "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001",
     "RS-RUNTIME-SELL-REJECTION-001",
     "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
     "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001",
