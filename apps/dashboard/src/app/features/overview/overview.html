@@ -1,151 +1,155 @@
 <section class="page-heading">
   <div>
     <div class="eyebrow">HARVESTER / CONTROL ROOM</div>
-    <h1>Good morning<span>.</span></h1>
-    <p class="page-description">A clear view of your trading operation, portfolio and system health.</p>
+    <h1>Overview<span>.</span></h1>
+    <p class="page-description">Live runtime, configured markets and Portfolio inventory from Harvester.</p>
   </div>
   <div class="snapshot-meta">
     <span class="snapshot-indicator"></span>
-    <span>LIVE SYSTEM HEALTH</span>
+    <span>LIVE SYSTEM VIEW</span>
     <span class="meta-divider">·</span>
-    <span>DEMO PORTFOLIO</span>
+    <span>READ ONLY</span>
   </div>
 </section>
 
-<section class="metrics-grid" aria-label="Portfolio summary">
-  @for (metric of metrics; track metric.label) {
+<section class="panel health-panel" aria-labelledby="health-title">
+  <div class="panel-heading">
+    <div>
+      <h2 id="health-title">System health</h2>
+      <p>Observed API, runtime and event-stream state</p>
+    </div>
+    <span class="health-count">{{ connectedCount() }} / 3 CONNECTED</span>
+  </div>
+
+  <div class="service-list">
+    @for (service of services(); track service.name) {
+      <div class="service-row">
+        <span class="service-icon" aria-hidden="true">⌁</span>
+        <div class="service-copy">
+          <strong>{{ service.name }}</strong>
+          <small>{{ service.description }}</small>
+        </div>
+        <span class="service-state"
+          [class.online]="service.state === 'connected'"
+          [class.idle]="service.state === 'checking'"
+          [class.offline]="service.state === 'offline' || service.state === 'unavailable'">
+          {{ service.label }}
+        </span>
+      </div>
+    }
+  </div>
+
+  <div class="health-note">
+    <span class="note-icon">i</span>
+    <p>Connection health is not exchange readiness or permission to trade. Runtime readiness below is shown only as reported by Harvester.</p>
+  </div>
+</section>
+
+@if (runtimeStatus(); as runtime) {
+  <section class="metrics-grid runtime-grid" aria-label="Harvester runtime summary">
     <article class="metric-card">
-      <div class="metric-topline">
-        <span class="metric-label">{{ metric.label }}</span>
-        <span class="metric-mark" aria-hidden="true">↗</span>
-      </div>
-      <div class="metric-value">{{ metric.value }}</div>
-      <div class="metric-bottom">
-        <span class="metric-change" [class.positive]="metric.tone === 'positive'">{{ metric.change }}</span>
-        <span class="metric-detail">{{ metric.detail }}</span>
-      </div>
+      <div class="metric-topline"><span class="metric-label">Runtime state</span></div>
+      <div class="metric-value">{{ runtime.runtimeState }}</div>
+      <div class="metric-bottom"><span class="metric-detail">Reported by Harvester</span></div>
     </article>
+    <article class="metric-card">
+      <div class="metric-topline"><span class="metric-label">Strategy mode</span></div>
+      <div class="metric-value">{{ runtime.strategyMode }}</div>
+      <div class="metric-bottom"><span class="metric-detail">Effective runtime mode</span></div>
+    </article>
+    <article class="metric-card">
+      <div class="metric-topline"><span class="metric-label">Environment</span></div>
+      <div class="metric-value">{{ runtime.tradingMode }}</div>
+      <div class="metric-bottom"><span class="metric-detail">{{ runtime.broker }}</span></div>
+    </article>
+    <article class="metric-card">
+      <div class="metric-topline"><span class="metric-label">Reported readiness</span></div>
+      <div class="metric-value">{{ runtime.readiness.state }}</div>
+      <div class="metric-bottom"><span class="metric-detail">{{ runtime.readiness.blockers.length }} reported blockers</span></div>
+    </article>
+  </section>
+} @else {
+  <section class="panel empty-state" aria-live="polite">
+    <h2>Runtime status unavailable</h2>
+    <p>Start Harvester locally and keep this page open. No runtime values are substituted when the API is offline.</p>
+  </section>
+}
+
+<section class="panel markets-panel" aria-labelledby="markets-title">
+  <div class="panel-heading">
+    <div>
+      <h2 id="markets-title">Configured markets</h2>
+      <p>Latest authoritative market snapshot</p>
+    </div>
+    <span class="records-count">{{ markets().length }} MARKETS</span>
+  </div>
+
+  @if (snapshotState() !== 'fresh') {
+    <p class="empty-inline">Waiting for a valid market snapshot · {{ snapshotState() }}</p>
+  } @else {
+    <div class="market-snapshot-list">
+      @for (market of markets(); track market.symbol) {
+        <article class="market-snapshot-row">
+          <div class="market-snapshot-identity">
+            <strong>{{ market.symbol }}</strong>
+            <span>{{ market.enabled ? 'ENABLED' : 'DISABLED' }} · {{ market.readiness }}</span>
+          </div>
+          <div class="market-snapshot-details">
+            <span>{{ market.latestPrice ?? 'Price unavailable' }}</span>
+            <small>{{ market.priceFresh ? 'Fresh sampled price' : 'Price not confirmed fresh' }}</small>
+          </div>
+          <div class="market-snapshot-details">
+            <span>{{ market.blockers.length }} blockers</span>
+            <small>{{ market.blockers.join(' · ') || 'No blockers reported' }}</small>
+          </div>
+        </article>
+      } @empty {
+        <p class="empty-inline">Harvester reports no configured markets.</p>
+      }
+    </div>
   }
 </section>
 
-<section class="content-grid">
-  <article class="panel performance-panel">
-    <div class="panel-heading">
-      <div>
-        <h2>Portfolio performance</h2>
-        <p>Illustrative account value over the last 7 days</p>
-      </div>
-      <span class="period-select">7 DAYS <span>⌄</span></span>
-    </div>
-
-    <div class="chart-summary">
-      <strong>$12,480.52</strong>
-      <span>+2.34% <small>demo period</small></span>
-    </div>
-
-    <div class="chart-wrap" role="img" aria-label="Illustrative portfolio line chart trending upward over seven days">
-      <div class="chart-y-labels">
-        <span>$12.5k</span>
-        <span>$12.2k</span>
-        <span>$11.9k</span>
-        <span>$11.6k</span>
-      </div>
-      <svg class="performance-chart" viewBox="0 0 700 190" preserveAspectRatio="none" aria-hidden="true">
-        <defs>
-          <linearGradient id="chart-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stop-color="#65d6ad" stop-opacity=".22"/>
-            <stop offset="100%" stop-color="#65d6ad" stop-opacity="0"/>
-          </linearGradient>
-        </defs>
-        <path class="chart-grid" d="M0 20H700 M0 68H700 M0 116H700 M0 164H700"/>
-        <path class="chart-area" d="M0 148 C35 142 45 126 82 132 S130 143 165 115 S215 121 250 104 S300 119 335 88 S380 102 420 75 S470 91 505 58 S560 74 590 43 S650 49 700 20 V190 H0Z"/>
-        <path class="chart-line" d="M0 148 C35 142 45 126 82 132 S130 143 165 115 S215 121 250 104 S300 119 335 88 S380 102 420 75 S470 91 505 58 S560 74 590 43 S650 49 700 20"/>
-        <circle cx="700" cy="20" r="4" class="chart-point"/>
-      </svg>
-      <div class="chart-x-labels">
-        <span>MON</span>
-        <span>TUE</span>
-        <span>WED</span>
-        <span>THU</span>
-        <span>FRI</span>
-        <span>SAT</span>
-        <span>SUN</span>
-      </div>
-    </div>
-    <div class="chart-disclaimer">Illustration only — no exchange or account data is connected.</div>
-  </article>
-
-  <article class="panel health-panel">
-    <div class="panel-heading">
-      <div>
-        <h2>System health</h2>
-        <p>Connection status overview</p>
-      </div>
-      <span class="health-count">{{ connectedCount() }} / 3 CONNECTED</span>
-    </div>
-
-    <div class="service-list">
-      @for (service of services(); track service.name) {
-        <div class="service-row">
-          <span class="service-icon" aria-hidden="true">⌁</span>
-          <div class="service-copy">
-            <strong>{{ service.name }}</strong>
-            <small>{{ service.description }}</small>
-          </div>
-          <span class="service-state"
-            [class.online]="service.state === 'connected'"
-            [class.idle]="service.state === 'checking'"
-            [class.offline]="service.state === 'offline' || service.state === 'unavailable'">
-            {{ service.label }}
-          </span>
-        </div>
-      }
-    </div>
-
-    <div class="health-note">
-      <span class="note-icon">i</span>
-      <p>Connection health is not exchange readiness or permission to trade. Portfolio and performance figures elsewhere on this page remain fictional demo data.</p>
-    </div>
-  </article>
-</section>
-
-<section class="panel positions-panel">
+<section class="panel positions-panel" aria-labelledby="portfolio-title">
   <div class="panel-heading positions-heading">
     <div>
-      <h2>Open positions</h2>
-      <p>Sample portfolio positions · fictional values</p>
+      <h2 id="portfolio-title">Portfolio inventory</h2>
+      <p>Actual Harvester position and recovery quantities · exact decimal strings</p>
     </div>
-    <span class="records-count">4 RECORDS</span>
+    <span class="records-count">{{ positions().length }} POSITIONS</span>
   </div>
 
-  <div class="table-scroll">
-    <table>
-      <thead>
-        <tr>
-          <th>MARKET</th>
-          <th>SIDE</th>
-          <th>QUANTITY</th>
-          <th>AVERAGE PRICE</th>
-          <th>LAST PRICE</th>
-          <th>UNREALIZED P&L</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (position of positions; track position.market) {
+  @if (snapshotState() !== 'fresh') {
+    <p class="empty-inline">Waiting for a valid Portfolio snapshot · {{ snapshotState() }}</p>
+  } @else {
+    <div class="table-scroll">
+      <table>
+        <thead>
           <tr>
-            <td class="market-cell">{{ position.market }}</td>
-            <td><span class="side-pill">{{ position.side }}</span></td>
-            <td>{{ position.quantity }}</td>
-            <td>{{ position.averagePrice }}</td>
-            <td>{{ position.lastPrice }}</td>
-            <td>
-              <span class="pnl-value">{{ position.unrealizedPnl }}</span>
-              <small class="pnl-change">{{ position.change }}</small>
-            </td>
+            <th>MARKET</th>
+            <th>ACTIVE QTY</th>
+            <th>FREE QTY</th>
+            <th>TOTAL QTY</th>
+            <th>INVESTED QUOTE</th>
+            <th>RECOVERY OUTSTANDING</th>
           </tr>
-        }
-      </tbody>
-    </table>
-  </div>
-  <div class="table-footnote">These records are seeded demo content and do not represent an actual account.</div>
+        </thead>
+        <tbody>
+          @for (position of positions(); track position.symbol) {
+            <tr>
+              <td class="market-cell">{{ position.symbol }}</td>
+              <td>{{ position.activeQuantity ?? '—' }}</td>
+              <td>{{ position.freeQuantity ?? '—' }}</td>
+              <td>{{ position.totalQuantity ?? '—' }}</td>
+              <td>{{ position.investedQuote ?? '—' }} {{ position.quoteAsset ?? '' }}</td>
+              <td>{{ position.recovery?.outstandingRecoveryAmount ?? '—' }} {{ position.quoteAsset ?? '' }}</td>
+            </tr>
+          } @empty {
+            <tr><td colspan="6">Harvester reports no Portfolio positions.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+  <div class="table-footnote">The current read model does not provide total account valuation or historical equity performance. Those values are not estimated here.</div>
 </section>
