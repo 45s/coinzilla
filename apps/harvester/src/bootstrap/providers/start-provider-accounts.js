@@ -143,13 +143,15 @@ function collectRuntimeStopErrors({
   result,
   providerInstanceId,
 }) {
-  if (result === undefined || result?.ok === true) {
+  if (result?.ok === true && result?.status === "STOPPED") {
     return []
   }
-  if (Array.isArray(result.errors) && result.errors.length > 0) {
+  if (Array.isArray(result?.errors) && result.errors.length > 0) {
     return result.errors
   }
-  return [new Error(`Provider account ${providerInstanceId} did not confirm shutdown`)]
+  return [new Error(
+    `Provider account ${providerInstanceId} did not confirm STOPPED status`,
+  )]
 }
 
 function collectProcessLockReleaseErrors({
