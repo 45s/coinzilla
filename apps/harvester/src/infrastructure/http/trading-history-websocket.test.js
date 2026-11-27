@@ -563,7 +563,10 @@ test("rejects an oversized application snapshot for its client without stopping 
 
 test("accepts Dashboard WebSocket upgrades from a dynamically selected localhost port", async (t) => {
   const eventBus = new EventBus()
-  const api = await startApi({ t, eventBus })
+  const api = await startApi({
+    t,
+    eventBus,
+  })
   const socket = createConnection({
     host: "127.0.0.1",
     port: api.address.port,
