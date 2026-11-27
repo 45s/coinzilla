@@ -516,7 +516,7 @@ function validateProcessScenarioAdapterOptions({
     throw new TypeError("Process scenario adapter requires strategyId")
   }
   if (typeof spawnSandboxedWorker !== "function") {
-    throw new TypeError("Process scenario adapter requires a worker launcher")
+    throw new TypeError("Process scenario adapter requires a trusted OS sandbox launcher or guarded-simulation worker launcher")
   }
   if (typeof workerPath !== "string" || !workerPath.trim()) {
     throw new TypeError("Process scenario adapter requires workerPath")

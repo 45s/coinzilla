@@ -220,7 +220,10 @@ export async function startTradingHistoryApi({
   const queries = createQueryFacade({ database })
   const runnerHost = createScenarioRunnerHost({
     eventBus,
-    adapters: [createScenarioRunnerAdapter({ env, platform })],
+    adapters: [createScenarioRunnerAdapter({
+      env,
+      platform,
+    })],
     sourceRevision: resolveScenarioRunnerSourceRevision({ env }),
   })
   const server = await openApiServer({
