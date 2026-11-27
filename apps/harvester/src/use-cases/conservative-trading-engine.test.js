@@ -6443,7 +6443,7 @@ test("invalid book updates invalidate the cached book and fail closed", async ()
 })
 
 
-test("an immediately-filled BUY keeps subsequent evaluations in recovery-only mode", async () => {
+test("a fully filled BUY keeps subsequent evaluations in recovery-only mode while its SELL remains open", async () => {
   const observedReferences = []
   const strategyPolicy = {
     evaluate: (input) => {
@@ -6464,18 +6464,44 @@ test("an immediately-filled BUY keeps subsequent evaluations in recovery-only mo
   }
   const harness = await createHarness({
     strategyPolicy,
-    immediateFilledAcknowledgement: true,
-    getAcknowledgedFills: ({ order }) => [makeBuyFill({
-      order,
-      tradeId: `recovery-only-buy-${order.clientOrderId}`,
-      price: order.limitPrice.amount,
-      quantity: order.originalQuantity.amount,
-      quoteQuantity: multiplyDecimal({
-        left: order.limitPrice.amount,
-        right: order.originalQuantity.amount,
-      }),
-    })],
+    accountingApplied: false,
   })
+  const started = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  assert.equal(started.ok, true, started.errors?.[0]?.message)
+  const firstBuy = harness.engine.getOrders().find(({ side }) => side === "BUY")
+  assert.ok(firstBuy)
+  const fill = makeBuyFill({
+    order: firstBuy,
+    tradeId: "recovery-only-buy-fill",
+    price: firstBuy.limitPrice.amount,
+    quantity: firstBuy.originalQuantity.amount,
+    quoteQuantity: multiplyDecimal({
+      left: firstBuy.limitPrice.amount,
+      right: firstBuy.originalQuantity.amount,
+    }),
+  })
+  const fillResult = await harness.engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({
+        order: firstBuy,
+      }),
+      fill,
+    },
+  })
+  assert.equal(fillResult.ok, true, fillResult.errors?.[0]?.message)
+  await harness.engine.evaluateLatest({
+    symbol: "DOGEUSDT",
+  })
+  assert.equal(harness.engine.getOrders().filter(({ side }) => side === "SELL").length, 1)
+  observedReferences.length = 0
 
   for (let index = 0; index < 12; index += 1) {
     const result = await harness.engine.processMarketPrice({
@@ -6483,7 +6509,7 @@ test("an immediately-filled BUY keeps subsequent evaluations in recovery-only mo
       priceEvent: {
         symbol: "DOGEUSDT",
         price: "100",
-        timestamp: index + 1,
+        timestamp: index + 2,
       },
     })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
@@ -6493,12 +6519,9 @@ test("an immediately-filled BUY keeps subsequent evaluations in recovery-only mo
   assert.equal(harness.orders.filter(({ side }) => side === "SELL").length, 1)
   assert.equal(harness.orders.length, 2)
   assert.equal(observedReferences.length, 12)
-  assert.equal(observedReferences[0], null)
-  assert.ok(observedReferences.slice(1).every((price) => price !== null))
+  assert.ok(observedReferences.every((price) => price !== null))
   assert.equal(harness.engine.getPausedMarkets().length, 0)
 })
-
-
 
 
 
