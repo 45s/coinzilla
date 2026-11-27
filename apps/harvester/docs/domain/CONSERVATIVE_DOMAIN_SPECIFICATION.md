@@ -375,7 +375,6 @@ The SAFE_TO_SHUTDOWN marker is a process-local projection, not a durable fact ac
 
 The implementation and deterministic regression tests are tracked by [issue #1186](https://github.com/45s/coinzilla/issues/1186).
 
-
 ### Recovery completion failure evidence
 
 When a Conservative strategy pause is caused by a failed recovery completion or residual-dust evaluation, the immutable `STRATEGY_MARKET_PAUSED` Operational State fact must include the sanitized original error identity (`name`, bounded `message`, and optional stable `code`) alongside the stable pause reason. Do not persist stacks or raw broker payloads. The generic pause reason remains a safety classification; it is not a substitute for the original failure. This evidence improves diagnosis without changing the fail-closed completion or BUY-admission rules.
