@@ -125,9 +125,15 @@ const withExternalOrdersPolicy = (externalOrdersPolicy) => ({
   },
 })
 
+const defaultHarnessEventPublisher = Object.freeze({
+  publish: () => ({ ok: true }),
+  flush: async () => ({ ok: true, durable: true }),
+  flushWrites: async () => ({ ok: true, durable: true }),
+})
+
 function createHarnessEventPublisher({ eventPublisher } = {}) {
   if (!eventPublisher) {
-    return undefined
+    return defaultHarnessEventPublisher
   }
   const flush = typeof eventPublisher.flush === "function"
     ? eventPublisher.flush
