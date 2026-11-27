@@ -146,21 +146,22 @@ These APPLICATION-layer cases exercise the production Recovery Seller runtime/us
 
 | Scenario ID | Claim | Status |
 | --- | --- | --- |
-| `RS-RUNTIME-SELL-SUBMISSION-001` | Normal production-flow SELL submission and reservation | PARTIAL / non-executable |
-| `RS-RUNTIME-SELL-REJECTION-001` | Broker rejection is surfaced and STOP is latched | PARTIAL / non-executable |
-| `RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001` | Failed durable SELL-intent write prevents broker placement and reservation; account BUY admission remains blocked | PARTIAL / non-executable |
-| `RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001` | Broker acknowledgement followed by failed outcome persistence remains unresolved; STOP is latched and SELL reservation retained | PARTIAL / non-executable |
-| `RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001` | Both outcome and STOP writes fail; no durable facts are claimed, SELL reservation is retained, and in-memory BUY admission remains blocked | PARTIAL / non-executable |
-| `RS-RUNTIME-SELL-BROKER-EXCEPTION-001` | Broker placement throws after invocation; UNKNOWN outcome and STOP are persisted, reservation retained, and BUY admission blocked | PARTIAL / non-executable |
-| `RS-RUNTIME-SELL-RESERVATION-FAILURE-001` | Intent is recorded but reservation callback fails; broker is not called, no reservation is retained, STOP and BUY-admission block are asserted | PARTIAL / non-executable |
-| `RS-RUNTIME-SELL-PARTIAL-CANCEL-001` | Partial terminal SELL is reconciled before STOP | PARTIAL / non-executable |
-| `RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001` | Fully FILLED under-target SELL reconciles accounting, pauses the market and latches STOP | PARTIAL / non-executable |
-| `RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001` | Failed account STOP persistence is surfaced and new BUY admission fails closed | PARTIAL / non-executable |
-| `RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001` | STOP blocks new BUY spending while an eligible first recovery SELL remains allowed | PARTIAL / non-executable |
+| `RS-RUNTIME-SELL-SUBMISSION-001` | Normal production-flow SELL submission and reservation | PARTIAL / sandbox-gated simulation |
+| `RS-RUNTIME-SELL-REJECTION-001` | Broker rejection is surfaced and STOP is latched | PARTIAL / sandbox-gated simulation |
+| `RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001` | Failed durable SELL-intent write prevents broker placement and reservation; account BUY admission remains blocked | PARTIAL / sandbox-gated simulation |
+| `RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001` | Broker acknowledgement followed by failed outcome persistence remains unresolved; STOP is latched and SELL reservation retained | PARTIAL / sandbox-gated simulation |
+| `RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001` | Both outcome and STOP writes fail; no durable facts are claimed, SELL reservation is retained, and in-memory BUY admission remains blocked | PARTIAL / sandbox-gated simulation |
+| `RS-RUNTIME-SELL-BROKER-EXCEPTION-001` | Broker placement throws after invocation; UNKNOWN outcome and STOP are persisted, reservation retained, and BUY admission blocked | PARTIAL / sandbox-gated simulation |
+| `RS-RUNTIME-SELL-RESERVATION-FAILURE-001` | Intent is recorded but reservation callback fails; broker is not called, no reservation is retained, STOP and BUY-admission block are asserted | PARTIAL / sandbox-gated simulation |
+| `RS-RUNTIME-SELL-PARTIAL-CANCEL-001` | Partial terminal SELL is reconciled before STOP | PARTIAL / sandbox-gated simulation |
+| `RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001` | Fully FILLED under-target SELL reconciles accounting, pauses the market and latches STOP | PARTIAL / sandbox-gated simulation |
+| `RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001` | Failed durable terminal reconciliation preserves FILLED status and sole-SELL reservation, latches STOP and blocks account admission | PARTIAL / sandbox-gated simulation |
+| `RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001` | Failed account STOP persistence is surfaced and new BUY admission fails closed | PARTIAL / sandbox-gated simulation |
+| `RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001` | STOP blocks new BUY spending while an eligible first recovery SELL remains allowed | PARTIAL / sandbox-gated simulation |
 
 **Automated test:** `apps/harvester/src/infrastructure/scenario-runner/rs-scenario-adapter.test.js`.
 
-**Coverage boundary:** these runtime integration scenarios do not count as domain scenario-suite coverage under issue #1780 and do not mark RS-009 VERIFIED. The broker and operational-state store are simulated/run-local; these tests do not prove production durability, trusted OS isolation, build attestation or live-account safety. Keep the runtime catalogue PARTIAL and non-executable until the Scenario Runner production-adapter and sandbox gates are met.
+**Coverage boundary:** these runtime integration scenarios do not count as domain scenario-suite coverage under issue #1780 and do not mark RS-009 VERIFIED. The broker and operational-state store are simulated/run-local; these tests do not prove production durability, trusted OS isolation, build attestation or live-account safety. Keep the runtime catalogue PARTIAL; isolated simulation is executable only through the explicitly configured and verified Linux process adapter. Production acceptance remains gated by durable operational state, trusted build provenance/exact replay, and successful adversarial real-host sandbox E2E.
 
 ### Shared packages
 
