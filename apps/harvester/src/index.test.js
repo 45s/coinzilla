@@ -1667,42 +1667,50 @@ const createProcessProvenanceIdentity = () => ({
   apiSecret: "must-not-be-copied",
 })
 
-const captureProcessProvenanceScenario = async () => {
+function createProcessProvenanceScenarioContext() {
   const operations = []
   const events = []
   const contexts = []
   const processIdentity = createProcessProvenanceIdentity()
+  return {
+    operations,
+    events,
+    contexts,
+    processIdentity,
+    eventBus: createProvenanceEventBus({ events, operations }),
+    logger: createProvenanceLogger({ contexts, operations }),
+  }
+}
+
+const captureProcessProvenanceScenario = async () => {
+  const scenario = createProcessProvenanceScenarioContext()
   let journalFlushCalls = 0
   let journalWriteFlushCalls = 0
-  const eventBus = createProvenanceEventBus({
-    events,
-    operations,
-  })
-  const logger = createProvenanceLogger({
-    contexts,
-    operations,
-  })
 
   await main({
-    processIdentity,
-    logger,
+    processIdentity: scenario.processIdentity,
+    logger: scenario.logger,
     createEventBus: () => {
-      operations.push("eventBus.create")
-      return eventBus
+      scenario.operations.push("eventBus.create")
+      return scenario.eventBus
     },
     acquireProcessLock: async () => {
-      operations.push("processLock.acquire")
-      return { ok: true,
-        release: async () => ({ ok: true,
-          released: true }) }
+      scenario.operations.push("processLock.acquire")
+      return {
+        ok: true,
+        release: async () => ({
+          ok: true,
+          released: true,
+        }),
+      }
     },
     createJournalService: () => createProvenanceJournal({
-      operations,
+      operations: scenario.operations,
       onFlush: () => { journalFlushCalls += 1 },
       onWriteFlush: () => { journalWriteFlushCalls += 1 },
     }),
     start: async ({ eventPublisher }) => {
-      operations.push("runtime.start")
+      scenario.operations.push("runtime.start")
       await eventPublisher.flush()
       const writeFlushResult = await eventPublisher.flushWrites()
       assert.equal(writeFlushResult.ok, true, "The process publisher must expose the Journal write-only flush.")
@@ -1713,10 +1721,10 @@ const captureProcessProvenanceScenario = async () => {
         strategyMode: "read-only",
         subscriptions: [],
         stop: async () => ({
-        ok: true,
-        status: "STOPPED",
-        data: { durableProcessStopAcknowledged: true },
-      }),
+          ok: true,
+          status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
+        }),
       }
     },
     registerSignalHandler: () => {},
@@ -1725,9 +1733,9 @@ const captureProcessProvenanceScenario = async () => {
     },
   })
   return {
-    operations,
-    events,
-    contexts,
+    operations: scenario.operations,
+    events: scenario.events,
+    contexts: scenario.contexts,
     journalFlushCalls,
     journalWriteFlushCalls,
   }
