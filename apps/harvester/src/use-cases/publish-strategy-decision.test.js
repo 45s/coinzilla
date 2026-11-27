@@ -98,7 +98,7 @@ test("keeps residual notional distinct from a zero exchange-rounded candidate no
   const dependencies = createCandidateNotionalDependencies({ events })
   const context = createCandidateNotionalContext()
 
-  publishStrategyDecision({
+  await publishStrategyDecision({
     dependencies,
     context,
   })
