@@ -1,4 +1,6 @@
-# AI Task — Diagnose and Fix Harvester User-Data Stream Recovery
+# DEFERRED / SECONDARY — AI Task: Harvester User-Data Stream Recovery
+
+> **Current priority (2026-11-27): DEFERRED.** This historical task is not the active P0 and must not be implemented, expanded, or used to block the trading-first fix. The only active P0 is correct current-process trading. Resume this task only after trading is correct and the operator explicitly reprioritizes it.
 
 **Repository:** `45s/coinzilla`  
 **Application:** `apps/harvester`  
