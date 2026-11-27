@@ -1532,6 +1532,40 @@ function evaluateIncidentResidual({
   })
 }
 
+function evaluateDogeIncidentResidualAtFilters({ quantityIncrement, minQuantity, minNotional } = {}) {
+  const { portfolio, recoveryLedger, metadata } = createDogeIncidentResidualScenario()
+  const incidentMarketMetadata = {
+    ...metadata,
+    tradingRules: {
+      constraints: metadata.tradingRules.constraints.map((rule) => {
+        if (rule.type === "QUANTITY_INCREMENT") {
+          return { ...rule,
+            value: { amount: quantityIncrement } }
+        }
+        if (rule.type === "MIN_QUANTITY") {
+          return { ...rule,
+            value: { amount: minQuantity } }
+        }
+        if (rule.type === "MIN_NOTIONAL") {
+          return { ...rule,
+            value: { amount: minNotional } }
+        }
+        return rule
+      }),
+    },
+  }
+  return evaluateIncidentResidual({
+    symbol: "DOGEUSDT",
+    price: "0.05719",
+    keepQuantity: 1,
+    orderQuantity: 400,
+    portfolio,
+    recoveryLedger,
+    incidentMarketMetadata,
+    lastBuyPrice: "0.0569",
+  })
+}
+
 test("sells the fee-reserved 1.7 DOGE quantity from the incident 2.8 DOGE residual under explicit sellable test filters", () => {
   const { portfolio, recoveryLedger, metadata } = createDogeIncidentResidualScenario()
   const position = portfolio.getPosition({ symbol: "DOGEUSDT" })
@@ -1574,6 +1608,45 @@ test("sells the fee-reserved 1.7 DOGE quantity from the incident 2.8 DOGE residu
   assert.equal(completion.eligible, false)
   assert.equal(completion.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH")
   assert.equal(completion.freeQuantity, "0")
+})
+
+test("classifies a residual below MIN_QUANTITY without fabricating a recovery SELL", () => {
+  const decision = evaluateDogeIncidentResidualAtFilters({
+    quantityIncrement: "0.1",
+    minQuantity: "1.8",
+    minNotional: "0.05",
+  })
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
+  assert.equal(decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST")
+  assert.equal(decision.inventoryDisposition.reason, "MIN_QUANTITY")
+  assert.equal(decision.inventoryDisposition.quantity, "1.8")
+})
+
+test("sells the residual exactly at the MIN_QUANTITY boundary", () => {
+  const decision = evaluateDogeIncidentResidualAtFilters({
+    quantityIncrement: "0.1",
+    minQuantity: "1.7",
+    minNotional: "0.05",
+  })
+  assert.equal(decision.actions.find((action) => action.side === "SELL")?.quantity, "1.7")
+})
+
+test("sells the residual exactly at the QUANTITY_INCREMENT boundary", () => {
+  const decision = evaluateDogeIncidentResidualAtFilters({
+    quantityIncrement: "1.7",
+    minQuantity: "0.1",
+    minNotional: "0.05",
+  })
+  assert.equal(decision.actions.find((action) => action.side === "SELL")?.quantity, "1.7")
+})
+
+test("sells the residual exactly at the MIN_NOTIONAL boundary", () => {
+  const decision = evaluateDogeIncidentResidualAtFilters({
+    quantityIncrement: "0.1",
+    minQuantity: "0.1",
+    minNotional: "0.097223",
+  })
+  assert.equal(decision.actions.find((action) => action.side === "SELL")?.quantity, "1.7")
 })
 
 test("classifies the incident 2.8 DOGE residual as dust only with explicit minimum-notional test filters", () => {
