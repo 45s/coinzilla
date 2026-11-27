@@ -108,76 +108,87 @@ function getConservativeRecoverySellReservationBlocker({
   })
 }
 
-function getConservativeRecoveryCycleBuyBlocker({
-  symbol,
-  order,
-  purpose,
-  ownership,
-  dependencies,
-} = {}) {
-  if (order.side !== "BUY" ||
-      purpose === "RECOVERY_BUY" ||
-      ownership?.strategyId === StrategyId.RECOVERY_SELLER) {
-    return null
-  }
+function isConservativeBuyAdmissionCandidate({ order, purpose, ownership } = {}) {
+  return order.side === "BUY" &&
+    purpose !== "RECOVERY_BUY" &&
+    ownership?.strategyId !== StrategyId.RECOVERY_SELLER
+}
+
+function readConservativeRecoveryAdmissionSnapshot({ dependencies, order, symbol } = {}) {
   if (typeof dependencies.getPortfolio !== "function" ||
       typeof dependencies.getRecoveryLedger !== "function") {
-    return defer({
-      symbol,
-      reason: "CONSERVATIVE_RECOVERY_STATE_UNAVAILABLE",
-    })
+    return { ok: false }
   }
-
-  let position
-  let recoveryLedger
   try {
     const portfolio = dependencies.getPortfolio()
     if (typeof portfolio?.getPosition !== "function") {
-      return defer({
-        symbol,
-        reason: "CONSERVATIVE_RECOVERY_STATE_UNAVAILABLE",
-      })
+      return { ok: false }
     }
-    position = portfolio.getPosition({
-      marketId: order.market.id,
-      symbol,
-      strategyId: StrategyId.COIN_GRABBER,
-    })
-    recoveryLedger = dependencies.getRecoveryLedger({
-      marketId: order.market.id,
-    })
+    return {
+      ok: true,
+      position: portfolio.getPosition({
+        marketId: order.market.id,
+        symbol,
+        strategyId: StrategyId.COIN_GRABBER,
+      }),
+      recoveryLedger: dependencies.getRecoveryLedger({
+        marketId: order.market.id,
+      }),
+    }
   } catch {
-    return defer({
-      symbol,
-      reason: "CONSERVATIVE_RECOVERY_STATE_UNAVAILABLE",
-    })
+    return { ok: false }
   }
+}
 
+function hasUnresolvedConservativeRecoveryCycle({ position, recoveryLedger } = {}) {
   const activeQuantity = position?.quantity?.amount ?? "0"
   const positionSpent = position?.spent?.amount ?? "0"
   const ledgerBuyCost = recoveryLedger?.buyCost ?? "0"
   const netSellProceeds = recoveryLedger?.netSellProceeds ?? "0"
+  return compareDecimal({ left: activeQuantity, right: "0" }) > 0 ||
+    compareDecimal({ left: positionSpent, right: "0" }) > 0 ||
+    compareDecimal({ left: ledgerBuyCost, right: "0" }) > 0 ||
+    compareDecimal({ left: netSellProceeds, right: "0" }) > 0
+}
+
+function getConservativeRecoveryCycleBuyBlocker(context = {}) {
+  const { symbol, order, purpose, ownership, dependencies } = context
+  if (!isConservativeBuyAdmissionCandidate({ order, purpose, ownership })) {
+    return null
+  }
+  const snapshot = readConservativeRecoveryAdmissionSnapshot({
+    dependencies,
+    order,
+    symbol,
+  })
+  if (!snapshot.ok) {
+    return defer({
+      symbol,
+      reason: "CONSERVATIVE_RECOVERY_STATE_UNAVAILABLE",
+    })
+  }
+  let unresolved
   try {
-    const recoveryCycleUnresolved =
-      compareDecimal({ left: activeQuantity, right: "0" }) > 0 ||
-      compareDecimal({ left: positionSpent, right: "0" }) > 0 ||
-      compareDecimal({ left: ledgerBuyCost, right: "0" }) > 0 ||
-      compareDecimal({ left: netSellProceeds, right: "0" }) > 0
-    if (!recoveryCycleUnresolved) {
-      return null
-    }
+    unresolved = hasUnresolvedConservativeRecoveryCycle(snapshot)
   } catch {
     return defer({
       symbol,
       reason: "CONSERVATIVE_RECOVERY_STATE_UNAVAILABLE",
     })
   }
-
+  if (!unresolved) {
+    return null
+  }
+  const activeQuantity = snapshot.position?.quantity?.amount ?? "0"
+  const positionSpent = snapshot.position?.spent?.amount ?? "0"
+  const netSellProceeds = snapshot.recoveryLedger?.netSellProceeds ?? "0"
   return defer({
     symbol,
     reason: "CONSERVATIVE_RECOVERY_CYCLE_ACTIVE",
     details: {
-      ...(position?.positionId ? { positionId: position.positionId } : {}),
+      ...(snapshot.position?.positionId
+        ? { positionId: snapshot.position.positionId }
+        : {}),
       activeQuantity,
       positionSpent,
       netSellProceeds,
