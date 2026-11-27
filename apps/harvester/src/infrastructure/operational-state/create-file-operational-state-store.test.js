@@ -437,6 +437,36 @@ test("fails closed after the fact stream is synced but before its manifest check
   )
 })
 
+test("classifies ledger integrity failures separately from uncertain append acknowledgements", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const initializedStore = createStore(directory)
+  const initialized = await initializedStore.initialize()
+  assert.equal(initialized.ok, true, "The isolated store must initialize before its manifest is made stale.")
+  const appended = await initializedStore.append(operatorPause())
+  assert.equal(appended.ok, true, "The fixture must contain one committed non-genesis fact.")
+
+  const manifestPath = path.join(directory, "manifest.jsonl")
+  const manifestLines = await readLines(manifestPath)
+  await writeFile(manifestPath, `${manifestLines[0]}\\n`)
+
+  const verification = await createStore(directory).verify()
+  assert.equal(verification.ok, false, "Verification must reject a fact stream that is ahead of its manifest.")
+  assert.equal(
+    verification.errors[0].code,
+    "DURABLE_FACTS_INTEGRITY_FAILED",
+    "A fresh verifier must report ledger inconsistency, not misclassify it as this process's uncertain append.",
+  )
+
+  const history = await createStore(directory).readAll()
+  assert.equal(history.ok, false, "History reads must reject the same uncommitted fact.")
+  assert.equal(
+    history.errors[0].code,
+    "DURABLE_FACTS_INTEGRITY_FAILED",
+    "A fresh history reader must preserve the integrity-failure classification.",
+  )
+})
+
 test("does not acknowledge a fact when its manifest checkpoint cannot be appended", async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true,
