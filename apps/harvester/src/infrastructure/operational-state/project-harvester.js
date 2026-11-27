@@ -548,6 +548,41 @@ function hasStructuredOperatorActionMetadata(data) {
   ].some((value) => value !== undefined)
 }
 
+
+function validateStructuredRecoverySellerStopResolution({
+        raisedBlocker,
+        resolution,
+      }) {
+  const validOperator = typeof resolution.operatorId === "string" &&
+    /^[A-Za-z0-9][A-Za-z0-9._@-]{2,127}$/.test(resolution.operatorId) &&
+    resolution.operatorAuthMethod === "OS_ACCOUNT"
+  const validAction = typeof resolution.actionId === "string" &&
+    /^[A-Za-z0-9][A-Za-z0-9._:@-]{7,127}$/.test(resolution.actionId) &&
+    resolution.resolvedBy === `operator:${resolution.operatorId}:${resolution.actionId}`
+  const validReason = typeof resolution.resolutionReason === "string" &&
+    resolution.resolutionReason.trim() === resolution.resolutionReason &&
+    resolution.resolutionReason.length >= 8 &&
+    resolution.resolutionReason.length <= 512 &&
+    !resolution.resolutionReason.split("").some((character) => {
+      const code = character.charCodeAt(0)
+      return code < 32 || code === 127
+    })
+  const validBlockerSet = Array.isArray(resolution.actionBlockerIds) &&
+    resolution.actionBlockerIds.length === 1 &&
+    resolution.actionBlockerIds[0] === raisedBlocker.blockerId
+  if (!validOperator || !validAction || !validReason || !validBlockerSet) {
+    throw new Error("Recovery Seller STOP resolution requires structured authenticated OS-account action metadata")
+  }
+}
+
+function validateLegacyRecoverySellerStopResolution(resolution) {
+  const validLegacyActor = typeof resolution.resolvedBy === "string" &&
+    /^operator:[A-Za-z0-9][A-Za-z0-9._@-]{2,127}:[A-Za-z0-9][A-Za-z0-9._:@-]{7,127}$/.test(resolution.resolvedBy)
+  if (!validLegacyActor) {
+    throw new Error("Legacy Recovery Seller STOP resolution requires its dedicated operator-action identity")
+  }
+}
+
 function validateSafetyBlockerResolutionOwnership({ raisedBlocker, resolution }) {
   const isRecoverySellerStopReason = raisedBlocker.reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
   const isRecoverySellerStop = isRecoverySellerStopReason &&
@@ -558,8 +593,16 @@ function validateSafetyBlockerResolutionOwnership({ raisedBlocker, resolution })
     throw new Error("Recovery Seller STOP reason has ambiguous producer provenance and must remain blocking")
   }
   if (isRecoverySellerStop) {
-    if (resolution.resolution !== "OPERATOR_ACTION" || hasOperatorMetadata) {
+    if (resolution.resolution !== "OPERATOR_ACTION") {
       throw new Error("Recovery Seller STOP must remain exclusively owned by its operator-action resolver")
+    }
+    if (hasOperatorMetadata) {
+      validateStructuredRecoverySellerStopResolution({
+        raisedBlocker,
+        resolution,
+      })
+    } else {
+      validateLegacyRecoverySellerStopResolution(resolution)
     }
     return
   }
@@ -575,7 +618,6 @@ function validateSafetyBlockerResolutionOwnership({ raisedBlocker, resolution })
     throw new Error("Operator-action resolution is restricted to account-wide user-data blockers and Recovery Seller STOP")
   }
 }
-
 function handleSafetyBlockerResolvedFact({ record, state }) {
   requireKnownOperationalSession({
     record,
