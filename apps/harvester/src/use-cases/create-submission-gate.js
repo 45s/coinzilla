@@ -151,10 +151,52 @@ function hasUnresolvedConservativeRecoveryCycle({ position, recoveryLedger } = {
     compareDecimal({ left: netSellProceeds, right: "0" }) > 0
 }
 
+function getActiveConservativeRecoverySell({ state, order } = {}) {
+  const registry = state?.registry
+  if (typeof registry?.getActiveOrders !== "function" ||
+      typeof registry.getOwnership !== "function") {
+    return null
+  }
+  return registry.getActiveOrders({
+    marketId: order.market.id,
+  }).find((candidate) => {
+    if (candidate.side !== "SELL") {
+      return false
+    }
+    const ownership = registry.getOwnership({
+      clientOrderId: candidate.clientOrderId,
+      brokerOrderId: candidate.brokerOrderId,
+      marketId: candidate.market.id,
+    })
+    return ownership?.strategyId === StrategyId.COIN_GRABBER
+  }) ?? null
+}
+
 function getConservativeRecoveryCycleBuyBlocker(context = {}) {
-  const { symbol, order, purpose, ownership, dependencies } = context
+  const {
+    symbol,
+    order,
+    purpose,
+    ownership,
+    dependencies,
+    state,
+  } = context
   if (!isConservativeBuyAdmissionCandidate({ order, purpose, ownership })) {
     return null
+  }
+  const activeRecoverySell = getActiveConservativeRecoverySell({
+    state,
+    order,
+  })
+  if (activeRecoverySell) {
+    return defer({
+      symbol,
+      reason: "CONSERVATIVE_RECOVERY_CYCLE_ACTIVE",
+      details: {
+        activeRecoverySellClientOrderId: activeRecoverySell.clientOrderId,
+        activeRecoverySellStatus: activeRecoverySell.status,
+      },
+    })
   }
   const snapshot = readConservativeRecoveryAdmissionSnapshot({
     dependencies,

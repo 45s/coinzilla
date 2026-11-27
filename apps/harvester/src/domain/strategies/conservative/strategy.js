@@ -789,6 +789,7 @@ function canPlaceStandingBuy({
       right: "0",
     }) > 0
   return !context.hasActiveBuy &&
+    !context.hasActiveSell &&
     !context.hasUnacknowledgedRecoverySell &&
     !recoveryCycleUnresolved &&
     inventoryDisposition?.status !== "PRICE_FILTER_BLOCKED"
