@@ -963,7 +963,7 @@ async function startTradingHistoryApiService({ options, resources, database, env
         logger: options.logger,
         level: "info",
         details: {
-          message: "Harvester trading-history API started.",
+          message: "Harvester local API started.",
           environment,
           host: service.address.address,
           port: service.address.port,
@@ -975,7 +975,7 @@ async function startTradingHistoryApiService({ options, resources, database, env
       logger: options.logger,
       level: "error",
       details: {
-        message: "Harvester trading-history API startup failed; trading will continue without the optional API.",
+        message: "Harvester local API startup failed; trading will continue without the optional API.",
         errorName: error?.name ?? "Error",
         errorCode: error?.code ?? "HARVESTER_TRADING_HISTORY_API_STARTUP_FAILED",
       },
@@ -994,11 +994,10 @@ async function startOptionalTradingHistoryApi({ options, resources, runtime } = 
       logger: options.logger,
       level: "warn",
       details: {
-        message: "Harvester trading-history API is not started because relational history persistence is unavailable.",
+        message: "Relational trading-history persistence is unavailable; the local runtime API will start with persisted-history routes returning HTTP 503.",
         environment: environment ?? "unknown",
       },
     })
-    return
   }
   await startTradingHistoryApiService({
     options,
