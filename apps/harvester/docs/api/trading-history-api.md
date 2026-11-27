@@ -43,7 +43,7 @@ The `HARVESTER_API_PORT` setting can change the listener port. The host is fixed
 
 The HTTP and WebSocket endpoints have no authentication. This is a deliberate local-only tradeoff for a single-user development machine, not a production or remote-host configuration. The listener is fixed to loopback, HTTP CORS, WebSocket upgrades, and operator commands accept only HTTP origins on exact `localhost` or `127.0.0.1` hosts, on any valid port. External and LAN origins remain rejected. Do not expose this listener through a reverse proxy, container port mapping, LAN interface, or public host.
 
-The API remains read-only: it exposes persisted history and does not submit, cancel, or modify exchange orders.
+Persisted-history resources are read-only. The same local server also exposes the existing operator-control contract, limited to explicit BUY pause/resume commands; it does not submit or cancel exchange orders.
 
 ## Versioned resources
 
