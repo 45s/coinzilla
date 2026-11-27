@@ -8,8 +8,8 @@ const test = (...args) => {
   return nodeTest(`[create-conservative-shutdown-participant.test.js] ${name}`, ...testArgs)
 }
 
-function createFakeEngineState() {
-  const markets = new Map(["DOGEUSDT", "SOLUSDT"].map((symbol) => [
+function createFakeEngineState({ symbols = ["DOGEUSDT", "SOLUSDT"] } = {}) {
+  const markets = new Map(symbols.map((symbol) => [
     symbol,
     {
       symbol,
@@ -147,8 +147,8 @@ function createFakeEngineSafetyOperations({ calls, unsafeSymbols, onAudit, marke
     },
   }
 }
-function createFakeEngine({ calls = [], unsafeSymbols = [], onAudit } = {}) {
-  const { markets, state, snapshot, invalidate } = createFakeEngineState()
+function createFakeEngine({ calls = [], unsafeSymbols = [], onAudit, symbols } = {}) {
+  const { markets, state, snapshot, invalidate } = createFakeEngineState({ symbols })
   return {
     beginShutdown() {
       calls.push("buy-gate")
@@ -438,6 +438,86 @@ test("keeps recovery-input failures separate from owned order and fill reconcili
     2,
     "Both required owned-order reconciliation passes must complete before the independent recovery-input failure.",
   )
+})
+
+function countRecoveryInputCalls({ calls, symbol } = {}) {
+  const expectedCall = `recovery-input:${symbol}`
+  return calls.filter((call) => call === expectedCall).length
+}
+
+function assertFourMarketRecoveryInputBlockers({ error, symbols } = {}) {
+  const diagnostics = error?.shutdownDiagnostics?.markets ?? []
+  assert.deepEqual(
+    diagnostics.map(({ symbol }) => symbol),
+    symbols,
+    "Shutdown diagnostics must preserve every configured market in deterministic order.",
+  )
+  for (const symbol of symbols) {
+    const blockers = getMarketBlockersFromShutdownError({
+      error,
+      symbol,
+    })
+    assert.ok(
+      hasBlockerWithPrefix({
+        blockers,
+        prefix: "RECOVERY_SELL_RECONCILIATION:SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE:MARKET_PRICE_UNAVAILABLE",
+      }),
+      `The recovery-input blocker must remain attributable to ${symbol}.`,
+    )
+    assert.equal(
+      blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"),
+      false,
+      `A missing recovery input must not be mislabeled as order/fill reconciliation failure for ${symbol}.`,
+    )
+  }
+  return true
+}
+
+test("retains recovery-input blockers independently for all four configured markets", async () => {
+  const symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT"]
+  const calls = []
+  const engine = createFakeEngine({
+    calls,
+    symbols,
+  })
+  engine.reconcileRecoverySellsForShutdown = async ({ symbols: requestedSymbols } = {}) => {
+    const [symbol] = requestedSymbols
+    calls.push(`recovery-input:${symbol}`)
+    return {
+      ok: false,
+      errors: [Object.assign(
+        new Error(`Shutdown recovery input is unavailable for ${symbol}: MARKET_PRICE_UNAVAILABLE`),
+        {
+          code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
+          reason: "MARKET_PRICE_UNAVAILABLE",
+          symbol,
+        },
+      )],
+    }
+  }
+  const participant = createParticipant({
+    engine,
+    calls,
+  })
+
+  participant.beginShutdown()
+  await assert.rejects(
+    participant.waitUntilSafe(),
+    (error) => assertFourMarketRecoveryInputBlockers({
+      error,
+      symbols,
+    }),
+  )
+
+  assert.deepEqual(
+    symbols.map((symbol) => countRecoveryInputCalls({
+      calls,
+      symbol,
+    })),
+    [1, 1, 1, 1],
+    "Every configured market must be attempted even when each market reports unavailable recovery input.",
+  )
+  assert.equal(participant.isSafeToShutdown(), false)
 })
 
 test("keeps stale recovery-price coverage separate from owned order and fill reconciliation", async () => {
