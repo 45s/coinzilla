@@ -35,16 +35,15 @@ The source-backed [2026-11-26 reliability baseline report](docs/audits/reports/2
 
 ## Scenario Runner / GC Strategy Lab
 
-Foundation [PR #1837](https://github.com/45s/coinzilla/pull/1837) is merged. It does **not** make the Scenario Runner production-ready or executable.
+Foundation [PR #1837](https://github.com/45s/coinzilla/pull/1837) is merged. [PR #1913](https://github.com/45s/coinzilla/pull/1913) composes the simulation-only RS process adapter behind the explicitly enabled Linux Bubblewrap/prlimit sandbox.
 
-The current [Runner roadmap](../../apps/dashboard/docs/features/gc-strategy-lab/RUNNER_ROADMAP.md) remains the feature-specific plan. Keep execution blocked until:
+The current [Runner roadmap](../../apps/dashboard/docs/features/gc-strategy-lab/RUNNER_ROADMAP.md) is the feature-specific plan. The current boundary is:
 
-- production user-data event transition and terminal-fill reconciliation are exercised for profitable partial CANCELED and adverse fully FILLED SELLs in [PR #1887](https://github.com/45s/coinzilla/pull/1887);
-- under-target FILLED SELL STOP, STOP-persistence failure, and STOP buy-only admission runtime scenarios are merged in PR #1887; PR #1913 adds test-first SELL-intent, acknowledged-outcome, combined outcome/STOP persistence, and ambiguous broker-placement exception and sole-SELL reservation callback failure scenarios. Broader infrastructure-failure scenarios remain outstanding;
-- a trusted OS-level sandbox and matching attestation are available and verified;
-- source/build/runtime/input replay provenance and exact-head checks are complete.
-
-Current scenarios use simulated infrastructure and run-local state. No real broker/exchange access, credentials, live account state, or production persistence is authorized.
+- Simulation execution is enabled only when `HARVESTER_SCENARIO_SANDBOX=linux-bubblewrap` is explicitly configured and the host passes trusted executable, namespace/seccomp and delegated cgroup v2 checks. Unverified hosts remain fail-closed.
+- PR #1887 covers the under-target FILLED SELL STOP, STOP-persistence failure and BUY-only STOP admission runtime scenarios.
+- PR #1913 adds five infrastructure-failure runtime scenarios: intent persistence, acknowledged outcome persistence, combined outcome/STOP persistence, ambiguous broker placement and sole-SELL reservation callback failure.
+- Runtime scenarios remain PARTIAL and simulation-only. They use run-local simulated broker and in-memory operational state; no real broker/exchange access, credentials, live account state or production persistence is authorized.
+- Remaining acceptance: manual adversarial E2E on a trusted delegated-cgroup Linux runner, production operational-state durability, trusted build-artifact provenance/exact replay, and broader terminal-reconciliation persistence plus retry/idempotency scenario coverage. Existing order-event tests include duplicate-fill regression coverage, but that does not substitute for the remaining runner-specific matrix.
 
 ## Recently merged fixes — follow up only through their open acceptance/evidence issues
 
@@ -63,15 +62,11 @@ Current scenarios use simulated infrastructure and run-local state. No real brok
 
 - Recovery Seller non-FILLED terminal SELLs require a durable account STOP after canonical fill reconciliation. Partial CANCELED/EXPIRED and zero-fill REJECTED outcomes remain unresolved under the account-wide STOP; canonical terminal accounting may release the terminal order reservation after all fills are reconciled. Profitable partial proceeds do not relax the STOP rule.
 
-
-
 ## Scenario Runner Linux sandbox implementation — 2026-11-27
 
 PR #1913 now composes the RS simulation-only process adapter behind explicit `HARVESTER_SCENARIO_SANDBOX=linux-bubblewrap`. The launcher verifies trusted Bubblewrap/prlimit/shell/Node binaries and capabilities, then applies user/network/PID/IPC/UTS namespaces, seccomp network/child-process restrictions, a read-only runtime allowlist, a trusted Node installation directory bound read-only at its canonical host path, worker IPC preservation, RLIMIT_CPU, and a per-run delegated cgroup v2 (256 MiB hard memory, swap disabled, one CPU quota, 64 pids/threads). The API remains fail-closed when the host lacks delegated cgroup controllers or any binary/capability check fails.
 
 Runtime scenarios are eligible for isolated simulation only; they remain PARTIAL and are not production-accepted. Required remaining gates: end-to-end adversarial OS isolation acceptance on a trusted delegated Linux runner, trusted build-artifact provenance/replay, production operational-state persistence acceptance, and the independent RS lifecycle correction in issue #1842.
-
-
 
 ## Linux sandbox adversarial acceptance harness — 2026-11-27
 
