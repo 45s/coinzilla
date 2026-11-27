@@ -110,6 +110,11 @@ export const CONSERVATIVE_REQUIREMENTS = Object.freeze([
     title: "Recovery SELL terminal outcomes trigger only evidence-backed replacement or completion.",
   },
   {
+    id: "CON-SPEC-5.4",
+    section: "5",
+    title: "Unknown cancellation outcomes, incomplete terminal fill history, or inconsistent commissions fail closed and block recovery SELL replacement.",
+  },
+  {
     id: "CON-SPEC-6.1",
     section: "6",
     title: "Recovery completion requires the specified profit, inventory, and terminal-order conditions.",
