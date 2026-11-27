@@ -309,3 +309,51 @@ test("Scenario Runner host marks runtime simulation executable only with a verif
   await host.runner.close()
   await eventBus.close()
 })
+
+
+test("enables the local simulation worker on Windows without Linux sandbox configuration", async () => {
+  const eventBus = new EventBus()
+  let serverInput
+  const service = await startTradingHistoryApi({
+    database: createDatabase(),
+    eventBus,
+    platform: "win32",
+    env: {
+      TRADING_MODE: "testnet",
+      COINZILLA_SOURCE_REVISION: "d".repeat(40),
+    },
+    logger: { info() {} },
+    startServer: async (input) => {
+      serverInput = input
+      return {
+        address: { address: "127.0.0.1", port: 4201 },
+        close: async () => {},
+      }
+    },
+  })
+
+  try {
+    const scenario = serverInput.scenarioRunnerCatalog
+      .find((strategy) => strategy.strategyId === "RS")
+      .scenarios.find((item) => item.id === "RS-RUNTIME-SELL-SUBMISSION-001")
+    assert.equal(scenario.executable, true,
+      "Windows local composition must expose the trusted simulation-only runtime scenario without Linux tooling.")
+    assert.equal(scenario.executionStatus, "EXECUTABLE",
+      "The Windows local simulation path must be executable rather than Linux-sandbox blocked.")
+    const accepted = serverInput.scenarioRunner.submit({
+      strategyId: "RS",
+      scenarioId: scenario.id,
+      input: scenario.defaultInput,
+    })
+    const result = await serverInput.scenarioRunner.waitForRun(accepted.runId)
+    assert.equal(result.status, "Completed",
+      "The Windows local worker must complete a production-flow scenario in a separate process.")
+    assert.equal(result.output.passed, true,
+      "The Windows local worker must return the production runtime scenario assertions.")
+    assert.equal(result.replayProvenance.verified, false,
+      "Local simulation execution must not imply trusted exact-replay provenance.")
+  } finally {
+    await service.close()
+    await eventBus.close()
+  }
+})
