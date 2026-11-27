@@ -11,13 +11,12 @@ import {
   statSync as statSyncNative,
   writeFileSync as writeFileSyncNative,
 } from "node:fs"
-import { join, posix, relative, resolve } from "node:path"
+import { basename, dirname, join, posix, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const DEFAULT_MAX_OUTPUT_BYTES = 1_048_576
 const SANDBOX_ROOT = "/workspace/coinzilla"
 const CGROUP_ROOT = "/sys/fs/cgroup"
-const SANDBOX_NODE_EXECUTABLE = "/usr/bin/node"
 const MEMORY_ADDRESS_SPACE_LIMIT_BYTES = 8_589_934_592
 const CPU_QUOTA_MICROSECONDS = 100_000
 const CPU_PERIOD_MICROSECONDS = 100_000
@@ -128,8 +127,20 @@ export function buildScenarioSeccompFilter({ arch = process.arch } = {}) {
   return Buffer.concat(buildFilterInstructions(syscalls))
 }
 
+function verifyTrustedExecutableDirectories({ path, statSync }) {
+  let directory = dirname(path)
+  while (directory !== "/") {
+    const stat = statSync(directory)
+    if (!stat.isDirectory() || stat.uid !== 0 || (stat.mode & 0o022) !== 0) {
+      throw new Error(`Sandbox executable parent directory is not trusted: ${directory}`)
+    }
+    directory = dirname(directory)
+  }
+}
+
 function verifyTrustedExecutable({ path, realpathSync, statSync, readFileSync }) {
   const canonicalPath = realpathSync(path)
+  verifyTrustedExecutableDirectories({ path: canonicalPath, statSync })
   const stat = statSync(canonicalPath)
   if (!stat.isFile() || stat.uid !== 0 || (stat.mode & 0o022) !== 0) {
     throw new Error(`Sandbox executable is not a trusted root-owned, non-writable file: ${path}`)
@@ -489,6 +500,30 @@ function resolveSandboxWorkerPath({ workerPath, repositoryRoot }) {
   return posix.join(SANDBOX_ROOT, relativeWorkerPath.split("\\").join("/"))
 }
 
+function nodeRuntimeBindDirectory({ nodeExecutable }) {
+  const executableDirectory = dirname(nodeExecutable)
+  return basename(executableDirectory) === "bin"
+    ? dirname(executableDirectory)
+    : executableDirectory
+}
+
+function addNodeRuntimeBind({ args, nodeExecutable }) {
+  if (nodeExecutable.startsWith("/usr/")) {
+    return
+  }
+  const runtimeDirectory = nodeRuntimeBindDirectory({ nodeExecutable })
+  addParentDirectories({
+    args,
+    target: runtimeDirectory,
+    seen: new Set(),
+  })
+  addReadOnlyBind({
+    args,
+    source: runtimeDirectory,
+    target: runtimeDirectory,
+  })
+}
+
 function createBubblewrapArguments({ workerPath, repositoryRoot, nodeExecutable, existsSync, realpathSync }) {
   const sandboxWorkerPath = resolveSandboxWorkerPath({
     workerPath,
@@ -510,16 +545,7 @@ function createBubblewrapArguments({ workerPath, repositoryRoot, nodeExecutable,
     existsSync,
     realpathSync,
   })
-  if (!existsSync(SANDBOX_NODE_EXECUTABLE)) {
-    throw new Error("The sandbox runtime requires /usr/bin/node as its worker mount point")
-  }
-  if (realpathSync(SANDBOX_NODE_EXECUTABLE) !== nodeExecutable) {
-    addReadOnlyBind({
-      args,
-      source: nodeExecutable,
-      target: SANDBOX_NODE_EXECUTABLE,
-    })
-  }
+  addNodeRuntimeBind({ args, nodeExecutable })
   args.push("--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp")
   addWorkspaceBinds({
     args,
@@ -531,7 +557,7 @@ function createBubblewrapArguments({ workerPath, repositoryRoot, nodeExecutable,
     "--seccomp", "4",
     "--preserve-fds", "1",
     "--",
-    SANDBOX_NODE_EXECUTABLE,
+    nodeExecutable,
     "--max-old-space-size=96",
     sandboxWorkerPath,
   )
