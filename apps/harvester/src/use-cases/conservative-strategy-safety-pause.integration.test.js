@@ -147,6 +147,12 @@ function createSafetyPauseEventPublisher(eventPublisher) {
         ok: true,
         durable: true,
       }),
+    flushWrites: typeof eventPublisher.flushWrites === "function"
+      ? eventPublisher.flushWrites
+      : async () => ({
+        ok: true,
+        durable: true,
+      }),
   }
 }
 
@@ -341,6 +347,10 @@ function makeEventPublisher({ events, publish = () => ({ ok: true }) } = {}) {
       return publish(event)
     },
     flush: async () => ({
+      ok: true,
+      durable: true,
+    }),
+    flushWrites: async () => ({
       ok: true,
       durable: true,
     }),
