@@ -39,6 +39,8 @@ export class Journal {
     this.closeInProgress = false
     this.flushPromises = new Set()
     this.flushQueue = Promise.resolve()
+    this.writeFlushQueue = Promise.resolve()
+    this.syncQueue = Promise.resolve()
     this.closing = false
     this.closed = false
     this.writeErrors = []
@@ -95,6 +97,39 @@ export class Journal {
   }
 
   /**
+   * Subscribe the Journal writer to source events.
+   * @private
+   * @returns {object} EventBus subscription result.
+   */
+  subscribeToEvents() {
+    return this.eventBus.subscribeAll({
+      handler: async (event) => {
+        const writeResult = await this.record({ event })
+        if (!writeResult.ok) {
+          this.reportError({
+            message: "Failed to write journal event",
+            errors: writeResult.errors,
+            eventId: event.id,
+            eventName: event.name,
+          })
+        }
+      },
+    })
+  }
+
+  /**
+   * Report successful startup without allowing diagnostics to fail lifecycle startup.
+   * @private
+   */
+  reportStarted() {
+    try {
+      this.logger.system?.("Journal started", { filePath: this.filePath })
+    } catch {
+      // Logging must not turn a successful startup into a failure.
+    }
+  }
+
+  /**
    * Acquire resources and subscribe while the public start() promise tracks completion.
    *
    * @private
@@ -119,17 +154,7 @@ export class Journal {
         this.startupCleanupErrors = await this.cleanupStoreResources(errors)
         return toResult({ errors })
       }
-      const result = this.eventBus.subscribeAll({
-        handler: async (event) => {
-          const writeResult = await this.record({ event })
-          if (!writeResult.ok) {
-            this.reportError({ message: "Failed to write journal event",
-errors: writeResult.errors,
-eventId: event.id,
-eventName: event.name })
-          }
-        },
-      })
+      const result = this.subscribeToEvents()
       if (!result.ok) {
         const errors = [...result.errors]
         this.startupCleanupErrors = await this.cleanupStoreResources(errors)
@@ -137,11 +162,7 @@ eventName: event.name })
       }
       this.subscription = result.subscription
       this.started = true
-      try {
-        this.logger.system?.("Journal started", { filePath: this.filePath })
-      } catch {
-        // Logging must not turn a successful startup into a failure.
-      }
+      this.reportStarted()
       return toResult({ filePath: this.filePath })
     } catch (error) {
       const errors = [error]
@@ -297,6 +318,74 @@ recordId: event.id })
    * @private
    * @returns {Promise<object>} Result; only successful file-content sync reports durable: true.
    */
+  /**
+   * Wait for already-enqueued Journal records and sync the active session file
+   * without draining EventBus. Safe to await from a pending EventBus handler.
+   *
+   * @returns {Promise<object>} Result; only successful file-content sync reports durable: true.
+   */
+  async flushWrites() {
+    if (!this.started || !this.filePath || this.closeInProgress || this.closing || this.closed) {
+      return toResult({ error: new Error("Journal must be started to flush durable writes") })
+    }
+
+    const flushPromise = this.writeFlushQueue.then(() => this.flushWritesLifecycle())
+    this.flushPromises.add(flushPromise)
+    this.writeFlushQueue = flushPromise.then(() => undefined, () => undefined)
+    try {
+      return await flushPromise
+    } finally {
+      this.flushPromises.delete(flushPromise)
+    }
+  }
+
+  /**
+   * Yield to the EventBus's already-scheduled Journal subscriber, then persist
+   * its queued write without waiting for the caller's EventBus delivery to end.
+   *
+   * @private
+   * @returns {Promise<object>} Result; only successful file-content sync reports durable: true.
+   */
+  async flushWritesLifecycle() {
+    await Promise.resolve()
+    const errors = []
+    try {
+      await this.writeQueue
+    } catch (error) {
+      errors.push(error)
+    }
+    errors.push(...this.writeErrors)
+
+    if (errors.length === 0 && this.filePath && !this.closed) {
+      try {
+        await this.syncSession()
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+
+    if (errors.length > 0) {
+      return toResult({ errors })
+    }
+    return toResult({
+      flushed: true,
+      durable: true,
+      filePath: this.filePath,
+    })
+  }
+
+  /**
+   * Serialize active-session fsync operations across global and write-only flushes.
+   *
+   * @private
+   * @returns {Promise<void>} Resolves only after the active session file is synced.
+   */
+  async syncSession() {
+    const syncPromise = this.syncQueue.then(() => this.store.sync())
+    this.syncQueue = syncPromise.then(() => undefined, () => undefined)
+    return syncPromise
+  }
+
   async flushLifecycle() {
     const errors = []
 
@@ -316,7 +405,7 @@ recordId: event.id })
     if (errors.length === 0 && this.filePath && !this.closed) {
       try {
         // record() acknowledges a completed write; flush() acknowledges an fsync.
-        await this.store.sync()
+        await this.syncSession()
       } catch (error) {
         errors.push(error)
       }

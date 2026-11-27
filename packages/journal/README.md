@@ -26,7 +26,7 @@ Journal validates the complete source-event graph before copying or appending it
 
 Every rejected value produces a path-specific `TypeError` before any JSONL bytes are appended. Property descriptors are inspected without invoking getters. Shared references are accepted as repeated subtrees; JSONL does not preserve object-identity/alias relationships, and recovered repeated values are independent objects. Null-prototype objects are persisted as ordinary JSON objects; prototype identity is also outside the contract.
 
-EventBus's in-memory contract remains intentionally broader. EventBus `publish()` and `flush()` are not Journal persistence acknowledgements. If an EventBus-delivered event cannot be serialized, the subscriber records the failure in the Journal writer state; `Journal.flush()` returns failure, and `Journal.close()` returns `durable: false`. The active writer rejects subsequent records after this failure, while records already accepted into the write queue are still drained in order. Close still performs cleanup and attempts to sync previously accepted bytes, but never reports durable success after an event was omitted. Direct `record()` calls return the serialization error and poison the writer in the same way.
+EventBus's in-memory contract remains intentionally broader. EventBus `publish()` and `flush()` are not Journal persistence acknowledgements. `Journal.flush()` is the global EventBus drain; `Journal.flushWrites()` is the write-queue/fsync barrier for a handler that cannot wait for EventBus to drain. If an EventBus-delivered event cannot be serialized, the subscriber records the failure in the Journal writer state; `Journal.flush()` returns failure, and `Journal.close()` returns `durable: false`. The active writer rejects subsequent records after this failure, while records already accepted into the write queue are still drained in order. Close still performs cleanup and attempts to sync previously accepted bytes, but never reports durable success after an event was omitted. Direct `record()` calls return the serialization error and poison the writer in the same way.
 
 The Harvester DTO audit found a narrow consumer migration requirement: `mapOrderUpdatedData` forwarded any numeric broker `transactionTime`, while several timestamp checks admitted negative zero. The application-boundary correction is tracked by [issue #923](https://github.com/45s/coinzilla/issues/923) and is under implementation in [PR #925](https://github.com/45s/coinzilla/pull/925). Keep this validation in Harvester; the Journal package does not modify another domain.
 
@@ -46,6 +46,7 @@ Journal uses only the EventBus operations `subscribeAll({ handler })` and `flush
 | `start()` | Creates the directory if needed, acquires exclusive writer ownership, creates a session, and subscribes to EventBus messages. A second active writer for the same directory is rejected. |
 | `record({ event })` | Recursively validates the complete source-event graph, then serializes before queueing the write. Unsupported/lossy values return a `TypeError`, reject new records, and are retained for lifecycle durability results. Writes already accepted into the queue are still drained in order. A successful result means the write completed and reports `durable: false`; it does not confirm file-content sync. |
 | `flush()` | Flushes EventBus delivery, waits for queued writes, and syncs the active session file. Success reports `durable: true` only when every delivered source event was accepted and every queued write synced. A subscribed serialization failure is included in the result and prevents durable success. |
+| `flushWrites()` | Waits for already-enqueued Journal records and syncs the active session file without draining EventBus. Safe inside a pending EventBus handler; reports `durable: true` only after successful file-content sync. |
 | `close()` | Cancels and waits for an in-progress startup to finish rolling back its owned resources, or unsubscribes an active writer, drains queued writes, syncs and closes the session, and releases the lock owned by this instance. Retained source-event serialization/write failures return `durable: false`; sync or cleanup failures also return errors and leave `closeDurable` false. |
 | `read(options)` | Reads and validates a complete bounded snapshot while this Journal instance is stopped. It does not acquire a cross-process reader lock. |
 | `replay(options)` | Validates the complete snapshot, then awaits the handler sequentially for each recovered record. A handler failure stops replay and reports completed progress. |
@@ -137,6 +138,11 @@ eventBus.publish({ name: "order.filled", source: "broker", data: { orderId: "42"
 const flushed = await journal.flush()
 if (!flushed.ok) throw flushed.errors[0]
 // flushed.durable === true only after the queued writes and file-content sync succeed.
+
+// From inside an EventBus handler, use the write-only barrier to avoid
+// waiting for that handler's own EventBus delivery to finish.
+const writeFlushed = await journal.flushWrites()
+if (!writeFlushed.ok) throw writeFlushed.errors[0]
 
 const closed = await journal.close()
 if (!closed.ok) throw closed.errors[0]
