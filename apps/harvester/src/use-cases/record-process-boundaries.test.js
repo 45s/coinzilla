@@ -197,13 +197,34 @@ function createInvalidProcessIdentityEnvelopeVariants(processIdentity) {
   return [
     null,
     [],
-    { ...processIdentity, application: "other" },
-    { ...processIdentity, runtimeSessionId: "another-session" },
-    { ...processIdentity, version: " " },
-    { ...processIdentity, processId: 0 },
-    { ...processIdentity, startedAt: "not-a-timestamp" },
-    { ...processIdentity, source: null },
-    { ...processIdentity, unexpected: true },
+    {
+      ...processIdentity,
+      application: "other",
+    },
+    {
+      ...processIdentity,
+      runtimeSessionId: "another-session",
+    },
+    {
+      ...processIdentity,
+      version: " ",
+    },
+    {
+      ...processIdentity,
+      processId: 0,
+    },
+    {
+      ...processIdentity,
+      startedAt: "not-a-timestamp",
+    },
+    {
+      ...processIdentity,
+      source: null,
+    },
+    {
+      ...processIdentity,
+      unexpected: true,
+    },
   ]
 }
 
