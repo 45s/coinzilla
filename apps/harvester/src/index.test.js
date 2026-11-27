@@ -68,6 +68,12 @@ const main = (options = {}) => {
     },
   })
 }
+const confirmedRuntimeStopResult = () => ({
+  ok: true,
+  status: "STOPPED",
+  data: { durableProcessStopAcknowledged: true },
+})
+
 const runMain = (options = {}) => main(options)
 
 const createTestAppConfig = ({ operatorControlEnabled = false, allowedUserIds = [] } = {}) => {
@@ -608,11 +614,7 @@ test("publishes stopped before closing Journal, then closes EventBus", async () 
       subscriptions: [],
       stop: async () => {
         operations.push("runtime.stop")
-        return {
-          ok: true,
-          status: "STOPPED",
-          data: { durableProcessStopAcknowledged: true },
-        }
+        return confirmedRuntimeStopResult()
       },
     }),
     registerSignalHandler: (...signalHandlerArguments) => {
@@ -847,7 +849,10 @@ test("reports an ambiguous process-lock release during startup cleanup", async (
       }),
       createEventBus: () => ({
         publish: () => ({ ok: true }),
-        close: async () => ({ ok: true, closed: true }),
+        close: async () => ({
+          ok: true,
+          closed: true,
+        }),
       }),
       createJournalService: disabledJournalService,
       start: async () => {

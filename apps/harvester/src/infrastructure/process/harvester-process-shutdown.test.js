@@ -330,7 +330,10 @@ test("requires a Journal-backed STOPPED event when PROCESS_STOPPED was not durab
       processLock: {
         release: async () => {
           calls.push("process-lock-release")
-          return { ok: true, released: true }
+          return {
+            ok: true,
+            released: true,
+          }
         },
       },
       closeObservability: async () => {
