@@ -1,5 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { EventBus } from "@coinzilla/event-bus"
+import { startTradingHistoryApi } from "./start-trading-history-api.js"
 
 async function loadApi() {
   return import("./trading-history-api.js").catch(() => null)
@@ -358,4 +360,46 @@ test("allows the Dashboard HTTP API from a dynamically selected localhost port",
     )
     await response.text()
   }
+})
+
+test("serves runtime operator status while persisted history reports database unavailability", async (t) => {
+  const eventBus = new EventBus()
+  const service = await startTradingHistoryApi({
+    eventBus,
+    operator: {
+      async getStatus() {
+        return {
+          ok: true,
+          data: {
+            runtimeState: "RUNNING",
+          },
+        }
+      },
+    },
+    env: {
+      TRADING_MODE: "testnet",
+      HARVESTER_API_PORT: "0",
+    },
+    logger: {
+      info() {},
+    },
+  })
+  t.after(async () => {
+    await service.close()
+    await eventBus.close()
+  })
+  const baseUrl = `http://127.0.0.1:${service.address.port}`
+
+  const runtimeStatus = await fetch(`${baseUrl}/api/v1/trading/operator/status`)
+  assert.equal(runtimeStatus.status, 200,
+    "The local runtime status endpoint must work without relational trading-history persistence.")
+  assert.equal((await runtimeStatus.json()).data.runtimeState, "RUNNING",
+    "The Dashboard must receive the actual Harvester runtime status.")
+
+  const historyMetadata = await fetch(`${baseUrl}/api/v1/trading/metadata`)
+  assert.equal(historyMetadata.status, 503,
+    "Persisted-history metadata must report service unavailable rather than an empty successful result.")
+  const historyFailure = await historyMetadata.json()
+  assert.equal(historyFailure.error.code, "HARVESTER_TRADING_HISTORY_PERSISTENCE_UNAVAILABLE",
+    "The history response must identify the missing relational persistence explicitly.")
 })
