@@ -1158,7 +1158,8 @@ test("acquires the process lock before starting Journal and releases it after cl
           flush: async () => ({ ok: true,
             durable: true }),
           close: async () => { sequence.push("journal-close"); return { ok: true,
-              closed: true } },
+              closed: true,
+              durable: true } },
         }
       },
       start: async (input) => {
