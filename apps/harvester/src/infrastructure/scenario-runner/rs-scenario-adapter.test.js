@@ -310,6 +310,7 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
     "RS-004-011",
     "RS-RUNTIME-SELL-SUBMISSION-001",
     "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001",
+    "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001",
     "RS-RUNTIME-SELL-REJECTION-001",
     "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
     "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001",
@@ -374,4 +375,31 @@ test("production RS runtime fails closed before broker submission when SELL inte
     "A SELL cycle must not be reserved before durable submission intent succeeds.")
   assert.equal(result.output.accountAdmissionBlocked, true,
     "Failed intent persistence must keep account BUY admission blocked.")
+})
+
+
+test("production RS runtime fails closed when broker acknowledgement outcome persistence fails", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-sell-outcome-persistence-failure",
+    scenarioId: "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.submissionRejected, true,
+    "The submitter must not report success when the broker acknowledgement outcome is not durably recorded.")
+  assert.equal(result.output.brokerSubmissionCallCount, 1,
+    "The simulated broker must be called once before the outcome persistence failure.")
+  assert.ok(result.output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_INTENT"),
+    "The immutable SELL intent must be persisted before broker placement.")
+  assert.equal(result.output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_OUTCOME"), false,
+    "The failed outcome append must not appear as a durable fact.")
+  assert.equal(result.output.stopFactAppended, true,
+    "An acknowledged-but-unconfirmed submission must latch the run-local account STOP.")
+  assert.notEqual(result.output.reservedSellCycle, null,
+    "The sole-SELL reservation must remain retained while the submission outcome is unresolved.")
+  assert.equal(result.output.accountAdmissionBlocked, true,
+    "Account BUY admission must remain blocked while broker outcome persistence is unresolved.")
 })
