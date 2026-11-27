@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { mkdtemp, readFile, rm } from "node:fs/promises"
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import * as fsPromises from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -347,6 +347,96 @@ test("initializes an empty store before verifying the process-owned ledger", asy
     createOperationalStateStore: () => expectedStore,
   })
   assert.deepEqual(operations, ["initializeIfEmpty", "verify"], "Startup must initialize only an empty ledger, then verify it before returning the store.")
+})
+
+test("creates the complete ledger automatically when the required directory is missing", async (t) => {
+  const parentDirectory = await mkdtemp(path.join(os.tmpdir(), "harvester-operational-state-first-start-"))
+  t.after(() => rm(parentDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const directory = path.join(parentDirectory, "nested", "recovery-facts")
+
+  const operationalStateStore = await prepareProcessOperationalStateStore({
+    appConfig: config({ recoverySeller: true }),
+    env: { OPERATIONAL_STATE_DIRECTORY: directory },
+    runtimeSessionId: "first-start-missing-directory",
+    createOperationalStateStore: (options) => createFileOperationalStateStore(options),
+  })
+
+  assert.deepEqual(
+    (await readdir(directory)).sort(),
+    ["facts.jsonl", "manifest.jsonl"],
+    "First startup must create exactly both required ledger streams in the missing directory.",
+  )
+  const read = await operationalStateStore.readAll()
+  assert.equal(read.ok, true, "The newly initialized ledger must pass the production reader.")
+  assert.equal(read.data.records.length, 1, "A new installation must contain only its genesis fact.")
+  assert.equal(read.data.records[0].factType, "LEDGER_INITIALIZED", "The first record must identify ledger genesis.")
+  assert.equal(read.data.records[0].sequence, "0", "Genesis must start at global sequence zero.")
+  const verification = await operationalStateStore.verify()
+  assert.equal(verification.ok, true, "Startup must return only after full ledger verification succeeds.")
+  assert.equal(verification.data.durableWriteSupported, true, "The created ledger must pass the durable-write verification gate.")
+})
+
+test("creates the complete ledger automatically when the required directory exists but is empty", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-operational-state-empty-first-start-"))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+
+  const operationalStateStore = await prepareProcessOperationalStateStore({
+    appConfig: config({ recoverySeller: true }),
+    env: { OPERATIONAL_STATE_DIRECTORY: directory },
+    runtimeSessionId: "first-start-empty-directory",
+    createOperationalStateStore: (options) => createFileOperationalStateStore(options),
+  })
+
+  assert.deepEqual(
+    (await readdir(directory)).sort(),
+    ["facts.jsonl", "manifest.jsonl"],
+    "First startup must populate an empty directory with exactly both required ledger streams.",
+  )
+  const read = await operationalStateStore.readAll()
+  assert.equal(read.ok, true, "The newly initialized empty directory must pass the production reader.")
+  assert.equal(read.data.records[0].factType, "LEDGER_INITIALIZED", "The empty directory must receive a genesis fact.")
+  assert.equal(read.data.records[0].sequence, "0", "Genesis must start at global sequence zero.")
+})
+
+test("does not recreate a missing stream in an existing partial ledger", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-operational-state-partial-first-start-"))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  const manifestPath = path.join(directory, "manifest.jsonl")
+  const originalManifest = '{"preserve":"existing partial evidence"}\\n'
+  await writeFile(manifestPath, originalManifest, "utf8")
+
+  await assert.rejects(
+    prepareProcessOperationalStateStore({
+      appConfig: config({ recoverySeller: true }),
+      env: { OPERATIONAL_STATE_DIRECTORY: directory },
+      runtimeSessionId: "first-start-partial-directory",
+      createOperationalStateStore: (options) => createFileOperationalStateStore(options),
+    }),
+    (error) => error.code === "PROCESS_OPERATIONAL_STATE_INITIALIZATION_FAILED" &&
+      error.cause?.code === "DURABLE_FACTS_LEDGER_INCOMPLETE" &&
+      error.message.includes("both facts.jsonl and manifest.jsonl"),
+    "An existing partial ledger must fail closed with an actionable startup error.",
+  )
+
+  assert.deepEqual(
+    (await readdir(directory)).sort(),
+    ["manifest.jsonl"],
+    "Startup must not synthesize the missing facts stream in an existing partial directory.",
+  )
+  assert.equal(
+    await readFile(manifestPath, "utf8"),
+    originalManifest,
+    "Startup must preserve the existing manifest byte-for-byte.",
+  )
 })
 
 test("fails closed in real process startup when a synced fact has no manifest checkpoint", async (t) => {
