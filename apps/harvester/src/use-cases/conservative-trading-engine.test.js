@@ -3810,7 +3810,11 @@ test("serializes market and user-data transitions until a pending SELL is acknow
   const pendingSell = engine.getOrders().find((order) => order.side === "SELL")
   assert.equal(pendingSell?.status, "PENDING")
   assert.equal(pendingSell?.brokerOrderId, undefined)
-  assert.equal(engine.getOrders().some((order) => order.side === "BUY"), false)
+  assert.equal(
+    engine.getOrders().some((order) => order.side === "BUY"),
+    true,
+    "The pre-existing BUY must remain in the canonical registry while the recovery SELL acknowledgement is pending.",
+  )
 
   const acknowledgedSell = createOpenSellAcknowledgement({ pendingSell })
   const concurrentMarketTransition = engine.processMarketPrice({
