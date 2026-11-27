@@ -54,6 +54,42 @@ function publishValidatedMarketMetadata({ eventPublisher, metadata, logger, symb
   })
 }
 
+function requireFetchedMarketMetadata({ symbol, filtersResult } = {}) {
+  if (filtersResult?.ok && filtersResult.data) {
+    return filtersResult.data
+  }
+  const details = filtersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+  const message = [
+    "Unable to load exchange market metadata for configured pair ",
+    symbol,
+    details ? ": " : "",
+    details ?? "",
+  ].join("")
+  throw new Error(message)
+}
+
+function createCapturedMarketMetadata({ filtersResult, now } = {}) {
+  const source = requireFetchedMarketMetadata({ filtersResult })
+  const metadataCapturedAt = readMetadataCaptureTimestamp({ now })
+  const metadataVersion = source.metadataVersion ?? null
+  return Object.freeze({
+    ...source,
+    metadataCapturedAt,
+    metadataVersion,
+  })
+}
+
+function storeDisabledMarketMetadata({ symbol, market, metadata, marketMetadata, logger } = {}) {
+  marketMetadata.set(symbol, metadata)
+  logSystem({
+    logger,
+    message: "Configured disabled market asset metadata loaded",
+    symbol,
+    baseAsset: market.baseAsset.code,
+    quoteAsset: market.quoteAsset.code,
+  })
+}
+
 async function loadConfiguredMarketMetadata({
   broker,
   symbol,
@@ -63,23 +99,9 @@ async function loadConfiguredMarketMetadata({
   logger,
   now,
 } = {}) {
-  const filtersResult = await broker.getSymbolFilters({ symbol })
-  if (!filtersResult?.ok || !filtersResult.data) {
-    const details = filtersResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-    const message = [
-      "Unable to load exchange market metadata for configured pair ",
-      symbol,
-      details ? ": " : "",
-      details ?? "",
-    ].join("")
-    throw new Error(message)
-  }
-  const metadataCapturedAt = readMetadataCaptureTimestamp({ now })
-  const metadataVersion = filtersResult.data.metadataVersion ?? null
-  const receivedMetadata = Object.freeze({
-    ...filtersResult.data,
-    metadataCapturedAt,
-    metadataVersion,
+  const receivedMetadata = createCapturedMarketMetadata({
+    filtersResult: await broker.getSymbolFilters({ symbol }),
+    now,
   })
   const market = validateCanonicalMarketMetadata({
     symbol,
@@ -92,13 +114,12 @@ async function loadConfiguredMarketMetadata({
     metadata: receivedMetadata,
   })
   if (!pairConfig.enabled) {
-    marketMetadata.set(symbol, receivedMetadata)
-    logSystem({
-      logger,
-      message: "Configured disabled market asset metadata loaded",
+    storeDisabledMarketMetadata({
       symbol,
-      baseAsset: market.baseAsset.code,
-      quoteAsset: market.quoteAsset.code,
+      market,
+      metadata: receivedMetadata,
+      marketMetadata,
+      logger,
     })
     return
   }
@@ -110,8 +131,8 @@ async function loadConfiguredMarketMetadata({
   })
   const metadataSnapshot = Object.freeze({
     ...validatedMetadata,
-    metadataCapturedAt,
-    metadataVersion,
+    metadataCapturedAt: receivedMetadata.metadataCapturedAt,
+    metadataVersion: receivedMetadata.metadataVersion,
   })
   marketMetadata.set(symbol, metadataSnapshot)
   publishValidatedMarketMetadata({
