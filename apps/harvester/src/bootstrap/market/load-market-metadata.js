@@ -91,18 +91,6 @@ async function loadConfiguredMarketMetadata({
     pairConfig,
     metadata: receivedMetadata,
   })
-  if (
-    !market ||
-    market.symbol !== symbol ||
-    !market.baseAsset?.code ||
-    !market.quoteAsset?.code
-  ) {
-    throw new Error([
-      "Configured pair ",
-      symbol,
-      " does not expose canonical base/quote asset metadata",
-    ].join(""))
-  }
   if (!pairConfig.enabled) {
     marketMetadata.set(symbol, receivedMetadata)
     logSystem({
