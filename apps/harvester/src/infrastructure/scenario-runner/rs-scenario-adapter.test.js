@@ -262,6 +262,37 @@ test("production RS STOP blocks new BUY spending while allowing an eligible firs
     "The production runtime must report the simulated SELL as submitted.")
 })
 
+test("production RS runtime fails closed when terminal reconciliation persistence fails", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-terminal-reconciliation-persistence-failure",
+    scenarioId: "RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.terminalSell.orderStatus, "FILLED",
+    "The canonical broker terminal status must remain FILLED after persistence fails.")
+  assert.equal(result.output.terminalSell.terminalReconciliationFailed, true,
+    "The production accounting boundary must report its failed durable reconciliation.")
+  assert.equal(result.output.terminalSell.terminalReconciled, false,
+    "The runtime must not report terminal reconciliation as committed.")
+  assert.equal(result.output.terminalSell.eventWorkflowFailedClosed, true,
+    "The production order-event workflow must fail closed.")
+  assert.equal(result.output.terminalSell.stopFactAppended, true,
+    "The account STOP must be durably appended in the run-local operational store.")
+  assert.equal(result.output.terminalSell.marketPaused, true,
+    "The affected market must be paused after reconciliation persistence fails.")
+  assert.equal(result.output.accountAdmissionBlocked, true,
+    "Account admission must remain blocked after the terminal reconciliation failure.")
+  assert.equal(result.output.reservedSellCycle.clientOrderId,
+    result.output.terminalSell.clientOrderId,
+    "The sole-SELL reservation must remain held until reconciliation commits.")
+  assert.equal(result.output.terminalSell.stagedSellFillCount, 1,
+    "The canonical fill must be staged once for the failed reconciliation attempt.")
+})
+
 test("production RS runtime fails closed when account STOP persistence fails after an under-target FILLED SELL", async () => {
   const result = await executeRecoverySellerRuntimeScenario({
     runId: "run-rs-runtime-filled-stop-persistence-failure",
@@ -317,6 +348,7 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
     "RS-RUNTIME-SELL-REJECTION-001",
     "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
     "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001",
+    "RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001",
     "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001",
     "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001",
   ], "The production catalog must preserve all expected RS scenario IDs and their stable order.")
@@ -342,6 +374,14 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
     "The under-target FILLED SELL scenario must remain partial until all production gates are met.")
   assert.equal(underTargetScenario.executable, true,
     "Runtime scenario eligibility is for isolated simulation; host attestation controls effective readiness.")
+  const terminalReconciliationFailureScenario = catalog.find((scenario) =>
+    scenario.id === "RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001")
+  assert.ok(terminalReconciliationFailureScenario,
+    "The terminal reconciliation persistence-failure scenario must be registered.")
+  assert.equal(terminalReconciliationFailureScenario.status, "PARTIAL",
+    "The terminal reconciliation persistence-failure scenario must remain partial until production acceptance.")
+  assert.equal(terminalReconciliationFailureScenario.executable, true,
+    "Terminal reconciliation failure is eligible for isolated simulation under a verified host adapter.")
   const stopFailureScenario = catalog.find((scenario) =>
     scenario.id === "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001")
   assert.ok(stopFailureScenario, "The STOP persistence-failure runtime scenario must be registered.")
