@@ -12,7 +12,6 @@ function createDisabledJournalService() {
       disabled: true,
     }),
     status: {
-      state: "disabled",
       enabled: false,
     },
     flush: async () => ({
@@ -87,9 +86,7 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
         return {
           ok: true,
           status: "STOPPED",
-          data: {
-            durableProcessStopAcknowledged: true,
-          },
+          data: { durableProcessStopAcknowledged: true },
         }
       },
     }),
