@@ -415,7 +415,7 @@ test("durably closes accepted Journal writes before child exit and makes repeate
     assert.ok(journalFileLine, "The child must report the real Journal session file for post-exit verification.")
     const journalFilePath = journalFileLine.slice("JOURNAL_FILE=".length)
     const journalContents = await readFile(journalFilePath, "utf8")
-    assert.match(journalContents, /shutdown\\.accepted/, "The accepted pre-shutdown EventBus event must be present in the closed Journal file.")
+    assert.match(journalContents, /shutdown\.accepted/, "The accepted pre-shutdown EventBus event must be present in the closed Journal file.")
     assert.match(journalContents, /accepted-before-process-exit/, "The durable Journal record must preserve the accepted write identity.")
     assert.ok(
       outputLines.includes("COUNTS=1,1,1"),
