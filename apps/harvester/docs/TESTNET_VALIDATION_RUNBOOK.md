@@ -1,5 +1,7 @@
 # Harvester controlled Binance Spot TESTNET validation runbook
 
+> **Priority:** Working, correct trading is the only active P0. Recovery, facts/Journal, databases/history, and broad observability are secondary and must not delay trading repair. This runbook remains preparation only; its separate exchange-authorization gate is unchanged.
+
 > This is an execution and evidence checklist, not a strategy specification. All Conservative expected behavior is derived from [CONSERVATIVE_DOMAIN_SPECIFICATION.md](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). If a checklist statement differs, the canonical specification controls.
 
 > **Execution gate: CLOSED / PAUSED.** This document is preparation only. Harvester must remain stopped until the operator and assistant explicitly begin an authorized joint TESTNET session. Offline CI is not exchange readiness. No order submission, cancellation, account-setting change, or other exchange write is authorized by this document.
