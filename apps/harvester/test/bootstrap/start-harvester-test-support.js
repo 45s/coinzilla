@@ -123,13 +123,17 @@ export const binanceEnv = {
 }
 
 export const startHarvesterForTest = (input = {}) => {
-  const eventPublisher = input.eventPublisher
-    ? {
-      ...input.eventPublisher,
-      flush: input.eventPublisher.flush ?? testEventPublisher.flush,
-      flushWrites: input.eventPublisher.flushWrites ?? testEventPublisher.flushWrites,
+  // Preserve the caller's publisher identity. Add test durability capabilities
+  // in place so the runtime receives the exact injected application publisher.
+  const eventPublisher = input.eventPublisher ?? testEventPublisher
+  if (input.eventPublisher) {
+    if (typeof eventPublisher.flush !== "function") {
+      eventPublisher.flush = testEventPublisher.flush
     }
-    : testEventPublisher
+    if (typeof eventPublisher.flushWrites !== "function") {
+      eventPublisher.flushWrites = testEventPublisher.flushWrites
+    }
+  }
   return startHarvester({
     ...input,
     env: {
