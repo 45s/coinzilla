@@ -302,7 +302,12 @@ function createDustCompletionFailureMarketMetadata({ symbol } = {}) {
         {
           type: "QUANTITY_INCREMENT",
           status: "SUPPORTED",
-          value: { amount: "1", asset: { code: "DOGE" } },
+          value: {
+            amount: "1",
+            asset: {
+              code: "DOGE",
+            },
+          },
         },
         {
           type: "MIN_NOTIONAL",
