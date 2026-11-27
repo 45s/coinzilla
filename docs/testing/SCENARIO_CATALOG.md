@@ -553,6 +553,26 @@ The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERV
   - `reserves base quantity for the configured fee ceiling`
   - `rounds the minimum SELL price up only when the exact fee-adjusted price exceeds a tick`
 
+- [`strategy.test.js`](../../apps/harvester/src/domain/strategies/conservative/strategy.test.js)
+  - `continues selling residual inventory after cumulative recovery profit is already secured`
+  - `does not create a duplicate residual SELL while one is active`
+  - `sells the fee-reserved 1.7 DOGE quantity from the incident 2.8 DOGE residual under explicit sellable test filters`
+  - `sells the fee-reserved 0.004 ZRO quantity from the incident 0.015 ZRO residual under explicit sellable test filters`
+  - `classifies residual quantity below the exchange quantity step instead of submitting an invalid SELL`
+  - `classifies residual quantity below MIN_NOTIONAL instead of submitting an invalid SELL`
+  - `sells the residual exactly at the MIN_QUANTITY boundary`
+  - `sells the residual exactly at the QUANTITY_INCREMENT boundary`
+  - `sells the residual exactly at the MIN_NOTIONAL boundary`
+- [`create-latest-transition-evaluator.test.js`](../../apps/harvester/src/use-cases/create-latest-transition-evaluator.test.js)
+  - `submits the residual SELL on reevaluation after the recovery SELL fill without completing or pausing the cycle`
+  - `fails closed before completion or residual SELL submission when recovery evidence cannot be durably flushed`
+  - `preserves unknown, rejected, and blocked residual SELL outcomes without completing recovery or placing a BUY`
+- [`conservative-trading-engine.test.js`](../../apps/harvester/src/use-cases/conservative-trading-engine.test.js)
+  - `reconciles multiple actual SELL fills before completing recovery`
+  - `keeps the recovery basis open and classifies exchange-constrained residual after a profitable SELL`
+  - `reconciles recovered orders without canceling or replacing any exchange order` (also reevaluates after restart reconciliation and asserts no duplicate recovery SELL)
+  - `does not cancel a recovery SELL when cancellation intent publication is still pending`
+
 **Evidence note:** Existing test titles were inspected to create a navigation mapping. The assertions have not yet been reviewed against every listed subcase, and the tests were not executed as part of this documentation-only catalog change; do not treat this mapping as VERIFIED.
 
 ### CG-003 — Pre-existing BUYs continue their lifecycle without reopening BUY admission
