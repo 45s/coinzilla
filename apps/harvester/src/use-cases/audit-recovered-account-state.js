@@ -424,7 +424,10 @@ function applyJournalFillCommissionDeltas({
       value: commission?.amount,
       field: `${fill.symbol}.commission.amount`,
     })
-    if (compareDecimal({ left: amount, right: "0" }) < 0) {
+    if (compareDecimal({
+      left: amount,
+      right: "0",
+    }) < 0) {
       throw new Error(`Recovered commission amount cannot be negative for ${fill.symbol}`)
     }
     const isThirdAsset = validateCommissionIdentity({
@@ -437,7 +440,10 @@ function applyJournalFillCommissionDeltas({
       continue
     }
     applyThirdAssetCommission({
-      commission: { ...commission, amount },
+      commission: {
+        ...commission,
+        amount,
+      },
       fill,
       market,
       baselineByAsset,
@@ -562,7 +568,10 @@ function indexRecoveredOrderIdentities({ orders }) {
     }
     recoveredByBrokerId.set(order.brokerOrderId, order)
   }
-  return { recoveredByBrokerId, recoveredByClientOrderId }
+  return {
+    recoveredByBrokerId,
+    recoveredByClientOrderId,
+  }
 }
 
 function addExpectedOrderCommitment({ order, expectedByBrokerId, expectedLocked }) {
@@ -580,7 +589,10 @@ function addExpectedOrderCommitment({ order, expectedByBrokerId, expectedLocked 
     left: order.originalQuantity.amount,
     right: order.executedQuantity.amount,
   })
-  if (compareDecimal({ left: remainingQuantity, right: "0" }) <= 0) {
+  if (compareDecimal({
+    left: remainingQuantity,
+    right: "0",
+  }) <= 0) {
     throw new Error(`Recovered active order has no remaining quantity: ${order.clientOrderId}`)
   }
   if (!["LIMIT", "LIMIT_MAKER"].includes(order.type) || !order.limitPrice) {
@@ -647,7 +659,10 @@ function inspectUnownedOrderFacts({ order, identity, brokerOrderId, symbol, mark
     value: identity.executedQuantity,
     field: `Unowned order ${brokerOrderId}.executedQuantity`,
   })
-  const remainingQuantity = subtractDecimal({ left: originalQuantity, right: executedQuantity })
+  const remainingQuantity = subtractDecimal({
+    left: originalQuantity,
+    right: executedQuantity,
+  })
   if (compareDecimal({ left: remainingQuantity, right: "0" }) <= 0) {
     throw new Error(`Unowned exchange order has no positive remaining quantity: ${brokerOrderId}`)
   }
@@ -655,10 +670,18 @@ function inspectUnownedOrderFacts({ order, identity, brokerOrderId, symbol, mark
     value: getOrderPrice({ order }),
     field: `Unowned order ${brokerOrderId}.price`,
   })
-  if (compareDecimal({ left: actualPrice, right: "0" }) <= 0) {
+  if (compareDecimal({
+    left: actualPrice,
+    right: "0",
+  }) <= 0) {
     throw new Error(`Unowned exchange order price must be positive: ${brokerOrderId}`)
   }
-  return { externalMarket, actualStatus, remainingQuantity, actualPrice }
+  return {
+    externalMarket,
+    actualStatus,
+    remainingQuantity,
+    actualPrice,
+  }
 }
 
 function reserveUnownedOrderBalance({ order, externalMarket, remainingQuantity, actualPrice, expectedLocked, brokerOrderId }) {
@@ -691,7 +714,13 @@ function validateUnownedOpenOrder({
   blockedMarkets,
   unownedOpenOrders,
 }) {
-  const facts = inspectUnownedOrderFacts({ order, identity, brokerOrderId, symbol, marketsBySymbol })
+  const facts = inspectUnownedOrderFacts({
+    order,
+    identity,
+    brokerOrderId,
+    symbol,
+    marketsBySymbol,
+  })
   reserveUnownedOrderBalance({
     order,
     externalMarket: facts.externalMarket,
@@ -710,7 +739,14 @@ function validateUnownedOpenOrder({
     status: facts.actualStatus,
   }))
 }
-function validateOwnedOpenOrder({ order, identity, expected, symbol, brokerOrderId, actualOpenByBrokerId }) {
+function validateOwnedOpenOrder({
+      order,
+      identity,
+      expected,
+      symbol,
+      brokerOrderId,
+      actualOpenByBrokerId,
+    }) {
   const actualPrice = getOrderPrice({ order })
   const expectedPrice = expected.limitPrice?.amount
   const actualStatus = normalizeOrderStatus({ status: order.status })
@@ -756,7 +792,11 @@ function inspectExchangeOpenOrder({
 }) {
   const identity = getOpenOrderIdentity({ order })
   const { brokerOrderId, symbol } = identity
-  assertCanonicalOpenOrderIdentity({ brokerOrderId, symbol, clientOrderId: identity.clientOrderId })
+  assertCanonicalOpenOrderIdentity({
+    brokerOrderId,
+    symbol,
+    clientOrderId: identity.clientOrderId,
+  })
   if (seenOpenOrderIds.has(brokerOrderId)) {
     throw new Error(`Exchange open-order snapshot contains duplicate brokerOrderId ${brokerOrderId}`)
   }
@@ -814,7 +854,12 @@ function inspectExchangeOpenOrders({
     const missing = [...expectedByBrokerId.keys()].filter((id) => !actualOpenByBrokerId.has(id))
     throw new Error(`Recovered active orders are missing from the exchange open-order snapshot: ${missing.join(", ")}`)
   }
-  return { actualOpenByBrokerId, unownedOpenOrders, blockedMarkets, seenOpenOrderIds }
+  return {
+    actualOpenByBrokerId,
+    unownedOpenOrders,
+    blockedMarkets,
+    seenOpenOrderIds,
+  }
 }
 function validateLockedBalances({
   expectedLocked,
@@ -999,4 +1044,12 @@ function runRecoveredAccountAudit(options) {
     orderCommitments,
     exchangeOrders,
   })
+}
+
+export function auditRecoveredAccountState(options = {}) {
+  try {
+    return runRecoveredAccountAudit(options)
+  } catch (error) {
+    return toResult({ error })
+  }
 }
