@@ -2307,9 +2307,7 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
   let flushCount = 0
   let cancelCalls = 0
   const seeded = makeSeededRecoveryState()
-  let lastPublishedEventName
-  let lastPublishedEventSide
-  let lastPublishedClientOrderId
+  const publishedEvents = []
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
@@ -2318,9 +2316,11 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
     onCancelOrderStarted: () => { cancelCalls += 1 },
     eventPublisher: {
       publish: (event) => {
-        lastPublishedEventName = event.name
-        lastPublishedEventSide = event.data?.side
-        lastPublishedClientOrderId = event.data?.clientOrderId
+        publishedEvents.push({
+          name: event.name,
+          side: event.data?.side,
+          clientOrderId: event.data?.clientOrderId,
+        })
         return { ok: true }
       },
       flushWrites: async () => {
@@ -2329,7 +2329,7 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
           ? {
             ok: false,
             errors: [new Error(
-              `journal sync failed after ${lastPublishedEventName} side=${lastPublishedEventSide} clientOrderId=${lastPublishedClientOrderId}`,
+              `journal sync failed after publications: ${JSON.stringify(publishedEvents)}`,
             )]
           }
           : {
