@@ -805,8 +805,13 @@ test("prints strategy markers with one separator and omits the decorative SYS ma
   )
   assert.match(
     written,
-    /Binance market-data stream connected; active market subscriptions: 4\. Conservative TESTNET trading is enabled/,
-    "The console must name the Binance market-data stream and the active subscription count explicitly.",
+    /Binance market-data stream connected; subscriptions: 4\./,
+    "The connected market-data summary must report the compact subscription count without stale readiness details.",
+  )
+  assert.doesNotMatch(
+    written,
+    /active market subscriptions|Conservative TESTNET trading is enabled|user-data readiness/,
+    "The compact connection summary must omit redundant market and trading-readiness prose.",
   )
   assert.doesNotMatch(
     written,
@@ -949,7 +954,9 @@ test("abbreviates Operational State Store wording in the terminal", () => {
     timestamp: "2026-11-26T21:45:18",
     level: "info",
     method: "info",
-    data: { message: "Operational State Store verified" },
+    data: {
+      message: "Operational State Store verified",
+    },
   })
   assert.match(written, /OSS verified/)
   assert.doesNotMatch(written, /Operational State Store/)
