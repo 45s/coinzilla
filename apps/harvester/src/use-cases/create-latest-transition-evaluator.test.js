@@ -346,7 +346,9 @@ function configureResidualSellThroughState({ dependencies, symbol, price } = {})
     timestamp: 100,
   })
   state.lastBuyPrices.set(symbol, price)
-  state.registry.getActiveOrders = () => []
+  state.residualSellThroughActiveOrders = []
+  state.registry.getActiveOrders = () => state.residualSellThroughActiveOrders
+  state.registry.getOwnership = () => ({ strategyId: "CG_coinGrabber" })
 }
 
 function configureResidualSellThroughPortfolio({
@@ -405,22 +407,36 @@ function configureResidualSellThroughDecision({
     takerPercent: 0.1,
     minProfit: 0.01,
   }
-  dependencies.strategyPolicy.evaluate = () => ({
-    strategy: "CONSERVATIVE",
-    action: "PLACE_ORDERS",
-    reason: "CONTINUE_SELL_THROUGH",
-    actions: [{
-      side: "SELL",
-      type: "LIMIT_MAKER",
-      price,
-      quantity: sellQuantity,
-      reason: "SELL_RESIDUAL_INVENTORY_ABOVE_KEEP_QUANTITY",
-    }],
-    inventoryDisposition: {
-      status: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
-      quantity: activeQuantity,
-    },
-  })
+  dependencies.strategyPolicy.evaluate = ({ activeOrders = [] } = {}) => {
+    const hasActiveRecoverySell = activeOrders.some((order) =>
+      order.side === "SELL" && ["OPEN", "PARTIALLY_FILLED"].includes(order.status))
+    if (hasActiveRecoverySell) {
+      return {
+        actions: [],
+        reason: "RECOVERY_SELL_ALREADY_ACTIVE",
+        inventoryDisposition: {
+          status: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+          quantity: activeQuantity,
+        },
+      }
+    }
+    return {
+      strategy: "CONSERVATIVE",
+      action: "PLACE_ORDERS",
+      reason: "CONTINUE_SELL_THROUGH",
+      actions: [{
+        side: "SELL",
+        type: "LIMIT_MAKER",
+        price,
+        quantity: sellQuantity,
+        reason: "SELL_RESIDUAL_INVENTORY_ABOVE_KEEP_QUANTITY",
+      }],
+      inventoryDisposition: {
+        status: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+        quantity: activeQuantity,
+      },
+    }
+  }
 }
 
 function configureResidualSellThroughSubmission({
@@ -438,6 +454,13 @@ function configureResidualSellThroughSubmission({
   })
   dependencies.submit = async ({ decision }) => {
     submissions.push(decision.actions)
+    dependencies.state.residualSellThroughActiveOrders.push({
+      clientOrderId: "residual-sell-client",
+      brokerOrderId: "residual-sell-broker",
+      market: { id: dependencies.state.prices.keys().next().value },
+      side: "SELL",
+      status: "OPEN",
+    })
     return {
       ok: true,
       data: {
@@ -558,6 +581,15 @@ test("submits the residual SELL on reevaluation after the recovery SELL fill wit
     assert.equal(tracked.completionCalls.count, 0, `${scenario.symbol} must not complete while sell-through is unresolved.`)
     assert.equal(tracked.pauses.length, 0, `${scenario.symbol} must not pause after a successful sell-through continuation.`)
     assert.equal(dependencies.state.completedRecoverySellSymbols.has(scenario.symbol), true)
+
+    const reevaluated = await evaluate({
+      symbol: scenario.symbol,
+      shutdownRecoveryOnly: true,
+    })
+    assert.equal(reevaluated.ok, true, `${scenario.symbol} reevaluation with an active residual SELL must remain successful.`)
+    assert.equal(tracked.submissions.length, 1, `${scenario.symbol} must not submit a duplicate residual SELL while the first is active.`)
+    assert.equal(tracked.completionCalls.count, 0, `${scenario.symbol} must not complete before the residual SELL is filled and reconciled.`)
+    assert.equal(tracked.pauses.length, 0, `${scenario.symbol} must not pause merely because its residual SELL is already active.`)
   }
 })
 
