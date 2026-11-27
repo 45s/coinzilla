@@ -149,6 +149,7 @@ These APPLICATION-layer cases exercise the production Recovery Seller runtime/us
 | `RS-RUNTIME-SELL-SUBMISSION-001` | Normal production-flow SELL submission and reservation | PARTIAL / non-executable |
 | `RS-RUNTIME-SELL-REJECTION-001` | Broker rejection is surfaced and STOP is latched | PARTIAL / non-executable |
 | `RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001` | Failed durable SELL-intent write prevents broker placement and reservation; account BUY admission remains blocked | PARTIAL / non-executable |
+| `RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001` | Broker acknowledgement followed by failed outcome persistence remains unresolved; STOP is latched and SELL reservation retained | PARTIAL / non-executable |
 | `RS-RUNTIME-SELL-PARTIAL-CANCEL-001` | Partial terminal SELL is reconciled before STOP | PARTIAL / non-executable |
 | `RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001` | Fully FILLED under-target SELL reconciles accounting, pauses the market and latches STOP | PARTIAL / non-executable |
 | `RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001` | Failed account STOP persistence is surfaced and new BUY admission fails closed | PARTIAL / non-executable |
