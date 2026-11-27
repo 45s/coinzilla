@@ -11,8 +11,6 @@ The Journal package's core record contract, filesystem adapter, lifecycle owners
 
 ## Active follow-up
 
-- **EventBus-handler-safe durable write barrier:** accepted capability request [#1910](https://github.com/45s/coinzilla/issues/1910), implementation [PR #1911](https://github.com/45s/coinzilla/pull/1911) against `develop`, exact head `d31e38a07ea1112d84bc8d4605343dacf95383c7`. The additive `flushWrites()` contract must wait for Journal writes and file-content fsync without draining EventBus; preserve global `flush()` and close semantics. Current exact-head CI is **not green**: Dependency Audit, External Documentation Links and Harvester Targeted Tests pass; Repository Quality, Unit Tests and Test Coverage fail because `journal.test.js` has two `object-property-newline` lint violations at lines 703 and 730. Fix and rerun the full exact-head matrix before merge. Consumer [PR #1909](https://github.com/45s/coinzilla/pull/1909) is blocked until this owner PR is merged into `develop`.
-
 - Preserve lossless JSONL serialization and mandatory durability propagation at the consumer boundary. The cross-package persistence constraint is tracked in [issue #889](https://github.com/45s/coinzilla/issues/889).
 - Only reopen completed lifecycle or filesystem work when a reproducible defect or a concrete consumer requirement is recorded.
 - Any future durability/API change must update the package's canonical contract and regression tests in the same change.
@@ -25,4 +23,3 @@ The Journal package's core record contract, filesystem adapter, lifecycle owners
 
 Do not keep completed PR narratives, historical RED/green logs, or old phased checklists in this active roadmap.
 
-- [ ] #1910 Journal write-only durable flush for EventBus handlers; preserve global flush semantics and coordinate close/fsync.
