@@ -841,7 +841,7 @@ test("fails closed before completion or residual SELL submission when recovery e
   }
   dependencies.eventPublisher = {
     publish: () => ({ ok: true }),
-    flush: async () => ({
+    flushWrites: async () => ({
       ok: false,
       errors: [failure],
     }),
@@ -873,7 +873,7 @@ test("fails closed before dust cycle completion when recovery decision evidence 
     pauses,
     publishedEvents,
   })
-  dependencies.eventPublisher.flush = async () => ({
+  dependencies.eventPublisher.flushWrites = async () => ({
     ok: false,
     errors: [failure],
   })
