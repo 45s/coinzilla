@@ -780,3 +780,134 @@ test("Linux sandbox launcher fails closed when delegated cgroup controllers are 
     },
   }), /cgroup v2 memory\/cpu\/pids delegation is required/)
 })
+
+
+function createSandboxCleanupRetryChild({ cleanupError }) {
+  const child = new EventEmitter()
+  child.exitCode = null
+  child.signalCode = null
+  let cleanupAttempts = 0
+  child.sandboxCleanup = () => {
+    cleanupAttempts += 1
+    if (cleanupAttempts < 3) {
+      throw cleanupError
+    }
+  }
+  child.send = (message) => {
+    if (message.type === "execute") {
+      child.emit("message", {
+        type: "started",
+        runId: message.runId,
+      })
+      child.emit("message", {
+        runId: message.runId,
+        ok: true,
+        output: {
+          simulated: true,
+        },
+      })
+    }
+  }
+  child.kill = (signal) => {
+    child.exitCode = 0
+    child.signalCode = signal
+    child.emit("exit", 0, signal)
+    child.emit("close", 0, signal)
+    return true
+  }
+  return {
+    child,
+    cleanupAttempts: () => cleanupAttempts,
+  }
+}
+
+test("process adapter fails the run when sandbox cgroup cleanup cannot be confirmed", async () => {
+  const cleanupError = new Error("cgroup removal failed")
+  const fixture = createSandboxCleanupRetryChild({ cleanupError })
+  const launcher = createSimulatedSandboxLauncher({
+    spawn: () => {
+      process.nextTick(() => fixture.child.emit("message", {
+        type: "ready",
+      }))
+      return fixture.child
+    },
+  })
+  const adapter = createProcessScenarioAdapter({
+    strategyId: "RS",
+    spawnSandboxedWorker: launcher,
+  })
+
+  await assert.rejects(adapter.execute({
+    runId: "run-worker-cgroup-cleanup-failure",
+    scenarioId: "RS-004-011",
+    input: null,
+  }), (error) => {
+    assert.match(error.message, /sandbox cgroup cleanup could not be confirmed/i,
+      "The adapter must not report a successful scenario when cgroup cleanup fails")
+    assert.equal(error.cause, cleanupError,
+      "The cgroup cleanup failure must remain available as the rejection cause")
+    return true
+  })
+  await assert.rejects(adapter.cancel({
+    runId: "run-worker-cgroup-cleanup-failure",
+  }), /sandbox cgroup cleanup could not be confirmed/,
+  "The child must remain registered when a cleanup retry still fails")
+  assert.equal(await adapter.cancel({
+    runId: "run-worker-cgroup-cleanup-failure",
+  }), true, "A later confirmed cleanup retry must release the retained child")
+  assert.equal(fixture.cleanupAttempts(), 3,
+    "Execution and cancellation must retry cleanup until the cgroup removal is confirmed")
+})
+
+
+function createSandboxSetupCleanupHandle({ cleanupError }) {
+  let cleanupAttempts = 1
+  const cleanupHandle = {
+    exitCode: 0,
+    signalCode: "SIGKILL",
+    sandboxCleanup() {
+      cleanupAttempts += 1
+      if (cleanupAttempts < 3) {
+        throw cleanupError
+      }
+    },
+  }
+  const setupError = new AggregateError(
+    [new Error("seccomp filter IPC setup failed"), cleanupError],
+    "Sandbox setup failed and cgroup cleanup could not be confirmed",
+  )
+  setupError.sandboxCleanupHandle = cleanupHandle
+  setupError.sandboxCleanupError = cleanupError
+  return {
+    setupError,
+    cleanupAttempts: () => cleanupAttempts,
+  }
+}
+
+test("process adapter retains cleanup handle when sandbox setup fails after spawn", async () => {
+  const cleanupError = new Error("cgroup directory removal failed")
+  const fixture = createSandboxSetupCleanupHandle({ cleanupError })
+  const launcher = createSimulatedSandboxLauncher({
+    spawn: () => {
+      throw fixture.setupError
+    },
+  })
+  const adapter = createProcessScenarioAdapter({
+    strategyId: "RS",
+    spawnSandboxedWorker: launcher,
+  })
+
+  await assert.rejects(adapter.execute({
+    runId: "run-worker-setup-cleanup-failure",
+    scenarioId: "RS-004-011",
+    input: null,
+  }), /cgroup cleanup could not be confirmed/)
+  await assert.rejects(adapter.cancel({
+    runId: "run-worker-setup-cleanup-failure",
+  }), /sandbox cgroup cleanup could not be confirmed/,
+  "The cleanup handle must remain registered after a failed retry")
+  assert.equal(await adapter.cancel({
+    runId: "run-worker-setup-cleanup-failure",
+  }), true, "A later confirmed cgroup cleanup must release the retained handle")
+  assert.equal(fixture.cleanupAttempts(), 3)
+})

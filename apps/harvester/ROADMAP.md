@@ -35,16 +35,20 @@ The source-backed [2026-11-26 reliability baseline report](docs/audits/reports/2
 
 ## Scenario Runner / GC Strategy Lab
 
-Foundation [PR #1837](https://github.com/45s/coinzilla/pull/1837) is merged. It does **not** make the Scenario Runner production-ready or executable.
+Foundation [PR #1837](https://github.com/45s/coinzilla/pull/1837), the production-flow RS runtime scenarios in [PR #1887](https://github.com/45s/coinzilla/pull/1887), and the infrastructure-failure/sandbox implementation in [PR #1913](https://github.com/45s/coinzilla/pull/1913) are merged. The production catalogue currently contains twelve PARTIAL RS runtime scenarios; simulation coverage is not production acceptance.
 
-The current [Runner roadmap](../../apps/dashboard/docs/features/gc-strategy-lab/RUNNER_ROADMAP.md) remains the feature-specific plan. Keep execution blocked until:
+The cgroup cleanup lifecycle defect found during acceptance is fixed in [PR #1918](https://github.com/45s/coinzilla/pull/1918): setup failures enter cleanup, cleanup errors are surfaced, scenario success is withheld until cleanup is confirmed, and retained child/run state can retry cleanup during cancellation. Its exact verified head is `32fbdfb90bfde1bdcd265b047f55fa29a1ae5f7b`; all six required workflows passed on that SHA. PR #1918 remains open for review.
 
-- production user-data event transition and terminal-fill reconciliation are exercised for profitable partial CANCELED and adverse fully FILLED SELLs in [PR #1887](https://github.com/45s/coinzilla/pull/1887);
-- under-target FILLED SELL STOP, STOP-persistence failure, and STOP buy-only admission runtime scenarios are implemented in PR #1887; other infrastructure-failure scenarios remain outstanding;
-- a trusted OS-level sandbox and matching attestation are available and verified;
-- source/build/runtime/input replay provenance and exact-head checks are complete.
+The current [Runner roadmap](../../apps/dashboard/docs/features/gc-strategy-lab/RUNNER_ROADMAP.md) and [issue #1836](https://github.com/45s/coinzilla/issues/1836) own remaining acceptance:
 
-Current scenarios use simulated infrastructure and run-local state. No real broker/exchange access, credentials, live account state, or production persistence is authorized.
+- the manual adversarial Linux sandbox E2E must pass on the trusted self-hosted `scenario-sandbox` runner with delegated cgroup v2; hosted CI and mocks are not substitutes;
+- trusted build-artifact attestation must bind source/build/runtime and replay inputs before exact replay can be accepted; missing provenance must continue to block replay;
+- runner-specific retry/idempotency acceptance beyond existing production duplicate-fill and exact-replay regressions remains open;
+- production-flow scenarios use run-local simulation state and a simulated broker; they do not prove restart durability of the production adapter's behavior.
+
+Scenario run history is accepted as in-memory MVP scope, not a blocker. The production operational-state store has its own durable append/manifest and recovery regressions; do not conflate that production store with the scenario worker's in-memory simulation adapter.
+
+All twelve runtime scenarios remain PARTIAL. No real broker/exchange access, credentials, live account state, production persistence, or live execution is authorized.
 
 ## Recently merged fixes — follow up only through their open acceptance/evidence issues
 
@@ -76,3 +80,7 @@ A manual self-hosted workflow `.github/workflows/harvester-scenario-sandbox-e2e.
 ## Production RS process-adapter sandbox acceptance — 2026-11-27
 
 The manual Linux sandbox E2E exercises both an adversarial OS-boundary probe and the actual production RS process adapter/runtime evaluator inside the sandbox. It verifies a passing simulation-only SELL scenario with one simulated broker call and run-local intent/outcome facts. This is not production trading acceptance or RS domain-matrix verification; it remains pending a successful run on the trusted delegated Linux runner and trusted build provenance.
+
+## Scenario Runner cgroup lifecycle follow-up — 2026-11-27
+
+The cgroup setup leak and post-spawn cleanup-handle orphaning are fixed on `fix/harvester/scenario-runner-cgroup-cleanup`: argument construction is guarded; cgroup removal errors are surfaced; the process adapter withholds success until cleanup is confirmed; and cleanup handles are retained/retried even when launcher setup throws before returning a child. Spawn/registration is isolated from execution-promise construction to keep failure registration explicit. Regressions cover invalid worker path, seccomp/IPC setup failure after spawn, spawn failure before child creation, cleanup diagnostics, and retained-slot retry. Exact-head CI is pending. Trusted Linux sandbox E2E, trusted artifact provenance/replay and overall production acceptance remain separate gates.

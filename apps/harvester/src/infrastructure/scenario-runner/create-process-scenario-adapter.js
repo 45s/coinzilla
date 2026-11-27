@@ -237,18 +237,50 @@ async function handleWorkerMessage({
   finish(result)
 }
 
-function createExecutionState({ resolve, reject, children, runId }) {
+function confirmSandboxCleanup({ child }) {
+  if (typeof child.sandboxCleanup !== "function") {
+    if (child.sandboxCleanupError) {
+      throw new Error("Scenario sandbox cgroup cleanup could not be confirmed", {
+        cause: child.sandboxCleanupError,
+      })
+    }
+    return
+  }
+  try {
+    child.sandboxCleanup()
+    delete child.sandboxCleanupError
+  } catch (cause) {
+    child.sandboxCleanupError = cause
+    throw new Error("Scenario sandbox cgroup cleanup could not be confirmed", {
+      cause,
+    })
+  }
+}
+
+function createExecutionState({ resolve, reject, children, runId, child }) {
   let settled = false
   function finish({ error, output, preserveChild = false }) {
     if (settled) {
       return
     }
+    let finalError = error
+    let retainChild = preserveChild
+    try {
+      confirmSandboxCleanup({ child })
+    } catch (cleanupError) {
+      finalError = error
+        ? new AggregateError([error, cleanupError], "Scenario worker failed and sandbox cgroup cleanup could not be confirmed", {
+          cause: error,
+        })
+        : cleanupError
+      retainChild = true
+    }
     settled = true
-    if (!preserveChild) {
+    if (!retainChild) {
       children.delete(runId)
     }
-    if (error) {
-      reject(error)
+    if (finalError) {
+      reject(finalError)
     } else {
       resolve(output)
     }
@@ -416,6 +448,7 @@ function createExecutionPromise({
       reject,
       children,
       runId,
+      child,
     })
     const finish = createAbortAwareFinish({
       signal,
@@ -565,6 +598,86 @@ function dispatchScenarioExecution({
     }))
   }
 }
+function retainSandboxCleanupHandle({ error, children, runId }) {
+  const cleanupHandle = error?.sandboxCleanupHandle
+  if (cleanupHandle && typeof cleanupHandle === "object") {
+    children.set(runId, cleanupHandle)
+  }
+}
+
+function spawnScenarioWorkerAndRetainFailure({
+  spawnSandboxedWorker,
+  workerPath,
+  maxOutputBytes,
+  children,
+  runId,
+}) {
+  try {
+    return spawnScenarioWorker({
+      spawnSandboxedWorker,
+      workerPath,
+      maxOutputBytes,
+    })
+  } catch (error) {
+    retainSandboxCleanupHandle({
+      error,
+      children,
+      runId,
+    })
+    throw error
+  }
+}
+
+function assertWorkerChildCompatible({ child }) {
+  if (!child || typeof child.send !== "function" ||
+    typeof child.once !== "function" || typeof child.kill !== "function") {
+    throw new TypeError("OS sandbox launcher must return a ChildProcess-compatible worker")
+  }
+}
+
+function createWorkerExecutionPromise({
+  child,
+  runId,
+  signal,
+  children,
+  terminationGraceMs,
+  maxOutputBytes,
+  strategyId,
+  scenarioId,
+  input,
+  onStarted,
+}) {
+  const execution = createExecutionPromise({
+    child,
+    runId,
+    signal,
+    children,
+    terminationGraceMs,
+    maxOutputBytes,
+    onReady: () => {
+      if (signal?.aborted) {
+        return
+      }
+      dispatchScenarioExecution({
+        child,
+        execution,
+        runId,
+        strategyId,
+        scenarioId,
+        input,
+        terminationGraceMs,
+      })
+    },
+    onStarted: () => {
+      confirmWorkerExecutionStarted({
+        signal,
+        onStarted,
+      })
+    },
+  })
+  return execution.promise
+}
+
 function createWorkerExecutor({
   strategyId,
   spawnSandboxedWorker,
@@ -579,45 +692,27 @@ function createWorkerExecutor({
       osSandboxVerified,
       signal,
     })
-    const child = spawnScenarioWorker({
+    const child = spawnScenarioWorkerAndRetainFailure({
       spawnSandboxedWorker,
       workerPath,
       maxOutputBytes,
+      children,
+      runId,
     })
-    if (!child || typeof child.send !== "function" ||
-      typeof child.once !== "function" || typeof child.kill !== "function") {
-      throw new TypeError("OS sandbox launcher must return a ChildProcess-compatible worker")
-    }
+    assertWorkerChildCompatible({ child })
     children.set(runId, child)
-    const execution = createExecutionPromise({
+    return createWorkerExecutionPromise({
       child,
       runId,
       signal,
       children,
       terminationGraceMs,
       maxOutputBytes,
-      onReady: () => {
-        if (signal?.aborted) {
-          return
-        }
-        dispatchScenarioExecution({
-          child,
-          execution,
-          runId,
-          strategyId,
-          scenarioId,
-          input,
-          terminationGraceMs,
-        })
-      },
-      onStarted: () => {
-        confirmWorkerExecutionStarted({
-          signal,
-          onStarted,
-        })
-      },
+      strategyId,
+      scenarioId,
+      input,
+      onStarted,
     })
-    return execution.promise
   }
 }
 
@@ -633,6 +728,7 @@ function createWorkerCanceller({ children, terminationGraceMs }) {
       graceMs: terminationGraceMs,
       cooperative: true,
     })
+    confirmSandboxCleanup({ child })
     children.delete(runId)
     return true
   }
