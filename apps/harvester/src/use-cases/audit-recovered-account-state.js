@@ -425,7 +425,10 @@ function applyRecoveredFillCommissionDeltas({
       value: commission?.amount,
       field: `${fill.symbol}.commission.amount`,
     })
-    if (compareDecimal({ left: amount, right: "0" }) < 0) {
+    if (compareDecimal({
+      left: amount,
+      right: "0",
+    }) < 0) {
       throw new Error(`Recovered commission amount cannot be negative for ${fill.symbol}`)
     }
     const isThirdAsset = validateCommissionIdentity({
@@ -438,7 +441,10 @@ function applyRecoveredFillCommissionDeltas({
       continue
     }
     applyThirdAssetCommission({
-      commission: { ...commission, amount },
+      commission: {
+        ...commission,
+        amount,
+      },
       fill,
       market,
       baselineByAsset,
@@ -676,7 +682,10 @@ function createUnownedOpenOrderCommitment({
     value: getOrderPrice({ order }),
     field: `Unowned order ${brokerOrderId}.price`,
   })
-  if (compareDecimal({ left: actualPrice, right: "0" }) <= 0) {
+  if (compareDecimal({
+    left: actualPrice,
+    right: "0",
+  }) <= 0) {
     throw new Error(`Unowned exchange order price must be positive: ${brokerOrderId}`)
   }
   if (!["BUY", "SELL"].includes(order.side)) {
@@ -686,7 +695,10 @@ function createUnownedOpenOrderCommitment({
     ? externalMarket.quoteAsset.code
     : externalMarket.baseAsset.code
   const amount = order.side === "BUY"
-    ? multiplyDecimal({ left: remainingQuantity, right: actualPrice })
+    ? multiplyDecimal({
+      left: remainingQuantity,
+      right: actualPrice,
+    })
     : remainingQuantity
   return {
     actualStatus,
@@ -818,7 +830,10 @@ function inspectExchangeOpenOrders({
     blockedMarkets: new Set(),
   }
   for (const order of openOrders) {
-    inspectExchangeOpenOrder({ order, context })
+    inspectExchangeOpenOrder({
+      order,
+      context,
+    })
   }
   if (context.actualOpenByBrokerId.size !== expectedByBrokerId.size) {
     const missing = [...expectedByBrokerId.keys()].filter((id) =>
