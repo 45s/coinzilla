@@ -821,7 +821,9 @@
         "src/infrastructure/operational-state/fact-validation.js",
         "src/infrastructure/operational-state/record-validation.js",
         "src/infrastructure/operational-state/resolve-directory.js",
-        "src/infrastructure/operational-state/helpers/validate-operational-state-account-facts.js"
+        "src/infrastructure/operational-state/helpers/validate-operational-state-account-facts.js",
+        "src/use-cases/audit-recovered-account-state.js",
+        "src/use-cases/restore-harvester-journal-state.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -892,10 +894,11 @@
         }
       ],
       "runtimeStatus": "offline-only",
-      "limitation": "The durable-fact store and crash matrix are verified offline; default runtime restoration and Journal replay remain disabled pending the separate #654 acceptance gates. This inventory does not authorize or claim runtime state restoration.",
+      "limitation": "Offline account audit now replays terminal, fully owned Recovery Seller BUY fills and includes their Portfolio base quantity and quote cash flow. Active/UNKNOWN RS BUY and RS SELL without durable mixed-sell allocation evidence remain deferred. This inventory does not authorize STOP resolution or restart; default runtime restoration and Journal-driven trading startup remain disabled pending the separate #654 acceptance gates.",
       "invariants": [
         "Verify append-only fact sequence, committed-head and digest integrity; corruption or incomplete history is a blocker.",
-        "The offline candidate remains candidateOnly with restorationEnabled=false and requires exchange reconciliation; runtime restoration and Journal replay are disabled."
+        "The offline candidate remains candidateOnly with restorationEnabled=false and requires exchange reconciliation; runtime restoration and Journal replay are disabled.",
+        "Offline account-audit replay accepts only terminal fully owned RS BUY fills; active/UNKNOWN RS BUY and unsupported RS SELL replay remain fail-closed."
       ]
     },
     {
