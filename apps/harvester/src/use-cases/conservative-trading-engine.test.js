@@ -7453,7 +7453,7 @@ test("does not attach a client-ID lookup that changes immutable order intent", a
 
 
 
-function createRecoveredCanonicalOrder({ clientOrderId, brokerOrderId, side, status, executedQuantity = "0" }) {
+function createRecoveredCanonicalOrder({ clientOrderId, brokerOrderId, side, status, executedQuantity = "0", originalQuantity = "1" }) {
   return new CanonicalOrder({
     clientOrderId,
     brokerOrderId,
@@ -7465,7 +7465,7 @@ function createRecoveredCanonicalOrder({ clientOrderId, brokerOrderId, side, sta
       asset: quoteAsset,
     }),
     originalQuantity: new Quantity({
-      amount: "1",
+      amount: originalQuantity,
       asset: baseAsset,
     }),
     executedQuantity: new Quantity({
@@ -7491,6 +7491,7 @@ function createRecoveredOrderFixtures() {
     brokerOrderId: "broker-recovered-sell",
     side: "SELL",
     status: "OPEN",
+    originalQuantity: "0.9",
   })
   const buyHistory = createRecoveredCanonicalOrder({
     clientOrderId: "recovered-buy",
@@ -7504,6 +7505,7 @@ function createRecoveredOrderFixtures() {
     brokerOrderId: "broker-recovered-sell",
     side: "SELL",
     status: "OPEN",
+    originalQuantity: "0.9",
   })
   const buyFill = new Fill({
     tradeId: "recovered-buy-trade",
@@ -7592,6 +7594,36 @@ test("reconciles recovered orders without canceling or replacing any exchange or
     harness,
     result,
   })
+
+  const reevaluation = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 2,
+    },
+  })
+  assert.equal(
+    reevaluation.ok,
+    true,
+    "A process restart must safely reevaluate after reconciling the outstanding recovery SELL.",
+  )
+  const activeRecoverySells = harness.engine.getActiveOrders().filter((order) => order.side === "SELL")
+  assert.equal(
+    activeRecoverySells.length,
+    1,
+    "Reconciliation must preserve exactly one outstanding recovery SELL and prevent a duplicate.",
+  )
+  assert.equal(
+    activeRecoverySells[0].clientOrderId,
+    "recovered-sell",
+    "The reconciled exchange order must remain the active recovery SELL.",
+  )
+  assert.deepEqual(
+    harness.orders,
+    [],
+    "A restart reevaluation must not submit a replacement while the reconciled recovery SELL remains OPEN.",
+  )
 })
 
 test("clears a recovered replacement intent only after canonical history confirms cancellation", async () => {
