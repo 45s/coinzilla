@@ -884,6 +884,11 @@
           "path": "test/recovery/operational-state-crash-matrix.test.js",
           "name": "replays a fill that races an uncertain cancellation without losing execution evidence",
           "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "replays terminal Recovery Seller BUY fills and includes their inventory in offline account audit",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "offline-only",
