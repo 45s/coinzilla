@@ -429,6 +429,30 @@ test("exposes a write-only durable flush without draining the global EventBus", 
   await service.close()
 })
 
+test("marks Journal degraded when write-only flush returns a failure", async () => {
+  const failure = new Error("write queue failed")
+  const service = prepareOptionalJournal({
+    eventBus: new EventBus(),
+    directory: "/unused",
+    logger,
+    journalFactory: () => ({
+      start: async () => ({ ok: true }),
+      flushWrites: async () => ({ ok: false, errors: [failure] }),
+      close: async () => ({
+        ok: true,
+        closed: true,
+      }),
+    }),
+  })
+
+  assert.equal((await service.ready).ok, true, "The Journal must start before the write-only failure is exercised.")
+  const result = await service.flushWrites()
+  assert.equal(result.ok, false, "A failed write-only Journal result must remain a failure.")
+  assert.equal(result.errors[0], failure, "The adapter must preserve the original Journal error.")
+  assert.equal(service.status.state, "degraded", "A failed write-only durability barrier must degrade Journal health.")
+  await service.close()
+})
+
 test("marks Journal degraded and reports a rejected write-only flush", async () => {
   const failure = new Error("write queue rejected")
   const reported = []

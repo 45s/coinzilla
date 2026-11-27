@@ -1041,6 +1041,7 @@ The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERV
 - [`prepare-optional-journal.test.js`](../../apps/harvester/src/infrastructure/journal/prepare-optional-journal.test.js)
   - `exposes a write-only durable flush without draining the global EventBus`
   - `fails closed when the underlying Journal has no write-only flush capability`
+  - `marks Journal degraded when write-only flush returns a failure`
   - `marks Journal degraded and reports a rejected write-only flush`
 - [`event-publisher.test.js`](../../apps/harvester/src/application/events/event-publisher.test.js)
   - `normalizes a rejected write-only flush and reports the original failure`
