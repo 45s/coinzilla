@@ -288,10 +288,10 @@ function resolveTrustedExecutable({ candidates, existsSync, verifyExecutable }) 
 }
 
 function verifySandboxTools({
-    bwrap,
-    prlimit,
-    execFileSync,
-  }) {
+  bwrap,
+  prlimit,
+  execFileSync,
+}) {
   const bwrapVersion = execFileSync(bwrap.path, ["--version"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
@@ -315,10 +315,10 @@ function verifySandboxTools({
 }
 
 function verifySandboxCapabilities({
-    bwrap,
-    prlimit,
-    execFileSync,
-  }) {
+  bwrap,
+  prlimit,
+  execFileSync,
+}) {
   execFileSync(prlimit.path, [
     "--as=8589934592:8589934592",
     "--cpu=30:30",
