@@ -576,7 +576,7 @@ function validateExpectedOpenOrder({ order }) {
   if (compareDecimal({
     left: remainingQuantity,
     right: "0",
-  }) <= 0)
+  }) <= 0) {
     throw new Error(`Recovered active order has no remaining quantity: ${order.clientOrderId}`)
   }
   if (!["LIMIT", "LIMIT_MAKER"].includes(order.type) || !order.limitPrice) {
