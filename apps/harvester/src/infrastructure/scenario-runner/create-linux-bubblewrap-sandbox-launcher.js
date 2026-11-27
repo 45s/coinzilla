@@ -283,7 +283,7 @@ function createScenarioCgroup({
       cleanup()
     } catch (cleanupError) {
       throw new AggregateError([error, cleanupError], "Scenario cgroup setup and cleanup failed", {
-        cause: error,
+        cause: cleanupError,
       })
     }
     throw error

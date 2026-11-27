@@ -340,7 +340,7 @@ The opt-in Linux sandbox acceptance test also constructs the production `createP
 
 ## Cgroup setup failure cleanup — implemented follow-up
 
-The Linux launcher now constructs all resource arguments inside the guarded cgroup lifecycle. Any setup failure after cgroup creation—including worker-path validation, argument construction, spawn, or seccomp IPC setup—attempts child termination and cgroup cleanup. If cleanup cannot be confirmed, an aggregate error retains the original setup failure and the cleanup failure.
+The Linux launcher now constructs all resource arguments inside the guarded cgroup lifecycle. Any setup failure after cgroup creation—including worker-path validation, argument construction, spawn, or seccomp IPC setup—attempts child termination and cgroup cleanup. If cleanup cannot be confirmed, an aggregate error retains the original setup failure and the cleanup failure; the cleanup failure is the cause, and the setup failure remains in the aggregate errors list.
 
 Per-run cgroup cleanup is idempotent after confirmed removal. A failed `cgroup.kill` or directory removal is no longer silently discarded: removal failure propagates with diagnostic context. The launcher attaches a cleanup function to its child; the process adapter verifies cleanup before resolving a scenario. A cleanup failure rejects the run and retains the child/run slot, and cancellation retries cleanup until removal is confirmed.
 
