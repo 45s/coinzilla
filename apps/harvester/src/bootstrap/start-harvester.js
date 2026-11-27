@@ -427,6 +427,21 @@ function createCommissionAssetPublisher({ accountSnapshotManagerRef }) {
   }
 }
 
+async function persistHarvesterProcessStartFromStartup({
+  dependencies,
+  operationalStateStore,
+  startupOptions,
+} = {}) {
+  return persistHarvesterProcessStart({
+    operationalStateStore,
+    appConfig: startupOptions.appConfig,
+    tradingEnabled: startupOptions.tradingEnabled,
+    configurationFingerprint: startupOptions.configurationFingerprint,
+    enabledMarkets: startupOptions.enabledSymbols,
+    processIdentity: dependencies.processIdentity,
+  })
+}
+
 export async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
   const {
     env,
@@ -472,13 +487,10 @@ export async function prepareHarvesterStartupState({ dependencies, resolved } = 
     }
     recoverySellerStopWorkflow = stopWorkflowResult.data
   }
-  await persistHarvesterProcessStart({
+  await persistHarvesterProcessStartFromStartup({
+    dependencies,
     operationalStateStore,
-    appConfig: startupOptions.appConfig,
-    tradingEnabled: startupOptions.tradingEnabled,
-    configurationFingerprint: startupOptions.configurationFingerprint,
-    enabledMarkets: startupOptions.enabledSymbols,
-    processIdentity: options.processIdentity,
+    startupOptions,
   })
   return {
     operatorControlLifecycle,

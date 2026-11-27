@@ -29,7 +29,7 @@ function jsonLines(records) {
   return `${records.map((record) => JSON.stringify(record)).join("\n")}\n`
 }
 
-function createFixtureFiles() {
+function createMatchingTestnetFixtureFiles() {
   return {
     "logs/sessions/2026-11-20_old/terminal.log": "old session",
     "logs/sessions/2026-11-24_testnet/terminal.log": "selected TESTNET session evidence",
@@ -56,6 +56,11 @@ function createFixtureFiles() {
       signal: null,
       logStreamsComplete: true,
     }),
+  }
+}
+
+function createExcludedSessionFixtureFiles() {
+  return {
     "logs/sessions/2026-11-25_live/terminal.log": "LIVE session must not be included",
     "logs/sessions/2026-11-25_live/process-identity.json": JSON.stringify({
       formatVersion: 1,
@@ -71,6 +76,11 @@ function createFixtureFiles() {
     "logs/cumulative/terminal.log": "TERMINAL LOG MUST NOT BE INCLUDED",
     "data/testnet/harvester.db": "DATABASE MUST NOT BE INCLUDED",
     "data/production/harvester.db": "PRODUCTION DATABASE MUST NOT BE INCLUDED",
+  }
+}
+
+function createRecoveryFactsFixtureFiles() {
+  return {
     "recovery-facts/facts.jsonl": jsonLines([
       {
         sequence: "0",
@@ -97,21 +107,29 @@ function createFixtureFiles() {
       {
         sequence: "1",
         digest: DATA_COMMIT_HASH,
-        runtimeSessionId: RUNTIME_SESSION_ID
+        runtimeSessionId: RUNTIME_SESSION_ID,
       },
     ]),
     "recovery-facts/manifest.jsonl": jsonLines([
       {
         sequence: "0",
         recordCount: "1",
-        lastCommittedDigest: "0".repeat(64)
+        lastCommittedDigest: "0".repeat(64),
       },
       {
         sequence: "1",
         recordCount: "2",
-        lastCommittedDigest: DATA_COMMIT_HASH
+        lastCommittedDigest: DATA_COMMIT_HASH,
       },
     ]),
+  }
+}
+
+function createFixtureFiles() {
+  return {
+    ...createMatchingTestnetFixtureFiles(),
+    ...createExcludedSessionFixtureFiles(),
+    ...createRecoveryFactsFixtureFiles(),
   }
 }
 
@@ -357,7 +375,8 @@ test("rejects LIVE mode before creating an archive", async (t) => {
   await assert.rejects(readdir(path.join(fixture.packageDirectory, "archive-output")), { code: "ENOENT" }, "LIVE mode rejection must happen before archive output is created")
 })
 
-async function writeTestnetSession(fixture, {
+async function writeTestnetSession({
+  fixture,
   sessionName,
   runtimeSessionId,
   complete = true,
@@ -417,8 +436,12 @@ function archiveWithoutPublishing({ fixture, inspectArchive }) {
 
 test("selects the exact trading-runtime session instead of a newer unrelated TESTNET startup", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
-  await writeTestnetSession(fixture, {
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  await writeTestnetSession({
+    fixture,
     sessionName: "2026-11-25_newer-unrelated",
     runtimeSessionId: OTHER_SESSION_ID,
     terminalContent: "newer unrelated startup failure",
@@ -453,7 +476,10 @@ test("selects the exact trading-runtime session instead of a newer unrelated TES
 
 test("reports no matching trading logs and preserves a mismatched session independently", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const factsPath = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
   const facts = (await readFile(factsPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line))
   facts.at(-1).runtimeSessionId = OTHER_SESSION_ID
@@ -481,8 +507,12 @@ test("reports no matching trading logs and preserves a mismatched session indepe
 
 test("marks multiple exact runtime candidates ambiguous instead of choosing the newest one", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
-  await writeTestnetSession(fixture, {
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  await writeTestnetSession({
+    fixture,
     sessionName: "2026-11-25_duplicate-runtime",
     runtimeSessionId: RUNTIME_SESSION_ID,
   })
@@ -509,7 +539,10 @@ test("marks multiple exact runtime candidates ambiguous instead of choosing the 
 
 test("detects identical source log content while retaining every source path", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const sessionDirectory = path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet")
   const identicalLogContent = "same startup-failure record"
   await writeFile(path.join(sessionDirectory, "harvester.log"), identicalLogContent, "utf8")
@@ -544,7 +577,10 @@ test("detects identical source log content while retaining every source path", a
 
 test("reports missing durable process identity, source revision, and session identity explicitly", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const factsPath = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
   const facts = (await readFile(factsPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line))
   delete facts[0].data.processIdentity
@@ -578,7 +614,10 @@ test("reports missing durable process identity, source revision, and session ide
 
 test("preserves incomplete failed-startup logs but does not count them as matching trading logs", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const completionPath = path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/process-completed.json")
   await writeFile(completionPath, JSON.stringify({
     runtimeSessionId: RUNTIME_SESSION_ID,

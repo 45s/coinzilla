@@ -350,7 +350,7 @@ maxLength: 64 })
   }
 }
 
-function validateDurableProcessIdentity({ processIdentity, runtimeSessionId } = {}) {
+function validateDurableProcessIdentityEnvelope({ processIdentity, runtimeSessionId } = {}) {
   if (!processIdentity || typeof processIdentity !== "object" || Array.isArray(processIdentity)) {
     throw new TypeError("Process-start processIdentity must be an object")
   }
@@ -362,17 +362,26 @@ function validateDurableProcessIdentity({ processIdentity, runtimeSessionId } = 
       processIdentity.runtimeSessionId !== runtimeSessionId) {
     throw new TypeError("Process-start processIdentity must match its Harvester runtime session")
   }
-  requireNonEmptyString({ value: processIdentity.version, field: "data.processIdentity.version", maxLength: 80 })
+  requireNonEmptyString({
+    value: processIdentity.version,
+    field: "data.processIdentity.version",
+    maxLength: 80,
+  })
   if (!Number.isSafeInteger(processIdentity.processId) || processIdentity.processId <= 0) {
     throw new TypeError("Process-start processIdentity.processId must be a positive safe integer")
   }
-  const startedAt = processIdentity.startedAt
-  const startedAtDate = new Date(startedAt)
-  if (typeof startedAt !== "string" || Number.isNaN(startedAtDate.getTime()) ||
-      startedAtDate.toISOString() !== startedAt) {
+  const { startedAt, source } = processIdentity
+  if (typeof startedAt !== "string") {
     throw new TypeError("Process-start processIdentity.startedAt must be a canonical UTC timestamp")
   }
-  const source = processIdentity.source
+  const startedAtDate = new Date(startedAt)
+  if (Number.isNaN(startedAtDate.getTime()) || startedAtDate.toISOString() !== startedAt) {
+    throw new TypeError("Process-start processIdentity.startedAt must be a canonical UTC timestamp")
+  }
+  return source
+}
+
+function validateDurableProcessIdentitySource({ source } = {}) {
   if (!source || typeof source !== "object" || Array.isArray(source)) {
     throw new TypeError("Process-start processIdentity.source must be an object")
   }
@@ -380,23 +389,26 @@ function validateDurableProcessIdentity({ processIdentity, runtimeSessionId } = 
   if (Object.keys(source).some((key) => !allowedSourceFields.has(key))) {
     throw new TypeError("Process-start processIdentity.source contains unsupported fields")
   }
-  for (const field of ["branch", "commit"]) {
-    if (source[field] !== null &&
-        (typeof source[field] !== "string" || source[field].trim() !== source[field])) {
-      throw new TypeError(`Process-start processIdentity.source.${field} must be a canonical string or null`)
-    }
+  const { branch, commit, workingTree, metadataSource } = source
+  if (branch !== null &&
+      (typeof branch !== "string" || branch.trim() !== branch || branch.length > 160)) {
+    throw new TypeError("Process-start processIdentity.source.branch must be a canonical string or null")
   }
-  if (source.branch !== null && source.branch.length > 160) {
-    throw new TypeError("Process-start processIdentity.source.branch exceeds its length limit")
-  }
-  if (source.commit !== null && !/^[a-f0-9]{40,64}$/.test(source.commit)) {
+  if (commit !== null &&
+      (typeof commit !== "string" || !/^[a-f0-9]{40,64}$/.test(commit))) {
     throw new TypeError("Process-start processIdentity.source.commit must be a lowercase Git SHA or null")
   }
-  if (!["clean", "dirty", "unknown"].includes(source.workingTree) ||
-      !["git", "environment", "unavailable"].includes(source.metadataSource)) {
+  if (!["clean", "dirty", "unknown"].includes(workingTree) ||
+      !["git", "environment", "unavailable"].includes(metadataSource)) {
     throw new TypeError("Process-start processIdentity source status is invalid")
   }
 }
+
+function validateDurableProcessIdentity({ processIdentity, runtimeSessionId } = {}) {
+  const source = validateDurableProcessIdentityEnvelope({ processIdentity, runtimeSessionId })
+  validateDurableProcessIdentitySource({ source })
+}
+
 
 export function validateProcessStartedFact({ factType, canonicalData, factId, runtimeSessionId }) {
   if (factType === "PROCESS_STARTED") {
