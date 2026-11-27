@@ -1,4 +1,4 @@
-import { capitalize, ensure } from "@coinzilla/utils"
+import { ensure, trimAndUppercase } from "@coinzilla/utils"
 import { assertWithDomainError } from "../helpers/assert-with-domain-error.js"
 
 export const errMsgs = {
@@ -45,7 +45,7 @@ export class Coin {
     if (quantity < 0) {
       throw new Error(errMsgs.quantity)
     }
-    this.#ticker = capitalize(ticker.trim())
+    this.#ticker = trimAndUppercase(ticker)
     this.#quantity = quantity
   }
 }
