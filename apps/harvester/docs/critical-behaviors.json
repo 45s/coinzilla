@@ -355,7 +355,7 @@
         },
         {
           "path": "test/replays/doge-zro-conservative-replay.test.js",
-          "name": "accounts streamed partial BUY executions before advancing the completed-BUY lifecycle",
+          "name": "accounts streamed partial BUY executions before recovery SELL planning",
           "kind": "integration"
         },
         {
@@ -578,7 +578,7 @@
         },
         {
           "path": "test/replays/doge-zro-conservative-replay.test.js",
-          "name": "combines four completed BUY fills into one profitable recovery SELL and retains the configured inventory",
+          "name": "completes the recovery cycle only after the SELL fill report is received and reconciled",
           "kind": "integration"
         },
         {
