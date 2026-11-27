@@ -3,8 +3,14 @@ import { firstValueFrom } from 'rxjs';
 
 import { OperatorApi } from '../operator/api';
 import { parseBotsWebSocketMessage } from '../bots/realtime';
-import { readBotsRuntimeStatus, type BotsRuntimeStatus } from '../bots/view-model';
-import { demoMetrics, demoPositions } from './overview.data';
+import {
+  readBotsMarketRows,
+  readBotsPortfolioPositions,
+  readBotsRuntimeStatus,
+  type BotsMarketRow,
+  type BotsPortfolioPosition,
+  type BotsRuntimeStatus,
+} from '../bots/view-model';
 
 type ConnectionState = 'checking' | 'connected' | 'offline' | 'unavailable';
 type SocketState = 'connecting' | 'connected' | 'reconnecting' | 'offline';
@@ -47,8 +53,8 @@ export class OverviewComponent implements OnInit, OnDestroy {
   private lastRevision = 0;
   private destroyed = false;
 
-  readonly metrics = demoMetrics;
-  readonly positions = demoPositions;
+  readonly markets = signal<readonly BotsMarketRow[]>([]);
+  readonly positions = signal<readonly BotsPortfolioPosition[]>([]);
   readonly apiState = signal<ConnectionState>('checking');
   readonly apiDescription = signal('Checking the local Harvester API');
   readonly socketState = signal<SocketState>('connecting');
@@ -168,6 +174,8 @@ export class OverviewComponent implements OnInit, OnDestroy {
       return;
     }
     this.runtimeStatus.set(status);
+    this.markets.set(readBotsMarketRows(message.data.markets.data));
+    this.positions.set(readBotsPortfolioPositions(message.data.portfolio.data));
     this.snapshotState.set('fresh');
     this.reconnectAttempt = 0;
   }
