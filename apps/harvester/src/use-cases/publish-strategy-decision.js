@@ -322,20 +322,32 @@ function publishStrategyDecisionEvent({ dependencies, context, balances, allocat
   }
 }
 
+function assertRecoveryDecisionPublicationSucceeded({ publication } = {}) {
+  if (publication?.ok !== true) {
+    throw publication?.errors?.[0] ?? new Error("Recovery strategy decision evidence publication failed")
+  }
+}
+
+function assertRecoveryDecisionFlushCapability({ eventPublisher } = {}) {
+  if (typeof eventPublisher?.flush !== "function") {
+    throw new TypeError("Recovery strategy decision evidence requires a durable Journal flush capability")
+  }
+}
+
+function assertRecoveryDecisionFlushSucceeded({ flushed } = {}) {
+  if (flushed?.ok !== true || flushed?.durable !== true) {
+    throw flushed?.errors?.[0] ?? new Error("Recovery strategy decision evidence was published but not durably journaled")
+  }
+}
+
 async function flushRecoveryDecisionEvidence({ eventPublisher, publication, recoveryEvidence } = {}) {
   if (recoveryEvidence === undefined) {
     return publication
   }
-  if (publication?.ok !== true) {
-    throw publication?.errors?.[0] ?? new Error("Recovery strategy decision evidence publication failed")
-  }
-  if (typeof eventPublisher?.flush !== "function") {
-    throw new TypeError("Recovery strategy decision evidence requires a durable Journal flush capability")
-  }
+  assertRecoveryDecisionPublicationSucceeded({ publication })
+  assertRecoveryDecisionFlushCapability({ eventPublisher })
   const flushed = await eventPublisher.flush()
-  if (flushed?.ok !== true || flushed?.durable !== true) {
-    throw flushed?.errors?.[0] ?? new Error("Recovery strategy decision evidence was published but not durably journaled")
-  }
+  assertRecoveryDecisionFlushSucceeded({ flushed })
   return {
     ok: true,
     durable: true,
