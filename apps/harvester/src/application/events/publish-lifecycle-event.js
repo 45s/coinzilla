@@ -23,7 +23,11 @@ function reportMappingFailure({ eventPublisher, eventName, dataResult } = {}) {
     ? dataResult.errors
     : [new TypeError("A successful lifecycle DTO mapping result is required")]
   for (const error of errors) {
-    reportPublicationFailure({ eventPublisher, eventName, error })
+    reportPublicationFailure({
+      eventPublisher,
+      eventName,
+      error,
+    })
   }
 }
 
@@ -65,7 +69,11 @@ function publishMappedLifecycleEvent({ eventPublisher, eventName, data } = {}) {
       data,
     })
     return publication && typeof publication.then === "function"
-      ? observeAsyncPublication({ publication, eventPublisher, eventName })
+      ? observeAsyncPublication({
+        publication,
+        eventPublisher,
+        eventName,
+      })
       : publication
   } catch (error) {
     return toResult({ error })
@@ -79,7 +87,11 @@ export function publishLifecycleEvent({
   dataResult,
 } = {}) {
   if (!dataResult?.ok) {
-    reportMappingFailure({ eventPublisher, eventName, dataResult })
+    reportMappingFailure({
+      eventPublisher,
+      eventName,
+      dataResult,
+    })
     return dataResult ?? toResult({
       error: new TypeError("A successful lifecycle DTO mapping result is required"),
     })
