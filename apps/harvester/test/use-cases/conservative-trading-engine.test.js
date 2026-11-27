@@ -217,7 +217,7 @@ function createFixtureBroker({
   }
 }
 
-function createFixtureAppConfig(externalOrdersPolicy) {
+function createFixtureAppConfig(externalOrdersPolicy, orderQuantity = 10) {
   return {
     strategies: {
       CG_coinGrabber: {
@@ -232,7 +232,7 @@ function createFixtureAppConfig(externalOrdersPolicy) {
             enableVolatilityProtection: true,
             ...(externalOrdersPolicy === undefined ? {} : { externalOrdersPolicy }),
             priceStepPercent: 0.5,
-            orderQuantity: 10,
+            orderQuantity,
             keepQuantity: 1,
             minProfit: 0.01,
             makerPercent: 0,
@@ -250,19 +250,30 @@ function createTradeEventFactory({
       baseAsset,
       quoteAsset,
     }) {
-  return ({ acknowledgedOrder, tradeId, quantity, executedQuantity, status, commissions = [] }) => {
+  return ({
+    acknowledgedOrder,
+    tradeId,
+    quantity,
+    executedQuantity,
+    status,
+    commissions = [],
+    price = acknowledgedOrder.limitPrice.amount,
+  } = {}) => {
     const fill = new Fill({
       tradeId,
       brokerOrderId: acknowledgedOrder.brokerOrderId,
       clientOrderId: acknowledgedOrder.clientOrderId,
       market,
       side: acknowledgedOrder.side,
-      price: acknowledgedOrder.limitPrice,
+      price: new Money({
+        amount: price,
+        asset: quoteAsset,
+      }),
       quantity: new Quantity({ amount: quantity,
 asset: baseAsset }),
       quoteQuantity: new Money({
         amount: multiplyDecimal({
-          left: acknowledgedOrder.limitPrice.amount,
+          left: price,
           right: quantity,
         }),
         asset: quoteAsset,
@@ -398,6 +409,7 @@ const createFixture = ({
   externalOrdersPolicy,
   getVolatilityData,
   pausedMarkets = [],
+  orderQuantity = 10,
 } = {}) => {
   const { baseAsset, quoteAsset, market, marketMetadata, accountSnapshot } = createMarketFixture()
   const brokerState = createFixtureBroker({
@@ -410,7 +422,7 @@ const createFixture = ({
   })
   const accounting = createFixtureAccounting({ market })
   let ready = initiallyReady
-  const appConfig = createFixtureAppConfig(externalOrdersPolicy)
+  const appConfig = createFixtureAppConfig(externalOrdersPolicy, orderQuantity)
   const engine = createFixtureEngine({
     broker: brokerState.broker,
     appConfig,
@@ -881,7 +893,7 @@ async function awaitInitialRecoverySell({ engine, pendingSellStarted }) {
 }
 
 async function startDeferredRecoveryScenario(fixture) {
-  const { engine, submittedIntents, pendingSell, pendingSellStarted } = fixture
+  const { engine, submittedIntents, pendingSellStarted, pendingSell } = fixture
   await engine.processBookTicker(createScenarioBookTicker())
   await engine.processBookTicker(createScenarioBookTicker())
   await engine.processMarketPrice({
@@ -905,29 +917,25 @@ async function startDeferredRecoveryScenario(fixture) {
       tradeId: "trade-1",
       quantity: "10",
       executedQuantity: "10",
-      status: "FILLED",
+      status: "PARTIALLY_FILLED",
+      price: "0.995",
     }),
   })
-  assert.equal(initialBuyFillResult.ok, true, `Initial BUY fill must reconcile before recovery evaluation: ${JSON.stringify(initialBuyFillResult)}`)
+  assert.equal(initialBuyFillResult.ok, true, `Initial partial BUY fill must reconcile before recovery evaluation: ${JSON.stringify(initialBuyFillResult)}`)
+  assert.equal(initialBuyFillResult.data.waitingForFullFill, true)
   const { pendingSellOrder, placingRecoveryOrders } = await awaitInitialRecoverySell({
     engine,
     pendingSellStarted,
   })
   assert.equal(
-    submittedIntents.some((intent) => intent.side === "BUY" && intent.clientOrderId !== initialBuy.clientOrderId),
-    false,
-    "A second BUY must not be submitted while the initial recovery SELL acknowledgement is pending.",
+    submittedIntents.filter((intent) => intent.side === "BUY").length,
+    1,
+    "A pre-existing partial BUY must not create a replacement or next standing BUY while the recovery SELL acknowledgement is pending.",
   )
   pendingSell.resolve(toResult({ data: pendingSellOrder }))
   await placingRecoveryOrders
-  const secondBuyIntent = submittedIntents.find((intent) => intent.side === "BUY" && intent.clientOrderId !== initialBuy.clientOrderId)
-  assert.ok(secondBuyIntent, "The next standing BUY must wait until the initial recovery SELL is acknowledged.")
   return {
-    secondBuy: createScenarioOrder({
-      fixture,
-      intent: secondBuyIntent,
-      brokerOrderId: "3",
-    }),
+    initialBuy,
     pendingSellOrder,
   }
 }
@@ -950,42 +958,46 @@ function createCancellationRacedSellFill({ fixture, pendingSellOrder }) {
   });
 }
 
-async function completeDeferredRecoverySellCancellation({ fixture, secondBuy, pendingSellOrder }) {
-  const { engine, cancelStarted, pendingCancel, cancellations, setFillsForOrder } = fixture;
+async function completeDeferredRecoverySellCancellation({ fixture, initialBuy, pendingSellOrder }) {
+  const { engine, cancelStarted, pendingCancel, cancellations, setFillsForOrder } = fixture
   const partialFill = engine.processUserDataEvent({
     event: fixture.createTradeEvent({
-      acknowledgedOrder: secondBuy,
+      acknowledgedOrder: initialBuy,
       tradeId: "trade-2",
       quantity: "5",
-      executedQuantity: "5",
+      executedQuantity: "15",
       status: "PARTIALLY_FILLED",
+      price: "0.99",
     }),
-  });
+  })
   const finalFill = engine.processUserDataEvent({
     event: fixture.createTradeEvent({
-      acknowledgedOrder: secondBuy,
+      acknowledgedOrder: initialBuy,
       tradeId: "trade-3",
       quantity: "5",
-      executedQuantity: "10",
+      executedQuantity: "20",
       status: "FILLED",
+      price: "0.99",
     }),
-  });
+  })
   await waitForDeferred({
     promise: cancelStarted.promise,
-    label: "recovery SELL cancellation after partial BUY fill",
-  });
+    label: "recovery SELL cancellation after a late fill on the pre-existing BUY",
+  })
   assert.deepEqual(
     cancellations,
     [pendingSellOrder.brokerOrderId],
-    "The first BUY fill must cancel the acknowledged recovery SELL by its exact broker order ID.",
-  );
+    "The late fill on the pre-existing BUY must cancel the acknowledged recovery SELL by its exact broker order ID.",
+  )
   const sellFillEvent = createCancellationRacedSellFill({
     fixture,
     pendingSellOrder,
-  });
-  setFillsForOrder({ orderId: pendingSellOrder.brokerOrderId,
-fills: [sellFillEvent.fill] });
-  const delayedSellReport = engine.processUserDataEvent({ event: sellFillEvent });
+  })
+  setFillsForOrder({
+    orderId: pendingSellOrder.brokerOrderId,
+    fills: [sellFillEvent.fill],
+  })
+  const delayedSellReport = engine.processUserDataEvent({ event: sellFillEvent })
   pendingCancel.resolve(toResult({
     data: new CanonicalOrder({
       clientOrderId: pendingSellOrder.clientOrderId,
@@ -995,13 +1007,15 @@ fills: [sellFillEvent.fill] });
       type: pendingSellOrder.type,
       limitPrice: pendingSellOrder.limitPrice,
       originalQuantity: pendingSellOrder.originalQuantity,
-      executedQuantity: new Quantity({ amount: "2",
-asset: fixture.market.baseAsset }),
+      executedQuantity: new Quantity({
+        amount: "2",
+        asset: fixture.market.baseAsset,
+      }),
       status: "CANCELED",
     }),
-  }));
-  await Promise.all([partialFill, finalFill, delayedSellReport]);
-  return { sellFillEvent };
+  }))
+  await Promise.all([partialFill, finalFill, delayedSellReport])
+  return { sellFillEvent }
 }
 
 function assertCanceledRecoverySellSequence({ fixture, pendingSellOrder }) {
@@ -1037,14 +1051,14 @@ function assertReconciledFillAccounting({ fixture, sellFillEvent }) {
     1,
     "The partial recovery SELL must be applied once across stream delivery and cancellation reconciliation.",
   );
-  assert.equal(position.quantity.amount, "18", "The Position must include both 10-unit BUYs less the 2-unit cancellation-raced SELL fill.");
-  assert.equal(position.spent.amount, "19.85", "Position.spent must retain the full 9.95 + 9.90 BUY cost across the SELL fill.");
+  assert.equal(position.quantity.amount, "18", "The Position must include all 20 units from the pre-existing BUY order less the 2-unit cancellation-raced SELL fill.");
+  assert.equal(position.spent.amount, "19.85", "Position.spent must retain the full 9.95 + 9.90 cost from the two fills of the same BUY order across the SELL fill.");
   assert.equal(position.freeBaseQuantity.amount, "0", "No active inventory may be moved to retained inventory before recovery completion.");
   assert.equal(recoveryLedger.buyCost, "19.85", "The RecoveryLedger compatibility cost mirror must match the complete BUY cost.");
   assert.equal(recoveryLedger.netSellProceeds, "2.213", "The cancellation-raced SELL fill must contribute 2 × 1.107 USDT less the actual 0.001 USDT quote commission.");
 }
 
-async function assertDuplicateFillIsIdempotent({ fixture, secondBuy }) {
+async function assertDuplicateFillIsIdempotent({ fixture, initialBuy }) {
   const portfolioBefore = fixture.getPortfolio().value;
   const recoveryLedgerBefore = fixture.getRecoveryLedger().value;
   const submittedIntentCountBefore = fixture.submittedIntents.length;
@@ -1052,7 +1066,7 @@ async function assertDuplicateFillIsIdempotent({ fixture, secondBuy }) {
 
   await fixture.engine.processUserDataEvent({
     event: fixture.createTradeEvent({
-      acknowledgedOrder: secondBuy,
+      acknowledgedOrder: initialBuy,
       tradeId: "trade-3",
       quantity: "5",
       executedQuantity: "10",
@@ -1084,16 +1098,17 @@ async function assertFinalRecoverySellReplacement(fixture) {
   );
 }
 
-test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel its exact ID and replace from latest fills", async () => {
+test("a pre-existing partially filled BUY is reconciled during recovery SELL acknowledgement and replaces SELL from latest fills", async () => {
   const fixture = createFixture({
     deferFirstSell: true,
     deferCancellation: true,
-  });
-  const scenario = await startDeferredRecoveryScenario(fixture);
+    orderQuantity: 20,
+  })
+  const scenario = await startDeferredRecoveryScenario(fixture)
   const { sellFillEvent } = await completeDeferredRecoverySellCancellation({
     fixture,
     ...scenario,
-  });
+  })
 
   assertCanceledRecoverySellSequence({
     fixture,
@@ -1105,7 +1120,7 @@ test("BUY fills wait for a pending recovery SELL acknowledgement, then cancel it
   });
   await assertDuplicateFillIsIdempotent({
     fixture,
-    secondBuy: scenario.secondBuy,
-  });
+    initialBuy: scenario.initialBuy,
+  })
   await assertFinalRecoverySellReplacement(fixture);
 });
