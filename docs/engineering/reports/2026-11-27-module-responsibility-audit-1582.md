@@ -3,7 +3,7 @@
 **Audit baseline:** `develop` `137bbf64df3518f81b948a95a586d4daee38400c`
 **Git tree:** `0969c57a8a91b575d41818f9c3a1b539b7756c89`
 **Review date:** 2026-11-27
-**Status:** inventory and source dispositions complete; PR #1952 exact-head CI and review remain.
+**Status:** current inventory, source dispositions, and report-only helper-name baseline verified on `develop` `137bbf64df3518f81b948a95a586d4daee38400c`; implementation/report head `3275ebc615cb670295345e188107ee58b988fd99` passed exact-head CI. The final evidence-refresh commit requires its own exact-head CI; issue #1582 remains open for user review/merge.
 
 ## Source inventory baseline
 
@@ -13,14 +13,14 @@ The recursive Git tree contains 1,995 entries / 1,746 files: 1,400 JavaScript fi
 
 - PR #1605 merged the full production-module filename scan and the eight legacy vague/redundant filename remediations.
 - Changed-helper naming remains enforced in the PR quality workflow.
-- Full-tree `pnpm run check:helper-names` previously ran report-only on PR #1952 implementation head `567107da5878bf351d649696eefc9ac37c5d9e30`: 14 helper-policy tests passed and 0 naming findings on the older `dd28f051c6ecf04972b247769e61196c1aa5bad2` baseline. The refreshed scan is explicitly report-only and its exact findings will be recorded from the current PR CI before close. Findings do not fail the workflow; they must be reviewed, corrected or accepted with rationale before any full-tree naming gate is made blocking.
-- Full-tree module filename check remains required and passed in Repository Quality run [46057995437](https://github.com/45s/coinzilla/actions/runs/46057995437); semantic function/module responsibility review remains mandatory.
+- Full-tree `pnpm run check:helper-names` ran report-only on exact PR #1952 head `3275ebc615cb670295345e188107ee58b988fd99` in Repository Quality run [46059871496](https://github.com/45s/coinzilla/actions/runs/46059871496): all 14 helper-policy tests passed and the scanner reported `Helper policy passed for all discovered production helper modules` (0 naming findings). Findings do not fail the workflow; they must be reviewed, corrected or accepted with explicit rationale before any full-tree naming gate is made blocking.
+- Full-tree module filename check remains required and passed in Repository Quality run [46059871496](https://github.com/45s/coinzilla/actions/runs/46059871496); semantic function/module responsibility review remains mandatory.
 
 ## Large production-module inventory
 
 The tested pnpm run report:large-modules reports maintained JavaScript source under apps/, packages/, and repository scripts/ when line count is greater than 500. It excludes test/spec/fixture files and test, tests, test-support, test-helpers, test-utils, __tests__, __fixtures__, mocks, __mocks__, node_modules, generated/vendor/build/coverage trees. A trailing newline is not counted. The report is deterministic (descending line count, then path) and does not fail because of file size.
 
-The current `develop` tree `137bbf64df3518f81b948a95a586d4daee38400c` still contains 72 production modules over 500 lines. Three existing candidate blobs changed since the prior baseline and were re-inspected: Journal recovery projector (1,449 lines; P2-08), recovered-account audit workflow (1,090 lines; KEEP-WORKFLOW), and Journal-state restoration workflow (837 lines; KEEP-WORKFLOW). The other 69 candidate source blobs are unchanged. Current source SHA values are pinned in every row. The report-only inventory and full-tree helper-name scan will be captured by the refreshed Repository Quality run on this PR; earlier CI at `567107da5878bf351d649696eefc9ac37c5d9e30` is historical evidence only.
+The report-only inventory ran on exact PR #1952 head `3275ebc615cb670295345e188107ee58b988fd99` in Repository Quality run [46059871496](https://github.com/45s/coinzilla/actions/runs/46059871496): exactly 72 production modules exceeded 500 lines. The CI output was compared against all 72 report rows; every path and line count matched, including the current source deltas. Three candidate blobs changed since the prior baseline and were re-inspected: Journal recovery projector (1,449 lines; P2-08), recovered-account audit workflow (1,090 lines; KEEP-WORKFLOW), and Journal-state restoration workflow (837 lines; KEEP-WORKFLOW). The other 69 candidate source blobs are unchanged. Current `develop` source blob SHA values are pinned in every row.
 
 | Module | Lines | Owner | Disposition | Source blob SHA (current develop) |
 | --- | ---: | --- | --- | --- |
@@ -129,7 +129,7 @@ File size alone is not a defect. The following modules have concrete multi-respo
 - P2-20 — Harvester strategy decision execution: separate preflight/intent persistence, broker submission, and acknowledgement reconciliation; preserve durable intent and unknown-outcome semantics.
 - P2-21 — Harvester app config: split section-level validation/normalization behind the current config resolver; preserve canonical defaults and validation errors.
 - P2-22 — Harvester candle history service: separate initial history/backfill, live replay, snapshot projection, and readiness; preserve service API.
-- P2-23 — Harvester runtime setup: implemented in [PR #1951](https://github.com/45s/coinzilla/pull/1951) at current head `fcd85156feb3668a07e4fbe47eef078c2fc9f1d4`, splitting user-data runtime, candle-history service, trading-engine composition, and operational-state callbacks while retaining the compatibility facade. It is current with `develop` (2 ahead / 0 behind); the most recent head is undergoing CI after a documentation-style correction. Mark complete in `develop` only after PR #1951 merges.
+- P2-23 — Harvester runtime setup: implemented in [PR #1951](https://github.com/45s/coinzilla/pull/1951) at exact current head `fcd85156feb3668a07e4fbe47eef078c2fc9f1d4`, splitting user-data runtime, candle-history service, trading-engine composition, and operational-state callbacks while retaining the compatibility facade. It is current with `develop` (3 ahead / 0 behind), ready for review, and exact-head CI has 29 successful checks, 1 optional read-only Binance TESTNET integration skipped without credentials, 0 failed, 0 pending. PR #1951 remains open for user review/merge; mark complete in `develop` only after merge.
 
 ## Cohesive-module dispositions
 
@@ -160,7 +160,7 @@ These are follow-up implementation tasks, not a requirement to mechanically spli
 
 ## Follow-up ownership and completion gates
 
-- **Harvester owner:** the 23 P2 dispositions above, each in a focused PR with direct tests, stable public facades, synchronized Harvester roadmap, and exact-head CI. PR #1951 is open and current with `develop`; latest head `fcd85156feb3668a07e4fbe47eef078c2fc9f1d4` has CI rerunning after a Markdown-style correction and remains pending exact-head verification.
+- **Harvester owner:** the 23 P2 dispositions above, each in a focused PR with direct tests, stable public facades, synchronized Harvester roadmap, and exact-head CI. PR #1951 is ready for user review at exact head `fcd85156feb3668a07e4fbe47eef078c2fc9f1d4`; 29 checks passed and the optional read-only TESTNET integration was skipped without credentials.
 - **Brokers owner:** Bitunix and Binance adapter boundary reviews. Preserve BrokerPort compatibility and follow package-local reference/workflow requirements before any protocol-specific extraction.
-- **Repository owner:** maintain the generated 72-module inventory and disposition newly added >500-line files; the full-tree helper-name baseline currently has zero findings and remains report-only.
-- **Issue #1582 remains open until PR #1952 is reviewed and merged.** The complete 72-module inventory, current source blob SHA for every candidate, and owner-scoped follow-up issues are recorded; the current full-tree helper-name scan remains pending exact-head CI evidence. P2 implementation work remains open in #1955–#1960; this audit does not claim those refactors are already implemented.
+- **Repository owner:** maintain the generated 72-module inventory and disposition newly added >500-line files; the full-tree helper-name baseline has 0 findings on current develop, verified by the report-only scan in Repository Quality run [46059871496](https://github.com/45s/coinzilla/actions/runs/46059871496).
+- **Issue #1582 remains open until PR #1952 is reviewed and merged.** The complete 72-module inventory, current source blob SHA for every candidate, and owner-scoped follow-up issues are recorded; the current full-tree helper-name scan has 0 findings on exact head `3275ebc615cb670295345e188107ee58b988fd99`; the final evidence-refresh commit will rerun exact-head CI. P2 implementation work remains open in #1955–#1960; this audit does not claim those refactors are already implemented.
