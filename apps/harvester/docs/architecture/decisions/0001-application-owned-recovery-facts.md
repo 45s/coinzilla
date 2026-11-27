@@ -72,6 +72,8 @@ The committed-head manifest records its format version, the last committed seque
 
 A fact record beyond the committed-head manifest journal, a checkpoint ahead of the fact log, a missing or malformed stream, a partial/torn record, a sequence gap, a digest mismatch, or tail truncation is an unresolved integrity failure. Do not truncate, repair, skip, or reinterpret it as an empty history automatically. An uncertain write result is not success and must not be blindly retried with a new fact identity.
 
+The filesystem regression suite exercises both process-restart boundaries independently: a synced fact with no matching manifest checkpoint remains uncommitted and is rejected by fresh verification; a fully synced manifest checkpoint whose caller acknowledgement is lost can be accepted only after fresh verification and an idempotent retry using the same fact identity and payload. These cases are intentionally not repaired or normalized during startup.
+
 The global sequence and committed head avoid relying on directory enumeration, filename timestamps, or UUID lexical order for new authoritative history. The old Journal directory tree still needs explicit discovery when it is examined for legacy evidence or a one-time baseline assessment.
 
 ### 3. Persist facts; derive mutable trading projections
