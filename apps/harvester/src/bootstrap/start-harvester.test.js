@@ -2210,42 +2210,56 @@ test("allows only an observation-only restart after account resolution and verif
   }
 })
 
+async function startHarvesterAfterPersistedRecoverySellerStop({
+  directory,
+  store,
+  broker,
+  onStrategyEvaluation,
+}) {
+  const restartStore = await createPersistedAccountStopForRestart({
+    directory,
+    store,
+  })
+  const result = await startHarvesterForTest({
+    loadConfig: async () => createRsOnlyStartupConfig(),
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    operationalStateStore: restartStore,
+    executionSymbols: ["LINEAUSDT"],
+    executionRoutes: [
+      {
+        strategyId: "RS_recoverySeller",
+        symbol: "LINEAUSDT",
+      },
+    ],
+    marketDataSymbols: ["LINEAUSDT"],
+    evaluateRecoverySellerTransition: onStrategyEvaluation,
+    logger: {
+      info() {},
+      error() {},
+    },
+  })
+  return { restartStore, result }
+}
+
 test("restores a persisted RS STOP and keeps a restarted runtime observation-only", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []
   const broker = createRsOnlyStartupBroker({ calls })
   let strategyEvaluationCount = 0
   try {
-    const restartStore = await createPersistedAccountStopForRestart({
+    const { restartStore, result } = await startHarvesterAfterPersistedRecoverySellerStop({
       directory,
       store,
-    })
-    const result = await startHarvesterForTest({
-      loadConfig: async () => createRsOnlyStartupConfig(),
-      env: binanceEnv,
-      brokerAdapterFactory: () => broker,
-      operationalStateStore: restartStore,
-      executionSymbols: ["LINEAUSDT"],
-      executionRoutes: [
-        {
-          strategyId: "RS_recoverySeller",
-          symbol: "LINEAUSDT",
-        },
-      ],
-      marketDataSymbols: ["LINEAUSDT"],
-      evaluateRecoverySellerTransition: async () => {
+      broker,
+      onStrategyEvaluation: async () => {
         strategyEvaluationCount += 1
         return {
           ok: true,
           data: { skipped: true },
         }
       },
-      logger: {
-        info() {},
-        error() {},
-      },
     })
-
     assert.equal(result.tradingEnabled, false,
       "A clean restart with a durable RS STOP must remain observation-only until controlled restart acceptance.")
     assert.equal(result.executionEnabled, false,
@@ -2260,14 +2274,9 @@ test("restores a persisted RS STOP and keeps a restarted runtime observation-onl
       "Restart must preserve the RS investment BUY gate.")
     assert.equal(restoredWorkflow.data.isSellAdmissionBlocked(), false,
       "The durable STOP semantics remain investment-only; startup's separate observation-only gate prevents implicit resume.")
-
     await result.processMarketPrice({
       symbol: "LINEAUSDT",
-      priceEvent: {
-        symbol: "LINEAUSDT",
-        price: "100",
-        timestamp: 2,
-      },
+      priceEvent: { symbol: "LINEAUSDT", price: "100", timestamp: 2 },
     })
     assert.equal(strategyEvaluationCount, 0,
       "An observation-only restart must prevent strategy evaluation until controlled restart acceptance.")
@@ -2275,9 +2284,6 @@ test("restores a persisted RS STOP and keeps a restarted runtime observation-onl
       "An observation-only restart must not submit broker orders.")
     await result.stop()
   } finally {
-    await rm(directory, {
-      recursive: true,
-      force: true,
-    })
+    await rm(directory, { recursive: true, force: true })
   }
 })
