@@ -1,5 +1,9 @@
 # @coinzilla/notifiers
 
+## CLI smoke test
+
+The operator-invoked Telegram smoke command is `pnpm --filter @coinzilla/notifiers test:telegram-smoke`. Run it only when intentionally verifying a configured bot/chat; it sends one real Telegram message. Use `pnpm --filter @coinzilla/notifiers test:telegram-smoke -- --version` to print source identity without Telegram credentials or network delivery. See the repository [CLI source identity rollout inventory](../../docs/engineering/CLI_SOURCE_IDENTITY.md).
+
 Dependency-free notification adapters for Coinzilla. Telegram is the first supported transport and uses Node.js built-in fetch(). No Telegram SDK, queue package, Redis, or other runtime dependency is required.
 
 ## Package structure
