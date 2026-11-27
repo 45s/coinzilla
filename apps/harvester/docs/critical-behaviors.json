@@ -727,6 +727,7 @@
       "title": "Shutdown ordering, process-lock retention and safe release",
       "sourceModules": [
         "src/index.js",
+        "src/bootstrap/providers/start-provider-accounts.js",
         "src/infrastructure/process-lock/acquire-harvester-process-locks.js",
         "src/infrastructure/process-lock/acquire-harvester-process-lock.js",
         "src/infrastructure/process/harvester-process-shutdown.js",
@@ -737,6 +738,16 @@
         "src/use-cases/create-conservative-shutdown-safety.js"
       ],
       "tests": [
+        {
+          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
+          "name": "propagates a missing provider durable stop acknowledgement to the aggregate runtime",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
+          "name": "propagates durable process-stop acknowledgement from every provider runtime",
+          "kind": "normal"
+        },
         {
           "path": "src/index.test.js",
           "name": "acquires the process lock before starting Journal and releases it after clean shutdown",
@@ -858,7 +869,8 @@
       "invariants": [
         "Acquire process ownership before starting Journal/runtime; release it only after shutdown and cleanup are confirmed.",
         "Gate BUY, cancel only current-process owned BUYs, reconcile fills/cancellations and prove recovery SELL coverage; if proof or CLOSING durability fails, retain required services and fail closed.",
-        "Bound EventBus flush, notification close, observability cleanup, logger close and lock release; retain process ownership on any failure/timeout, and retry pending operations without overlap."
+        "Bound EventBus flush, notification close, observability cleanup, logger close and lock release; retain process ownership on any failure/timeout, and retry pending operations without overlap.",
+        "A multi-provider aggregate may report durable PROCESS_STOPPED only when every started provider confirms it; otherwise the outer handler must pass the enabled Journal-backed STOPPED barrier before final process-lock release."
       ]
     },
     {
