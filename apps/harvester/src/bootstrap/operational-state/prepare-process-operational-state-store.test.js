@@ -411,7 +411,7 @@ test("does not recreate a missing stream in an existing partial ledger", async (
     force: true,
   }))
   const manifestPath = path.join(directory, "manifest.jsonl")
-  const originalManifest = '{"preserve":"existing partial evidence"}\\n'
+  const originalManifest = JSON.stringify({ preserve: "existing partial evidence" }) + "\n"
   await writeFile(manifestPath, originalManifest, "utf8")
 
   await assert.rejects(
