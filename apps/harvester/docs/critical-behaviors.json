@@ -8,6 +8,7 @@
     "src/use-cases/create-submission-gate.js",
     "src/use-cases/restore-harvester-operational-state.js",
     "src/bootstrap/account/",
+    "src/bootstrap/providers/",
     "src/bootstrap/start-harvester.js",
     "src/infrastructure/operational-state/",
     "src/index.js",
@@ -1274,7 +1275,7 @@
       "branches": 83.22,
       "functions": 96
     },
-    "note": "The original 30 critical-module floors retain their measured baseline provenance. The seven additional critical modules introduced by release PR #1662 were measured from its develop source head and then re-measured with all 37 modules enforced in workflow run 44966859719; their per-module baseline and minimum values are recorded in moduleCoverage."
+    "note": "The original 30 critical-module floors retain their measured baseline provenance. The seven additional critical modules introduced by release PR #1662 were measured from its develop source head and then re-measured with all 37 modules enforced in workflow run 44966859719; their per-module baseline and minimum values are recorded in moduleCoverage. The start-provider-accounts.js module was separately measured from develop 6405aafa1824e61de7fee420f54b436eed30cb5e in workflow run 45934755515 (Harvester job 140295275348); its measured baseline is lines 92.78%, branches 76.83%, functions 97.87%, with policy floors 90%, 75%, and 95%."
   },
   "moduleCoverage": [
     {
@@ -1293,6 +1294,19 @@
         "lines": 83.47,
         "branches": 81.54,
         "functions": 95.18
+      }
+    },
+    {
+      "path": "src/bootstrap/providers/start-provider-accounts.js",
+      "baseline": {
+        "lines": 92.78,
+        "branches": 76.83,
+        "functions": 97.87
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 75,
+        "functions": 95
       }
     },
     {

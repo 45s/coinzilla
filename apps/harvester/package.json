@@ -180,7 +180,8 @@
       "src/domain/strategies/conservative/strategy.test.js",
       "src/bootstrap/create-harvester-stop.test.js",
       "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
-      "src/bootstrap/shutdown/create-shutdown-handler.test.js"
+      "src/bootstrap/shutdown/create-shutdown-handler.test.js",
+      "src/bootstrap/providers/start-provider-accounts.test.js"
     ]
   },
   "scripts": {
