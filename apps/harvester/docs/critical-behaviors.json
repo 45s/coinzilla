@@ -1918,6 +1918,11 @@
           "path": "src/use-cases/audit-recovered-account-state.test.js",
           "name": "sorts multiple unowned open-order commitments deterministically",
           "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "reconciles a third-asset commission when the fee asset is also a market asset",
+          "kind": "normal"
         }
       ],
       "invariants": [

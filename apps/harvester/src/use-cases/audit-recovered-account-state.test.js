@@ -965,6 +965,28 @@ test("fails closed on malformed or unmarketed Journal commission fills", () => {
   assert.match(missingMarket.errors?.[0]?.message ?? "", /Canonical Market metadata is missing for recovered fill ETHUSDT/)
 })
 
+test("reconciles a third-asset commission when the fee asset is also a market asset", () => {
+  const { projection, restored } = restoreState({ thirdAssetCommission: true })
+  const recoveredState = resolveRestoredOrdersAsFilled({ recoveredState: restored })
+  const bnbMarket = new Market({
+    venue: "binance",
+    symbol: "BNBUSDT",
+    baseAsset: feeAsset,
+    quoteAsset: market.quoteAsset,
+  })
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState,
+    currentAccountSnapshot: snapshot({
+      bnbFree: "0.99",
+      bnbLocked: "0",
+    }),
+    openOrders: [],
+    markets: [market, bnbMarket],
+  })
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+})
+
 test("accounts for third-asset commission debits during recovered account reconciliation", () => {
   const { projection, restored } = restoreState({ thirdAssetCommission: true })
   const result = auditRecoveredAccountState({
