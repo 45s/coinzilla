@@ -1367,10 +1367,9 @@ test("rejects a negative remaining quantity on an active recovery SELL", () => {
       market,
       side: "SELL",
       status: "OPEN",
-      remainingQuantity: new Quantity({
+      remainingQuantity: {
         amount: "-1",
-        asset: baseAsset,
-      }),
+      },
     }],
   }), /remainingQuantity cannot be negative/)
 })
