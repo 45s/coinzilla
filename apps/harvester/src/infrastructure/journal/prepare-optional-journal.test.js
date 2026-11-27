@@ -437,7 +437,10 @@ test("marks Journal degraded when write-only flush returns a failure", async () 
     logger,
     journalFactory: () => ({
       start: async () => ({ ok: true }),
-      flushWrites: async () => ({ ok: false, errors: [failure] }),
+      flushWrites: async () => ({
+        ok: false,
+        errors: [failure],
+      }),
       close: async () => ({
         ok: true,
         closed: true,
