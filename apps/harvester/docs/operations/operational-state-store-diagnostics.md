@@ -51,6 +51,30 @@ Resolver: `apps/harvester/src/infrastructure/operational-state/resolve-directory
 
 **Important:** before inspecting or copying data, confirm which directory was actually selected. Do not assume the default if the environment may override it.
 
+### First startup: automatic directory and file creation
+
+When the Operational State Store is required (Conservative restart recovery is enabled, or Recovery Seller is enabled with at least one enabled market), normal Harvester startup calls `initializeIfEmpty()` before full verification:
+
+- If `apps/harvester/recovery-facts/` (or the configured override) does not exist, startup creates the directory, `facts.jsonl`, `manifest.jsonl`, and the sequence-0 `LEDGER_INITIALIZED` genesis record.
+- If the directory exists and is empty, startup creates the same two files and genesis record.
+- Startup then verifies both streams, their sequence/digest/checkpoint linkage, filesystem types/permissions, and required durability barriers before continuing.
+
+No manual initialization command is required for a genuinely new installation. This is first-start genesis only; it does not reconstruct or restore orders, fills, balances, Portfolio, RecoveryLedger, OrderRegistry, or operator state. Telegram-only startup does not create the store because it does not require it.
+
+### Existing directory with a missing file: do not auto-repair
+
+If the directory exists but contains only one stream (for example, `manifest.jsonl` exists and `facts.jsonl` is missing), startup must fail closed. It must **not** create an empty counterpart: the remaining file may be evidence of an interrupted or previously populated ledger. Unexpected files, malformed streams, digest/checkpoint mismatches, and durability failures are also preserved and rejected.
+
+For this case:
+
+1. Stop retrying startup; do not run `operational-state:init`, reset scripts, or manually create either JSONL file.
+2. Confirm the actual resolved directory and `OPERATIONAL_STATE_DIRECTORY` override.
+3. Preserve the entire directory and relevant process logs. Record file names, sizes, and SHA-256 hashes before any recovery work.
+4. Restore `facts.jsonl` and `manifest.jsonl` together from the **same verified backup/snapshot**, after confirming that the backup belongs to this installation and is internally consistent.
+5. If no verified matching backup exists, keep the process stopped and escalate for evidence-based operator recovery. Never invent a genesis record for a directory that already contains ledger evidence.
+
+The directory is intentionally excluded from Git. A repository checkout or `git pull` cannot restore it; maintain a separate protected backup. See [ADR-0007](../architecture/decisions/0007-initialize-empty-operational-state-ledger.md) for the authoritative initialization decision.
+
 ## 3. How to run the diagnostic
 
 From the repository root:

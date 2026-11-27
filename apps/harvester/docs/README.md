@@ -19,6 +19,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Shared token specification generator](../README.md#generate-or-refresh-market-metadata) — retrieve and maintain exchange-derived market precision through `pnpm run config:symbol`; strategy pairs remain operator-owned
 - [Harvester agent instructions](../AGENTS.md) — task-relevant documentation review, domain constraints and concise communication
 - [Harvester roadmap](../ROADMAP.md) — current domain work and status
+- [Operational State Store first-start initialization (ADR-0007)](architecture/decisions/0007-initialize-empty-operational-state-ledger.md) — startup creates the directory, both JSONL streams and genesis only when the directory is missing or empty; existing partial/corrupt data is never repaired.
+- [Operational State Store diagnostics and recovery boundaries](operations/operational-state-store-diagnostics.md) — default path, override, automatic first-start setup and safe handling of missing ledger files.
 - [Startup open-order ownership (ADR-0004)](architecture/decisions/0004-startup-open-orders-are-external.md) — accepted and implemented ownership rule for startup-snapshot orders
 - [Emergency BUY pause (ADR-0005)](architecture/decisions/0005-emergency-buy-pause.md) — global BUY controls and owned-BUY cancellation workflow; market command split is superseded by ADR-0006
 - [Market Pause cancels owned BUYs (ADR-0006)](architecture/decisions/0006-market-pause-cancels-owned-buys.md) — current operator market Pause/Resume behavior, cancellation ordering, ownership boundary and recovery SELL continuity

@@ -3,7 +3,7 @@
 Start with the procedure matching the task. Do not treat a runbook as standing authorization to interact with TESTNET or place/cancel orders.
 
 - [Local DEV reset and evidence archive](local-dev-reset-and-archive.md) — TESTNET-only archive publication, production-data exclusion, process-lock refusal, and recovery-facts-only reset.
-- [Operational State Store diagnostics and incident investigation](operational-state-store-diagnostics.md) — read-only integrity/projection diagnostic, data locations, exit codes, immutable incident evidence, and the resolved #1743 submission-intent wiring defect.
+- [Operational State Store diagnostics and incident investigation](operational-state-store-diagnostics.md) — default path and override, automatic first-start creation for a missing/empty directory, fail-closed partial-ledger handling, read-only integrity/projection diagnostic, and recovery boundaries.
 - [Journal Operations](../JOURNAL_OPERATIONS.md) — Journal lifecycle, event inventory, PREFLIGHT/RECOVERY/CLOSING and targeted COMMISSION_BASELINE durability, process locks, shutdown ordering, failure diagnosis, and read-only Operational State integrity/projection diagnostics.
 - [One-market recovery reconciliation](../recovery/README.md) — offline ADR-0001 Step 7 evidence bundle, audit-only CLI and explicit coverage confirmation.
 - [Offline user-data ACCOUNT blocker resolution](../recovery/README.md#offline-user-data-account-blocker-resolution) — clean-stop requirement, all-configured-market audit, durable resolution/readback and controlled restart; never clears Recovery Seller STOP.
