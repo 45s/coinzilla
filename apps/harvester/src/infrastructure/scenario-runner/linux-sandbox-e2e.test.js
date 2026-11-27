@@ -29,17 +29,8 @@ function hostNamespaceIds() {
 function waitForWorkerMessage({ child, expectedType, timeoutMs }) {
   return new Promise((...promiseCallbacks) => {
     const [resolveMessage, rejectMessage] = promiseCallbacks
-    const onMessage = (message) => {
-      if (message?.type === expectedType || message?.type === "probe-error") {
-        finish({ message })
-      }
-    }
-    const onError = (error) => finish({ error })
-    const onExit = (...exitArguments) => {
-      const [code, signal] = exitArguments
-      finish({ error: new Error(`Sandbox worker exited before its probe response: ${code}/${signal}`) })
-    }
-    const finish = ({ error = null, message = null } = {}) => {
+    let timer = null
+    function finish({ error = null, message = null } = {}) {
       clearTimeout(timer)
       child.removeListener("message", onMessage)
       child.removeListener("error", onError)
@@ -50,7 +41,17 @@ function waitForWorkerMessage({ child, expectedType, timeoutMs }) {
         resolveMessage(message)
       }
     }
-    const timer = setTimeout(() => finish({ error: new Error("Sandbox worker probe timed out") }), timeoutMs)
+    const onMessage = (message) => {
+      if (message?.type === expectedType || message?.type === "probe-error") {
+        finish({ message })
+      }
+    }
+    const onError = (error) => finish({ error })
+    const onExit = (...exitArguments) => {
+      const [code, signal] = exitArguments
+      finish({ error: new Error(`Sandbox worker exited before its probe response: ${code}/${signal}`) })
+    }
+    timer = setTimeout(() => finish({ error: new Error("Sandbox worker probe timed out") }), timeoutMs)
     child.on("message", onMessage)
     child.once("error", onError)
     child.once("exit", onExit)
@@ -119,13 +120,14 @@ function assertSandboxCgroupProfile({ child }) {
 function waitForChildClose({ child, timeoutMs }) {
   return new Promise((...promiseCallbacks) => {
     const [resolveClose] = promiseCallbacks
-    const onClose = () => finish(true)
-    const finish = (closed) => {
+    let timer = null
+    function finish(closed) {
       clearTimeout(timer)
       child.removeListener("close", onClose)
       resolveClose(closed)
     }
-    const timer = setTimeout(() => finish(false), timeoutMs)
+    const onClose = () => finish(true)
+    timer = setTimeout(() => finish(false), timeoutMs)
     child.once("close", onClose)
   })
 }
