@@ -117,6 +117,11 @@
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "submits only the recovery SELL while the recovery cycle remains active",
           "kind": "integration"
+        },
+        {
+          "path": "test/use-cases/conservative-trading-engine.test.js",
+          "name": "a pre-existing partially filled BUY is reconciled during recovery SELL acknowledgement and replaces SELL from latest fills",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
@@ -532,6 +537,11 @@
         {
           "path": "src/use-cases/conservative-trading-engine.test.js",
           "name": "completes the full Conservative lifecycle with the configured retained quantity",
+          "kind": "integration"
+        },
+        {
+          "path": "test/use-cases/conservative-trading-engine.test.js",
+          "name": "a pre-existing partially filled BUY is reconciled during recovery SELL acknowledgement and replaces SELL from latest fills",
           "kind": "integration"
         }
       ],
