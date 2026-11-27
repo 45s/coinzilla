@@ -583,6 +583,7 @@ test("publishes stopped before closing Journal, then closes EventBus", async () 
         closed: true,
       }
     },
+    flush: async () => ({ ok: true }),
   }
   const journalService = {
     close: async () => {
@@ -643,6 +644,7 @@ test("continues EventBus cleanup when Journal close fails", async () => {
       return { ok: true,
         closed: true }
     },
+    flush: async () => ({ ok: true }),
   }
   const journalService = {
     close: async () => {
@@ -698,6 +700,7 @@ test("reports EventBus timeout and preserves Journal close result", async () => 
         timedOut: true,
         errors: [new Error("EventBus close timed out")] }
     },
+    flush: async () => ({ ok: true }),
   }
   const journalService = {
     close: async () => {
@@ -753,6 +756,7 @@ test("coalesces repeated shutdown signals into one cleanup operation", async () 
     publish: (event) => { operations.push(`publish:${event.name}`); return { ok: true,
         event } },
     close: async () => { operations.push("eventBus.close"); return { ok: true } },
+    flush: async () => ({ ok: true }),
   }
   const journalService = {
     close: async () => { operations.push("journal.close"); return { ok: true } },
@@ -800,6 +804,7 @@ test("closes observability after publishing startup failure", async () => {
     publish: (event) => { operations.push(`publish:${event.name}`); return { ok: true,
         event } },
     close: async () => { operations.push("eventBus.close"); return { ok: true } },
+    flush: async () => ({ ok: true }),
   }
   const journalService = {
     close: async () => { operations.push("journal.close"); return { ok: true } },
