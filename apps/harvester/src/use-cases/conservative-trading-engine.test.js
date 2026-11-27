@@ -2095,7 +2095,7 @@ async function applyCompletedBuyAndAssertDurableSellCancellation({
   assert.equal(cancelled.data.side, "SELL")
   assert.equal(cancelled.data.status, "CANCELED")
   const cancelIntentIndex = sequence.lastIndexOf("publish:cancel_requested")
-  const cancelFlushIndex = sequence.lastIndexOf("flush")
+  const cancelFlushIndex = sequence.lastIndexOf("flushWrites")
   const brokerCancelIndex = sequence.indexOf("broker:cancel")
   const cancelLogIndex = sequence.lastIndexOf("log:CANCEL_REQUESTED")
   assert.ok(cancelIntentIndex >= 0)
@@ -2109,6 +2109,8 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
   const events = []
   const sequence = []
   const lifecycleStatuses = []
+  let globalFlushCalls = 0
+  let writeOnlyFlushCalls = 0
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
     logger: {
@@ -2135,10 +2137,19 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
         return { ok: true }
       },
       flush: async () => {
-        sequence.push("flush")
+        globalFlushCalls += 1
+        sequence.push("global-flush")
+        return {
+          ok: false,
+          errors: [new Error("optional EventBus observer failed")],
+        }
+      },
+      flushWrites: async () => {
+        writeOnlyFlushCalls += 1
+        sequence.push("flushWrites")
         return {
           ok: true,
-          durable: true
+          durable: true,
         }
       },
     },
@@ -2164,6 +2175,8 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
     buyOrder,
     sellOrder,
   })
+  assert.equal(globalFlushCalls, 0, "A durable trading intent must not drain global EventBus observers.")
+  assert.equal(writeOnlyFlushCalls, 2, "Submission and cancellation intents must each use the write-only Journal barrier.")
 })
 
 test("does not cancel a recovery SELL when cancellation intent publication is still pending", async () => {
