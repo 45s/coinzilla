@@ -17,7 +17,10 @@ function createDurableEventPublisherStub() {
       durable: true,
     }),
   }
-  eventPublisher.flushWrites = async (...flushArguments) => eventPublisher.flush(...flushArguments)
+  eventPublisher.flushWrites = async () => ({
+    ok: true,
+    durable: true,
+  })
   return eventPublisher
 }
 
