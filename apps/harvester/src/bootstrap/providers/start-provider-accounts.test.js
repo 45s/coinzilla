@@ -919,7 +919,7 @@ test("passes both strategy routes to one provider while deduplicating its market
   assert.deepEqual(starts[0].executionSymbols, ["BTCUSDT"], "The shared market must be subscribed only once")
 })
 
-test("retains a provider process lock when its runtime stop lacks durable acknowledgement", async () => {
+test("propagates a missing provider durable stop acknowledgement to the aggregate runtime", async () => {
   const providers = [
     createProvider({
       providerInstanceId: "first",
