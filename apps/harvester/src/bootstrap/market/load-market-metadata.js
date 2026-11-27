@@ -80,8 +80,11 @@ function requireFetchedMarketMetadata({ symbol, filtersResult } = {}) {
   throw new Error(message)
 }
 
-function createCapturedMarketMetadata({ filtersResult, now } = {}) {
-  const source = requireFetchedMarketMetadata({ filtersResult })
+function createCapturedMarketMetadata({ symbol, filtersResult, now } = {}) {
+  const source = requireFetchedMarketMetadata({
+    symbol,
+    filtersResult,
+  })
   const metadataCapturedAt = readMetadataCaptureTimestamp({ now })
   const metadataVersion = source.metadataVersion ?? null
   return Object.freeze({
@@ -112,17 +115,18 @@ async function loadConfiguredMarketMetadata({
   now,
 } = {}) {
   const receivedMetadata = createCapturedMarketMetadata({
+    symbol,
     filtersResult: await broker.getSymbolFilters({ symbol }),
     now,
-  })
-  const market = validateCanonicalMarketMetadata({
-    symbol,
-    metadata: receivedMetadata,
   })
   logReceivedMarketMetadata({
     logger,
     symbol,
     pairConfig,
+    metadata: receivedMetadata,
+  })
+  const market = validateCanonicalMarketMetadata({
+    symbol,
     metadata: receivedMetadata,
   })
   if (!pairConfig.enabled) {
