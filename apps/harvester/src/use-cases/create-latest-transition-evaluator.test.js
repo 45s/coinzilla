@@ -280,11 +280,38 @@ test("stops Conservative evaluation when recovery filter refresh fails", async (
 })
 
 
-function configureDustCompletionFailureMarket({
-  dependencies,
-  symbol,
-  publishedEvents,
-} = {}) {
+function createDustCompletionFailureMarketMetadata({ symbol } = {}) {
+  return {
+    market: {
+      id: symbol,
+      baseAsset: { id: "asset:DOGE" },
+      quoteAsset: { id: "asset:USDT" },
+    },
+    tradingRules: {
+      constraints: [
+        {
+          type: "MIN_QUANTITY",
+          status: "SUPPORTED",
+          value: { amount: "1", asset: { code: "DOGE" } },
+        },
+        {
+          type: "QUANTITY_INCREMENT",
+          status: "SUPPORTED",
+          value: { amount: "1", asset: { code: "DOGE" } },
+        },
+        {
+          type: "MIN_NOTIONAL",
+          status: "SUPPORTED",
+          value: { amount: "5", asset: { code: "USDT" } },
+        },
+      ],
+    },
+    metadataCapturedAt: 1234,
+    metadataVersion: null,
+  }
+}
+
+function configureDustCompletionFailureMarket({ dependencies, symbol, publishedEvents } = {}) {
   dependencies.state.completedRecoverySellSymbols = new Set([symbol])
   dependencies.state.completedRecoverySellOrdersBySymbol = new Map([
     [symbol, {
@@ -303,49 +330,7 @@ function configureDustCompletionFailureMarket({
     takerPercent: 0.1,
     minProfit: 0.01,
   }
-  dependencies.getCurrentMarketMetadata = () => ({
-    market: {
-      id: symbol,
-      baseAsset: { id: "asset:DOGE" },
-      quoteAsset: { id: "asset:USDT" },
-    },
-    tradingRules: {
-      constraints: [
-        {
-          type: "MIN_QUANTITY",
-          status: "SUPPORTED",
-          value: {
-            amount: "1",
-            asset: {
-              code: "DOGE",
-            },
-          },
-        },
-        {
-          type: "QUANTITY_INCREMENT",
-          status: "SUPPORTED",
-          value: {
-            amount: "1",
-            asset: {
-              code: "DOGE",
-            },
-          },
-        },
-        {
-          type: "MIN_NOTIONAL",
-          status: "SUPPORTED",
-          value: {
-            amount: "5",
-            asset: {
-              code: "USDT",
-            },
-          },
-        },
-      ],
-    },
-    metadataCapturedAt: 1234,
-    metadataVersion: null,
-  })
+  dependencies.getCurrentMarketMetadata = () => createDustCompletionFailureMarketMetadata({ symbol })
   dependencies.eventPublisher = {
     publish: (event) => {
       publishedEvents.push(event)
@@ -720,8 +705,8 @@ test("submits the residual SELL on reevaluation after the recovery SELL fill wit
 
 
 
-test("preserves unknown, rejected, and blocked residual SELL outcomes without completing recovery or placing a BUY", async () => {
-  const scenarios = [
+function createResidualSellOutcomeScenarios() {
+  return [
     {
       status: "UNKNOWN",
       submitResult: {
@@ -754,38 +739,52 @@ test("preserves unknown, rejected, and blocked residual SELL outcomes without co
       },
     },
   ]
-  for (const scenario of scenarios) {
-    const dependencies = createDependencies()
-    const tracked = configureResidualSellThroughDependencies({
-      dependencies,
-      symbol: "DOGEUSDT",
-      activeQuantity: "2.8",
-      sellQuantity: "1.7",
-      keepQuantity: 1,
-      price: "0.05719",
-      baseAssetId: "asset:DOGE",
-      quoteAssetId: "asset:USDT",
-      submitResult: scenario.submitResult,
-    })
-    const evaluate = createLatestTransitionEvaluator(dependencies)
-    const result = await evaluate({
-      symbol: "DOGEUSDT",
-      shutdownRecoveryOnly: true,
-    })
+}
 
-    assert.equal(tracked.submissions.length, 1, "Each broker outcome must preserve one residual SELL attempt.")
-    assert.equal(tracked.submissions[0][0].side, "SELL")
-    assert.equal(tracked.submissions[0][0].quantity, "1.7")
-    assert.equal(tracked.completionCalls.count, 0, "An unresolved broker outcome must not complete recovery.")
-    assert.equal(dependencies.state.completedRecoverySellSymbols.has("DOGEUSDT"), true)
-    assert.equal(tracked.submissions[0].some((action) => action.side === "BUY"), false)
-    if (scenario.status === "BLOCKED") {
-      assert.equal(result.ok, true)
-      assert.equal(result.data.deferred, true)
-      assert.equal(result.data.reason, "SUBMISSION_BLOCKED")
-    } else {
-      assert.equal(result.ok, false)
-      assert.equal(result.errors[0], scenario.submitResult.errors[0])
-    }
+async function runResidualSellOutcomeScenario({ scenario } = {}) {
+  const dependencies = createDependencies()
+  const tracked = configureResidualSellThroughDependencies({
+    dependencies,
+    symbol: "DOGEUSDT",
+    activeQuantity: "2.8",
+    sellQuantity: "1.7",
+    keepQuantity: 1,
+    price: "0.05719",
+    baseAssetId: "asset:DOGE",
+    quoteAssetId: "asset:USDT",
+    submitResult: scenario.submitResult,
+  })
+  const evaluate = createLatestTransitionEvaluator(dependencies)
+  const result = await evaluate({
+    symbol: "DOGEUSDT",
+    shutdownRecoveryOnly: true,
+  })
+  return { dependencies, tracked, result }
+}
+
+function assertResidualSellOutcomeScenario({ scenario, dependencies, tracked, result } = {}) {
+  assert.equal(tracked.submissions.length, 1, "Each broker outcome must preserve one residual SELL attempt.")
+  assert.equal(tracked.submissions[0][0].side, "SELL")
+  assert.equal(tracked.submissions[0][0].quantity, "1.7")
+  assert.equal(tracked.completionCalls.count, 0, "An unresolved broker outcome must not complete recovery.")
+  assert.equal(dependencies.state.completedRecoverySellSymbols.has("DOGEUSDT"), true)
+  assert.equal(tracked.submissions[0].some((action) => action.side === "BUY"), false)
+  if (scenario.status === "BLOCKED") {
+    assert.equal(result.ok, true)
+    assert.equal(result.data.deferred, true)
+    assert.equal(result.data.reason, "SUBMISSION_BLOCKED")
+    return
+  }
+  assert.equal(result.ok, false)
+  assert.equal(result.errors[0], scenario.submitResult.errors[0])
+}
+
+test("preserves unknown, rejected, and blocked residual SELL outcomes without completing recovery or placing a BUY", async () => {
+  for (const scenario of createResidualSellOutcomeScenarios()) {
+    const outcome = await runResidualSellOutcomeScenario({ scenario })
+    assertResidualSellOutcomeScenario({
+      scenario,
+      ...outcome,
+    })
   }
 })

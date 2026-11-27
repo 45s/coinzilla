@@ -126,21 +126,14 @@ function createRecoveryPlannedSell({ sellAction, decision } = {}) {
   }
 }
 
-function createRecoveryDecisionEvidence({
+function createRecoveryDecisionMeasurements({
   dependencies,
   context,
   balances,
-  allocation,
+  inventoryDisposition,
+  sellAction,
 } = {}) {
-  const { decision, symbol, marketPrice, metadata } = context
-  const { inventoryDisposition } = decision
-  const sellAction = findRecoverySellAction({
-    context,
-    allocation,
-  })
-  if (inventoryDisposition === undefined && sellAction === undefined) {
-    return undefined
-  }
+  const { symbol, marketPrice } = context
   const position = resolveRecoveryPosition({
     balances,
     context,
@@ -171,12 +164,6 @@ function createRecoveryDecisionEvidence({
     candidateQuantity,
   })
   return {
-    status: resolveRecoveryEvidenceStatus({ inventoryDisposition }),
-    reason: resolveRecoveryEvidenceReason({
-      inventoryDisposition,
-      sellAction,
-      decision,
-    }),
     activeQuantity,
     keepQuantity,
     residualQuantity,
@@ -192,6 +179,34 @@ function createRecoveryDecisionEvidence({
       left: evaluatedPrice,
       right: sellableQuantity,
     }),
+  }
+}
+
+function createRecoveryDecisionEvidence({ dependencies, context, balances, allocation } = {}) {
+  const { decision, metadata, marketPrice } = context
+  const { inventoryDisposition } = decision
+  const sellAction = findRecoverySellAction({
+    context,
+    allocation,
+  })
+  if (inventoryDisposition === undefined && sellAction === undefined) {
+    return undefined
+  }
+  const measurements = createRecoveryDecisionMeasurements({
+    dependencies,
+    context,
+    balances,
+    inventoryDisposition,
+    sellAction,
+  })
+  return {
+    status: resolveRecoveryEvidenceStatus({ inventoryDisposition }),
+    reason: resolveRecoveryEvidenceReason({
+      inventoryDisposition,
+      sellAction,
+      decision,
+    }),
+    ...measurements,
     inventoryDisposition: inventoryDisposition ?? null,
     plannedSell: createRecoveryPlannedSell({
       sellAction,
@@ -204,20 +219,22 @@ function createRecoveryDecisionEvidence({
   }
 }
 
-function createStrategyDecisionInputs({ context, balances, pairs } = {}) {
+function createStrategyDecisionInputsWithoutBalances({ context, pairs } = {}) {
   const { symbol, activeOrdersBefore, lastBuyPrice, recoveryLedgerBefore } = context
-  if (balances === undefined) {
-    const position = context.portfolioBefore?.getPosition?.({ symbol })
-    return {
-      lastBuyPrice: lastBuyPrice ?? null,
-      activeOrderCount: activeOrdersBefore.length,
-      activeBuyCount: activeOrdersBefore.filter((order) => order.side === "BUY").length,
-      activeSellCount: activeOrdersBefore.filter((order) => order.side === "SELL").length,
-      activeBaseQuantity: position?.baseQuantity?.amount ?? "0",
-      keepQuantity: String(pairs[symbol].keepQuantity),
-      outstandingRecoveryAmount: recoveryLedgerBefore?.outstandingRecoveryAmount ?? "0",
-    }
+  const position = context.portfolioBefore?.getPosition?.({ symbol })
+  return {
+    lastBuyPrice: lastBuyPrice ?? null,
+    activeOrderCount: activeOrdersBefore.length,
+    activeBuyCount: activeOrdersBefore.filter((order) => order.side === "BUY").length,
+    activeSellCount: activeOrdersBefore.filter((order) => order.side === "SELL").length,
+    activeBaseQuantity: position?.baseQuantity?.amount ?? "0",
+    keepQuantity: String(pairs[symbol].keepQuantity),
+    outstandingRecoveryAmount: recoveryLedgerBefore?.outstandingRecoveryAmount ?? "0",
   }
+}
+
+function createStrategyDecisionInputsWithBalances({ context, balances, pairs } = {}) {
+  const { symbol, activeOrdersBefore, lastBuyPrice, recoveryLedgerBefore } = context
   const {
     position,
     portfolioBaseBalance,
@@ -252,6 +269,20 @@ function createStrategyDecisionInputs({ context, balances, pairs } = {}) {
     takerPercent: String(pairs[symbol].takerPercent),
     minProfit: String(pairs[symbol].minProfit),
   }
+}
+
+function createStrategyDecisionInputs({ context, balances, pairs } = {}) {
+  if (balances === undefined) {
+    return createStrategyDecisionInputsWithoutBalances({
+      context,
+      pairs,
+    })
+  }
+  return createStrategyDecisionInputsWithBalances({
+    context,
+    balances,
+    pairs,
+  })
 }
 
 /**

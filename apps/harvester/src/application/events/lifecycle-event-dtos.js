@@ -555,6 +555,33 @@ function mapOptionalRecoveryDecimal({ value, field } = {}) {
   })
 }
 
+function mapRecoveryInventoryDispositionDecimals({ value } = {}) {
+  const decimalFields = [
+    ["quantity", "recoveryEvidence.inventoryDisposition.quantity"],
+    ["minimumQuantity", "recoveryEvidence.inventoryDisposition.minimumQuantity"],
+    ["minimumNotional", "recoveryEvidence.inventoryDisposition.minimumNotional"],
+    ["quantityStepSize", "recoveryEvidence.inventoryDisposition.quantityStepSize"],
+    ["maximumQuantity", "recoveryEvidence.inventoryDisposition.maximumQuantity"],
+    ["maximumNotional", "recoveryEvidence.inventoryDisposition.maximumNotional"],
+    ["evaluatedQuantity", "recoveryEvidence.inventoryDisposition.evaluatedQuantity"],
+    ["evaluatedNotional", "recoveryEvidence.inventoryDisposition.evaluatedNotional"],
+    ["evaluatedPrice", "recoveryEvidence.inventoryDisposition.evaluatedPrice"],
+    ["requiredPrice", "recoveryEvidence.inventoryDisposition.requiredPrice"],
+    ["maximumPrice", "recoveryEvidence.inventoryDisposition.maximumPrice"],
+  ]
+  const mapped = {}
+  for (const [key, field] of decimalFields) {
+    const decimal = mapOptionalRecoveryDecimal({
+      value: value[key],
+      field,
+    })
+    if (decimal !== undefined) {
+      mapped[key] = decimal
+    }
+  }
+  return mapped
+}
+
 function mapRecoveryInventoryDisposition({ value } = {}) {
   if (value === undefined || value === null) {
     return null
@@ -592,29 +619,10 @@ function mapRecoveryInventoryDisposition({ value } = {}) {
       field: "recoveryEvidence.inventoryDisposition.reason",
     })
   }
-  const decimalFields = [
-    ["quantity", "recoveryEvidence.inventoryDisposition.quantity"],
-    ["minimumQuantity", "recoveryEvidence.inventoryDisposition.minimumQuantity"],
-    ["minimumNotional", "recoveryEvidence.inventoryDisposition.minimumNotional"],
-    ["quantityStepSize", "recoveryEvidence.inventoryDisposition.quantityStepSize"],
-    ["maximumQuantity", "recoveryEvidence.inventoryDisposition.maximumQuantity"],
-    ["maximumNotional", "recoveryEvidence.inventoryDisposition.maximumNotional"],
-    ["evaluatedQuantity", "recoveryEvidence.inventoryDisposition.evaluatedQuantity"],
-    ["evaluatedNotional", "recoveryEvidence.inventoryDisposition.evaluatedNotional"],
-    ["evaluatedPrice", "recoveryEvidence.inventoryDisposition.evaluatedPrice"],
-    ["requiredPrice", "recoveryEvidence.inventoryDisposition.requiredPrice"],
-    ["maximumPrice", "recoveryEvidence.inventoryDisposition.maximumPrice"],
-  ]
-  for (const [key, field] of decimalFields) {
-    const decimal = mapOptionalRecoveryDecimal({
-      value: value[key],
-      field,
-    })
-    if (decimal !== undefined) {
-      mapped[key] = decimal
-    }
+  return {
+    ...mapped,
+    ...mapRecoveryInventoryDispositionDecimals({ value }),
   }
-  return mapped
 }
 
 function mapRecoveryFilterConstraint({ value } = {}) {
@@ -714,25 +722,8 @@ function mapRecoveryPlannedSell({ value } = {}) {
   }
 }
 
-function mapStrategyRecoveryEvidence({ value } = {}) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError("recoveryEvidence must be an object")
-  }
-  const inventoryDisposition = mapRecoveryInventoryDisposition({
-    value: value.inventoryDisposition,
-  })
-  const plannedSell = mapRecoveryPlannedSell({
-    value: value.plannedSell,
-  })
+function mapStrategyRecoveryEvidenceQuantities({ value } = {}) {
   return {
-    status: requireString({
-      value: value.status,
-      field: "recoveryEvidence.status",
-    }),
-    reason: requireString({
-      value: value.reason,
-      field: "recoveryEvidence.reason",
-    }),
     activeQuantity: requireDecimalString({
       value: value.activeQuantity,
       field: "recoveryEvidence.activeQuantity",
@@ -769,6 +760,29 @@ function mapStrategyRecoveryEvidence({ value } = {}) {
       value: value.sellableNotional,
       field: "recoveryEvidence.sellableNotional",
     }),
+  }
+}
+
+function mapStrategyRecoveryEvidence({ value } = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("recoveryEvidence must be an object")
+  }
+  const inventoryDisposition = mapRecoveryInventoryDisposition({
+    value: value.inventoryDisposition,
+  })
+  const plannedSell = mapRecoveryPlannedSell({
+    value: value.plannedSell,
+  })
+  return {
+    status: requireString({
+      value: value.status,
+      field: "recoveryEvidence.status",
+    }),
+    reason: requireString({
+      value: value.reason,
+      field: "recoveryEvidence.reason",
+    }),
+    ...mapStrategyRecoveryEvidenceQuantities({ value }),
     filterSnapshot: mapRecoveryFilterSnapshot({
       value: value.filterSnapshot,
     }),

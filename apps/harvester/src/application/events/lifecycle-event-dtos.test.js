@@ -1941,8 +1941,52 @@ test("rejects malformed provider identity tokens in lifecycle DTOs", () => {
 })
 
 
-test("maps no-action recovery disposition and filter evidence into a durable strategy decision", () => {
-  const result = mapStrategyDecisionData({
+function createRecoveryInventoryDispositionFixture() {
+  return {
+    status: "EXCHANGE_CONSTRAINED_DUST",
+    reason: "MIN_NOTIONAL",
+    quantity: "1.8",
+    minimumQuantity: "1",
+    minimumNotional: "5",
+    quantityStepSize: "1",
+    evaluatedQuantity: "1",
+    evaluatedNotional: "0.05719",
+    evaluatedPrice: "0.05719",
+  }
+}
+
+function createRecoveryFilterSnapshotFixture() {
+  return {
+    capturedAt: 1234,
+    version: null,
+    evaluationTimestamp: 1000,
+    captureSource: "LOCAL_METADATA_CACHE",
+    available: true,
+    constraints: [
+      {
+        type: "MIN_QUANTITY",
+        status: "SUPPORTED",
+        value: "1",
+        assetCode: "DOGE",
+      },
+      {
+        type: "QUANTITY_INCREMENT",
+        status: "SUPPORTED",
+        value: "1",
+        assetCode: "DOGE",
+      },
+      {
+        type: "MIN_NOTIONAL",
+        status: "SUPPORTED",
+        value: "5",
+        assetCode: "USDT",
+      },
+    ],
+  }
+}
+
+function createNoActionRecoveryDecisionFixture() {
+  return {
     strategy: "CONSERVATIVE",
     symbol: "DOGEUSDT",
     referencePrice: "0.05719",
@@ -1967,47 +2011,15 @@ test("maps no-action recovery disposition and filter evidence into a durable str
       residualNotional: "0.102942",
       candidateNotional: "0.05719",
       sellableNotional: "0",
-      inventoryDisposition: {
-        status: "EXCHANGE_CONSTRAINED_DUST",
-        reason: "MIN_NOTIONAL",
-        quantity: "1.8",
-        minimumQuantity: "1",
-        minimumNotional: "5",
-        quantityStepSize: "1",
-        evaluatedQuantity: "1",
-        evaluatedNotional: "0.05719",
-        evaluatedPrice: "0.05719",
-      },
+      inventoryDisposition: createRecoveryInventoryDispositionFixture(),
       plannedSell: null,
-      filterSnapshot: {
-        capturedAt: 1234,
-        version: null,
-        evaluationTimestamp: 1000,
-        captureSource: "LOCAL_METADATA_CACHE",
-        available: true,
-        constraints: [
-          {
-            type: "MIN_QUANTITY",
-            status: "SUPPORTED",
-            value: "1",
-            assetCode: "DOGE",
-          },
-          {
-            type: "QUANTITY_INCREMENT",
-            status: "SUPPORTED",
-            value: "1",
-            assetCode: "DOGE",
-          },
-          {
-            type: "MIN_NOTIONAL",
-            status: "SUPPORTED",
-            value: "5",
-            assetCode: "USDT",
-          },
-        ],
-      },
+      filterSnapshot: createRecoveryFilterSnapshotFixture(),
     },
-  })
+  }
+}
+
+test("maps no-action recovery disposition and filter evidence into a durable strategy decision", () => {
+  const result = mapStrategyDecisionData(createNoActionRecoveryDecisionFixture())
 
   assert.equal(result.ok, true)
   assert.equal(result.data.actions.length, 0)
