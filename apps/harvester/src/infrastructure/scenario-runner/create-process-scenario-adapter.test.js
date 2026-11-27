@@ -780,3 +780,60 @@ test("Linux sandbox launcher fails closed when delegated cgroup controllers are 
     },
   }), /cgroup v2 memory\/cpu\/pids delegation is required/)
 })
+
+
+test("process adapter fails the run when sandbox cgroup cleanup cannot be confirmed", async () => {
+  const cleanupError = new Error("cgroup removal failed")
+  const child = new EventEmitter()
+  child.exitCode = null
+  child.signalCode = null
+  child.sandboxCleanup = () => {
+    throw cleanupError
+  }
+  child.send = (message) => {
+    if (message.type === "execute") {
+      child.emit("message", {
+        type: "started",
+        runId: message.runId,
+      })
+      child.emit("message", {
+        runId: message.runId,
+        ok: true,
+        output: {
+          simulated: true,
+        },
+      })
+    }
+  }
+  child.kill = (signal) => {
+    child.exitCode = 0
+    child.signalCode = signal
+    child.emit("exit", 0, signal)
+    child.emit("close", 0, signal)
+    return true
+  }
+  const launcher = createSimulatedSandboxLauncher({
+    spawn: () => {
+      process.nextTick(() => child.emit("message", {
+        type: "ready",
+      }))
+      return child
+    },
+  })
+  const adapter = createProcessScenarioAdapter({
+    strategyId: "RS",
+    spawnSandboxedWorker: launcher,
+  })
+
+  await assert.rejects(adapter.execute({
+    runId: "run-worker-cgroup-cleanup-failure",
+    scenarioId: "RS-004-011",
+    input: null,
+  }), (error) => {
+    assert.match(error.message, /sandbox cgroup cleanup could not be confirmed/i,
+      "The adapter must not report a successful scenario when cgroup cleanup fails")
+    assert.equal(error.cause, cleanupError,
+      "The cgroup cleanup failure must remain available as the rejection cause")
+    return true
+  })
+})
