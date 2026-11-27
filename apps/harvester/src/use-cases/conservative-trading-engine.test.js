@@ -2067,7 +2067,40 @@ function makeBuyFill({
   })
 }
 
-async function applyCompletedBuyAndAssertDurableSellCancellation({
+async function createWriteOnlyDurableIntentPublisher({ events, sequence, onEvent }) {
+  let globalFlushCalls = 0
+  let writeOnlyFlushCalls = 0
+
+  return {
+    eventPublisher: {
+      publish: (event) => {
+        events.push(event)
+        onEvent?.(event)
+        return { ok: true }
+      },
+      flush: async () => {
+        globalFlushCalls += 1
+        sequence.push("global-flush")
+        return {
+          ok: false,
+          errors: [new Error("optional EventBus observer failed")],
+        }
+      },
+      flushWrites: async () => {
+        writeOnlyFlushCalls += 1
+        sequence.push("flushWrites")
+        return {
+          ok: true,
+          durable: true,
+        }
+      },
+    },
+    getGlobalFlushCalls: () => globalFlushCalls,
+    getWriteOnlyFlushCalls: () => writeOnlyFlushCalls,
+  }
+}
+
+function applyCompletedBuyAndAssertDurableSellCancellation({
   harness,
   events,
   sequence,
@@ -2109,10 +2142,20 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
   const events = []
   const sequence = []
   const lifecycleStatuses = []
-  let globalFlushCalls = 0
-  let writeOnlyFlushCalls = 0
   const seeded = makeSeededRecoveryState()
-  const harness = await createHarness({
+  let harness
+  const durableIntentPublisher = createWriteOnlyDurableIntentPublisher({
+    events,
+    sequence,
+    onEvent: (event) => {
+      if (event.name === "order.cancel_requested") sequence.push("publish:cancel_requested")
+      if (event.name === "order.cancelled") {
+        const registered = harness.engine.getOrders().find((order) => order.clientOrderId === event.data.clientOrderId)
+        assert.equal(registered.status, "CANCELED")
+      }
+    },
+  })
+  harness = await createHarness({
     logger: {
       info: (entry) => {
         if (entry.orderLifecycle === true) {
@@ -2126,26 +2169,7 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
     seedExistingBuy: true,
     baseFreeBalance: "1",
     onCancelOrderStarted: () => sequence.push("broker:cancel"),
-    eventPublisher: {
-      publish: (event) => {
-        events.push(event)
-        if (event.name === "order.cancel_requested") {sequence.push("publish:cancel_requested")}
-        if (event.name === "order.cancelled") {
-          const registered = harness.engine.getOrders().find((order) => order.clientOrderId === event.data.clientOrderId)
-          assert.equal(registered.status, "CANCELED")
-        }
-        return { ok: true }
-      },
-flush: async
-      flushWrites: async () => {
-        writeOnlyFlushCalls += 1
-        sequence.push("flushWrites")
-        return {
-          ok: true,
-          durable: true,
-        }
-      },
-    },
+    eventPublisher: durableIntentPublisher.eventPublisher,
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -2168,8 +2192,8 @@ flush: async
     buyOrder,
     sellOrder,
   })
-  assert.equal(globalFlushCalls, 0, "A durable trading intent must not drain global EventBus observers.")
-  assert.equal(writeOnlyFlushCalls, 2, "Submission and cancellation intents must each use the write-only Journal barrier.")
+  assert.equal(durableIntentPublisher.getGlobalFlushCalls(), 0, "A durable trading intent must not drain global EventBus observers.")
+  assert.equal(durableIntentPublisher.getWriteOnlyFlushCalls(), 2, "Submission and cancellation intents must each use the write-only Journal barrier.")
 })
 
 test("does not cancel a recovery SELL when cancellation intent publication is still pending", async () => {
@@ -2187,7 +2211,13 @@ test("does not cancel a recovery SELL when cancellation intent publication is st
     onCancelOrderStarted: () => { cancelCalls += 1 },
     eventPublisher: {
       publish: (event) => event.name === "order.cancel_requested" ? pendingPublication : ({ ok: true }),
-flush: async
+flush: async () => {
+        globalFlushCalls += 1
+        return {
+          ok: false,
+          errors: [new Error("optional observer failure")],
+        }
+      },
       flushWrites: async () => {
         writeOnlyFlushCalls += 1
         return {
