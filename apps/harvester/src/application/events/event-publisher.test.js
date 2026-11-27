@@ -94,6 +94,23 @@ test("exposes structured failure reporting for lifecycle DTO mapping errors", ()
   assert.equal(logs[0].error, error, "The diagnostic must retain the original mapper error.")
 })
 
+test("normalizes a rejected write-only flush and reports the original failure", async () => {
+  const failure = new Error("Journal write-only flush rejected")
+  const reported = []
+  const publisher = makeEventPublisher({
+    eventBus: { publish: () => ({ ok: true }) },
+    flushWrites: async () => { throw failure },
+    logger: { error: (entry) => reported.push(entry) },
+  })
+
+  const result = await publisher.flushWrites()
+  assert.equal(result.ok, false, "A rejected Journal write-only flush must not escape as success.")
+  assert.equal(result.errors[0], failure, "The publisher must preserve the original Journal failure.")
+  assert.equal(reported.length, 1, "The publisher must report the write-only durability failure.")
+  assert.equal(reported[0].eventName, "journal.flush_writes", "The diagnostic must identify the write-only flush operation.")
+  assert.equal(reported[0].error, failure, "The diagnostic must retain the original Journal failure.")
+})
+
 test("delegates write-only flush and requires a durable acknowledgement", async () => {
   let calls = 0
   const eventBus = {

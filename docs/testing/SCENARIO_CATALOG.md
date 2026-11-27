@@ -1041,6 +1041,9 @@ The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERV
 - [`prepare-optional-journal.test.js`](../../apps/harvester/src/infrastructure/journal/prepare-optional-journal.test.js)
   - `exposes a write-only durable flush without draining the global EventBus`
   - `fails closed when the underlying Journal has no write-only flush capability`
+  - `marks Journal degraded and reports a rejected write-only flush`
+- [`event-publisher.test.js`](../../apps/harvester/src/application/events/event-publisher.test.js)
+  - `normalizes a rejected write-only flush and reports the original failure`
 
 **Evidence note:** This mapping names the residual sell-through, filter-boundary, restart-idempotency, and durability assertions. It remains TEST-MAPPED until the complete required CI set passes on the exact current PR HEAD; historical exchange filters and the original runtime source revision remain unknown.
 
