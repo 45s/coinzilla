@@ -469,9 +469,7 @@ function createSecondAccountFailureStarter({
       stopMarketData: async () => ({ ok: true }),
       stop: async () => {
         stopCalls.push(account)
-        return {
-          ok: true,
-        }
+        return durableProcessStopResult()
       },
     }
   }
@@ -588,7 +586,7 @@ function createFailedSecondAccountStarter({ startupError, stopped }) {
       stopMarketData: async () => ({ ok: true }),
       stop: async () => {
         stopped.push(account)
-        return { ok: true }
+        return durableProcessStopResult()
       },
     }
   }
