@@ -59,7 +59,10 @@ async function listHarvesterProcessLockPaths({ lockDirectory } = {}) {
 async function readLockOwner({ lockPath } = {}) {
   try {
     const owner = JSON.parse(await readFile(lockPath, "utf8"))
-    validateLockOwner({ owner, lockPath })
+    validateLockOwner({
+      owner,
+      lockPath,
+    })
     return owner
   } catch (error) {
     throw new Error(
@@ -100,7 +103,10 @@ async function inspectHarvesterProcessLock({ lockPath, hostname, isProcessAlive 
     )
   }
   if (!reclaimed) {
-    throw createBlockingLockError({ lockPath, owner })
+    throw createBlockingLockError({
+      lockPath,
+      owner,
+    })
   }
 }
 
