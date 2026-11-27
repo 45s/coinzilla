@@ -481,11 +481,11 @@ function createSeededBuyOrder({ targetMarket, status, brokerOrderId, acknowledge
     }),
     originalQuantity: new Quantity({
       amount: "1",
-      asset: baseAsset,
+      asset: targetMarket.baseAsset,
     }),
     executedQuantity: new Quantity({
       amount: "0",
-      asset: baseAsset,
+      asset: targetMarket.baseAsset,
     }),
     status,
     createdAt: 1,
