@@ -85,10 +85,7 @@ function resolveRecoverySellableQuantity({ sellAction } = {}) {
   return sellAction?.quantity ?? "0"
 }
 
-function resolveRecoveryCandidateNotional({ inventoryDisposition, evaluatedPrice, candidateQuantity } = {}) {
-  if (inventoryDisposition?.evaluatedNotional !== undefined) {
-    return inventoryDisposition.evaluatedNotional
-  }
+function resolveRecoveryCandidateNotional({ evaluatedPrice, candidateQuantity } = {}) {
   return multiplyDecimal({
     left: evaluatedPrice,
     right: candidateQuantity,
@@ -159,7 +156,6 @@ function createRecoveryDecisionMeasurements({
   })
   const sellableQuantity = resolveRecoverySellableQuantity({ sellAction })
   const candidateNotional = resolveRecoveryCandidateNotional({
-    inventoryDisposition,
     evaluatedPrice,
     candidateQuantity,
   })
