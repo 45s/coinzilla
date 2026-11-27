@@ -23,6 +23,8 @@ const EVENT = Object.freeze({
   EXECUTION_ACCOUNTING_FAILED: "execution.accounting_failed",
 })
 
+const RECOVERY_SELLER_STOP_RESTART_PENDING_REASON = "RECOVERY_SELLER_STOP_RESTART_PENDING"
+
 const CANCELLATION_FAILURE_OUTCOMES = new Map([
   ["NOT_CANCELED", "NOT_CANCELED"],
   ["NOT_REGISTERED", "NOT_REGISTERED"],
@@ -549,7 +551,10 @@ function hasStructuredOperatorActionMetadata(data) {
 }
 
 function validateSafetyBlockerResolutionOwnership({ raisedBlocker, resolution }) {
-  const isRecoverySellerStopReason = raisedBlocker.reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+  const isRecoverySellerStopReason = [
+    "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    RECOVERY_SELLER_STOP_RESTART_PENDING_REASON,
+  ].includes(raisedBlocker.reason)
   const isRecoverySellerStop = isRecoverySellerStopReason &&
     (raisedBlocker.producer === "RECOVERY_SELLER_STOP_WORKFLOW" ||
       raisedBlocker.producer === undefined)
@@ -558,8 +563,14 @@ function validateSafetyBlockerResolutionOwnership({ raisedBlocker, resolution })
     throw new Error("Recovery Seller STOP reason has ambiguous producer provenance and must remain blocking")
   }
   if (isRecoverySellerStop) {
-    if (resolution.resolution !== "OPERATOR_ACTION" || hasOperatorMetadata) {
+    if (raisedBlocker.reason === RECOVERY_SELLER_STOP_RESTART_PENDING_REASON) {
+      throw new Error("Recovery Seller controlled-restart blocker requires explicit fresh-PREFLIGHT acceptance")
+    }
+    if (resolution.resolution !== "OPERATOR_ACTION") {
       throw new Error("Recovery Seller STOP must remain exclusively owned by its operator-action resolver")
+    }
+    if (hasOperatorMetadata && resolution.operatorAuthMethod !== "OS_ACCOUNT") {
+      throw new Error("Recovery Seller STOP resolution requires authenticated OS operator metadata")
     }
     return
   }

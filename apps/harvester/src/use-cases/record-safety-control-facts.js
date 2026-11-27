@@ -120,14 +120,19 @@ function validateSafetyBlockerScopeAndSymbol({ scope, symbol }) {
   }
 }
 
+const RECOVERY_SELLER_STOP_RESTART_PENDING_REASON = "RECOVERY_SELLER_STOP_RESTART_PENDING"
+
 function validateSafetyBlockerProducer({ producer, reason }) {
   const validProducer = producer === undefined ||
     ["USER_DATA_EVENT_HANDLER", "RECOVERY_SELLER_STOP_WORKFLOW"].includes(producer)
   if (!validProducer) {
     throw new TypeError("Safety blocker producer must identify a supported producer")
   }
-  if (producer === "RECOVERY_SELLER_STOP_WORKFLOW" && reason !== "RECOVERY_SELLER_UNEXPECTED_CONDITION") {
-    throw new TypeError("Recovery Seller STOP producer may emit only its dedicated blocker reason")
+  if (
+    producer === "RECOVERY_SELLER_STOP_WORKFLOW" &&
+    !["RECOVERY_SELLER_UNEXPECTED_CONDITION", RECOVERY_SELLER_STOP_RESTART_PENDING_REASON].includes(reason)
+  ) {
+    throw new TypeError("Recovery Seller STOP producer may emit only dedicated STOP or controlled-restart reasons")
   }
 }
 
@@ -194,8 +199,11 @@ operation: "recordSafetyBlockerRaised" })
 function isRecoverySellerStopBlocker(raisedFact) {
   const producer = raisedFact?.data?.producer
   const isRecoverySellerProducer = producer === undefined || producer === "RECOVERY_SELLER_STOP_WORKFLOW"
-  return isRecoverySellerProducer &&
-    raisedFact?.data?.reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+  const isRecoverySellerStopReason = [
+    "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    RECOVERY_SELLER_STOP_RESTART_PENDING_REASON,
+  ].includes(raisedFact?.data?.reason)
+  return isRecoverySellerProducer && isRecoverySellerStopReason
 }
 
 function validateOperatorActionIdentity({ operatorIdentity, operatorId, actionId, resolvedBy }) {
@@ -243,15 +251,17 @@ function validateOperatorActionMetadata(options) {
   validateOperatorActionBlockerSet(options)
 }
 
-function validateRecoverySellerStopAction({ resolvedBy, operatorIdentity, operatorId, actionId, resolutionReason, actionBlockerIds }) {
-  if (operatorIdentity !== undefined ||
-      operatorId !== undefined ||
-      actionId !== undefined ||
-      resolutionReason !== undefined ||
-      actionBlockerIds !== undefined ||
-      !/^operator:[A-Za-z0-9][A-Za-z0-9._@-]{2,127}:[A-Za-z0-9][A-Za-z0-9._:@-]{7,127}$/.test(resolvedBy)) {
-    throw new TypeError("Recovery Seller STOP must use its exclusive operator action resolver")
+function validateRecoverySellerStopAction(options) {
+  if (options.raisedFact?.data?.reason === RECOVERY_SELLER_STOP_RESTART_PENDING_REASON) {
+    throw new TypeError("Recovery Seller controlled-restart blocker requires explicit fresh-PREFLIGHT acceptance")
   }
+  if (
+    options.actionBlockerIds?.length !== 1 ||
+    options.actionBlockerIds[0] !== options.blockerId
+  ) {
+    throw new TypeError("Recovery Seller STOP operator action must target exactly its original blocker")
+  }
+  validateOperatorActionMetadata(options)
 }
 
 function validateSafetyBlockerResolutionBase({ blockerId, resolvedBy, resolution, evidenceDigest }) {
@@ -268,9 +278,14 @@ function validateSafetyBlockerResolutionBase({ blockerId, resolvedBy, resolution
 
 function validateSafetyBlockerResolution(options) {
   validateSafetyBlockerResolutionBase(options)
-  if (options.raisedFact?.data?.reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION" &&
-      options.raisedFact.data.producer !== "RECOVERY_SELLER_STOP_WORKFLOW" &&
-      options.raisedFact.data.producer !== undefined) {
+  if (
+    [
+      "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+      RECOVERY_SELLER_STOP_RESTART_PENDING_REASON,
+    ].includes(options.raisedFact?.data?.reason) &&
+    options.raisedFact.data.producer !== "RECOVERY_SELLER_STOP_WORKFLOW" &&
+    options.raisedFact.data.producer !== undefined
+  ) {
     throw new TypeError("Recovery Seller STOP reason has ambiguous producer provenance and cannot be resolved")
   }
   if (isRecoverySellerStopBlocker(options.raisedFact)) {

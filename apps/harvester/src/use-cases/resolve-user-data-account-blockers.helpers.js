@@ -180,7 +180,7 @@ export function getActiveAccountResolutionBlockers(projection) {
     .map((blocker) => ({ ...blocker }))
   if (blockers.some(({ producer, reason }) =>
     producer !== "USER_DATA_EVENT_HANDLER" ||
-    reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+    ["RECOVERY_SELLER_UNEXPECTED_CONDITION", "RECOVERY_SELLER_STOP_RESTART_PENDING"].includes(reason)
   )) {
     throw new Error("An active ACCOUNT blocker has no verified user-data producer provenance or belongs to Recovery Seller STOP")
   }
