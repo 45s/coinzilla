@@ -844,7 +844,7 @@ test("closes observability after publishing startup failure", async () => {
 })
 
 
-test("reports an ambiguous process-lock release during startup cleanup", async () => {
+test("reports an ambiguous process-lock release after startup logger cleanup", async () => {
   const diagnostics = []
   const calls = []
   const previousExitCode = process.exitCode
@@ -856,6 +856,80 @@ test("reports an ambiguous process-lock release during startup cleanup", async (
         release: async () => {
           calls.push("lock-release")
           return { ok: true }
+        },
+      }),
+      createEventBus: () => ({
+        publish: () => ({ ok: true }),
+        flush: async () => ({ ok: true }),
+        close: async () => {
+          calls.push("eventBus.close")
+          return {
+            ok: true,
+            closed: true,
+          }
+        },
+      }),
+      createJournalService: () => ({
+        status: { enabled: false },
+        ready: Promise.resolve({
+          ok: false,
+          errors: [new Error("Journal readiness failed")],
+        }),
+        flush: async () => ({
+          ok: true,
+          durable: true,
+        }),
+        close: async () => {
+          calls.push("journal.close")
+          return {
+            ok: true,
+            closed: true,
+            disabled: true,
+          }
+        },
+      }),
+      start: async () => {
+        throw new Error("Runtime must not start before Journal readiness succeeds.")
+      },
+      closeLogger: async () => {
+        calls.push("logger.close")
+      },
+      logger: {
+        info() {},
+        debug() {},
+        error: ({ message }) => diagnostics.push(message),
+      },
+    })
+    assert.equal(process.exitCode, 1)
+    assert.deepEqual(calls, [
+      "journal.close",
+      "eventBus.close",
+      "logger.close",
+      "lock-release",
+    ])
+    assert.ok(
+      diagnostics.includes("observability shutdown incomplete"),
+      "An ambiguous lock-release result must be reported as incomplete cleanup.",
+    )
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("retains the process lock when startup logger cleanup fails", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => {
+          calls.push("lock-release")
+          return {
+            ok: true,
+            released: true,
+          }
         },
       }),
       createEventBus: () => ({
@@ -885,18 +959,19 @@ test("reports an ambiguous process-lock release during startup cleanup", async (
       start: async () => {
         throw new Error("Runtime must not start before Journal readiness succeeds.")
       },
+      closeLogger: async () => {
+        calls.push("logger.close")
+        throw new Error("Logger close failed")
+      },
       logger: {
         info() {},
         debug() {},
-        error: ({ message }) => diagnostics.push(message),
+        error() {},
       },
     })
+    assert.deepEqual(calls, ["logger.close"],
+      "The process lock must remain held when logger shutdown is not confirmed.")
     assert.equal(process.exitCode, 1)
-    assert.deepEqual(calls, ["lock-release"])
-    assert.ok(
-      diagnostics.includes("observability shutdown incomplete"),
-      "An ambiguous lock-release result must be reported as incomplete cleanup.",
-    )
   } finally {
     process.exitCode = previousExitCode
   }

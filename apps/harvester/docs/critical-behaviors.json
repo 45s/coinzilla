@@ -879,6 +879,11 @@
           "path": "src/index.trading-history-api.test.js",
           "name": "retains persistence and process ownership when trading-history API close explicitly fails",
           "kind": "failure"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "retains the process lock when startup logger cleanup fails",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
