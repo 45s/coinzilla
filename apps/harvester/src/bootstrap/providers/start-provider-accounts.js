@@ -202,12 +202,8 @@ async function stopOneStartedAccount({
       if (stopErrors.length > 0) {
         return stopErrors
       }
-      if (result?.data?.durableProcessStopAcknowledged !== true) {
-        return [new Error(
-          `Provider account ${entry.provider.providerInstanceId} did not confirm durable PROCESS_STOPPED before process-lock release`,
-        )]
-      }
-      entry.durableProcessStopAcknowledged = true
+      entry.durableProcessStopAcknowledged =
+        result?.data?.durableProcessStopAcknowledged === true
       entry.runtimeStopped = true
     } catch (error) {
       return [error]
