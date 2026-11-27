@@ -35,6 +35,25 @@ function logReceivedMarketMetadata({ logger, symbol, pairConfig, metadata } = {}
   })
 }
 
+function validateCanonicalMarketMetadata({ symbol, metadata } = {}) {
+  const { market } = metadata
+  return market
+}
+
+function publishValidatedMarketMetadata({ eventPublisher, metadata, logger, symbol } = {}) {
+  publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.MARKET_TRADING_RULES_CAPTURED,
+    dataResult: mapMarketTradingRulesCapturedData({ metadata }),
+  })
+  logSystem({
+    logger,
+    message: "Supported exchange trading rules validated",
+    symbol,
+    unvalidatedConstraintCount: metadata.unvalidatedConstraints.length,
+  })
+}
+
 async function loadConfiguredMarketMetadata({
   broker,
   symbol,
@@ -62,7 +81,10 @@ async function loadConfiguredMarketMetadata({
     metadataCapturedAt,
     metadataVersion,
   })
-  const { market } = receivedMetadata
+  const market = validateCanonicalMarketMetadata({
+    symbol,
+    metadata: receivedMetadata,
+  })
   logReceivedMarketMetadata({
     logger,
     symbol,
@@ -104,16 +126,11 @@ async function loadConfiguredMarketMetadata({
     metadataVersion,
   })
   marketMetadata.set(symbol, metadataSnapshot)
-  publishLifecycleEvent({
+  publishValidatedMarketMetadata({
     eventPublisher,
-    eventName: HARVESTER_EVENT_NAMES.MARKET_TRADING_RULES_CAPTURED,
-    dataResult: mapMarketTradingRulesCapturedData({ metadata: metadataSnapshot }),
-  })
-  logSystem({
+    metadata: metadataSnapshot,
     logger,
-    message: "Supported exchange trading rules validated",
     symbol,
-    unvalidatedConstraintCount: metadataSnapshot.unvalidatedConstraints.length,
   })
 }
 

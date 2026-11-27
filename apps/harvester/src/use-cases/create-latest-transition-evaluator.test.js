@@ -280,11 +280,9 @@ test("stops Conservative evaluation when recovery filter refresh fails", async (
 })
 
 
-function configureDustCompletionFailureEvidence({
+function configureDustCompletionFailureMarket({
   dependencies,
   symbol,
-  failure,
-  pauses,
   publishedEvents,
 } = {}) {
   dependencies.state.completedRecoverySellSymbols = new Set([symbol])
@@ -354,6 +352,14 @@ function configureDustCompletionFailureEvidence({
       return { ok: true }
     },
   }
+}
+
+function configureDustCompletionFailureCallbacks({
+  dependencies,
+  failure,
+  pauses,
+  publishedEvents,
+} = {}) {
   dependencies.pause = async (input) => {
     pauses.push(input)
   }
@@ -381,6 +387,27 @@ function configureDustCompletionFailureEvidence({
     },
   })
 }
+
+function configureDustCompletionFailureEvidence({
+  dependencies,
+  symbol,
+  failure,
+  pauses,
+  publishedEvents,
+} = {}) {
+  configureDustCompletionFailureMarket({
+    dependencies,
+    symbol,
+    publishedEvents,
+  })
+  configureDustCompletionFailureCallbacks({
+    dependencies,
+    failure,
+    pauses,
+    publishedEvents,
+  })
+}
+
 
 test("forwards the original dust-completion failure and publishes exact filter evidence before pausing", async () => {
   const dependencies = createDependencies()
