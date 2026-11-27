@@ -449,7 +449,7 @@ test("submits the residual SELL on reevaluation after the recovery SELL fill wit
     {
       symbol: "DOGEUSDT",
       activeQuantity: "2.8",
-      sellQuantity: "1.8",
+      sellQuantity: "1.7",
       keepQuantity: 1,
       price: "0.05719",
       baseAssetId: "asset:DOGE",
@@ -458,7 +458,7 @@ test("submits the residual SELL on reevaluation after the recovery SELL fill wit
     {
       symbol: "ZROUSDT",
       activeQuantity: "0.015",
-      sellQuantity: "0.005",
+      sellQuantity: "0.004",
       keepQuantity: 0.01,
       price: "1.092",
       baseAssetId: "asset:ZRO",

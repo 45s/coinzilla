@@ -1527,7 +1527,7 @@ function evaluateIncidentResidual({
   })
 }
 
-test("sells the exact 1.8 DOGE excess from the incident 2.8 DOGE residual under explicit sellable test filters", () => {
+test("sells the fee-reserved 1.7 DOGE quantity from the incident 2.8 DOGE residual under explicit sellable test filters", () => {
   const { portfolio, recoveryLedger, metadata } = createDogeIncidentResidualScenario()
   const position = portfolio.getPosition({ symbol: "DOGEUSDT" })
   assert.equal(position.quantity.amount, "2.8")
@@ -1555,7 +1555,7 @@ test("sells the exact 1.8 DOGE excess from the incident 2.8 DOGE residual under 
     lastBuyPrice: "0.0569",
   })
   const sell = decision.actions.find((action) => action.side === "SELL")
-  assert.equal(sell?.quantity, "1.8")
+  assert.equal(sell?.quantity, "1.7")
   assert.equal(sell?.reason, "SELL_RESIDUAL_INVENTORY_ABOVE_KEEP_QUANTITY")
   assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
   const completion = evaluateRecoveryCompletion({
@@ -1602,7 +1602,7 @@ test("classifies the incident 2.8 DOGE residual as dust only with explicit minim
   assert.equal(completion.freeQuantity, "2.8")
 })
 
-test("sells the exact 0.005 ZRO excess from the incident 0.015 ZRO residual under explicit sellable test filters", () => {
+test("sells the fee-reserved 0.004 ZRO quantity from the incident 0.015 ZRO residual under explicit sellable test filters", () => {
   const { portfolio, recoveryLedger, metadata } = createZroIncidentResidualScenario({
     quantityIncrement: "0.001",
     minQuantity: "0.001",
@@ -1622,7 +1622,7 @@ test("sells the exact 0.005 ZRO excess from the incident 0.015 ZRO residual unde
     lastBuyPrice: "1.084",
   })
   const sell = decision.actions.find((action) => action.side === "SELL")
-  assert.equal(sell?.quantity, "0.005")
+  assert.equal(sell?.quantity, "0.004")
   assert.equal(sell?.reason, "SELL_RESIDUAL_INVENTORY_ABOVE_KEEP_QUANTITY")
   assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
   const completion = evaluateRecoveryCompletion({
