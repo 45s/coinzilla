@@ -344,4 +344,4 @@ The Linux launcher now constructs all resource arguments inside the guarded cgro
 
 Per-run cgroup cleanup is idempotent after confirmed removal. A failed `cgroup.kill` or directory removal is no longer silently discarded: removal failure propagates with diagnostic context. The launcher attaches a cleanup function to its child; the process adapter verifies cleanup before resolving a scenario. A cleanup failure rejects the run and retains the child/run slot, and cancellation retries cleanup until removal is confirmed.
 
-The regressions in `create-linux-bubblewrap-sandbox-launcher.test.js` and `create-process-scenario-adapter.test.js` cover setup cleanup, cleanup failure propagation, result rejection, and retained-slot retry. Exact-head CI is pending; this is implementation evidence, not trusted OS-boundary acceptance.
+The regressions in `create-linux-bubblewrap-sandbox-launcher.test.js` and `create-process-scenario-adapter.test.js` cover setup cleanup, cleanup failure propagation, result rejection, and retained-slot retry across repeated cancellation attempts. Exact-head CI is pending; this is implementation evidence, not trusted OS-boundary acceptance.

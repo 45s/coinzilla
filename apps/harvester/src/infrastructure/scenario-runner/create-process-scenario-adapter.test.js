@@ -840,7 +840,6 @@ test("process adapter fails the run when sandbox cgroup cleanup cannot be confir
       "The cgroup cleanup failure must remain available as the rejection cause")
     return true
   })
-}
   await assert.rejects(adapter.cancel({
     runId: "run-worker-cgroup-cleanup-failure",
   }), /sandbox cgroup cleanup could not be confirmed/,
