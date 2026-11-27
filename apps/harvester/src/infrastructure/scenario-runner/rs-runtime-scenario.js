@@ -2045,6 +2045,27 @@ function createRuntimeScenarioSellSubmissionAssertions({ output, expected }) {
   ]
 }
 
+function createTerminalReconciliationPersistenceEvidenceAssertions({ output, expected }) {
+  return [
+    createAssertion({
+      name: "canonical SELL fill is staged once for reconciliation",
+      actual: output.terminalSell?.stagedSellFillCount,
+      expected: expected.stagedSellFillCount,
+    }),
+    createAssertion({
+      name: "sole-SELL reservation remains held until reconciliation commits",
+      actual: output.reservedSellCycle?.clientOrderId === output.terminalSell?.clientOrderId,
+      expected: expected.reservationRetained,
+    }),
+    createAssertion({
+      name: "terminal reconciliation exposes a durable persistence error",
+      actual: typeof output.terminalSell?.terminalReconciliationError === "string" &&
+        output.terminalSell.terminalReconciliationError.length > 0,
+      expected: true,
+    }),
+  ]
+}
+
 function createTerminalReconciliationPersistenceFailureAssertions({ output, expected }) {
   return [
     ...createRuntimeScenarioSellSubmissionAssertions({
@@ -2091,21 +2112,9 @@ function createTerminalReconciliationPersistenceFailureAssertions({ output, expe
       actual: output.terminalSell?.buyAdmissionBlocked,
       expected: expected.buyAdmissionBlocked,
     }),
-    createAssertion({
-      name: "canonical SELL fill is staged once for reconciliation",
-      actual: output.terminalSell?.stagedSellFillCount,
-      expected: expected.stagedSellFillCount,
-    }),
-    createAssertion({
-      name: "sole-SELL reservation remains held until reconciliation commits",
-      actual: output.reservedSellCycle?.clientOrderId === output.terminalSell?.clientOrderId,
-      expected: expected.reservationRetained,
-    }),
-    createAssertion({
-      name: "terminal reconciliation exposes the injected durable persistence failure",
-      actual: typeof output.terminalSell?.terminalReconciliationError === "string" &&
-        output.terminalSell.terminalReconciliationError.length > 0,
-      expected: true,
+    ...createTerminalReconciliationPersistenceEvidenceAssertions({
+      output,
+      expected,
     }),
   ]
 }
