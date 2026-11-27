@@ -299,8 +299,18 @@ Market-scoped blockers remain local to their symbol. The ADR-0008 Recovery Selle
 
 Do not confuse an account open-order audit classification of `BLOCKED` with this safety gate. ADR-0004 remains authoritative: external orders stay unowned and untouched; `IGNORE` permits scoped continuation, while `BLOCK` prevents trading only on the affected market.
 
-## Offline Recovery Seller Journal replay boundary
+## Recovery Seller STOP resolution boundary
 
-The read-only account audit replays only terminal, fully owned Recovery Seller BUY orders/fills (`RECOVERY_BUY`, BUY side, valid position/cycle identity) and includes their Portfolio base-quantity and quote-cash-flow deltas. This permits offline reconciliation of confirmed RS BUY inventory without attributing it to Conservative strategy positions.
+Recovery Seller STOP resolution is an offline, authenticated local OS-account action. It requires explicit cause-fixed acknowledgement, the exact durable blocker ID, fresh (at most five minutes old) authoritative account-wide order/fill/balance reconciliation for every configured market, zero unresolved facts/discrepancies, and verified Portfolio/legacy/reservation accounting. Copying operator identity fields or supplying UI evidence is not authentication.
 
-Active or UNKNOWN RS BUY orders remain deferred until canonical order reconciliation. RS SELL orders/fills remain deferred until durable mixed-sell allocation evidence is available and replayed. An audit that reports this deferral must not be used to resolve an RS STOP or authorize a restart. This is offline Journal/account reconciliation only and does not query or mutate an exchange.
+Run `node scripts/recovery-seller-stop.js --context <evidence.json> --operator-id <local-user> --action-id <unique-id> --resolution-reason <text> --cause-fixed` from the Harvester package. The context file is operator-reviewed offline evidence; the command does not query exchanges or submit/cancel orders.
+
+Durable resolution does not clear in-process BUY/SELL admission gates, reset runtime state, restart the process, or resume trading. The current process remains blocked and reports `requiresControlledRestart: true`. A separate controlled restart must perform fresh authoritative reconciliation and PREFLIGHT before execution. Telegram STOP status remains read-only.
+
+The read-only operator STOP status reports `requiresControlledRestart` and both BUY/SELL admission-gate states so an operator can verify that durable resolution has not resumed execution.
+
+## Offline Recovery Seller BUY Journal replay
+
+The offline Journal/account-audit path may replay only acknowledged, terminal, fully owned Recovery Seller BUYs with complete fill identity and exact cumulative quantity. It reconstructs Portfolio base inventory and quote cash flow; third-asset commission accounting requires its captured baseline.
+
+Active or UNKNOWN BUYs, incomplete/contradictory Journal evidence, and RS SELL fills without durable mixed-sell allocation evidence remain deferred. This is accounting-only: offline replay never resolves RS STOP, authorizes controlled restart, or enables runtime restoration. No exchange/account operations are part of this workflow.

@@ -244,7 +244,7 @@ test("requires structured operator action for user-data ACCOUNT blocker resoluti
   }
 })
 
-test("keeps Recovery Seller STOP exclusive to its dedicated legacy operator action", () => {
+test("projects legacy and structured Recovery Seller STOP operator actions without account-wide bypass", () => {
   const raisedBlocker = {
     blockerId,
     producer: "RECOVERY_SELLER_STOP_WORKFLOW",
@@ -277,6 +277,10 @@ test("keeps Recovery Seller STOP exclusive to its dedicated legacy operator acti
   ]
   const legacy = projectHarvesterOperationalState({ records: recordsFor(legacyResolution) })
   const structured = projectHarvesterOperationalState({ records: recordsFor(structuredResolution) })
+  const invalidStructured = projectHarvesterOperationalState({ records: recordsFor({
+    ...structuredResolution,
+    operatorAuthMethod: "TELEGRAM",
+  }) })
 
   const legacyUnattributedRecords = recordsFor(legacyResolution).map((entry) =>
     entry.factType === "SAFETY_BLOCKER_RAISED"
@@ -293,7 +297,9 @@ test("keeps Recovery Seller STOP exclusive to its dedicated legacy operator acti
 
   assert.equal(legacy.ok, true, legacy.errors?.map(({ message }) => message).join("; "))
   assert.deepEqual(legacy.data.stickySafetyBlockers, [])
-  assert.equal(structured.ok, false, "The account-wide user-data resolver must not clear Recovery Seller STOP.")
+  assert.equal(structured.ok, true, "A structured OS-account action must project the durable STOP resolution.")
+  assert.deepEqual(structured.data.stickySafetyBlockers, [])
+  assert.equal(invalidStructured.ok, false, "Non-OS-account structured resolution must remain blocking.")
   assert.equal(legacyUnattributed.ok, true, "Legacy untagged Recovery Seller STOP facts retain their dedicated resolver")
   assert.deepEqual(legacyUnattributed.data.stickySafetyBlockers, [])
 })

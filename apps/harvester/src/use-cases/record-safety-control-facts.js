@@ -243,14 +243,13 @@ function validateOperatorActionMetadata(options) {
   validateOperatorActionBlockerSet(options)
 }
 
-function validateRecoverySellerStopAction({ resolvedBy, operatorIdentity, operatorId, actionId, resolutionReason, actionBlockerIds }) {
-  if (operatorIdentity !== undefined ||
-      operatorId !== undefined ||
-      actionId !== undefined ||
-      resolutionReason !== undefined ||
-      actionBlockerIds !== undefined ||
-      !/^operator:[A-Za-z0-9][A-Za-z0-9._@-]{2,127}:[A-Za-z0-9][A-Za-z0-9._:@-]{7,127}$/.test(resolvedBy)) {
-    throw new TypeError("Recovery Seller STOP must use its exclusive operator action resolver")
+function validateRecoverySellerStopAction(options) {
+  validateOperatorActionMetadata(options)
+  const exactBlockerSet = Array.isArray(options.actionBlockerIds) &&
+    options.actionBlockerIds.length === 1 &&
+    options.actionBlockerIds[0] === options.blockerId
+  if (!exactBlockerSet) {
+    throw new TypeError("Recovery Seller STOP resolution requires the exact durable blocker set")
   }
 }
 
