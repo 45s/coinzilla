@@ -39,7 +39,11 @@ function reportAsyncPublicationResult({ eventPublisher, eventName, result } = {}
     ? result.errors
     : [new Error("Asynchronous lifecycle event publication failed")]
   for (const error of errors) {
-    reportPublicationFailure({ eventPublisher, eventName, error })
+    reportPublicationFailure({
+      eventPublisher,
+      eventName,
+      error,
+    })
   }
 }
 
