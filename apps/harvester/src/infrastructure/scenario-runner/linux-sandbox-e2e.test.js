@@ -30,6 +30,18 @@ function waitForWorkerMessage({ child, expectedType, timeoutMs }) {
   return new Promise((...promiseCallbacks) => {
     const [resolveMessage, rejectMessage] = promiseCallbacks
     let timer = null
+    function onMessage(message) {
+      if (message?.type === expectedType || message?.type === "probe-error") {
+        finish({ message })
+      }
+    }
+    function onError(error) {
+      finish({ error })
+    }
+    function onExit(...exitArguments) {
+      const [code, signal] = exitArguments
+      finish({ error: new Error(`Sandbox worker exited before its probe response: ${code}/${signal}`) })
+    }
     function finish({ error = null, message = null } = {}) {
       clearTimeout(timer)
       child.removeListener("message", onMessage)
@@ -41,23 +53,12 @@ function waitForWorkerMessage({ child, expectedType, timeoutMs }) {
         resolveMessage(message)
       }
     }
-    const onMessage = (message) => {
-      if (message?.type === expectedType || message?.type === "probe-error") {
-        finish({ message })
-      }
-    }
-    const onError = (error) => finish({ error })
-    const onExit = (...exitArguments) => {
-      const [code, signal] = exitArguments
-      finish({ error: new Error(`Sandbox worker exited before its probe response: ${code}/${signal}`) })
-    }
     timer = setTimeout(() => finish({ error: new Error("Sandbox worker probe timed out") }), timeoutMs)
     child.on("message", onMessage)
     child.once("error", onError)
     child.once("exit", onExit)
   })
 }
-
 function sendWorkerMessage({ child, message }) {
   return new Promise((...promiseCallbacks) => {
     const [resolveMessage, rejectMessage] = promiseCallbacks
@@ -121,17 +122,18 @@ function waitForChildClose({ child, timeoutMs }) {
   return new Promise((...promiseCallbacks) => {
     const [resolveClose] = promiseCallbacks
     let timer = null
+    function onClose() {
+      finish(true)
+    }
     function finish(closed) {
       clearTimeout(timer)
       child.removeListener("close", onClose)
       resolveClose(closed)
     }
-    const onClose = () => finish(true)
     timer = setTimeout(() => finish(false), timeoutMs)
     child.once("close", onClose)
   })
 }
-
 async function terminateSandboxChild({ child }) {
   if (child.exitCode !== null || child.signalCode !== null) {
     return
