@@ -68,12 +68,111 @@ function createShutdownChildSource({ lockModuleUrl, shutdownModuleUrl } = {}) {
   `
 }
 
-function startShutdownChild({ directory, source } = {}) {
+function createDurableJournalShutdownChildSource({ lockModuleUrl, shutdownModuleUrl } = {}) {
+  return `
+    import { EventBus } from "@coinzilla/event-bus"
+    import { Journal } from "@coinzilla/journal"
+    import { acquireHarvesterProcessLock } from ${JSON.stringify(lockModuleUrl)}
+    import { createRuntimeShutdownHandler } from ${JSON.stringify(shutdownModuleUrl)}
+
+    const logger = {
+      system: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    }
+    const eventBus = new EventBus({ logger })
+    const journal = new Journal({
+      eventBus,
+      directory: process.env.HARVESTER_TEST_JOURNAL_DIRECTORY,
+      logger,
+    })
+    const journalStarted = await journal.start()
+    if (journalStarted.ok !== true) {
+      throw journalStarted.errors?.[0] ?? new Error("The real Journal could not start.")
+    }
+    const accepted = eventBus.publish({
+      name: "shutdown.accepted",
+      source: "integration-test",
+      payload: { writeId: "accepted-before-process-exit" },
+    })
+    if (accepted.ok !== true) {
+      throw accepted.errors?.[0] ?? new Error("The pre-shutdown Journal event was not accepted.")
+    }
+
+    const lock = await acquireHarvesterProcessLock({
+      directory: process.env.HARVESTER_TEST_LOCK_DIRECTORY,
+      token: "child-process-lock",
+    })
+    if (lock.ok !== true) {
+      throw lock.errors?.[0] ?? new Error("Child process could not acquire its process lock.")
+    }
+
+    let runtimeStopCalls = 0
+    let journalCloseCalls = 0
+    let lockReleaseCalls = 0
+    const journalService = {
+      status: { enabled: true },
+      close: async () => {
+        journalCloseCalls += 1
+        return journal.close()
+      },
+    }
+    const handler = createRuntimeShutdownHandler({
+      runtime: {
+        stop: async () => {
+          runtimeStopCalls += 1
+          return {
+            ok: true,
+            status: "STOPPED",
+            data: { durableProcessStopAcknowledged: true },
+          }
+        },
+      },
+      logger,
+      eventPublisher: {
+        publish: () => ({ ok: true }),
+      },
+      eventBus,
+      journalService,
+      processLock: {
+        release: async () => {
+          lockReleaseCalls += 1
+          const result = await lock.release()
+          if (result.ok === true) {
+            process.stdout.write("LOCK_RELEASED\\n")
+          }
+          return result
+        },
+      },
+      closeObservability: async ({ journalService: service }) => {
+        const result = await service.close()
+        if (result.ok !== true || result.durable !== true) {
+          return result.errors ?? [new Error("The real Journal close was not durably confirmed.")]
+        }
+        return []
+      },
+      closeLogger: async () => {
+        process.stdout.write("LOGGER_CLOSED\\n")
+      },
+      logTelegramNotificationSummary: () => {},
+    })
+
+    await handler("SIGTERM")
+    await handler("SIGINT")
+    process.stdout.write("JOURNAL_FILE=" + journal.filePath + "\\n")
+    process.stdout.write("COUNTS=" + [runtimeStopCalls, journalCloseCalls, lockReleaseCalls].join(",") + "\\n")
+    process.stdout.write("SHUTDOWN_COMPLETE\\n")
+  `
+}
+
+function startShutdownChild({ directory, source, journalDirectory } = {}) {
   const child = spawn(process.execPath, ["--input-type=module", "-e", source], {
     cwd: process.cwd(),
     env: {
       ...process.env,
       HARVESTER_TEST_LOCK_DIRECTORY: directory,
+      ...(journalDirectory ? { HARVESTER_TEST_JOURNAL_DIRECTORY: journalDirectory } : {}),
     },
     stdio: ["ignore", "pipe", "pipe"],
   })
@@ -258,6 +357,67 @@ function createDurabilityFailureChildSource({
     process.stdout.write("SHUTDOWN_ATTEMPT_RETURNED\\n")
   `
 }
+
+test("durably closes accepted Journal writes before child exit and makes repeated shutdown idempotent", {
+  timeout: 10_000,
+}, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-durable-journal-shutdown-"))
+  const journalDirectory = path.join(directory, "journal")
+  const lockPath = path.join(directory, ".harvester-trading.lock")
+  const source = createDurableJournalShutdownChildSource({
+    shutdownModuleUrl: new URL("./harvester-process-shutdown.js", import.meta.url).href,
+    lockModuleUrl: new URL("../process-lock/acquire-harvester-process-lock.js", import.meta.url).href,
+  })
+  const { child, closed, getOutput } = startShutdownChild({
+    directory,
+    journalDirectory,
+    source,
+  })
+
+  try {
+    const exit = await closed
+    const output = getOutput()
+    assert.equal(exit.code, 0, `The child must exit successfully after durable Journal shutdown; stderr: ${output.stderr}`)
+    assert.equal(exit.signal, null, "The child must exit naturally rather than being killed by a signal.")
+    const outputLines = output.stdout.trim().split(/\\r?\\n/)
+    assert.deepEqual(
+      outputLines.slice(0, 2),
+      ["LOGGER_CLOSED", "LOCK_RELEASED"],
+      "The process logger must close and the Journal must durably close before the real process lock is released.",
+    )
+    const journalFileLine = outputLines.find((line) => line.startsWith("JOURNAL_FILE="))
+    assert.ok(journalFileLine, "The child must report the real Journal session file for post-exit verification.")
+    const journalFilePath = journalFileLine.slice("JOURNAL_FILE=".length)
+    const journalContents = await readFile(journalFilePath, "utf8")
+    assert.match(journalContents, /shutdown\\.accepted/, "The accepted pre-shutdown EventBus event must be present in the closed Journal file.")
+    assert.match(journalContents, /accepted-before-process-exit/, "The durable Journal record must preserve the accepted write identity.")
+    assert.ok(
+      outputLines.includes("COUNTS=1,1,1"),
+      "Repeated shutdown requests must execute runtime stop, Journal close, and process-lock release exactly once.",
+    )
+    assert.equal(outputLines.at(-1), "SHUTDOWN_COMPLETE", "The child must report completion only after the lock-release boundary.")
+    await assert.rejects(
+      readFile(lockPath, "utf8"),
+      { code: "ENOENT" },
+      "The real process-lock file must be absent before child exit.",
+    )
+    const replacementLock = await acquireHarvesterProcessLock({
+      directory,
+      token: "parent-process-lock",
+    })
+    assert.equal(replacementLock.ok, true, "A subsequent process must be able to acquire the released process lock.")
+    const release = await replacementLock.release()
+    assert.equal(release.ok, true, "The parent must clean up the replacement lock.")
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) {
+      child.kill("SIGKILL")
+    }
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
 
 test("retains the real process lock when durable PROCESS_STOPPED acknowledgement fails", {
   timeout: 10_000,
