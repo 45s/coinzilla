@@ -882,7 +882,7 @@ test("durably journals the submission intent before calling the broker", async (
   assert.equal(result.ok, true)
   assert.ok(sequence.indexOf("publish:order.submission_requested") >= 0)
   assert.ok(sequence.indexOf("flushWrites") > sequence.indexOf("publish:order.submission_requested"))
-  assert.ok(sequence.indexOf("broker:place") > sequence.indexOf("flush"))
+  assert.ok(sequence.indexOf("broker:place") > sequence.indexOf("flushWrites"))
 })
 
 test("does not submit an order when its durable intent flush fails", async () => {
