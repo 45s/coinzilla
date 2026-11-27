@@ -1,11 +1,26 @@
-import { createHash } from "node:crypto"
+import { createHash, randomUUID as randomUUIDNative } from "node:crypto"
 import { execFileSync as execFileSyncNative, spawn as spawnNative } from "node:child_process"
-import { existsSync as existsSyncNative, readFileSync as readFileSyncNative, realpathSync as realpathSyncNative, statSync as statSyncNative } from "node:fs"
+import {
+  accessSync as accessSyncNative,
+  constants as fsConstants,
+  existsSync as existsSyncNative,
+  mkdirSync as mkdirSyncNative,
+  readFileSync as readFileSyncNative,
+  realpathSync as realpathSyncNative,
+  rmdirSync as rmdirSyncNative,
+  statSync as statSyncNative,
+  writeFileSync as writeFileSyncNative,
+} from "node:fs"
 import { join, posix, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const DEFAULT_MAX_OUTPUT_BYTES = 1_048_576
 const SANDBOX_ROOT = "/workspace/coinzilla"
+const CGROUP_ROOT = "/sys/fs/cgroup"
+const MEMORY_ADDRESS_SPACE_LIMIT_BYTES = 8_589_934_592
+const CPU_QUOTA_MICROSECONDS = 100_000
+const CPU_PERIOD_MICROSECONDS = 100_000
+const SANDBOX_PROCESS_LIMIT = 64
 const REQUIRED_SANDBOX_PROFILE = Object.freeze({
   networkAccess: "deny",
   filesystemAccess: "read-only-allowlisted-runtime",
@@ -122,6 +137,145 @@ function verifyTrustedExecutable({ path, realpathSync, statSync, readFileSync })
     path: canonicalPath,
     sha256: createHash("sha256").update(readFileSync(canonicalPath)).digest("hex"),
   }
+}
+
+
+function resolveDelegatedCgroupParent({ readFileSync, realpathSync, accessSync }) {
+  const unified = readFileSync("/proc/self/cgroup", "utf8")
+    .split("\\n")
+    .find((line) => line.startsWith("0::"))
+  if (!unified) {
+    throw new Error("Scenario sandbox requires a unified cgroup v2 hierarchy")
+  }
+  const relativePath = unified.slice(3).replace(/^\\/+/, "")
+  if (relativePath.split("/").includes("..")) {
+    throw new Error("Invalid current cgroup path")
+  }
+  const parentPath = realpathSync(resolve(CGROUP_ROOT, relativePath))
+  if (parentPath !== CGROUP_ROOT && !parentPath.startsWith(CGROUP_ROOT + "/")) {
+    throw new Error("Current cgroup path escapes the cgroup v2 root")
+  }
+  const controllers = readFileSync(join(parentPath, "cgroup.controllers"), "utf8")
+    .trim()
+    .split(/\\s+/)
+  const enabled = readFileSync(join(parentPath, "cgroup.subtree_control"), "utf8")
+    .trim()
+    .split(/\\s+/)
+    .map((controller) => controller.replace(/^\\+/, ""))
+  for (const controller of ["memory", "cpu", "pids"]) {
+    if (!controllers.includes(controller) || !enabled.includes(controller)) {
+      throw new Error("Scenario cgroup controller is not delegated and enabled: " + controller)
+    }
+  }
+  accessSync(parentPath, fsConstants.W_OK)
+  return parentPath
+}
+
+function createCgroupSettings({ memoryLimitBytes }) {
+  return [
+    ["memory.max", String(memoryLimitBytes)],
+    ["memory.swap.max", "0"],
+    ["cpu.max", CPU_QUOTA_MICROSECONDS + " " + CPU_PERIOD_MICROSECONDS],
+    ["pids.max", String(SANDBOX_PROCESS_LIMIT)],
+    ["memory.oom.group", "1"],
+  ]
+}
+
+function writeAndVerifyCgroupSettings({ path, settings, writeFileSync, readFileSync }) {
+  for (const [name, value] of settings) {
+    const filePath = join(path, name)
+    writeFileSync(filePath, value + "\\n", "utf8")
+    const actual = readFileSync(filePath, "utf8").trim()
+    if (actual !== value) {
+      throw new Error("Scenario cgroup did not apply required setting: " + name)
+    }
+  }
+}
+
+function cleanupScenarioCgroup({ path, existsSync, writeFileSync, rmdirSync }) {
+  const killPath = join(path, "cgroup.kill")
+  if (existsSync(killPath)) {
+    try {
+      writeFileSync(killPath, "1\\n", "utf8")
+    } catch {}
+  }
+  try {
+    rmdirSync(path)
+  } catch {}
+}
+
+function createScenarioCgroup({
+  parentPath,
+  memoryLimitBytes,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  existsSync,
+  rmdirSync,
+  randomUUID,
+}) {
+  const path = join(parentPath, "scenario-runner-" + process.pid + "-" + randomUUID())
+  mkdirSync(path, { mode: 0o755 })
+  try {
+    writeAndVerifyCgroupSettings({
+      path,
+      settings: createCgroupSettings({ memoryLimitBytes }),
+      writeFileSync,
+      readFileSync,
+    })
+    return Object.freeze({
+      cgroupProcsPath: join(path, "cgroup.procs"),
+      cleanup: () => cleanupScenarioCgroup({
+        path,
+        existsSync,
+        writeFileSync,
+        rmdirSync,
+      }),
+    })
+  } catch (error) {
+    cleanupScenarioCgroup({
+      path,
+      existsSync,
+      writeFileSync,
+      rmdirSync,
+    })
+    throw error
+  }
+}
+
+function createLinuxCgroupController({
+  readFileSync = readFileSyncNative,
+  realpathSync = realpathSyncNative,
+  accessSync = accessSyncNative,
+  mkdirSync = mkdirSyncNative,
+  writeFileSync = writeFileSyncNative,
+  existsSync = existsSyncNative,
+  rmdirSync = rmdirSyncNative,
+  randomUUID = randomUUIDNative,
+  memoryLimitBytes = REQUIRED_SANDBOX_PROFILE.memoryLimitBytes,
+}) {
+  const parentPath = resolveDelegatedCgroupParent({
+    readFileSync,
+    realpathSync,
+    accessSync,
+  })
+  const create = () => createScenarioCgroup({
+    parentPath,
+    memoryLimitBytes,
+    mkdirSync,
+    writeFileSync,
+    readFileSync,
+    existsSync,
+    rmdirSync,
+    randomUUID,
+  })
+  return Object.freeze({
+    verify: () => {
+      const probe = create()
+      probe.cleanup()
+    },
+    create,
+  })
 }
 
 function resolveTrustedExecutable({ candidates, existsSync, verifyExecutable }) {
