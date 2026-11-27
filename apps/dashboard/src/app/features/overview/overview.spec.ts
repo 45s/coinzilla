@@ -61,12 +61,38 @@ function createSnapshotMessage() {
           tradingEnabled: true,
           userDataReady: true,
           userDataStatus: 'READY',
-          markets: [],
+          markets: [{
+            symbol: 'BTCUSDT',
+            enabled: true,
+            operatorBuysPaused: false,
+            readiness: 'READY',
+            blockers: [],
+            latestPrice: '65000.00000000',
+            priceFresh: true,
+          }],
         },
       },
       portfolio: {
         ok: true,
-        data: { observedAt: 120000, positions: [] },
+        data: {
+          observedAt: 120000,
+          positions: [{
+            symbol: 'BTCUSDT',
+            baseAsset: 'BTC',
+            quoteAsset: 'USDT',
+            activeQuantity: '0.12500000',
+            freeQuantity: '0.00100000',
+            totalQuantity: '0.12600000',
+            investedQuote: '500.00000000',
+            quoteNetCashFlow: '-500.00000000',
+            recovery: {
+              buyCost: '500.00000000',
+              netSellProceeds: '0',
+              outstandingRecoveryAmount: '500.00000000',
+              realizedNetProfit: '0',
+            },
+          }],
+        },
       },
     },
   };
@@ -100,7 +126,7 @@ describe('OverviewComponent', () => {
     vi.useRealTimers();
   });
 
-  it('keeps demo portfolio content explicitly labeled while rendering live system health', async () => {
+  it('renders live runtime, market and Portfolio data without fictional demo content', async () => {
     vi.stubGlobal('WebSocket', MockWebSocket);
     const result = await createOverviewFixture();
     http = result.http;
@@ -113,9 +139,12 @@ describe('OverviewComponent', () => {
 
     const renderedText = (result.fixture.nativeElement as HTMLElement).textContent as string;
 
-    expect(renderedText, 'Overview must keep the portfolio summary visible.').toContain('Portfolio value');
-    expect(renderedText, 'Fictional portfolio values must remain explicitly identified as demo data.').toContain('DEMO PORTFOLIO');
-    expect(renderedText, 'The demo positions must remain labeled as fictional values.').toContain('fictional values');
+    expect(renderedText, 'Overview must render the runtime summary from Harvester.').toContain('conservative-testnet');
+    expect(renderedText, 'Overview must render the actual configured market snapshot.').toContain('BTCUSDT');
+    expect(renderedText, 'Portfolio quantities must retain their exact source decimal strings.').toContain('0.12500000');
+    expect(renderedText, 'Portfolio investment values must retain their exact source decimal strings.').toContain('500.00000000');
+    expect(renderedText, 'Overview must not show the previous fictional portfolio valuation.').not.toContain('$12,480.52');
+    expect(renderedText, 'Overview must not retain the fictional performance chart.').not.toContain('Portfolio performance');
     expect(renderedText, 'The real Harvester API must be reported as connected after a valid response.').toContain('Local Harvester API responding');
     expect(renderedText, 'The runtime label must come from the authoritative status response.').toContain('RUNNING');
     expect(renderedText, 'The event stream must be connected only after receiving a valid snapshot.').toContain('3 / 3 CONNECTED');
@@ -159,6 +188,7 @@ describe('OverviewComponent', () => {
     expect(renderedText, 'A malformed API response must be reported as unavailable.').toContain('invalid runtime status response');
     expect(renderedText, 'Malformed runtime data must not be rendered as a real RUNNING process.').not.toContain('Runtime state: RUNNING');
     expect(renderedText, 'A malformed WebSocket envelope must not be treated as a fresh snapshot.').toContain('Connected · snapshot waiting');
+    expect(renderedText, 'Malformed snapshots must not fabricate market or Portfolio rows.').not.toContain('BTCUSDT');
     result.fixture.destroy();
   });
 
