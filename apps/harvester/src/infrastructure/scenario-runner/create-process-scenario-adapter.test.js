@@ -617,7 +617,19 @@ function createLinuxSandboxLauncherFixture() {
 }
 
 function assertTrustedNodeRuntimeBind({ spawned }) {
-  assertTrustedNodeRuntimeBind({ spawned })
+  const nodeRuntimeDirectory = "/opt/toolcache/node/24.22.3/x64"
+  let nodeRuntimeBindIndex = -1
+  for (let index = 0; index < spawned.args.length - 2; index += 1) {
+    if (spawned.args[index] === "--ro-bind" &&
+        spawned.args[index + 1] === nodeRuntimeDirectory &&
+        spawned.args[index + 2] === nodeRuntimeDirectory) {
+      nodeRuntimeBindIndex = index
+      break
+    }
+  }
+  assert.ok(nodeRuntimeBindIndex >= 0, "Trusted Node installation must be mounted read-only at its host path")
+  assert.ok(spawned.args.includes("/opt/toolcache/node/24.22.3/x64/bin/node"),
+    "Worker must execute the verified host Node binary from the read-only bind")
 }
 
 test("Linux sandbox launcher attests the OS profile and applies cgroup, seccomp and IPC", async () => {
@@ -639,19 +651,7 @@ test("Linux sandbox launcher attests the OS profile and applies cgroup, seccomp 
   assert.equal(spawned.command, "/bin/sh")
   assert.ok(spawned.args.includes("--as=8589934592:8589934592"))
   assert.ok(spawned.args.includes("/sys/fs/cgroup/scenario-test/cgroup.procs"))
-  const nodeRuntimeDirectory = "/opt/toolcache/node/24.22.3/x64"
-  let nodeRuntimeBindIndex = -1
-  for (let index = 0; index < spawned.args.length - 2; index += 1) {
-    if (spawned.args[index] === "--ro-bind" &&
-        spawned.args[index + 1] === nodeRuntimeDirectory &&
-        spawned.args[index + 2] === nodeRuntimeDirectory) {
-      nodeRuntimeBindIndex = index
-      break
-    }
-  }
-  assert.ok(nodeRuntimeBindIndex >= 0, "Trusted Node installation must be mounted read-only at its host path")
-  assert.ok(spawned.args.includes("/opt/toolcache/node/24.22.3/x64/bin/node"),
-    "Worker must execute the verified host Node binary from the read-only bind")
+  assertTrustedNodeRuntimeBind({ spawned })
   assert.ok(spawned.args.includes("--cpu=30:30"))
   assert.ok(spawned.args.includes("--unshare-net"))
   assert.ok(spawned.args.includes("--unshare-pid"))
