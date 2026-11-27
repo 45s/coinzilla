@@ -135,7 +135,10 @@ test("does not bind the production local API for an injected runtime adapter unl
     createJournalService: createDisabledJournalService,
     acquireProcessLock: async () => ({
       ok: true,
-      release: async () => ({ ok: true, released: true }),
+      release: async () => ({
+        ok: true,
+        released: true,
+      }),
     }),
     prepareOrderHistoryPersistence: async () => null,
     start: async () => ({
