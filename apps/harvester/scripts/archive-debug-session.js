@@ -265,7 +265,7 @@ function resolveProcessOutcome(completion) {
 function createProcessIdentityMissingFieldWarnings({ identity, identityError } = {}) {
   const warnings = []
   if (!identity) {
-    warnings.push(identityError ? "PROCESS_IDENTITY_INVALID" : "PROCESS_IDENTITY_MISSING")
+    warnings.push(identityError?.code && identityError.code !== "ENOENT" ? "PROCESS_IDENTITY_INVALID" : "PROCESS_IDENTITY_MISSING")
     return warnings
   }
   if (!UUID_PATTERN.test(identity.runtimeSessionId ?? "")) {
@@ -288,7 +288,7 @@ function createProcessIdentityMissingFieldWarnings({ identity, identityError } =
 function createCompletionMissingFieldWarnings({ identity, completion, completionError } = {}) {
   const warnings = []
   if (!completion) {
-    warnings.push(completionError ? "COMPLETION_RECORD_INVALID" : "COMPLETION_RECORD_MISSING")
+    warnings.push(completionError?.code && completionError.code !== "ENOENT" ? "COMPLETION_RECORD_INVALID" : "COMPLETION_RECORD_MISSING")
     return warnings
   }
   if (identity?.runtimeSessionId && completion.runtimeSessionId !== identity.runtimeSessionId) {
@@ -307,8 +307,15 @@ function createArchiveSessionMissingFieldWarnings({
   completionError,
 } = {}) {
   return [
-    ...createProcessIdentityMissingFieldWarnings({ identity, identityError }),
-    ...createCompletionMissingFieldWarnings({ identity, completion, completionError }),
+    ...createProcessIdentityMissingFieldWarnings({
+      identity,
+      identityError,
+    }),
+    ...createCompletionMissingFieldWarnings({
+      identity,
+      completion,
+      completionError,
+    }),
   ]
 }
 
@@ -342,6 +349,19 @@ function resolveArchiveSessionProcessId({ identity, recoveryCheckpoint } = {}) {
   return null
 }
 
+function resolveArchiveSessionRuntimeSessionId(identity) {
+  const runtimeSessionId = identity?.runtimeSessionId
+  return UUID_PATTERN.test(runtimeSessionId ?? "") ? runtimeSessionId : null
+}
+
+function resolveArchiveSessionStartTimestamp(identity) {
+  return typeof identity?.startedAt === "string" ? identity.startedAt : null
+}
+
+function resolveArchiveSessionEndTimestamp(completion) {
+  return typeof completion?.endedAt === "string" ? completion.endedAt : null
+}
+
 function createArchiveSessionEvidenceRecord({
   sessionName,
   identity,
@@ -354,12 +374,10 @@ function createArchiveSessionEvidenceRecord({
     sessionName,
     relativePath: `logs/sessions/${sessionName}`,
     environment: identity?.environment ?? "unknown",
-    runtimeSessionId: UUID_PATTERN.test(identity?.runtimeSessionId ?? "")
-      ? identity.runtimeSessionId
-      : null,
+    runtimeSessionId: resolveArchiveSessionRuntimeSessionId(identity),
     processId,
-    startedAt: typeof identity?.startedAt === "string" ? identity.startedAt : null,
-    endedAt: typeof completion?.endedAt === "string" ? completion.endedAt : null,
+    startedAt: resolveArchiveSessionStartTimestamp(identity),
+    endedAt: resolveArchiveSessionEndTimestamp(completion),
     sourceRevision: identity?.source?.commit ?? null,
     workingTreeState: identity?.source?.workingTree ?? "unknown",
     completionStatus: resolveArchiveSessionCompletionStatus({
