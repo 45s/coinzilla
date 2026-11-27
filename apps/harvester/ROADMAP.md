@@ -118,6 +118,7 @@ The Linux sandbox acceptance workflow is manual-dispatch only (not triggered by 
 ## Bootstrap runtime setup responsibility audit — 2026-11-27
 
 [PR #1951](https://github.com/45s/coinzilla/pull/1951) splits the former 582-line harvester-runtime-setup.js by its existing responsibilities:
+
 - harvester-user-data-runtime.js — user-data state, readiness, and event operations.
 - harvester-candle-history-service.js — market-specific candle broker routing and provider identity projection.
 - harvester-trading-engine-composition.js — trading-engine option composition and Recovery Seller/account safety gates.
