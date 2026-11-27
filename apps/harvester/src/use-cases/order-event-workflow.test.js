@@ -382,6 +382,69 @@ test("ignores unmatched manual orders under the default external-order policy", 
   assert.deepEqual(calls.accounting, [], "Manual executions must never update strategy accounting.")
 })
 
+test("ignores unmatched orders from a prior Harvester process under the default external-order policy", async () => {
+  const order = makeOrder({
+    brokerOrderId: "previous-session-order",
+    clientOrderId: "h-previousprocessnamespace-7",
+    status: "OPEN",
+    executedQuantity: "0",
+  })
+  const {
+    workflow,
+    calls,
+  } = makeWorkflow({
+    updateResult: { unknown: true },
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: order,
+      clientOrderId: order.clientOrderId,
+    },
+  })
+
+  assert.equal(result.ok, true, "An unmatched prior-session Harvester order must be treated as external to this process.")
+  assert.equal(result.data.externalOrder, true, "The prior-session order must remain explicitly external.")
+  assert.deepEqual(calls.pauses, [], "A prior-session order must not pause the current process market.")
+  assert.deepEqual(calls.accounting, [], "A prior-session execution must never enter current-session accounting.")
+})
+
+test("keeps an unmatched order from the current Harvester process fail-closed", async () => {
+  const registeredOrder = makeOrder({
+    clientOrderId: "h-currentprocessnamespace-1",
+    brokerOrderId: "current-session-order-1",
+    status: "OPEN",
+    executedQuantity: "0",
+  })
+  const unmatchedCurrentSessionOrder = makeOrder({
+    clientOrderId: "h-currentprocessnamespace-2",
+    brokerOrderId: "current-session-order-2",
+    status: "OPEN",
+    executedQuantity: "0",
+  })
+  const registry = new OrderRegistry({
+    orders: [registeredOrder],
+  })
+  const {
+    workflow,
+    calls,
+  } = makeWorkflow({ registry })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: unmatchedCurrentSessionOrder,
+      clientOrderId: unmatchedCurrentSessionOrder.clientOrderId,
+    },
+  })
+
+  assert.equal(result.ok, false, "An unregistered order from this process must remain an ownership-integrity failure.")
+  assert.equal(result.failure.stage, "ORDER_REGISTRY_MATCH", "The current-session ownership failure must retain its stable stage.")
+  assert.equal(calls.pauses[0]?.reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT", "An unresolved current-session order must pause its market.")
+  assert.deepEqual(calls.accounting, [], "An unresolved current-session order must not be accounted.")
+})
+
 test("applies partial BUY fills without advancing strategy evaluation", async () => {
   const order = makeOrder()
   const fill = makeFill()
