@@ -32,7 +32,7 @@ The process-owned store exposes `initializeIfEmpty()` for normal startup. It app
 | Either stream is missing, malformed, corrupt, or inconsistent | Fail startup; do not repair, truncate, reset, or replace it. |
 | Path is a symlink or not a real directory | Fail startup. |
 
-New genesis uses the existing versioned schema, global sequence `0`, canonical digest, and committed-head checkpoint. The directory and stream permissions remain `0700` and `0600` on POSIX systems.
+New genesis uses the existing versioned schema, global sequence `0`, canonical digest, and committed-head checkpoint. The directory and stream permissions remain `0700` and `0600` on POSIX systems. When initialization creates missing path components, it fsyncs each parent directory that owns a newly created component, from the nearest existing ancestor down to the ledger directory, after syncing the genesis fact and manifest. Verification then fsyncs the ledger directory before durable acknowledgement. Any required directory-sync failure after genesis writes is an uncertain outcome and fails closed; no file-only fallback is reported.
 
 The explicit `initialize()` operation remains available to the manual initialization CLI and continues to refuse every non-empty directory. Normal process startup uses `initializeIfEmpty()` and then performs the existing full verification before broker-capable runtime startup.
 

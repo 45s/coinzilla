@@ -8,6 +8,33 @@ import test from "node:test"
 import { createFileOperationalStateStore } from "./create-file-store.js"
 
 const createDirectory = () => mkdtemp(path.join(os.tmpdir(), "harvester-Operational State Store records-"))
+function createFactSyncAcknowledgementFault({ factPath } = {}) {
+  let active = false
+  const fileSystem = {
+    ...fsPromises,
+    open: async (...parameters) => {
+      const [target, ...args] = parameters
+      const handle = await fsPromises.open(target, ...args)
+      if (active && target === factPath && args[0] === "a") {
+        const sync = handle.sync.bind(handle)
+        Object.defineProperty(handle, "sync", {
+          value: async () => {
+            await sync()
+            throw new Error("simulated lost acknowledgement after successful fact sync")
+          },
+        })
+      }
+      return handle
+    },
+  }
+  return {
+    fileSystem,
+    enable: () => {
+      active = true
+    },
+  }
+}
+
 const createStore = (...parameters) => {
   const [directory, options = {}] = parameters
   return createFileOperationalStateStore({
@@ -38,6 +65,31 @@ const digestRecord = (record) => {
   return createHash("sha256").update(canonicalStringify(body), "utf8").digest("hex")
 }
 const readLines = async (filePath) => (await readFile(filePath, "utf8")).trimEnd().split("\n")
+function createDirectorySyncRecordingFileSystem({ directories, syncedDirectories, failDirectory = null, syncError = new Error("simulated directory fsync failure") }) {
+  const directorySet = new Set(directories)
+  return {
+    ...fsPromises,
+    async open(...openArguments) {
+      const [filePath] = openArguments
+      const handle = await fsPromises.open(...openArguments)
+      if (!directorySet.has(filePath)) {
+        return handle
+      }
+      return {
+        writeFile: (...writeArguments) => handle.writeFile(...writeArguments),
+        sync: async () => {
+          syncedDirectories.push(filePath)
+          if (filePath === failDirectory) {
+            throw syncError
+          }
+          return handle.sync()
+        },
+        close: () => handle.close(),
+      }
+    },
+  }
+}
+
 const readManifestRecords = async (directory) => (await readLines(path.join(directory, "manifest.jsonl"))).map(JSON.parse)
 
 test("normal verification and append never initialize a missing Operational State Store", async (t) => {
@@ -58,8 +110,8 @@ test("explicit initialization writes a genesis fact and committed-head manifest 
 force: true }))
   const store = createStore(directory)
   const initialized = await store.initialize()
-  assert.equal(initialized.ok, true)
-  assert.equal(initialized.data.durable, true)
+  assert.equal(initialized.ok, true, "Genesis initialization must succeed when every required directory fsync succeeds.")
+  assert.equal(initialized.data.durable, true, "Genesis may be acknowledged durable only after stream and directory-entry fsync barriers succeed.")
   const records = await store.readAll()
   assert.equal(records.ok, true)
   assert.equal(records.data.records.length, 1)
@@ -378,6 +430,113 @@ force: true }))
   const verification = await store.verify()
   assert.equal(verification.ok, false)
   assert.match(verification.errors[0].message, /manifest.*chain|previous.*manifest/i)
+})
+
+test("fails closed after the fact stream is synced but before its manifest checkpoint is appended", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  const factPath = path.join(directory, "facts.jsonl")
+  const fault = createFactSyncAcknowledgementFault({ factPath })
+  const originalStore = createStore(directory, { fileSystem: fault.fileSystem })
+  const initialized = await originalStore.initialize()
+  assert.equal(initialized.ok, true, "The isolated store must be initialized before fault injection.")
+  fault.enable()
+
+  const uncertainAppend = await originalStore.append(operatorPause())
+  assert.equal(uncertainAppend.ok, false, "The append must not claim success after its fact-sync acknowledgement is lost.")
+  assert.equal(
+    uncertainAppend.errors[0].code,
+    "DURABLE_FACTS_COMMIT_UNCERTAIN",
+    "A fact written without a committed manifest checkpoint must remain an uncertain commit.",
+  )
+  assert.notEqual(uncertainAppend.data?.durable, true, "The uncertain append must never claim durable success.")
+  const repeatedAppend = await originalStore.append(operatorPause())
+  assert.equal(repeatedAppend.ok, false, "The original store instance must remain fenced.")
+  assert.equal(
+    repeatedAppend.errors[0].code,
+    "DURABLE_FACTS_COMMIT_UNCERTAIN",
+    "A genuinely uncertain append must retain its commit-uncertain classification when fenced.",
+  )
+
+  const persistedFacts = await readLines(factPath)
+  const persistedManifest = await readManifestRecords(directory)
+  assert.equal(persistedFacts.length, 2, "The fixture must contain the synced genesis and uncheckpointed fact.")
+  assert.equal(persistedManifest.length, 1, "The manifest must remain at genesis when the fact checkpoint was not appended.")
+
+  const restartedStore = createStore(directory)
+  const verification = await restartedStore.verify()
+  assert.equal(verification.ok, false, "A fresh process must reject a fact stream that is ahead of its manifest.")
+  assert.match(
+    verification.errors[0].message,
+    /Operational State record exists beyond the committed-head manifest journal/,
+    "Restart verification must identify the exact fact-beyond-manifest inconsistency.",
+  )
+  assert.equal(
+    (await restartedStore.append(operatorPause())).ok,
+    false,
+    "An uncommitted fact must not be silently adopted by a retry after restart.",
+  )
+})
+
+test("classifies ledger integrity failures separately from uncertain append acknowledgements", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  const initializedStore = createStore(directory)
+  const initialized = await initializedStore.initialize()
+  assert.equal(initialized.ok, true, "The isolated store must initialize before its manifest is made stale.")
+  const appended = await initializedStore.append(operatorPause())
+  assert.equal(appended.ok, true, "The fixture must contain one committed non-genesis fact.")
+
+  const manifestPath = path.join(directory, "manifest.jsonl")
+  const manifestLines = await readLines(manifestPath)
+  await writeFile(manifestPath, `${manifestLines[0]}\\n`)
+
+  const verificationStore = createStore(directory)
+  const verification = await verificationStore.verify()
+  assert.equal(verification.ok, false, "Verification must reject a fact stream that is ahead of its manifest.")
+  assert.equal(
+    verification.errors[0].code,
+    "DURABLE_FACTS_INTEGRITY_FAILED",
+    "A fresh verifier must report ledger inconsistency, not misclassify it as this process's uncertain append.",
+  )
+  const fencedAppend = await verificationStore.append(operatorPause())
+  assert.equal(fencedAppend.ok, false, "A store that failed integrity verification must remain write-fenced.")
+  assert.equal(
+    fencedAppend.errors[0].code,
+    "DURABLE_FACTS_INTEGRITY_FAILED",
+    "The write fence must preserve the integrity failure instead of reporting an uncertain append.",
+  )
+
+  const historyStore = createStore(directory)
+  const history = await historyStore.readAll()
+  assert.equal(history.ok, false, "History reads must reject the same uncommitted fact.")
+  assert.equal(
+    history.errors[0].code,
+    "DURABLE_FACTS_INTEGRITY_FAILED",
+    "A fresh history reader must preserve the integrity-failure classification.",
+  )
+  const fencedRead = await historyStore.readAll()
+  assert.equal(fencedRead.ok, false, "The same history reader must remain fenced after failed verification.")
+  assert.equal(
+    fencedRead.errors[0].code,
+    "DURABLE_FACTS_INTEGRITY_FAILED",
+    "The read fence must preserve the integrity failure on subsequent operations.",
+  )
+
+  const appendStore = createStore(directory)
+  const blockedAppend = await appendStore.append(operatorPause())
+  assert.equal(blockedAppend.ok, false, "Append preflight must reject an inconsistent ledger before writing.")
+  assert.equal(
+    blockedAppend.errors[0].code,
+    "DURABLE_FACTS_INTEGRITY_FAILED",
+    "Append preflight must not misclassify a detected integrity failure as an uncertain new commit.",
+  )
 })
 
 test("does not acknowledge a fact when its manifest checkpoint cannot be appended", async (t) => {
@@ -856,4 +1015,57 @@ test("does not repair or replace an existing corrupt ledger", async (t) => {
   assert.equal(result.data.initialized, false)
   assert.equal((await store.verify()).ok, false, "Corrupt content must still fail integrity verification.")
   assert.equal(await readFile(factsPath, "utf8"), corrupted, "Startup must preserve the corrupt evidence unchanged.")
+})
+
+
+test("initialization fsyncs newly created directory entries before durable acknowledgement", async (t) => {
+  const root = await createDirectory()
+  t.after(() => rm(root, {
+    recursive: true,
+    force: true,
+  }))
+  const nested = path.join(root, "nested")
+  const directory = path.join(nested, "store")
+  const syncedDirectories = []
+  const fileSystem = createDirectorySyncRecordingFileSystem({
+    directories: [root, nested, directory],
+    syncedDirectories,
+  })
+  const store = createStore(directory, { fileSystem })
+
+  const initialized = await store.initializeIfEmpty()
+
+  assert.equal(initialized.ok, true)
+  assert.equal(initialized.data.durable, true)
+  assert.deepEqual(syncedDirectories, [root, nested, directory],
+    "Parent entries for newly created directories and the ledger files must be fsynced before acknowledgement")
+})
+
+
+test("directory fsync failure prevents durable genesis acknowledgement", async (t) => {
+  const root = await createDirectory()
+  t.after(() => rm(root, {
+    recursive: true,
+    force: true,
+  }))
+  const directory = path.join(root, "ledger")
+  const syncError = new Error("simulated parent directory fsync failure")
+  const syncedDirectories = []
+  const fileSystem = createDirectorySyncRecordingFileSystem({
+    directories: [root, directory],
+    syncedDirectories,
+    failDirectory: root,
+    syncError,
+  })
+  const store = createStore(directory, { fileSystem })
+
+  const initialized = await store.initializeIfEmpty()
+
+  assert.equal(initialized.ok, false,
+    "Genesis must not be acknowledged when the newly created ledger path is not durable")
+  assert.equal(initialized.errors[0].code, "DURABLE_FACTS_COMMIT_UNCERTAIN", "A parent-directory fsync failure after genesis writes must be classified as an uncertain commit.")
+  assert.equal(syncedDirectories[0], root,
+    "The failed fsync must be the parent directory that owns the new ledger entry")
+  assert.equal((await store.verify()).ok, false,
+    "The store must remain fenced after the uncertain initialization outcome")
 })
