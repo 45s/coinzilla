@@ -116,22 +116,20 @@ function resolveScenarioRunnerSourceRevision({ env } = {}) {
 }
 
 function createScenarioRunnerAdapter({ env }) {
-  let launcher
-  {
-    if (env.HARVESTER_SCENARIO_SANDBOX !== "linux-bubblewrap") {
+  if (env.HARVESTER_SCENARIO_SANDBOX !== "linux-bubblewrap") {
       return createUnavailableScenarioAdapter({
         strategyId: "RS",
         reason: "Scenario execution is disabled; explicitly configure the verified Linux Bubblewrap sandbox to enable isolated simulation.",
       })
-    }
-    try {
-      launcher = createLinuxBubblewrapSandboxLauncher()
-    } catch {
-      return createUnavailableScenarioAdapter({
-        strategyId: "RS",
-        reason: "The configured Linux Bubblewrap/prlimit sandbox failed verification; Recovery Seller scenario execution remains blocked.",
-      })
-    }
+  }
+  let launcher
+  try {
+    launcher = createLinuxBubblewrapSandboxLauncher()
+  } catch {
+    return createUnavailableScenarioAdapter({
+      strategyId: "RS",
+      reason: "The configured Linux Bubblewrap/prlimit sandbox failed verification; Recovery Seller scenario execution remains blocked.",
+    })
   }
   try {
     return createProcessScenarioAdapter({

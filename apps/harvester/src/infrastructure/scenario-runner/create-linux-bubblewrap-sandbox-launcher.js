@@ -95,9 +95,15 @@ function buildFilterInstructions({ auditArch, clone, denied }) {
       jf: 1,
       k: syscall,
     }))
-    instructions.push(encodeInstruction({ code: 0x06, k: ERRNO_PERMISSION_DENIED }))
+    instructions.push(encodeInstruction({
+      code: 0x06,
+      k: ERRNO_PERMISSION_DENIED,
+    }))
   }
-  instructions.push(encodeInstruction({ code: 0x06, k: SECCOMP_ALLOW }))
+  instructions.push(encodeInstruction({
+    code: 0x06,
+    k: SECCOMP_ALLOW,
+  }))
   return instructions
 }
 
@@ -300,7 +306,11 @@ function addWorkspaceBinds({
       target,
       seen: createdDirectories,
     })
-    addReadOnlyBind({ args, source, target })
+    addReadOnlyBind({
+      args,
+      source,
+      target,
+    })
   }
 }
 
@@ -328,9 +338,17 @@ function createBubblewrapArguments({ workerPath, repositoryRoot, nodeExecutable,
     "--uid", "0",
     "--gid", "0",
   ]
-  addSystemRuntimeBinds({ args, existsSync, realpathSync })
+  addSystemRuntimeBinds({
+    args,
+    existsSync,
+    realpathSync,
+  })
   args.push("--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp")
-  addWorkspaceBinds({ args, repositoryRoot, existsSync })
+  addWorkspaceBinds({
+    args,
+    repositoryRoot,
+    existsSync,
+  })
   args.push(
     "--chdir", join(SANDBOX_ROOT, "apps/harvester"),
     "--seccomp", "4",
@@ -418,7 +436,7 @@ function createLinuxLauncher({
     prlimitSha256: prlimit.sha256,
     nodeRuntimeSha256,
   })
-  return launcher
+  return Object.freeze(launcher)
 }
 
 function assertMaxOutputBytes({ maxOutputBytes }) {
@@ -436,7 +454,12 @@ function resolveExecutableVerifier({ verifyExecutable, realpathSync, statSync, r
   }))
 }
 
-function resolveSandboxTools({ bwrapPath, prlimitPath, existsSync, verifyExecutable }) {
+function resolveSandboxTools({
+    bwrapPath,
+    prlimitPath,
+    existsSync,
+    verifyExecutable,
+  }) {
   const bwrap = resolveTrustedExecutable({
     candidates: [bwrapPath, "/bin/bwrap"],
     existsSync,
@@ -466,8 +489,16 @@ function resolveTrustedNodeRuntime({ nodeExecutable, realpathSync, verifyExecuta
 }
 
 function verifyLinuxSandboxRuntime({ bwrap, prlimit, execFileSync, arch }) {
-  verifySandboxTools({ bwrap, prlimit, execFileSync })
-  verifySandboxCapabilities({ bwrap, prlimit, execFileSync })
+  verifySandboxTools({
+    bwrap,
+    prlimit,
+    execFileSync,
+  })
+  verifySandboxCapabilities({
+    bwrap,
+    prlimit,
+    execFileSync,
+  })
   syscallNumbers({ arch })
 }
 
