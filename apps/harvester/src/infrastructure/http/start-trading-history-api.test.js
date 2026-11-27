@@ -289,8 +289,14 @@ test("Scenario Runner host marks runtime simulation executable only with a verif
       strategyId: "RS",
       executionMode: "simulation-only",
       osSandboxVerified: true,
-      execute: async () => ({ ok: true, data: {} }),
-      cancel: async () => ({ ok: true, data: {} }),
+      execute: async () => ({
+        ok: true,
+        data: {},
+      }),
+      cancel: async () => ({
+        ok: true,
+        data: {},
+      }),
     }],
   })
   const registration = host.catalog.find((item) => item.strategyId === "RS")

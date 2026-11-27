@@ -336,6 +336,53 @@ function createLinuxLauncher({
   return launcher
 }
 
+function assertMaxOutputBytes({ maxOutputBytes }) {
+  if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 1) {
+    throw new RangeError("Sandbox maximum output bytes must be a positive safe integer")
+  }
+}
+
+function resolveExecutableVerifier({ verifyExecutable, realpathSync, statSync, readFileSync }) {
+  return verifyExecutable ?? (({ path }) => verifyTrustedExecutable({
+    path,
+    realpathSync,
+    statSync,
+    readFileSync,
+  }))
+}
+
+function resolveSandboxTools({ bwrapPath, prlimitPath, existsSync, verifyExecutable }) {
+  const bwrap = resolveTrustedExecutable({
+    candidates: [bwrapPath, "/bin/bwrap"],
+    existsSync,
+    verifyExecutable,
+  })
+  const prlimit = resolveTrustedExecutable({
+    candidates: [prlimitPath, "/bin/prlimit"],
+    existsSync,
+    verifyExecutable,
+  })
+  return { bwrap, prlimit }
+}
+
+function resolveTrustedNodeRuntime({ nodeExecutable, realpathSync, verifyExecutable }) {
+  const path = realpathSync(nodeExecutable)
+  if (!path.startsWith("/usr/")) {
+    throw new Error("The scenario sandbox requires a trusted Node runtime below /usr")
+  }
+  const runtime = verifyExecutable({ path })
+  if (runtime.path !== path || !/^[a-f0-9]{64}$/i.test(runtime.sha256)) {
+    throw new Error("The scenario Node runtime failed trusted executable verification")
+  }
+  return runtime
+}
+
+function verifyLinuxSandboxRuntime({ bwrap, prlimit, execFileSync, arch }) {
+  verifySandboxTools({ bwrap, prlimit, execFileSync })
+  verifySandboxCapabilities({ bwrap, prlimit, execFileSync })
+  syscallNumbers({ arch })
+}
+
 export function createLinuxBubblewrapSandboxLauncher({
   platform = process.platform,
   arch = process.arch,
@@ -351,6 +398,46 @@ export function createLinuxBubblewrapSandboxLauncher({
   statSync = statSyncNative,
   readFileSync = readFileSyncNative,
   verifyExecutable,
+  if (platform !== "linux") {
+    throw new Error("The trusted Bubblewrap scenario sandbox is supported only on Linux")
+  }
+  assertMaxOutputBytes({ maxOutputBytes })
+  const verify = resolveExecutableVerifier({
+    verifyExecutable,
+    realpathSync,
+    statSync,
+    readFileSync,
+  })
+  const { bwrap, prlimit } = resolveSandboxTools({
+    bwrapPath,
+    prlimitPath,
+    existsSync,
+    verifyExecutable: verify,
+  })
+  verifyLinuxSandboxRuntime({
+    bwrap,
+    prlimit,
+    execFileSync,
+    arch,
+  })
+  const resolvedRepositoryRoot = realpathSync(resolve(repositoryRoot))
+  const nodeRuntime = resolveTrustedNodeRuntime({
+    nodeExecutable,
+    realpathSync,
+    verifyExecutable: verify,
+  })
+  return createLinuxLauncher({
+    bwrap,
+    prlimit,
+    repositoryRoot: resolvedRepositoryRoot,
+    nodeExecutable: nodeRuntime.path,
+    nodeRuntimeSha256: nodeRuntime.sha256,
+    spawn,
+    existsSync,
+    realpathSync,
+    maxOutputBytes,
+  })
+}
 } = {}) {
   if (platform !== "linux") {
     throw new Error("The trusted Bubblewrap scenario sandbox is supported only on Linux")

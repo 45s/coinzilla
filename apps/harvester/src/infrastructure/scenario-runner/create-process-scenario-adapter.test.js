@@ -556,8 +556,13 @@ test("Linux sandbox launcher attests the required OS profile and passes a seccom
     execFileSync: (path) => path.includes("bwrap") ? "bubblewrap 0.9.0" : "prlimit from util-linux",
     existsSync: () => true,
     realpathSync: (path) => path,
-    spawn: (command, args, options) => {
-      spawned = { command, args, options }
+    spawn: (...spawnArguments) => {
+      const [command, args, options] = spawnArguments
+      spawned = {
+        command,
+        args,
+        options,
+      }
       return child
     },
   })
@@ -594,7 +599,10 @@ test("Linux sandbox launcher rejects a mismatched isolation profile before spawn
     nodeExecutable: "/usr/bin/node",
     bwrapPath: "/usr/bin/bwrap",
     prlimitPath: "/usr/bin/prlimit",
-    verifyExecutable: ({ path }) => ({ path, sha256: "b".repeat(64) }),
+    verifyExecutable: ({ path }) => ({
+      path,
+      sha256: "b".repeat(64),
+    }),
     execFileSync: (path) => path.includes("bwrap") ? "bubblewrap 0.9.0" : "prlimit from util-linux",
     existsSync: () => true,
     realpathSync: (path) => path,
