@@ -21,12 +21,20 @@ async function writeLock({ lockDirectory, filename = ".harvester-trading-test.lo
 }
 
 function createOwner({ pid = 456789, hostname = CURRENT_HOST, token = "owner-token" } = {}) {
-  return { pid, hostname, startedAt: STARTED_AT, token }
+  return {
+    pid,
+    hostname,
+    startedAt: STARTED_AT,
+    token,
+  }
 }
 
 test("passes when the process-lock directory does not exist", async (t) => {
   const parentDirectory = await createLockDirectory()
-  t.after(() => rm(parentDirectory, { recursive: true, force: true }))
+  t.after(() => rm(parentDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const lockDirectory = path.join(parentDirectory, "missing-locks")
   await assert.doesNotReject(
     assertHarvesterProcessStopped({ lockDirectory }),
@@ -36,7 +44,10 @@ test("passes when the process-lock directory does not exist", async (t) => {
 
 test("passes when the process-lock directory contains no lock files", async (t) => {
   const lockDirectory = await createLockDirectory()
-  t.after(() => rm(lockDirectory, { recursive: true, force: true }))
+  t.after(() => rm(lockDirectory, {
+    recursive: true,
+    force: true,
+  }))
   await writeFile(path.join(lockDirectory, "operator-note.txt"), "must remain untouched", "utf8")
 
   await assert.doesNotReject(
@@ -52,8 +63,14 @@ test("passes when the process-lock directory contains no lock files", async (t) 
 
 test("reclaims a same-host lock only when its recorded PID is confirmed absent", async (t) => {
   const lockDirectory = await createLockDirectory()
-  t.after(() => rm(lockDirectory, { recursive: true, force: true }))
-  const lockPath = await writeLock({ lockDirectory, owner: createOwner() })
+  t.after(() => rm(lockDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const lockPath = await writeLock({
+    lockDirectory,
+    owner: createOwner(),
+  })
 
   await assert.doesNotReject(
     assertHarvesterProcessStopped({
@@ -72,9 +89,15 @@ test("reclaims a same-host lock only when its recorded PID is confirmed absent",
 
 test("retains a same-host lock when its recorded PID may still be alive", async (t) => {
   const lockDirectory = await createLockDirectory()
-  t.after(() => rm(lockDirectory, { recursive: true, force: true }))
+  t.after(() => rm(lockDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const owner = createOwner()
-  const lockPath = await writeLock({ lockDirectory, owner })
+  const lockPath = await writeLock({
+    lockDirectory,
+    owner,
+  })
 
   await assert.rejects(
     assertHarvesterProcessStopped({
@@ -94,7 +117,10 @@ test("retains a same-host lock when its recorded PID may still be alive", async 
 
 test("retains a lock owned by another host without probing its PID", async (t) => {
   const lockDirectory = await createLockDirectory()
-  t.after(() => rm(lockDirectory, { recursive: true, force: true }))
+  t.after(() => rm(lockDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const owner = createOwner({ hostname: "another-host" })
   const lockPath = await writeLock({ lockDirectory, owner })
 
@@ -118,7 +144,10 @@ test("retains a lock owned by another host without probing its PID", async (t) =
 
 test("retains malformed lock metadata and fails closed", async (t) => {
   const lockDirectory = await createLockDirectory()
-  t.after(() => rm(lockDirectory, { recursive: true, force: true }))
+  t.after(() => rm(lockDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const lockPath = path.join(lockDirectory, ".harvester-trading-test.lock")
   await writeFile(lockPath, "{malformed", "utf8")
 
@@ -140,7 +169,10 @@ test("retains malformed lock metadata and fails closed", async (t) => {
 
 test("retains a replacement lock when ownership changes during stale-lock inspection", async (t) => {
   const lockDirectory = await createLockDirectory()
-  t.after(() => rm(lockDirectory, { recursive: true, force: true }))
+  t.after(() => rm(lockDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const lockPath = await writeLock({ lockDirectory, owner: createOwner() })
   const replacementOwner = createOwner({
     pid: 987654,
@@ -169,7 +201,10 @@ test("retains a replacement lock when ownership changes during stale-lock inspec
 
 test("fails closed when process liveness cannot be determined", async (t) => {
   const lockDirectory = await createLockDirectory()
-  t.after(() => rm(lockDirectory, { recursive: true, force: true }))
+  t.after(() => rm(lockDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const owner = createOwner()
   const lockPath = await writeLock({ lockDirectory, owner })
 
@@ -195,13 +230,19 @@ test("fails closed when process liveness cannot be determined", async (t) => {
 
 test("evaluates every lock file and reclaims only the confirmed stale owners", async (t) => {
   const lockDirectory = await createLockDirectory()
-  t.after(() => rm(lockDirectory, { recursive: true, force: true }))
+  t.after(() => rm(lockDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const staleLockPath = await writeLock({
     lockDirectory,
     filename: ".binance-harvester-trading-test.lock",
     owner: createOwner({ pid: 111 }),
   })
-  const liveOwner = createOwner({ pid: 222, token: "live-owner" })
+  const liveOwner = createOwner({
+    pid: 222,
+    token: "live-owner",
+  })
   const liveLockPath = await writeLock({
     lockDirectory,
     filename: ".harvester-trading-test.lock",
