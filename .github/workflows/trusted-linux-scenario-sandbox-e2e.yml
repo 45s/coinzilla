@@ -1,13 +1,6 @@
 name: Trusted Linux Scenario Sandbox E2E
 
 on:
-  pull_request:
-    branches:
-      - develop
-    paths:
-      - "apps/harvester/src/infrastructure/scenario-runner/**"
-      - "apps/harvester/package.json"
-      - ".github/workflows/trusted-linux-scenario-sandbox-e2e.yml"
   workflow_dispatch:
 
 permissions:
@@ -20,7 +13,6 @@ jobs:
     # hosted CI does not prove delegated cgroup-v2 or the actual host boundary.
     runs-on: [self-hosted, linux, scenario-sandbox]
     timeout-minutes: 15
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
       - name: Check out exact PR revision

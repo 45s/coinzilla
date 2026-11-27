@@ -111,3 +111,6 @@ If the current implementation cannot execute the simulation workflow on Windows,
 ## Windows guarded simulation worker — 2026-11-27
 
 The Harvester API now selects a dedicated Node child-process worker by default on Windows, without requiring a Linux sandbox environment variable. The worker uses a minimal environment and the existing Node module/network/filesystem guards. The host distinguishes this guarded simulation boundary from a verified OS sandbox: it supports local functional testing of repository-owned RS scenarios with simulated broker/order and run-local state, but it is not an OS security boundary, does not provide OS-enforced resource limits, and must not execute arbitrary user-supplied code. Linux Bubblewrap/prlimit/cgroup remains optional hardening. The Windows integration test is wired into a `windows-latest` CI job; acceptance is pending that job's result on the final PR head. Production acceptance remains PARTIAL and exact replay remains fail-closed pending trusted artifact verification.
+
+
+The Linux sandbox acceptance workflow is manual-dispatch only (not triggered by pull requests). It is an optional OS-hardening check, not a required PR status or a prerequisite for Windows local functional acceptance. Do not wait for a self-hosted Linux runner to continue Scenario Runner feature development.

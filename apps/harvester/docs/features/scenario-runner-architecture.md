@@ -352,3 +352,6 @@ On Windows, `startTradingHistoryApi` now composes a dedicated Node child-process
 The Windows worker is a functional-development boundary for repository-owned scenario adapters and simulated dependencies. Its Node API guards deny selected module/network APIs and filesystem mutations, but they are not equivalent to OS isolation: they do not enforce OS-level memory/CPU/network/filesystem limits and must not be treated as a safe runtime for arbitrary user-supplied JavaScript. It must remain connected only to the fixed worker adapter registry and simulation-only ports. The Linux Bubblewrap/prlimit/cgroup path remains an optional additional OS-hardening layer. This distinction does not promote PARTIAL scenarios to production acceptance and does not authorize exact replay; trusted artifact verification remains a separate fail-closed gate.
 
 A Windows-specific CI job runs the Harvester local API composition integration tests on `windows-latest`; do not claim Windows acceptance until that job passes on the exact PR head.
+
+
+The trusted Linux sandbox E2E workflow is intentionally manual-dispatch only and is not part of pull-request CI. A missing or queued self-hosted Linux runner therefore cannot block ordinary development or merge checks for the Windows local simulation path. Run it only when separately validating the optional Linux OS-isolation layer.
