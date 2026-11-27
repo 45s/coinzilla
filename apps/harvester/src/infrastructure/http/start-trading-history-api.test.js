@@ -312,40 +312,59 @@ test("Scenario Runner host marks runtime simulation executable only with a verif
 })
 
 
-test("enables the local simulation worker on Windows without Linux sandbox configuration", { skip: process.platform !== "win32" }, async () => {
+test("executes a production-flow scenario through the local Harvester HTTP API on Windows", { skip: process.platform !== "win32" }, async () => {
   const eventBus = new EventBus()
-  let serverInput
   const service = await startTradingHistoryApi({
     database: createDatabase(),
     eventBus,
     env: {
       TRADING_MODE: "testnet",
+      HARVESTER_API_PORT: "0",
       COINZILLA_SOURCE_REVISION: "d".repeat(40),
     },
     logger: { info() {} },
-    startServer: async (input) => {
-      serverInput = input
-      return {
-        address: { address: "127.0.0.1", port: 4201 },
-        close: async () => {},
-      }
-    },
   })
+  const apiBase = `http://127.0.0.1:${service.address.port}/api/v1/scenario-runner`
 
   try {
-    const scenario = serverInput.scenarioRunnerCatalog
+    const catalogResponse = await fetch(`${apiBase}/catalog`)
+    assert.equal(catalogResponse.status, 200,
+      "The local Harvester API must expose the scenario catalogue on Windows.")
+    const catalogEnvelope = await catalogResponse.json()
+    const scenario = catalogEnvelope.data
       .find((strategy) => strategy.strategyId === "RS")
       .scenarios.find((item) => item.id === "RS-RUNTIME-SELL-SUBMISSION-001")
     assert.equal(scenario.executable, true,
       "Windows local composition must expose the trusted simulation-only runtime scenario without Linux tooling.")
     assert.equal(scenario.executionStatus, "EXECUTABLE",
       "The Windows local simulation path must be executable rather than Linux-sandbox blocked.")
-    const accepted = serverInput.scenarioRunner.submit({
-      strategyId: "RS",
-      scenarioId: scenario.id,
-      input: scenario.defaultInput,
+
+    const submitResponse = await fetch(`${apiBase}/runs`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        strategyId: "RS",
+        scenarioId: scenario.id,
+        input: scenario.defaultInput,
+      }),
     })
-    const result = await serverInput.scenarioRunner.waitForRun(accepted.runId)
+    assert.equal(submitResponse.status, 202,
+      "The local HTTP API must accept a valid Windows simulation run.")
+    const acceptedEnvelope = await submitResponse.json()
+    let result = null
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const runResponse = await fetch(`${apiBase}/runs/${encodeURIComponent(acceptedEnvelope.data.runId)}`)
+      assert.equal(runResponse.status, 200,
+        "The local HTTP API must expose the accepted run for authoritative status recovery.")
+      const runEnvelope = await runResponse.json()
+      if (["Completed", "Failed", "Cancelled", "Timed out", "Blocked"].includes(runEnvelope.data.status)) {
+        result = runEnvelope.data
+        break
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+
+    assert.ok(result, "The Windows simulation worker must reach a terminal run state through the HTTP API.")
     assert.equal(result.status, "Completed",
       "The Windows local worker must complete a production-flow scenario in a separate process.")
     assert.equal(result.output.passed, true,
