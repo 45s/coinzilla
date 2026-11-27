@@ -518,6 +518,21 @@
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "completes the recovery cycle only after the SELL fill report is received and reconciled",
           "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "an immediately-filled BUY keeps subsequent evaluations in recovery-only mode",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "completes the full Conservative lifecycle with the supported zero keepQuantity",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "completes the full Conservative lifecycle with the configured retained quantity",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
