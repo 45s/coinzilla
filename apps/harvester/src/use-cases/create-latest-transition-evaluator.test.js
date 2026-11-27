@@ -10,13 +10,15 @@ const test = (...args) => {
 }
 
 function createDurableEventPublisherStub() {
-  return {
+  const eventPublisher = {
     publish: () => ({ ok: true }),
     flush: async () => ({
       ok: true,
       durable: true,
     }),
   }
+  eventPublisher.flushWrites = async (...flushArguments) => eventPublisher.flush(...flushArguments)
+  return eventPublisher
 }
 
 function createDependencies({ hardPause = false } = {}) {

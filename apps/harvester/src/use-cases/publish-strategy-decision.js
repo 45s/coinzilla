@@ -329,8 +329,8 @@ function assertRecoveryDecisionPublicationSucceeded({ publication } = {}) {
 }
 
 function assertRecoveryDecisionFlushCapability({ eventPublisher } = {}) {
-  if (typeof eventPublisher?.flush !== "function") {
-    throw new TypeError("Recovery strategy decision evidence requires a durable Journal flush capability")
+  if (typeof eventPublisher?.flushWrites !== "function") {
+    throw new TypeError("Recovery strategy decision evidence requires a write-only durable Journal flush capability")
   }
 }
 
@@ -346,7 +346,7 @@ async function flushRecoveryDecisionEvidence({ eventPublisher, publication, reco
   }
   assertRecoveryDecisionPublicationSucceeded({ publication })
   assertRecoveryDecisionFlushCapability({ eventPublisher })
-  const flushed = await eventPublisher.flush()
+  const flushed = await eventPublisher.flushWrites()
   assertRecoveryDecisionFlushSucceeded({ flushed })
   return {
     ok: true,

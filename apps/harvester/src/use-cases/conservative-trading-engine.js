@@ -1632,11 +1632,11 @@ function createSubmissionLifecycleCallbacks({
       if (recoverySell && persistenceError === undefined) {
         if (publication?.ok !== true) {
           persistenceError = publication?.errors?.[0] ?? new Error("Recovery SELL deferral evidence publication failed")
-        } else if (typeof eventPublisher?.flush !== "function") {
-          persistenceError = new TypeError("Recovery SELL deferral evidence requires a durable Journal flush capability")
+        } else if (typeof eventPublisher?.flushWrites !== "function") {
+          persistenceError = new TypeError("Recovery SELL deferral evidence requires a write-only durable Journal flush capability")
         } else {
           try {
-            const flushed = await eventPublisher.flush()
+            const flushed = await eventPublisher.flushWrites()
             if (flushed?.ok !== true || flushed?.durable !== true) {
               persistenceError = flushed?.errors?.[0] ?? new Error("Recovery SELL deferral evidence was not durably journaled")
             }

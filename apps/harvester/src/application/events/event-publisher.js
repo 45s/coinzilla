@@ -6,10 +6,10 @@ import { defaultLogger, toResult } from "@coinzilla/utils"
  * Publication is synchronous admission only. flush() waits for subscribers
  * (including Journal) to persist all accepted events.
  *
- * @param {{ eventBus: { publish: (event: object) => object }, flush?: () => Promise<object>, logger?: { error?: (entry: object) => void } }} input
- * @returns {{ publish: (event: object) => object, flush: () => Promise<object>, reportFailure: (input: { event?: object, error: Error }) => void }}
+ * @param {{ eventBus: { publish: (event: object) => object }, flush?: () => Promise<object>, flushWrites?: () => Promise<object>, logger?: { error?: (entry: object) => void } }} input
+ * @returns {{ publish: (event: object) => object, flush: () => Promise<object>, flushWrites: () => Promise<object>, reportFailure: (input: { event?: object, error: Error }) => void }}
  */
-export function makeEventPublisher({ eventBus, flush: flushEvents, logger = defaultLogger } = {}) {
+export function makeEventPublisher({ eventBus, flush: flushEvents, flushWrites: flushJournalWrites, logger = defaultLogger } = {}) {
   const reportFailure = ({ event, error }) => {
     try {
       logger?.error?.({
@@ -85,7 +85,42 @@ export function makeEventPublisher({ eventBus, flush: flushEvents, logger = defa
     }
   }
 
+  const flushWrites = async () => {
+    if (typeof flushJournalWrites !== "function") {
+      return toResult({ error: new TypeError("Harvester event publisher has no write-only durable flush capability") })
+    }
+    try {
+      const result = await flushJournalWrites()
+      if (result?.ok === true && result?.durable === true) {
+        try {
+          logger?.trace?.({ message: "Harvester event publisher write-only flush completed" })
+        } catch {
+          // Diagnostic logging must not change durable flush semantics.
+        }
+        return result
+      }
+      const errors = Array.isArray(result?.errors) && result.errors.length > 0
+        ? result.errors
+        : [new Error("Harvester write-only Journal flush did not confirm durable persistence")]
+      const failure = toResult({ errors })
+      reportFailure({ event: { name: "journal.flush_writes" },
+        error: failure.errors[0] })
+      if (result?.recoveryFailure) {
+        return {
+          ...failure,
+          recoveryFailure: result.recoveryFailure,
+        }
+      }
+      return failure
+    } catch (error) {
+      reportFailure({ event: { name: "journal.flush_writes" },
+        error })
+      return toResult({ error })
+    }
+  }
+
   return Object.freeze({ publish,
     flush,
+    flushWrites,
     reportFailure })
 }

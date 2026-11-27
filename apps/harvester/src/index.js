@@ -299,8 +299,27 @@ function createProcessEventPublisher({ eventBus, logger, journalService, resourc
         recoveryFailure: classifyJournalFlushFailure({ status: journalService?.status }),
       }
     },
+    flushWrites: async () => {
+      await resources.processStartedPublication
+      const result = await (journalService?.flushWrites?.() ?? Promise.resolve({
+        ok: false,
+        errors: [new Error("Harvester Journal write-only durable flush is unavailable")],
+      }))
+      if (result?.ok === true && result?.durable === true) {
+        return result
+      }
+      const failure = result?.ok === false
+        ? result
+        : {
+          ok: false,
+          errors: [new Error("Harvester Journal write-only flush did not confirm durable persistence")],
+        }
+      return {
+        ...failure,
+        recoveryFailure: classifyJournalFlushFailure({ status: journalService?.status }),
+      }
+    },
   })
-}
 
 function publishProcessStartedEvidence({ processStartedDataResult, resources, logger } = {}) {
   if (!processStartedDataResult.ok) {
