@@ -190,7 +190,10 @@ function assertChildJournalResult({ result, expected, phase }) {
 test("prevents a second process from writing to an active journal directory", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-process-lock-"))
   const eventBus = new EventBus()
-  const journal = new Journal({ eventBus, directory })
+  const journal = new Journal({
+    eventBus,
+    directory,
+  })
   const childScript = createSecondProcessJournalScript()
   const runChildJournal = () => spawnSync(
     process.execPath,
@@ -229,7 +232,10 @@ test("prevents a second process from writing to an active journal directory", as
   } finally {
     await journal.close()
     await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -711,7 +717,12 @@ test("waits for startup cancellation to release the writer lock before close res
     releaseCreateSessionFile()
     const startResult = await startPromise
     const closeResult = await closePromise
-    await assertStartupCancellationState({ startResult, closeResult, journal, directory })
+    await assertStartupCancellationState({
+      startResult,
+      closeResult,
+      journal,
+      directory,
+    })
   } finally {
     releaseCreateSessionFile()
     await Promise.allSettled([startPromise, closePromise].filter(Boolean))
@@ -1659,7 +1670,12 @@ async function createActiveFlushFixture() {
     flushPromise: null,
     closePromise: null,
   }
-  const store = createActiveFlushStore({ fixture, storeCalls, firstSyncStarted, firstSyncGate })
+  const store = createActiveFlushStore({
+    fixture,
+    storeCalls,
+    firstSyncStarted,
+    firstSyncGate,
+  })
 
   const journal = new Journal({
     eventBus,
@@ -1947,10 +1963,17 @@ async function assertCloseDrainsPublishedEvent({ context, appendGate, appendStar
 
   await appendStarted.promise
   await Promise.resolve()
-  await assertCloseRemainsPendingForAppend({ context, closeSettled })
+  await assertCloseRemainsPendingForAppend({
+    context,
+    closeSettled,
+  })
   appendGate.resolve()
   const closeResult = await closePromise
-  await assertCloseResultAndRecord({ context, closeResult, published })
+  await assertCloseResultAndRecord({
+    context,
+    closeResult,
+    published,
+  })
 
 }
 
@@ -2042,7 +2065,10 @@ async function assertJournalRejectsLossyPayload({ invalidPayload }) {
       `Journal must retain the original ${invalidPayload.label} serialization failure for flush and close.`,
     )
 
-    await assertLossyPayloadCloseFailure({ context, invalidPayload })
+    await assertLossyPayloadCloseFailure({
+      context,
+      invalidPayload,
+    })
   } finally {
     await context.journal.close()
     await context.eventBus.close()

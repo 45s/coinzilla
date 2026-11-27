@@ -97,12 +97,6 @@ export class Journal {
   }
 
   /**
-   * Acquire resources and subscribe while the public start() promise tracks completion.
-   *
-   * @private
-   * @returns {Promise<object>} Startup result after success or complete rollback.
-   */
-  /**
    * Subscribe the Journal writer to source events.
    * @private
    * @returns {object} EventBus subscription result.
@@ -123,6 +117,24 @@ export class Journal {
     })
   }
 
+  /**
+   * Report successful startup without allowing diagnostics to fail lifecycle startup.
+   * @private
+   */
+  reportStarted() {
+    try {
+      this.logger.system?.("Journal started", { filePath: this.filePath })
+    } catch {
+      // Logging must not turn a successful startup into a failure.
+    }
+  }
+
+  /**
+   * Acquire resources and subscribe while the public start() promise tracks completion.
+   *
+   * @private
+   * @returns {Promise<object>} Startup result after success or complete rollback.
+   */
   async startLifecycle() {
     try {
       await this.store.ensureDirectory()
@@ -150,11 +162,7 @@ export class Journal {
       }
       this.subscription = result.subscription
       this.started = true
-      try {
-        this.logger.system?.("Journal started", { filePath: this.filePath })
-      } catch {
-        // Logging must not turn a successful startup into a failure.
-      }
+      this.reportStarted()
       return toResult({ filePath: this.filePath })
     } catch (error) {
       const errors = [error]
