@@ -1,43 +1,30 @@
 import assert from "node:assert/strict"
-import { createHash, createHmac, pbkdf2Sync } from "node:crypto"
 import test from "node:test"
 
 import { authenticateMongoScram } from "./scram.js"
 
-function parseAttributes(value) {
-  return Object.fromEntries(value.split(",").map((item) => {
-    const separator = item.indexOf("=")
-    return [item.slice(0, separator), item.slice(separator + 1)]
-  }))
-}
-
-function createServerFinal({
-  password,
-  username,
-  authMessage,
-  salt,
-  iterations,
-  mechanism,
-  clientProof,
-}) {
-  const passwordDigest = mechanism === "SCRAM-SHA-1"
-    ? createHash("md5").update(`${username}:mongo:${password}`).digest("hex")
-    : password
-  const hash = mechanism === "SCRAM-SHA-1" ? "sha1" : "sha256"
-  const length = mechanism === "SCRAM-SHA-1" ? 20 : 32
-  const saltedPassword = pbkdf2Sync(passwordDigest, salt, iterations, length, hash)
-  const clientKey = createHmac(hash, saltedPassword).update("Client Key").digest()
-  const storedKey = createHash(hash).update(clientKey).digest()
-  const clientSignature = createHmac(hash, storedKey).update(authMessage).digest()
-  const recoveredClientKey = Buffer.alloc(clientProof.length)
-  for (let index = 0; index < clientProof.length; index += 1) {
-    recoveredClientKey[index] = clientProof[index] ^ clientSignature[index]
-  }
-  assert.deepEqual(recoveredClientKey, clientKey, "SCRAM client proof must be valid")
-
-  const serverKey = createHmac(hash, saltedPassword).update("Server Key").digest()
-  return createHmac(hash, serverKey).update(authMessage).digest("base64")
-}
+const FIXED_SCRAM_VECTORS = Object.freeze({
+  "SCRAM-SHA-256|alice|correct horse battery staple": {
+    serverFirst: "r=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBservernonce,s=dGVzdC1zYWx0,i=4096",
+    clientFinal: "c=biws,r=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBservernonce,p=P5ErDGWXmsDz+WitTmuy1O9e2f7v+QUO2tjbkaz9NpI=",
+    serverFinal: "v=/gNgGg7rTgEt51krIftpS6hcX8/+092GBE1H5xvT7TE=",
+  },
+  "SCRAM-SHA-1|alice|legacy-password": {
+    serverFirst: "r=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBservernonce,s=dGVzdC1zYWx0,i=4096",
+    clientFinal: "c=biws,r=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBservernonce,p=HFZvnCnOfWt4b+grVpTd5ST1bVg=",
+    serverFinal: "v=TJkKtX74yxwzn+Uc0nsyLLqaE+M=",
+  },
+  "SCRAM-SHA-256|alice|secret": {
+    serverFirst: "r=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBservernonce,s=dGVzdC1zYWx0,i=4096",
+    clientFinal: "c=biws,r=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBservernonce,p=0T0GsHvgoRiQVAWxqWbffMznTXk/zF/hc3iYuNfd7SE=",
+    serverFinal: "v=vuyUxdJEsyClsL++705LZ6hefdvDaUXlTUO9p8Qr7Is=",
+  },
+  "SCRAM-SHA-256|alice,admin=1|secret": {
+    serverFirst: "r=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBservernonce,s=dGVzdC1zYWx0,i=4096",
+    clientFinal: "c=biws,r=AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBservernonce,p=jdvE4XINB2vb0QqXU0B5MxtW+EMcKjVW6xtqp/mGvEc=",
+    serverFinal: "v=mUGy8AwFRrcksyCRkQ7CwuPUWL1rsTTZdE+nK0ArByU=",
+  },
+})
 
 function createScramServer({
   password,
@@ -49,43 +36,26 @@ function createScramServer({
   continueResponse = {},
   serverFirst = null,
 }) {
-  let clientFirstBare
-  let challenge
-  const salt = Buffer.from("test-salt")
-  const iterations = 4096
+  const vector = FIXED_SCRAM_VECTORS[`${mechanism}|${username}|${password}`]
+  assert.ok(vector, "the SCRAM test server requires an independently generated protocol vector")
   const conversationId = 7
 
   return {
     async command({ body }) {
       if (body.saslStart === 1) {
-        clientFirstBare = body.payload.toString("utf8").slice(3)
-        const attributes = parseAttributes(clientFirstBare)
-        challenge = serverFirst
-          ?? `r=${attributes.r}servernonce,s=${salt.toString("base64")},i=${iterations}`
         return {
           ok: 1,
           conversationId,
           done: false,
-          payload: Buffer.from(challenge),
+          payload: Buffer.from(serverFirst ?? vector.serverFirst),
           ...startResponse,
         }
       }
 
       if (body.saslContinue === 1) {
         const clientFinal = body.payload.toString("utf8")
-        const proofSeparator = clientFinal.lastIndexOf(",p=")
-        const clientFinalWithoutProof = clientFinal.slice(0, proofSeparator)
-        const proof = Buffer.from(clientFinal.slice(proofSeparator + 3), "base64")
-        const authMessage = `${clientFirstBare},${challenge},${clientFinalWithoutProof}`
-        const signature = createServerFinal({
-          password,
-          username,
-          authMessage,
-          salt,
-          iterations,
-          mechanism,
-          clientProof: proof,
-        })
+        assert.equal(clientFinal, vector.clientFinal, "client proof must match the independent SCRAM protocol vector")
+        const signature = vector.serverFinal.slice(2)
         return {
           ok: 1,
           conversationId,
