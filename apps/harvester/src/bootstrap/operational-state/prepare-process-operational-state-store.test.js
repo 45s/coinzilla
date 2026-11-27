@@ -1,6 +1,10 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { mkdtemp, readFile, rm } from "node:fs/promises"
+import * as fsPromises from "node:fs/promises"
+import os from "node:os"
 import path from "node:path"
+import { createFileOperationalStateStore } from "../../infrastructure/operational-state/create-file-store.js"
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import { DEFAULT_OPERATIONAL_STATE_DIRECTORY } from "../../infrastructure/operational-state/resolve-directory.js"
 import { prepareProcessOperationalStateStore } from "./prepare-process-operational-state-store.js"
@@ -300,6 +304,76 @@ test("initializes an empty store before verifying the process-owned ledger", asy
     createOperationalStateStore: () => expectedStore,
   })
   assert.deepEqual(operations, ["initializeIfEmpty", "verify"], "Startup must initialize only an empty ledger, then verify it before returning the store.")
+})
+
+test("fails closed in real process startup when a synced fact has no manifest checkpoint", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-process-operational-state-startup-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const manifestPath = path.join(directory, "manifest.jsonl")
+  let failManifestAppend = false
+  const fileSystem = {
+    ...fsPromises,
+    open: async (...parameters) => {
+      const [target, ...args] = parameters
+      if (failManifestAppend && target === manifestPath && args[0] === "a") {
+        return {
+          writeFile: async () => {
+            throw new Error("simulated manifest checkpoint append failure")
+          },
+          sync: async () => {},
+          close: async () => {},
+        }
+      }
+      return fsPromises.open(target, ...args)
+    },
+  }
+  const interruptedStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "startup-boundary-session",
+    fileSystem,
+  })
+  const initialized = await interruptedStore.initialize()
+  assert.equal(initialized.ok, true, "The isolated real store must initialize before fault injection.")
+  failManifestAppend = true
+  const interruptedAppend = await interruptedStore.append({
+    factId: "operator-control:startup-boundary",
+    factType: "OPERATOR_MARKET_PAUSED",
+    data: {
+      requestId: "startup-boundary",
+      actorId: "test-operator",
+      symbol: "BTCUSDT",
+    },
+  })
+  assert.equal(interruptedAppend.ok, false, "The interrupted append must not be acknowledged.")
+  assert.equal(
+    interruptedAppend.errors[0].code,
+    "DURABLE_FACTS_COMMIT_UNCERTAIN",
+    "The real store must classify the incomplete two-stream commit as uncertain.",
+  )
+
+  const factsBeforeStartup = await readFile(path.join(directory, "facts.jsonl"), "utf8")
+  const manifestBeforeStartup = await readFile(manifestPath, "utf8")
+  await assert.rejects(
+    prepareProcessOperationalStateStore({
+      appConfig: config({ recovery: true }),
+      env: { OPERATIONAL_STATE_DIRECTORY: directory },
+      runtimeSessionId: "startup-after-interruption",
+      createOperationalStateStore: (options) => createFileOperationalStateStore(options),
+    }),
+    (error) => error.code === "PROCESS_OPERATIONAL_STATE_VERIFICATION_FAILED" &&
+      /Operational State record exists beyond the committed-head manifest journal/.test(error.cause?.message ?? ""),
+    "Real process startup must reject the uncheckpointed fact before broker-capable startup.",
+  )
+  assert.equal(
+    await readFile(path.join(directory, "facts.jsonl"), "utf8"),
+    factsBeforeStartup,
+    "Startup verification must not truncate, repair, or otherwise mutate the fact stream.",
+  )
+  assert.equal(
+    await readFile(manifestPath, "utf8"),
+    manifestBeforeStartup,
+    "Startup verification must not synthesize or otherwise mutate a missing manifest checkpoint.",
+  )
 })
 
 test("fails closed without verification when an existing partial ledger cannot be initialized safely", async () => {
