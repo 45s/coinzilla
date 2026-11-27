@@ -336,7 +336,7 @@ See [architecture — operational notifications](./docs/architecture.md#operatio
 
 See [Journal Operations](./docs/JOURNAL_OPERATIONS.md) and the [Journal evidence contract](./docs/JOURNAL_EVIDENCE_CONTRACT.md).
 
-### Process-restart recovery — active forensic workstream (#654)
+### Process-restart recovery — deferred secondary workstream (#654)
 
 Process-restart restoration is not implemented. Follow [#654](https://github.com/45s/coinzilla/issues/654), the [current Harvester roadmap](./ROADMAP.md) and [audit evidence](./docs/audits/README.md).
 
