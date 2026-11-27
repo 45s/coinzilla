@@ -11312,7 +11312,7 @@ test("pauses a blocked recovery SELL when its deferral evidence cannot be durabl
   assert.equal(scenario.getFlushCount(), 2)
   assert.deepEqual(scenario.harness.orders, [])
   assert.equal(scenario.harness.engine.getOrders().length, 0)
-  assert.ok(scenario.harness.pauses.includes("ORDER_INTENT_NOT_DURABLE"))
+  assert.ok(scenario.harness.pauses.includes("RECOVERY_SELL_DEFERRAL_EVIDENCE_PERSISTENCE_FAILED"))
 })
 
 test("rechecks external-order ownership after the durable order intent and records a terminal local deferral", async () => {
