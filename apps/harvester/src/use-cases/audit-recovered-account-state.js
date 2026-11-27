@@ -632,7 +632,11 @@ function createExpectedOrderCommitments({ recoveredState }) {
     orders: recoveredState.orderRegistry.orders,
   })
   for (const order of expectedOpenOrders) {
-    addExpectedOrderCommitment({ order, expectedByBrokerId, expectedLocked })
+    addExpectedOrderCommitment({
+      order,
+      expectedByBrokerId,
+      expectedLocked,
+    })
   }
   return {
     expectedOpenOrders,
