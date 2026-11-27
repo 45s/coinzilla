@@ -49,11 +49,23 @@ function probeNetworkUnavailable() {
         port: 53,
       })
       socket.setTimeout(1_000)
-      socket.once("connect", () => finish({ connected: true, errorCode: null }))
-      socket.once("error", (error) => finish({ connected: false, errorCode: error.code ?? "UNKNOWN" }))
-      socket.once("timeout", () => finish({ connected: false, errorCode: "TIMEOUT" }))
+      socket.once("connect", () => finish({
+        connected: true,
+        errorCode: null,
+      }))
+      socket.once("error", (error) => finish({
+        connected: false,
+        errorCode: error.code ?? "UNKNOWN",
+      }))
+      socket.once("timeout", () => finish({
+        connected: false,
+        errorCode: "TIMEOUT",
+      }))
     } catch (error) {
-      finish({ connected: false, errorCode: error.code ?? "UNKNOWN" })
+      finish({
+        connected: false,
+        errorCode: error.code ?? "UNKNOWN",
+      })
     }
   })
 }
