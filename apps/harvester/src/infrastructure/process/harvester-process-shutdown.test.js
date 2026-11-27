@@ -92,7 +92,7 @@ function createDurableJournalChildSetupSource({ eventBusModuleUrl, journalModule
     const accepted = eventBus.publish({
       name: "shutdown.accepted",
       source: "integration-test",
-      payload: { writeId: "accepted-before-process-exit" },
+      data: { writeId: "accepted-before-process-exit" },
     })
     if (accepted.ok !== true) {
       throw accepted.errors?.[0] ?? new Error("The pre-shutdown Journal event was not accepted.")
