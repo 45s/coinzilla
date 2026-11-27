@@ -564,11 +564,14 @@ test("rejects an oversized application snapshot for its client without stopping 
 test("accepts Dashboard WebSocket upgrades from a dynamically selected localhost port", async (t) => {
   const eventBus = new EventBus()
   const api = await startApi({ t, eventBus })
-  const socket = createConnection({ host: "127.0.0.1", port: api.address.port })
+  const socket = createConnection({
+    host: "127.0.0.1",
+    port: api.address.port,
+  })
   t.after(() => socket.destroy())
-  const response = new Promise((resolve, reject) => {
+  const response = new Promise((resolve) => {
     socket.once("data", (chunk) => resolve(chunk.toString("utf8")))
-    socket.once("error", reject)
+    socket.once("error", () => resolve("socket-error"))
   })
   socket.write([
     "GET /api/v1/trading/events HTTP/1.1",
@@ -577,6 +580,9 @@ test("accepts Dashboard WebSocket upgrades from a dynamically selected localhost
     "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
     "Sec-WebSocket-Version: 13", "Origin: http://localhost:4317", "", "",
   ].join("\r\n"))
-  assert.match(await response, /^HTTP\/1\.1 101 Switching Protocols/,
-    "A local Dashboard on a dynamically selected port must complete the Harvester WebSocket handshake.")
+  assert.match(
+    await response,
+    /^HTTP\/1\.1 101 Switching Protocols/,
+    "A local Dashboard on a dynamically selected port must complete the Harvester WebSocket handshake.",
+  )
 })
