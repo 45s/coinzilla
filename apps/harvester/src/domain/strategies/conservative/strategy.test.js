@@ -1301,3 +1301,76 @@ test("classifies the ADA 0.1 residual as MIN_NOTIONAL when one fee-reserved step
     inventoryDisposition: decision.inventoryDisposition,
   })
 })
+test("fails closed when an active Position is missing its RecoveryLedger", () => {
+  const { portfolio } = makeBoughtState()
+
+  assert.throws(() => evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    marketMetadata,
+  }), /active Position requires its recovery proceeds ledger/)
+})
+
+test("fails closed when Position.spent and RecoveryLedger buyCost diverge", () => {
+  const { portfolio } = makeBoughtState()
+  const recoveryLedger = {
+    market,
+    buyCost: "9.99",
+    netSellProceeds: "0",
+  }
+
+  assert.throws(() => evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata,
+  }), /Position.spent and legacy RecoveryLedger cost mirror diverged/)
+})
+
+test("fails closed when active recovery SELL commitments exceed sellable Position inventory", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+
+  assert.throws(() => evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata,
+    activeOrders: [{
+      market,
+      side: "SELL",
+      status: "OPEN",
+      remainingQuantity: new Quantity({
+        amount: "99",
+        asset: baseAsset,
+      }),
+    }],
+  }), /Aggregate active Conservative recovery SELL commitments exceed sellable Position inventory/)
+})
+
+test("rejects a negative remaining quantity on an active recovery SELL", () => {
+  const { portfolio, recoveryLedger } = makeBoughtState()
+
+  assert.throws(() => evaluateConservativeStrategy({
+    marketPrice,
+    pairConfig,
+    settings,
+    portfolio,
+    recoveryLedger,
+    marketMetadata,
+    activeOrders: [{
+      market,
+      side: "SELL",
+      status: "OPEN",
+      remainingQuantity: new Quantity({
+        amount: "-1",
+        asset: baseAsset,
+      }),
+    }],
+  }), /remainingQuantity cannot be negative/)
+})
