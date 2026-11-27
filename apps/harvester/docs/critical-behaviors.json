@@ -31,7 +31,10 @@
     "src/use-cases/resolve-recovery-seller-stop.js",
     "src/use-cases/resolve-user-data-account-blockers.helpers.js",
     "src/use-cases/resolve-user-data-account-blockers.js",
-    "src/use-cases/restore-harvester-operational-state.js"
+    "src/use-cases/restore-harvester-operational-state.js",
+    "src/infrastructure/journal/project-harvester-journal-recovery.js",
+    "src/use-cases/restore-harvester-journal-state.js",
+    "src/use-cases/audit-recovered-account-state.js"
   ],
   "behaviors": [
     {
@@ -1855,6 +1858,81 @@
         "Successful resolution keeps BUY and SELL admission closed in the current process; no order submission, runtime reset, restart, or auto-resume occurs.",
         "A controlled restart may re-enable execution only after fresh authoritative account reconciliation and PREFLIGHT."
       ]
+    },
+    {
+      "id": "RECOVERY_SELLER_OFFLINE_BUY_REPLAY",
+      "title": "Offline Recovery Seller BUY replay and account reconciliation",
+      "sourceModules": [
+        "src/infrastructure/journal/project-harvester-journal-recovery.js",
+        "src/use-cases/restore-harvester-journal-state.js",
+        "src/use-cases/audit-recovered-account-state.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "replays terminal Recovery Seller BUY fills and includes their inventory in offline account audit",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "keeps Recovery Seller SELL fill replay deferred without mixed-sell allocation evidence",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "keeps an unresolved Recovery Seller BUY order deferred until canonical reconciliation",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "defers a FILLED Recovery Seller BUY when Journal fill evidence is incomplete",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "accepts balances and reservations that exactly match replayed strategy ownership",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "ignores quote-asset commissions when reconciling third-asset account deltas",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "rejects negative third-asset commission amounts",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "fails closed on malformed or unmarketed Journal commission fills",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "reports the target market blocked status when a canonical target market is supplied",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "sorts multiple unowned open-order commitments deterministically",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "reconciles a third-asset commission when the fee asset is also a market asset",
+          "kind": "normal"
+        }
+      ],
+      "invariants": [
+        "Only acknowledged, terminal, fully owned RS BUY orders with exact order/fill identity and cumulative quantity are replayed offline.",
+        "Replay reconstructs Portfolio base quantity and quote cash flow; third-asset commission deltas require a captured baseline.",
+        "Active/UNKNOWN BUYs and incomplete or contradictory Journal evidence fail closed. RS SELL replay remains deferred without durable mixed-sell allocation evidence.",
+        "Offline replay is accounting-only; it never resolves RS STOP, authorizes controlled restart, or enables runtime restoration."
+      ],
+      "runtimeStatus": "offline-only",
+      "limitation": "Offline Journal/account reconciliation only; active or UNKNOWN orders require canonical reconciliation, RS SELL allocation is deferred, and this path cannot resolve STOP or authorize controlled restart."
     }
   ],
   "coverageBaseline": {
@@ -1870,7 +1948,7 @@
       "branches": 83.22,
       "functions": 96
     },
-    "note": "The original 30 critical-module floors retain their measured baseline provenance. The seven additional critical modules introduced by release PR #1662 were measured from its develop source head and then re-measured with all 37 modules enforced in workflow run 44966859719; their per-module baseline and minimum values are recorded in moduleCoverage. The start-provider-accounts.js module was separately measured from develop 6405aafa1824e61de7fee420f54b436eed30cb5e in workflow run 45934755515 (Harvester job 140295275348); its measured baseline is lines 92.78%, branches 76.83%, functions 97.87%, with policy floors 90%, 75%, and 95%. The Recovery Seller STOP workflow and resolver were measured from develop source SHA 2a030b960ba43a6911a98b2f5b2662b04eef5453 in workflow run 46041844024 (Harvester job 140651244165), before their implementation changes; measured baselines and non-weakened minimum floors are recorded in moduleCoverage. Exact implementation-head coverage from run 46045551059 (Harvester job 140663786408): STOP workflow 96.53% lines / 93.22% branches / 100% functions; STOP resolver 98.78% lines / 92.45% branches / 100% functions."
+    "note": "The original 30 critical-module floors retain their measured baseline provenance. The seven additional critical modules introduced by release PR #1662 were measured from its develop source head and then re-measured with all 37 modules enforced in workflow run 44966859719; their per-module baseline and minimum values are recorded in moduleCoverage. The start-provider-accounts.js module was separately measured from develop 6405aafa1824e61de7fee420f54b436eed30cb5e in workflow run 45934755515 (Harvester job 140295275348); its measured baseline is lines 92.78%, branches 76.83%, functions 97.87%, with policy floors 90%, 75%, and 95%. The Recovery Seller STOP workflow and resolver were measured from develop source SHA 2a030b960ba43a6911a98b2f5b2662b04eef5453 in workflow run 46041844024 (Harvester job 140651244165), before their implementation changes; measured baselines and non-weakened minimum floors are recorded in moduleCoverage. Exact implementation-head coverage from run 46045551059 (Harvester job 140663786408): STOP workflow 96.53% lines / 93.22% branches / 100% functions; STOP resolver 98.78% lines / 92.45% branches / 100% functions. The three offline Recovery Seller BUY replay/account-audit modules were baselined from test-only PR #1938 head 40b63d6af69703ba896cb844a1eea6a5cf0faac4 (coverage workflow run 46040222360, Harvester job 140645766306), with source base develop d9330f58c2238afa8d2b0a7ff20734faaec93032. A source comparison to develop 21f32ad24719875a20cc7ef38c76dfc16beed085 found no changes in these three modules, so the measured values remain the exact develop-source baseline. Exact PR #1939 head dc6665d961570d4b3513486fbeef9313808c39d8 coverage run 46056521344 (Harvester job 140700245057) enforced the expanded 53-module inventory; all critical module floors passed."
   },
   "moduleCoverage": [
     {
@@ -2862,6 +2940,60 @@
         "branches": 92.45,
         "functions": 100
       }
+    },
+    {
+      "path": "src/infrastructure/journal/project-harvester-journal-recovery.js",
+      "baseline": {
+        "lines": 88.64,
+        "branches": 74.09,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 70,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 88.68,
+        "branches": 74.17,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/use-cases/restore-harvester-journal-state.js",
+      "baseline": {
+        "lines": 82.33,
+        "branches": 74.25,
+        "functions": 93.88
+      },
+      "minimum": {
+        "lines": 80,
+        "branches": 70,
+        "functions": 90
+      },
+      "latestObserved": {
+        "lines": 89.49,
+        "branches": 77.23,
+        "functions": 98.33
+      }
+    },
+    {
+      "path": "src/use-cases/audit-recovered-account-state.js",
+      "baseline": {
+        "lines": 91.31,
+        "branches": 80.19,
+        "functions": 94.87
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 80,
+        "functions": 90
+      },
+      "latestObserved": {
+        "lines": 91.56,
+        "branches": 80.72,
+        "functions": 98.04
+      }
     }
   ],
   "runtimeScope": {
@@ -2880,17 +3012,19 @@
     ]
   },
   "latestCoverageMeasurement": {
-    "measuredAt": "2026-11-27T15:50:49Z",
-    "branch": "fix/harvester/1923-provider-bootstrap-critical-inventory-sync",
-    "prHeadSha": "27044b40ac6f0bd8f1fe3d064a20163bca9830b7",
-    "workflowRunId": 46028341253,
-    "harvesterJobId": 140605433799,
+    "measuredAt": "2026-11-27T19:26:09Z",
+    "branch": "fix/harvester/offline-rs-buy-replay-implementation-20261127",
+    "prHeadSha": "dc6665d961570d4b3513486fbeef9313808c39d8",
+    "baseDevelopSha": "21f32ad24719875a20cc7ef38c76dfc16beed085",
+    "workflowRunId": 46056521344,
+    "harvesterJobId": 140700245057,
     "aggregate": {
-      "lines": 91.24,
-      "branches": 84.38,
-      "functions": 96.1
+      "lines": 91.31,
+      "branches": 84.42,
+      "functions": 96.15
     },
-    "checkedCriticalModuleCount": 50,
-    "gatePassed": true
+    "checkedCriticalModuleCount": 53,
+    "gatePassed": true,
+    "note": "Exact PR #1939 head coverage enforced all 53 critical module floors and passed. The read-only Binance TESTNET integration was skipped by workflow configuration; no exchange operations were performed."
   }
 }
