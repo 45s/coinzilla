@@ -52,6 +52,29 @@ reason: "AUTHORITATIVE_RECONCILIATION_COMPLETED",
   )
 })
 
+test("persists sanitized failure name, message, and code with a strategy pause", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const failure = new Error("Recovery completion persistence failed password=fixture-secret")
+  failure.code = "RECOVERY_COMPLETION_WRITE_FAILED"
+  const result = await recordStrategyMarketControl({
+    operationalStateStore,
+    action: "PAUSE",
+    transitionId: "session-1:failure",
+    symbol: "DOGEUSDT",
+    reason: "RECOVERY_CYCLE_COMPLETION_FAILED",
+    error: failure,
+  })
+
+  assert.equal(result.ok, true, "The pause fact must commit with safe failure evidence.")
+  const read = await operationalStateStore.readAll()
+  const pauseFact = read.data.records.at(-1)
+  assert.equal(pauseFact.data.error.name, "Error", "The durable evidence must preserve the original error type.")
+  assert.equal(pauseFact.data.error.code, failure.code, "The durable evidence must preserve the stable failure code.")
+  assert.match(pauseFact.data.error.message, /password=\\[REDACTED\\]/, "Sensitive assignment values must be redacted before persistence.")
+  assert.doesNotMatch(pauseFact.data.error.message, /fixture-secret/, "The original secret-like value must not enter the immutable fact.")
+  assert.equal("stack" in pauseFact.data.error, false, "Durable pause evidence must not persist an error stack.")
+})
+
 test("records a sticky safety blocker and resolves it only after a committed raise with explicit evidence", async (t) => {
   const operationalStateStore = await createStore(t)
   const raised = await recordSafetyBlockerRaised({

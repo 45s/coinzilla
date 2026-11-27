@@ -420,7 +420,7 @@ function readActiveStrategySafetyPauseBuyOrders({ state, symbol }) {
     }))
 }
 
-async function persistStrategySafetyPauseFact({ callback, symbol, reason }) {
+async function persistStrategySafetyPauseFact({ callback, symbol, reason, error }) {
   if (typeof callback !== "function") {
     return {
       persisted: null,
@@ -431,6 +431,7 @@ async function persistStrategySafetyPauseFact({ callback, symbol, reason }) {
     const result = await callback({
       symbol,
       reason,
+      error,
     })
     const persisted = result?.ok === true && result.data?.durable === true
     return {
@@ -606,6 +607,7 @@ async function prepareStrategySafetyPause({
       callback: onOperationalStateStrategyMarketPaused,
       symbol,
       reason,
+      error,
     })
     pauseFactPersisted = fact.persisted
     failures.push(...fact.errors)

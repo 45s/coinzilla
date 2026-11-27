@@ -515,12 +515,14 @@ function createStrategyMarketPausedCallback({ store,
   sequence } = {}) {
   return store
     ? ({ symbol,
-  reason }) => recordStrategyMarketControl({
+  reason,
+  error }) => recordStrategyMarketControl({
       operationalStateStore: store,
       action: "PAUSE",
       transitionId: `${store.runtimeSessionId}:${++sequence.value}`,
       symbol,
       reason,
+      error,
     })
     : undefined
 }

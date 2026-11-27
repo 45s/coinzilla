@@ -277,3 +277,39 @@ test("stops Conservative evaluation when recovery filter refresh fails", async (
   assert.equal(result.errors[0], refreshError, "The evaluator must preserve the original refresh failure.")
   assert.equal(strategyEvaluated, false, "The strategy policy must not run after a failed filter refresh.")
 })
+
+
+test("forwards the original dust-completion failure while retaining the fail-closed pause", async () => {
+  const dependencies = createDependencies()
+  const symbol = "DOGEUSDT"
+  const failure = new Error("recovery completion fact append failed")
+  failure.code = "RECOVERY_COMPLETION_WRITE_FAILED"
+  const pauses = []
+  dependencies.state.completedRecoverySellSymbols = new Set([symbol])
+  dependencies.state.completedRecoverySellOrdersBySymbol = new Map([[symbol, { clientOrderId: "completed-sell", brokerOrderId: "completed-broker-sell" }]])
+  dependencies.state.trailingBuy = new Map()
+  dependencies.pairs[symbol] = { enabled: true, keepQuantity: 1, minProfit: 0.01 }
+  dependencies.pause = async (input) => { pauses.push(input) }
+  dependencies.completeRecoveryCycle = async () => ({ ok: false, errors: [failure] })
+  dependencies.strategyPolicy.evaluate = () => ({
+    actions: [],
+    reason: "RESIDUAL_DUST",
+    inventoryDisposition: {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      reason: "MIN_NOTIONAL",
+      quantity: "1.8",
+      minimumNotional: "5",
+      evaluatedQuantity: "1.8",
+      evaluatedNotional: "0.18",
+    },
+  })
+  const evaluate = createLatestTransitionEvaluator(dependencies)
+
+  const result = await evaluate({ symbol, shutdownRecoveryOnly: true })
+
+  assert.equal(result.ok, false, "A failed durable completion must remain fail-closed.")
+  assert.equal(result.errors[0], failure, "The evaluator must preserve the original completion failure identity.")
+  assert.equal(pauses.length, 1, "The completion failure must produce exactly one market pause.")
+  assert.equal(pauses[0].reason, "RECOVERY_CYCLE_COMPLETION_FAILED", "The existing stable pause reason must remain compatible.")
+  assert.equal(pauses[0].error, failure, "The original failure must reach the durable pause callback, not only a generic reason.")
+})

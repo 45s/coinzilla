@@ -1,6 +1,6 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
-import { resumeHarvesterDeferredStrategyEvaluations } from "./harvester-runtime-setup.js"
+import { createOperationalStateCallbacks, resumeHarvesterDeferredStrategyEvaluations } from "./harvester-runtime-setup.js"
 
 const test = (...args) => nodeTest(`[harvester-runtime-setup.test.js] ${args[0]}`, ...args.slice(1))
 
@@ -110,4 +110,26 @@ test("catches unexpected deferred replay exceptions and returns a failure result
   assert.equal(result.ok, false)
   assert.deepEqual(result.errors, [failure])
   assert.equal(errors[0].error, failure)
+})
+
+
+test("forwards original strategy pause failure to the durable operational-state recorder", async () => {
+  let recorded
+  const failure = new Error("residual completion failed")
+  const callbacks = createOperationalStateCallbacks({
+    operationalStateStore: { runtimeSessionId: "runtime-evidence-test" },
+    recordStrategyMarketControl: async (input) => {
+      recorded = input
+      return { ok: true, data: { durable: true } }
+    },
+  })
+
+  await callbacks.onOperationalStateStrategyMarketPaused({
+    symbol: "DOGEUSDT",
+    reason: "RECOVERY_CYCLE_COMPLETION_FAILED",
+    error: failure,
+  })
+
+  assert.equal(recorded.error, failure, "The callback must forward the exact Error object without flattening or replacing it.")
+  assert.equal(recorded.symbol, "DOGEUSDT", "The durable recorder must retain the affected market.")
 })

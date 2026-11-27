@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import { toResult } from "@coinzilla/utils"
+import { mapStrategyPausedData } from "../application/events/lifecycle-event-dtos.js"
 import {
   hasControlCharacters,
   isAuthenticatedLocalOperatorIdentity,
@@ -32,6 +33,7 @@ export async function recordStrategyMarketControl({
   transitionId,
   symbol,
   reason,
+  error,
 } = {}) {
   try {
     requireStore({ operationalStateStore,
@@ -44,6 +46,15 @@ operation: "recordStrategyMarketControl" })
         typeof reason !== "string" || !reason.trim() || reason !== reason.trim()) {
       throw new TypeError("Strategy market control requires a unique transition ID, canonical symbol, and reason")
     }
+    if (error !== undefined && (action !== "PAUSE" || !(error instanceof Error))) {
+      throw new TypeError("Strategy market-control error evidence is allowed only as an Error on PAUSE")
+    }
+    const pauseData = action === "PAUSE"
+      ? mapStrategyPausedData({ symbol, reason, error })
+      : undefined
+    if (pauseData?.ok === false) {
+      return pauseData
+    }
     const prefix = action === "PAUSE" ? "strategy-market-paused:" : "strategy-market-resumed:"
     return await appendDurably({
       operationalStateStore,
@@ -51,7 +62,7 @@ operation: "recordStrategyMarketControl" })
       fact: {
         factId: prefix + transitionId,
         factType: action === "PAUSE" ? "STRATEGY_MARKET_PAUSED" : "STRATEGY_MARKET_RESUMED",
-        data: { symbol,
+        data: pauseData?.data ?? { symbol,
 reason },
       },
     })
