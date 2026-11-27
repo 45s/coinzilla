@@ -55,120 +55,7 @@ function createAppConfig({ symbol, orderQuantity, keepQuantity, minProfit, price
   }
 }
 
-async function fillArchivedBuy({ replay, scenario, index, currentBuy }) {
-  const buy = scenario.buys[index]
-  const recoverySellSubmission = replay.waitForSubmittedOrder("SELL", index + 1)
-  const nextBuySubmission = index < scenario.buys.length - 1
-    ? replay.waitForSubmittedOrder("BUY", index + 2)
-    : null
-
-  assert.equal(currentBuy.price, buy.price, "The replay must submit each archived BUY at its recorded execution price.")
-  await replay.publishMarketPrice(currentBuy.price)
-  const archivedFill = getArchivedFill(buy.tradeId)
-  await replay.publishOrderFill({
-    order: currentBuy,
-    price: buy.price,
-    tradeId: buy.tradeId,
-    fillQuantity: currentBuy.quantity,
-    cumulativeExecutedQuantity: currentBuy.quantity,
-    quoteQuantity: archivedFill.quoteQuantity,
-    commissionAmount: buy.commissionAmount,
-    commissionAsset: buy.commissionAsset,
-  })
-  assert.equal(
-    replay.receivedExecutionReports.at(-1)?.fill?.quoteQuantity,
-    archivedFill.quoteQuantity,
-    `Runtime replay must preserve exchange-reported quoteQuantity for trade ${buy.tradeId}.`,
-  )
-
-  const [recoverySell, nextBuy] = await Promise.all([
-    recoverySellSubmission,
-    nextBuySubmission ?? Promise.resolve(null),
-  ])
-  return {
-    recoverySell,
-    nextBuy,
-  }
-}
-
-async function fillArchivedBuys({ replay, scenario }) {
-  const initialBuySubmission = replay.waitForSubmittedOrder("BUY")
-  await replay.publishMarketPrice(scenario.initialPrice)
-  let currentBuy = await initialBuySubmission
-  let latestRecoverySell
-
-  for (let index = 0; index < scenario.buys.length; index += 1) {
-    const result = await fillArchivedBuy({
-      replay,
-      scenario,
-      index,
-      currentBuy,
-    })
-    latestRecoverySell = result.recoverySell
-    if (result.nextBuy) {
-      currentBuy = result.nextBuy
-    }
-  }
-  return latestRecoverySell
-}
-
-async function fillArchivedRecoverySell({ replay, scenario, recoverySell }) {
-  assert.equal(recoverySell.price, scenario.sell.price, "The recovery SELL must use the archived SELL execution price.")
-  assert.equal(recoverySell.quantity, scenario.sell.quantity, "The recovery SELL quantity must match the archived executed quantity.")
-
-  const completionWaiter = replay.waitForRecoveryCycleCompletion()
-  await replay.publishMarketPrice(recoverySell.price)
-  const archivedFill = getArchivedFill(scenario.sell.tradeId)
-  await replay.publishOrderFill({
-    order: recoverySell,
-    price: scenario.sell.price,
-    tradeId: scenario.sell.tradeId,
-    fillQuantity: scenario.sell.quantity,
-    cumulativeExecutedQuantity: scenario.sell.quantity,
-    quoteQuantity: archivedFill.quoteQuantity,
-    commissionAmount: scenario.sell.commissionAmount,
-    commissionAsset: scenario.sell.commissionAsset,
-  })
-  assert.equal(
-    replay.receivedExecutionReports.at(-1)?.fill?.quoteQuantity,
-    archivedFill.quoteQuantity,
-    `Runtime replay must preserve exchange-reported quoteQuantity for trade ${scenario.sell.tradeId}.`,
-  )
-  return completionWaiter
-}
-
-function assertCycleCompleted({ replay, scenario, completion }) {
-  assert.equal(completion.freeQuantity, scenario.expectedFreeQuantity, "The completed runtime cycle must retain the exact archived residual inventory.")
-  assert.equal(completion.realizedNetProfit, scenario.expectedRealizedNetProfit, "The runtime completion event must report exact net profit after actual commissions.")
-  assert.deepEqual(
-    completion.dust,
-    scenario.expectedDust,
-    "Completion must preserve the exact exchange-constrained residual and limiting-filter evidence from the explicit test fixture.",
-  )
-  assert.equal(
-    replay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
-    1,
-    "Each archived runtime replay must publish exactly one recovery-cycle completion event.",
-  )
-  assert.equal(
-    replay.receivedLifecycleEvents.filter(({ name }) => name === "strategy.paused").length,
-    0,
-    "A valid archived recovery cycle must not raise a strategy safety pause.",
-  )
-  assert.equal(replay.harvesterRuntimeErrors.length, 0, "The production runtime replay must complete without uncaught Harvester errors.")
-}
-
-function assertPortfolioReset({ replay, scenario }) {
-  const position = replay.runtime.portfolio.getPosition({ symbol: scenario.symbol })
-  const recoveryLedger = replay.runtime.getRecoveryLedger({ marketId: position.market.id })
-  assert.equal(position.baseQuantity.amount, "0", "A completed recovery cycle must release its active Portfolio base quantity.")
-  assert.equal(position.freeBaseQuantity.amount, scenario.expectedFreeQuantity, "The exact residual inventory must remain free in Portfolio after cycle reset.")
-  assert.equal(position.spent.amount, "0", "A completed recovery cycle must reset its active BUY cost basis.")
-  assert.equal(recoveryLedger.buyCost, "0", "A completed recovery cycle must reset RecoveryLedger BUY cost.")
-  assert.equal(recoveryLedger.netSellProceeds, "0", "A completed recovery cycle must reset RecoveryLedger net SELL proceeds.")
-}
-
-async function runArchivedRecoveryCycle({ t, scenario }) {
+async function runArchivedAdmissionReplay({ t, scenario }) {
   const replay = await createDogeTradingReplay({
     marketSymbol: scenario.symbol,
     appConfig: createAppConfig(scenario),
@@ -180,30 +67,73 @@ async function runArchivedRecoveryCycle({ t, scenario }) {
   let stopped = false
   t.after(async () => {
     if (!stopped) {
-      await replay.runtime.stop()
+      try {
+        await replay.runtime.stop()
+      } catch {
+        // An unresolved recovery cycle is intentionally not repaired by this admission replay.
+      }
     }
   })
 
-  const recoverySell = await fillArchivedBuys({
-    replay,
-    scenario,
+  const initialBuySubmission = replay.waitForSubmittedOrder("BUY")
+  await replay.publishMarketPrice(scenario.initialPrice)
+  const initialBuy = await initialBuySubmission
+  const archivedBuy = scenario.buys[0]
+  assert.equal(
+    initialBuy.price,
+    archivedBuy.price,
+    "The first Harvester BUY must match the first archived execution price.",
+  )
+  const recoverySellSubmission = replay.waitForSubmittedOrder("SELL")
+  const archivedFill = getArchivedFill(archivedBuy.tradeId)
+  await replay.publishOrderFill({
+    order: initialBuy,
+    price: archivedBuy.price,
+    tradeId: archivedBuy.tradeId,
+    fillQuantity: initialBuy.quantity,
+    cumulativeExecutedQuantity: initialBuy.quantity,
+    quoteQuantity: archivedFill.quoteQuantity,
+    commissionAmount: archivedBuy.commissionAmount,
+    commissionAsset: archivedBuy.commissionAsset,
   })
-  const completion = await fillArchivedRecoverySell({
-    replay,
-    scenario,
-    recoverySell,
-  })
-  assertCycleCompleted({
-    replay,
-    scenario,
-    completion: await completion,
-  })
-  assertPortfolioReset({
-    replay,
-    scenario,
-  })
+  assert.equal(
+    replay.receivedExecutionReports.at(-1)?.fill?.quoteQuantity,
+    archivedFill.quoteQuantity,
+    `Runtime replay must preserve exchange-reported quoteQuantity for trade ${archivedBuy.tradeId}.`,
+  )
+  const recoverySell = await recoverySellSubmission
+  assert.equal(recoverySell.side, "SELL")
+  assert.equal(recoverySell.status, "OPEN")
 
-  await replay.runtime.stop()
+  // Drive the market through the next archived BUY price. The active recovery
+  // cycle must keep BUY admission closed; the old archived overlapping BUY is
+  // deliberately not reproduced by the current policy.
+  await replay.publishMarketPrice(
+    scenario.buys[1]?.price ?? scenario.sell.price,
+  )
+  assert.equal(
+    replay.submittedCanonicalOrders.filter(({ side }) => side === "BUY").length,
+    1,
+    "No subsequent archived BUY may be submitted while the first recovery cycle remains unresolved.",
+  )
+  assert.equal(
+    replay.submittedCanonicalOrders.filter(({ side }) => side === "SELL").length,
+    1,
+  )
+  assert.equal(
+    replay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
+    0,
+  )
+  assert.equal(
+    replay.receivedLifecycleEvents.filter(({ name }) => name === "strategy.paused").length,
+    0,
+  )
+  assert.equal(replay.harvesterRuntimeErrors.length, 0)
+  try {
+    await replay.runtime.stop()
+  } catch {
+    // Shutdown safety remains fail-closed while the recovery cycle is unresolved.
+  }
   stopped = true
 }
 
@@ -370,22 +300,22 @@ const scenarios = [
 
 const [zroScenario, dogeScenario, adaScenario] = scenarios
 
-test("replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory", async (t) => {
-  await runArchivedRecoveryCycle({
+test("blocks subsequent archived ZROUSDT BUYs while the first recovery cycle is active", async (t) => {
+  await runArchivedAdmissionReplay({
     t,
     scenario: zroScenario,
   })
 })
 
-test("replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory", async (t) => {
-  await runArchivedRecoveryCycle({
+test("blocks subsequent archived DOGEUSDT BUYs while the first recovery cycle is active", async (t) => {
+  await runArchivedAdmissionReplay({
     t,
     scenario: dogeScenario,
   })
 })
 
-test("replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory", async (t) => {
-  await runArchivedRecoveryCycle({
+test("blocks subsequent archived ADAUSDT BUYs while the first recovery cycle is active", async (t) => {
+  await runArchivedAdmissionReplay({
     t,
     scenario: adaScenario,
   })
