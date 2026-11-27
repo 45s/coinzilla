@@ -130,7 +130,7 @@ async function assertPublishedArchive({ directory, remote, expectedIdentityStatu
   }, "Debug archive manifest must mark cumulative logs excluded and selected session logs gzip-compressed")
   assert.equal(
     await readFile(path.join(directory, "data_commit_hash"), "utf8"),
-    `${DATA_COMMIT_HASH}\\n`,
+    `${DATA_COMMIT_HASH}\n`,
     "Published checkpoint identity file must match the recovery-facts manifest",
   )
   assert.equal(
