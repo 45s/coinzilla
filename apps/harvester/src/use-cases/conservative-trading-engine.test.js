@@ -11252,7 +11252,14 @@ async function createRecoverySellDeferralHarness({ failDeferralFlush = false } =
         if (flushCount === 1) {
           hasExternalOrder = true
         }
-        if (failDeferralFlush && flushCount === 2) {
+        return {
+          ok: true,
+          durable: true,
+        }
+      },
+      flushWrites: async () => {
+        flushCount += 1
+        if (failDeferralFlush) {
           return {
             ok: false,
             errors: [failure],
