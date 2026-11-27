@@ -1,6 +1,7 @@
 import { realpathSync, statSync } from "node:fs"
 import { extname, isAbsolute, relative, resolve as resolvePath, sep } from "node:path"
 import { fileURLToPath } from "node:url"
+import { isNodeGuardedSimulationLauncher } from "./create-node-guarded-simulation-launcher.js"
 
 const DEFAULT_TERMINATION_GRACE_MS = 250
 const DEFAULT_MAX_OUTPUT_BYTES = 1_048_576
@@ -480,9 +481,8 @@ function createExecutionPromise({
 }
 
 /**
- * Orchestrate a worker that must be launched by a trusted OS-level sandbox.
- * This module enforces lifecycle and output limits but does not create the
- * filesystem, network, process or memory isolation itself.
+ * Orchestrate a worker launched by an OS sandbox or trusted simulation launcher.
+ * This module enforces lifecycle and output limits but does not create OS isolation.
  */
 
 
@@ -516,7 +516,7 @@ function validateProcessScenarioAdapterOptions({
     throw new TypeError("Process scenario adapter requires strategyId")
   }
   if (typeof spawnSandboxedWorker !== "function") {
-    throw new TypeError("Process scenario adapter requires a trusted OS sandbox launcher")
+    throw new TypeError("Process scenario adapter requires a trusted OS sandbox launcher or guarded-simulation worker launcher")
   }
   if (typeof workerPath !== "string" || !workerPath.trim()) {
     throw new TypeError("Process scenario adapter requires workerPath")
@@ -550,9 +550,9 @@ function spawnScenarioWorker({ spawnSandboxedWorker, workerPath, maxOutputBytes 
   })
 }
 
-function assertWorkerCanStart({ osSandboxVerified, signal }) {
-  if (!osSandboxVerified) {
-    throw new Error("OS-level sandbox isolation has not been verified for the process scenario adapter")
+function assertWorkerCanStart({ osSandboxVerified, simulationBoundaryVerified, signal }) {
+  if (!osSandboxVerified && !simulationBoundaryVerified) {
+    throw new Error("OS-level sandbox isolation has not been verified and no trusted guarded-simulation worker is registered")
   }
   if (signal?.aborted) {
     throw new Error("Scenario worker execution was cancelled before startup")
@@ -686,10 +686,12 @@ function createWorkerExecutor({
   maxOutputBytes,
   children,
   osSandboxVerified,
+  simulationBoundaryVerified,
 }) {
   return async function execute({ runId, scenarioId, input, signal, onStarted } = {}) {
     assertWorkerCanStart({
       osSandboxVerified,
+      simulationBoundaryVerified,
       signal,
     })
     const child = spawnScenarioWorkerAndRetainFailure({
@@ -747,14 +749,19 @@ export function createProcessScenarioAdapter(options = {}) {
     spawnSandboxedWorker: validatedOptions.spawnSandboxedWorker,
     maxOutputBytes: validatedOptions.maxOutputBytes,
   })
+  const simulationBoundaryVerified = isNodeGuardedSimulationLauncher({
+    launcher: validatedOptions.spawnSandboxedWorker,
+  })
   return Object.freeze({
     strategyId: validatedOptions.strategyId,
     executionMode: "simulation-only",
     osSandboxVerified,
+    simulationBoundaryVerified,
     execute: createWorkerExecutor({
       ...validatedOptions,
       children,
       osSandboxVerified,
+      simulationBoundaryVerified,
     }),
     cancel: createWorkerCanceller({
       children,

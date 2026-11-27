@@ -38,8 +38,10 @@ function collectMissingReplayProvenance({ identity, replayProvenance, sourceRevi
   if (missingRuntimeIdentity) {
     missing.add("runtime identity is unavailable")
   }
-  if (replayProvenance?.verified !== true) {
-    missing.add("trusted replay provenance verification is unavailable")
+  if (replayProvenance?.verified === true) {
+    missing.add("caller-supplied verified replay provenance claim is not trusted")
+  } else {
+    missing.add("trusted build-artifact verification is not integrated into the Scenario Runner trust boundary")
   }
   if (sourceRevision && identity.sourceCommitSha !== sourceRevision) {
     missing.add("active source commit does not match the recorded source revision")

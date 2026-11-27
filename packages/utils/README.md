@@ -19,7 +19,7 @@ Import the supported API from the package entry point:
 - `formatTimeRelatively`: English relative-time formatting via `Intl.RelativeTimeFormat` (default unit: hours; callers may select another supported unit).
 - `wait`: promise-based delay; accepts a finite duration from 0 through 2,147,483,647 milliseconds.
 - `generateUUID`: UUID v4 generation.
-- `capitalize`: trims and uppercases a string.
+- `trimAndUppercase`: trims surrounding whitespace and uppercases the complete string.
 - `toResult`: normalizes result objects; an explicit non-null `errors` property takes precedence over `error`, non-array errors are wrapped in an array, `ok` is recomputed from the normalized errors, and other input properties are preserved.
 - `SystemCustomError`: shared native `Error` base for package-owned subclasses; preserves native `cause`, sets the concrete subclass name, and optionally exposes a stable `code`, safe scalar `context`, and boolean `retryable` classification.
 - `createKeyedQueue`: creates independent serialized promise queues per key; tasks sharing a key run in enqueue order, different keys run concurrently, and `drain()` waits for tasks pending when it is called. An optional `onError({ key, error })` reports task failures without poisoning later tasks for that key.

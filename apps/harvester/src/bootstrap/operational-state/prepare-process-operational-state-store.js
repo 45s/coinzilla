@@ -78,7 +78,7 @@ async function initializeProcessStoreIfEmpty({ store, directory } = {}) {
   }
   const cause = initialization?.errors?.[0] ?? new Error("Operational State Store initialization was not confirmed")
   throw new ProcessOperationalStateStartupError(
-    `Harvester could not prepare the Operational State Store at ${  directory}. A missing or empty directory is initialized automatically; an existing directory must contain both facts.jsonl and manifest.jsonl. Partial or corrupt history was not changed. Preserve the directory and restore both streams from one verified backup before retrying.`,
+    `Harvester could not prepare the Operational State Store at ${directory}: ${cause.message ?? String(cause)}. A missing or empty directory is initialized automatically; an existing directory must contain both facts.jsonl and manifest.jsonl. Partial or corrupt history was not changed. Preserve the directory and restore both streams from one verified backup before retrying.`,
     "PROCESS_OPERATIONAL_STATE_INITIALIZATION_FAILED",
     cause,
   )

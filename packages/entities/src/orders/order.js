@@ -1,4 +1,4 @@
-import { capitalize, ensure } from "@coinzilla/utils"
+import { ensure, trimAndUppercase } from "@coinzilla/utils"
 import { assertWithDomainError } from "../helpers/assert-with-domain-error.js"
 import { errMsgs } from "./err-msgs.js"
 
@@ -54,7 +54,7 @@ export class Order {
       name: "symbol",
       errorMessage: errMsgs.symbol,
     })
-    this.#symbol = capitalize(symbol.trim())
+    this.#symbol = trimAndUppercase(symbol)
 
     assertValidString({
       value: type,

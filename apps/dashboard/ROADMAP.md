@@ -8,6 +8,7 @@
 
 - **Scenario Runner / GC Strategy Lab:** active production-flow work is tracked in [#1836](https://github.com/45s/coinzilla/issues/1836) and the [dedicated feature roadmap](./docs/features/gc-strategy-lab/RUNNER_ROADMAP.md). Foundation [PR #1837](https://github.com/45s/coinzilla/pull/1837) is merged into `develop`; the full production adapter/catalogue and trusted OS-level sandbox launcher remain incomplete. Keep execution fail-closed.
 - Keep backend/API integration authoritative. Do not add UI-only pause state or call exchange APIs from the browser.
+- **Live Overview workspace:** [#1945](https://github.com/45s/coinzilla/issues/1945) replaces the fictional Overview preview with read-only Harvester API health plus authoritative runtime, configured-market and Portfolio snapshots. Total account valuation and historical equity performance remain unavailable because the current read model does not expose them.
 
 ## Deferred / not currently tracked
 

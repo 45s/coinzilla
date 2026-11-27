@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { readFileSync, readlinkSync } from "node:fs"
+import { existsSync, readFileSync, readlinkSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { join, resolve } from "node:path"
 import test from "node:test"
@@ -197,6 +197,8 @@ test("real Linux sandbox isolates namespaces, filesystem, network, child process
   assert.equal(results.namespaces.rootUidIsMapped, true, "Worker UID 0 must be mapped inside the user namespace")
 
   assertSandboxCgroupProfile({ child })
+  const cgroupPath = cgroupPathForProcess({ pid: child.pid })
+  assert.ok(existsSync(cgroupPath), "The per-run cgroup must exist while the sandbox child is alive")
   await sendWorkerMessage({
     child,
     message: {
@@ -207,6 +209,8 @@ test("real Linux sandbox isolates namespaces, filesystem, network, child process
     child,
     timeoutMs: 5_000,
   }), true, "Sandbox worker must exit cleanly so the run cgroup can be removed")
+  assert.equal(existsSync(cgroupPath), false,
+    "The real per-run cgroup must be removed after the sandbox child exits")
 })
 
 
