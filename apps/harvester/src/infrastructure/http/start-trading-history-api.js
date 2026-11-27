@@ -68,16 +68,16 @@ function resolveStartupConfiguration({ env, environment } = {}) {
 }
 
 function validateApiDependencies({ database, eventBus, environment }) {
-  if (!database || typeof database.prepare !== "function") {
+  if (database !== undefined && database !== null && typeof database.prepare !== "function") {
     throw new TradingHistoryApiStartupError({
-      message: "The Harvester relational trading-history database is unavailable; the optional API cannot start.",
+      message: "The supplied Harvester relational trading-history database handle is invalid.",
       code: "HARVESTER_TRADING_HISTORY_API_DATABASE_UNAVAILABLE",
       environment,
     })
   }
   if (!eventBus || typeof eventBus.subscribe !== "function") {
     throw new TradingHistoryApiStartupError({
-      message: "The Harvester EventBus is unavailable; the optional trading-history API cannot start.",
+      message: "The Harvester EventBus is unavailable; the local runtime API cannot start.",
       code: "HARVESTER_TRADING_HISTORY_API_EVENT_BUS_UNAVAILABLE",
       environment,
     })
@@ -158,9 +158,21 @@ function createScenarioRunnerAdapter({ env, platform }) {
   }
 }
 
-function createQueryFacade({ database }) {
-  const repository = createTradingHistoryQueryRepository({ database })
-  return createTradingHistoryQueries({ repository })
+function validateApiDependencies({ database, eventBus, environment }) {
+  if (database !== undefined && database !== null && typeof database.prepare !== "function") {
+    throw new TradingHistoryApiStartupError({
+      message: "The supplied Harvester relational trading-history database handle is invalid.",
+      code: "HARVESTER_TRADING_HISTORY_API_DATABASE_UNAVAILABLE",
+      environment,
+    })
+  }
+  if (!eventBus || typeof eventBus.subscribe !== "function") {
+    throw new TradingHistoryApiStartupError({
+      message: "The Harvester EventBus is unavailable; the local runtime API cannot start.",
+      code: "HARVESTER_TRADING_HISTORY_API_EVENT_BUS_UNAVAILABLE",
+      environment,
+    })
+  }
 }
 
 async function openApiServer({
