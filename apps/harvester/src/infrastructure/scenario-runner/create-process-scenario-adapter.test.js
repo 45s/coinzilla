@@ -582,7 +582,12 @@ test("Linux sandbox launcher attests the required OS profile and passes a seccom
         }
       },
     },
-    execFileSync: (path) => path.includes("bwrap") ? "bubblewrap 0.9.0" : "prlimit from util-linux",
+    execFileSync: (path, args) => {
+      if (args[0] === "--help") {
+        return "bubblewrap --seccomp --preserve-fds"
+      }
+      return path.includes("bwrap") ? "bubblewrap 0.9.0" : "prlimit from util-linux"
+    },
     existsSync: () => true,
     realpathSync: (path) => path,
     spawn: (...spawnArguments) => {
@@ -637,12 +642,26 @@ test("Linux sandbox launcher rejects a mismatched isolation profile before spawn
       path,
       sha256: "b".repeat(64),
     }),
-    execFileSync: (path) => path.includes("bwrap") ? "bubblewrap 0.9.0" : "prlimit from util-linux",
+    execFileSync: (path, args) => {
+      if (args[0] === "--help") {
+        return "bubblewrap --seccomp --preserve-fds"
+      }
+      return path.includes("bwrap") ? "bubblewrap 0.9.0" : "prlimit from util-linux"
+    },
     existsSync: () => true,
     realpathSync: (path) => path,
     spawn: () => {
       spawnCalls += 1
       return { stdio: [] }
+    },
+    cgroupController: {
+      verify() {},
+      create() {
+        return {
+          cgroupProcsPath: "/sys/fs/cgroup/scenario-test/cgroup.procs",
+          cleanup() {},
+        }
+      },
     },
   })
   assert.throws(() => launcher({
@@ -656,4 +675,32 @@ test("Linux sandbox launcher rejects a mismatched isolation profile before spawn
     },
   }), /profile does not match/)
   assert.equal(spawnCalls, 0)
+})
+
+test("Linux sandbox launcher fails closed when delegated cgroup controllers are unavailable", () => {
+  assert.throws(() => createLinuxBubblewrapSandboxLauncher({
+    platform: "linux",
+    repositoryRoot: "/repo",
+    nodeExecutable: "/usr/bin/node",
+    bwrapPath: "/usr/bin/bwrap",
+    prlimitPath: "/usr/bin/prlimit",
+    verifyExecutable: ({ path }) => ({
+      path,
+      sha256: "e".repeat(64),
+    }),
+    cgroupController: {
+      verify() {
+        throw new Error("cgroup v2 memory/cpu/pids delegation is required")
+      },
+      create() {
+        throw new Error("unreachable")
+      },
+    },
+    existsSync: () => true,
+    realpathSync: (path) => path,
+    execFileSync: () => "not reached",
+    spawn: () => {
+      throw new Error("unreachable")
+    },
+  }), /cgroup v2 memory\/cpu\/pids delegation is required/)
 })
