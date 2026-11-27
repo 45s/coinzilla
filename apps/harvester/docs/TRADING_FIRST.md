@@ -308,3 +308,9 @@ Run `node scripts/recovery-seller-stop.js --context <evidence.json> --operator-i
 Durable resolution does not clear in-process BUY/SELL admission gates, reset runtime state, restart the process, or resume trading. The current process remains blocked and reports `requiresControlledRestart: true`. A separate controlled restart must perform fresh authoritative reconciliation and PREFLIGHT before execution. Telegram STOP status remains read-only.
 
 The read-only operator STOP status reports `requiresControlledRestart` and both BUY/SELL admission-gate states so an operator can verify that durable resolution has not resumed execution.
+
+## Offline Recovery Seller BUY Journal replay
+
+The offline Journal/account-audit path may replay only acknowledged, terminal, fully owned Recovery Seller BUYs with complete fill identity and exact cumulative quantity. It reconstructs Portfolio base inventory and quote cash flow; third-asset commission accounting requires its captured baseline.
+
+Active or UNKNOWN BUYs, incomplete/contradictory Journal evidence, and RS SELL fills without durable mixed-sell allocation evidence remain deferred. This is accounting-only: offline replay never resolves RS STOP, authorizes controlled restart, or enables runtime restoration. No exchange/account operations are part of this workflow.

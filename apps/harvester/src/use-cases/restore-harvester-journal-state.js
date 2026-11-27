@@ -291,26 +291,99 @@ function validateProjectionData({ projection, marketMetadata }) {
   }
 }
 
-function assertRecoverySellerJournalReplayDeferred({ data }) {
-  const isRecoverySellerActivity = (item) => {
-    if (item.strategyId === StrategyId.RECOVERY_SELLER) {
-      return true
-    }
-    if (item.strategyId === StrategyId.COIN_GRABBER) {
-      return false
-    }
-    // Legacy/unknown strategy records using the shared recovery purpose are
-    // ambiguous. Keep them fail-closed rather than replaying them as CG.
-    return ["RECOVERY_BUY", "RECOVERY_SELL"].includes(item.purpose)
+function isRecoverySellerActivity(item) {
+  if (item.strategyId === StrategyId.RECOVERY_SELLER) {
+    return true
   }
-  const hasRecoverySellerOrders = data.orders.some(isRecoverySellerActivity)
-  const hasRecoverySellerFills = data.fills.some(isRecoverySellerActivity)
+  if (item.strategyId === StrategyId.COIN_GRABBER) {
+    return false
+  }
+  return ["RECOVERY_BUY", "RECOVERY_SELL"].includes(item.purpose)
+}
+
+function hasCompleteRecoverySellerBuyFillEvidence({ order, fills }) {
+  if (
+    order.submissionOutcome !== "ACKNOWLEDGED" ||
+    order.exchangeStatusHint !== "FILLED" ||
+    order.cancellationState !== "NONE" ||
+    !Array.isArray(order.fillIds) ||
+    order.fillIds.length === 0 ||
+    compareDecimal({
+      left: order.cumulativeFillQuantity,
+      right: order.quantity,
+    }) !== 0
+  ) {
+    return false
+  }
+  const fillIds = new Set(order.fillIds)
+  const ownedFills = fills.filter((fill) => fillIds.has(fill.fillId))
+  if (ownedFills.length !== order.fillIds.length) {
+    return false
+  }
+  return ownedFills.every((fill) => (
+    fill.strategyId === StrategyId.RECOVERY_SELLER &&
+    fill.purpose === "RECOVERY_BUY" &&
+    fill.side === "BUY" &&
+    fill.clientOrderId === order.clientOrderId &&
+    fill.brokerOrderId === order.brokerOrderId &&
+    fill.symbol === order.symbol &&
+    fill.positionId === order.positionId &&
+    fill.cycleId === order.cycleId
+  ))
+}
+
+function isReplayableRecoverySellerBuyOrder({ item, fills }) {
+  const hasOwnedBuyIdentity = (
+    item.strategyId === StrategyId.RECOVERY_SELLER &&
+    item.purpose === "RECOVERY_BUY" &&
+    item.side === "BUY" &&
+    typeof item.positionId === "string" &&
+    item.positionId.trim().length > 0 &&
+    typeof item.cycleId === "string" &&
+    item.cycleId.trim().length > 0
+  )
+  return hasOwnedBuyIdentity && hasCompleteRecoverySellerBuyFillEvidence({
+    order: item,
+    fills,
+  })
+}
+
+function assertRecoverySellerJournalReplayDeferred({ data }) {
+  const replayableBuyOrders = data.orders.filter((item) =>
+    isReplayableRecoverySellerBuyOrder({
+      item,
+      fills: data.fills,
+    })
+  )
+  const replayableBuyOrderIds = new Set(replayableBuyOrders.map(({ clientOrderId }) =>
+    clientOrderId
+  ))
+  const replayableBuyFillIds = new Set(replayableBuyOrders.flatMap(({ fillIds }) =>
+    fillIds
+  ))
+  const hasUnsupportedRecoverySellerOrders = data.orders.some((item) => (
+    isRecoverySellerActivity(item) &&
+    !replayableBuyOrderIds.has(item.clientOrderId)
+  ))
+  const hasUnsupportedRecoverySellerFills = data.fills.some((item) => (
+    isRecoverySellerActivity(item) &&
+    !replayableBuyFillIds.has(item.fillId)
+  ))
   const lifecycle = data.recoverySellerLifecycle
-  const hasCandidateOrders = lifecycle?.ordersByCycle?.some(({ orders }) => orders.length > 0) ?? false
-  const hasCandidateFills = lifecycle?.appliedFillsByCycle?.some(({ fills }) => fills.length > 0) ?? false
-  if (hasRecoverySellerOrders || hasRecoverySellerFills || hasCandidateOrders || hasCandidateFills) {
+  const hasCandidateOrders = lifecycle?.ordersByCycle?.some(({ orders }) =>
+    orders.some((order) => !replayableBuyOrderIds.has(order.clientOrderId))
+  ) ?? false
+  const hasCandidateFills = lifecycle?.appliedFillsByCycle?.some(({ fills }) =>
+    fills.some((fill) => !replayableBuyFillIds.has(fill.fillId))
+  ) ?? false
+  if (
+    hasUnsupportedRecoverySellerOrders ||
+    hasUnsupportedRecoverySellerFills ||
+    hasCandidateOrders ||
+    hasCandidateFills
+  ) {
     throw new Error(
-      "Recovery Seller Journal replay is deferred; refusing to restore RS orders or fills through Conservative accounting.",
+      "Recovery Seller Journal replay is deferred; refusing to restore SELL, unresolved BUY, or ambiguous RS activity without canonical/mixed-sell allocation evidence.",
     )
   }
 }
