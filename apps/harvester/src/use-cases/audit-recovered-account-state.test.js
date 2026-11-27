@@ -327,7 +327,8 @@ function createRecoverySellerBuyRecords({
   }
   return records
 }
-function createRecoverySellerSellRecords() {
+
+function createRecoverySellerSellRecords({ lineOffset = 0 } = {}) {
   const ownership = {
     purpose: "RECOVERY_SELL",
     strategyId: StrategyId.RECOVERY_SELLER,
@@ -349,12 +350,12 @@ function createRecoverySellerSellRecords() {
     record("order.submission_requested", {
       ...intent,
       status: "PENDING",
-    }, 5),
+    }, 5 + lineOffset),
     record("order.submitted", {
       ...intent,
       brokerOrderId,
       status: "FILLED",
-    }, 6),
+    }, 6 + lineOffset),
     record("execution.fill_applied", {
       fillId: "binance:BTCUSDT:trade-rs-sell-1",
       tradeId: "trade-rs-sell-1",
@@ -369,10 +370,9 @@ function createRecoverySellerSellRecords() {
       commissions: [],
       commissionStatus: "COMPLETE",
       ...ownership,
-    }, 7),
+    }, 7 + lineOffset),
   ]
 }
-
 
 function getRecoverySellerOrderRecords(options) {
   if (options.recoverySellerBuy) {
@@ -382,13 +382,13 @@ function getRecoverySellerOrderRecords(options) {
     })
   }
   if (options.recoverySellerSell) {
-    return createRecoverySellerSellRecords()
+    return createRecoverySellerSellRecords({ lineOffset: 5 })
   }
   return []
 }
 
 function getCommissionBaselineRecords(options) {
-  if (!options.thirdAssetCommission || !options.includeCommissionBaseline) {
+  if (!options.thirdAssetCommission || !(options.includeCommissionBaseline ?? true)) {
     return []
   }
   let lineNumber = 5
@@ -399,7 +399,6 @@ function getCommissionBaselineRecords(options) {
   }
   return [createCommissionBaselineRecord({ lineNumber })]
 }
-
 function getRecoveryProjectionLineOffset({ recoverySellerBuy, recoverySellerSell }) {
   if (recoverySellerBuy) {
     return 5
@@ -410,16 +409,12 @@ function getRecoveryProjectionLineOffset({ recoverySellerBuy, recoverySellerSell
   return 0
 }
 
-function createRecoveryProjectionRecords(options) {
-  const lineOffset = getRecoveryProjectionLineOffset(options)
+
+function getConservativeSellThroughRecords(options, lineOffset) {
+  if (options.recoverySellerSell) {
+    return []
+  }
   return [
-    ...createOpeningRecords(),
-    ...getRecoverySellerOrderRecords(options),
-    ...getCommissionBaselineRecords(options),
-    createBuyFillRecord({
-      thirdAssetCommission: options.thirdAssetCommission,
-      lineOffset,
-    }),
     ...createSellCycleRecords({
       freeQuantity: options.freeQuantity ?? "0.01",
       thirdAssetCommission: options.thirdAssetCommission,
@@ -433,7 +428,19 @@ function createRecoveryProjectionRecords(options) {
   ]
 }
 
-
+function createRecoveryProjectionRecords(options) {
+  const lineOffset = getRecoveryProjectionLineOffset(options)
+  return [
+    ...createOpeningRecords(),
+    ...getRecoverySellerOrderRecords(options),
+    ...getCommissionBaselineRecords(options),
+    createBuyFillRecord({
+      thirdAssetCommission: options.thirdAssetCommission,
+      lineOffset,
+    }),
+    ...getConservativeSellThroughRecords(options, lineOffset),
+  ]
+}
 function hasThirdAssetCommission(fill) {
   return fill.commissions.some(({ asset }) => asset === "BNB")
 }
