@@ -876,7 +876,7 @@
         "Acquire process ownership before starting Journal/runtime; release it only after shutdown and cleanup are confirmed.",
         "Gate BUY, cancel only current-process owned BUYs, reconcile fills/cancellations and prove recovery SELL coverage; if proof or CLOSING durability fails, retain required services and fail closed.",
         "Bound EventBus flush, notification close, observability cleanup, logger close and lock release; retain process ownership on any failure/timeout, and retry pending operations without overlap.",
-        "A multi-provider aggregate may report durable PROCESS_STOPPED only when every started provider confirms it; otherwise the outer handler must pass the enabled Journal-backed STOPPED barrier before final process-lock release."
+        "Every started provider runtime must return ok:true and status:STOPPED before its account lock can be released. A multi-provider aggregate may report durable PROCESS_STOPPED only when every started provider also confirms it; otherwise the outer handler must pass the enabled Journal-backed STOPPED barrier before final process-lock release."
       ]
     },
     {
