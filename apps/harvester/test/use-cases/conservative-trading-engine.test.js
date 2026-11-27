@@ -332,6 +332,7 @@ function createFixtureEngine({
   isMarketBookFresh,
   getVolatilityData,
   pausedMarkets,
+  orderRegistry,
 }) {
   return makeConservativeTradingEngine({
     broker,
@@ -355,7 +356,7 @@ function createFixtureEngine({
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData,
-    initialState: { pausedMarkets },
+    initialState: { pausedMarkets, orderRegistry },
     onPause: async () => {},
     isStopping: () => false,
   });
@@ -425,6 +426,7 @@ const createFixture = ({
   externalOrdersPolicy,
   getVolatilityData,
   pausedMarkets = [],
+  initialOrderRegistry,
   orderQuantity = 10,
 } = {}) => {
   const { baseAsset, quoteAsset, market, marketMetadata, accountSnapshot } = createMarketFixture()
@@ -457,6 +459,7 @@ const createFixture = ({
     isMarketBookFresh,
     getVolatilityData,
     pausedMarkets,
+    orderRegistry: initialOrderRegistry,
   })
   return createFixturePublicApi({
     engine,
@@ -757,11 +760,34 @@ asset: fixture.market.baseAsset }),
   assert.equal(fixture.getRecoveryLedger(), recoveryLedger, "Manual execution reports must not mutate Harvester RecoveryLedger.")
 })
 
-test("keeps unmatched Harvester client IDs fail-closed under the default external-order policy", async () => {
-  const fixture = createFixture()
-  const harvesterOrder = new CanonicalOrder({
+test("keeps unmatched IDs from the current process namespace fail-closed", async () => {
+  const marketFixture = createMarketFixture()
+  const registeredCurrentSessionOrder = new CanonicalOrder({
+    clientOrderId: "h-0123456789abcdef012345-6",
+    brokerOrderId: "current-session-order-6",
+    market: marketFixture.market,
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "1.01",
+asset: marketFixture.market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1",
+asset: marketFixture.market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: marketFixture.market.baseAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+  const currentSessionRegistry = new OrderRegistry({
+    orders: [registeredCurrentSessionOrder],
+  })
+  const fixture = createFixture({
+    initialOrderRegistry: currentSessionRegistry,
+  })
+  const unmatchedCurrentSessionOrder = new CanonicalOrder({
     clientOrderId: "h-0123456789abcdef012345-7",
-    brokerOrderId: "prior-harvester-order",
+    brokerOrderId: "current-session-order-7",
     market: fixture.market,
     side: "SELL",
     type: "LIMIT_MAKER",
@@ -777,13 +803,13 @@ asset: fixture.market.baseAsset }),
     updatedAt: 1,
   })
 
-  const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: harvesterOrder } })
+  const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: unmatchedCurrentSessionOrder } })
 
-  assert.equal(result.ok, false, "An unmatched Harvester-generated ID must not be ignored as a manual order.")
+  assert.equal(result.ok, false, "An unmatched order from the current process namespace must not be ignored as an external order.")
   assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY",
 stage: "ORDER_REGISTRY_MATCH",
 retryable: false },
-    "An unresolved Harvester order must retain the ownership-integrity failure.")
+    "An unresolved current-session order must retain the ownership-integrity failure.")
 })
 
 test("retains fail-closed handling for manual external execution reports when policy is block", async () => {
