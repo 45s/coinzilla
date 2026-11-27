@@ -32,7 +32,7 @@ function probeNetworkUnavailable() {
   return new Promise((resolve) => {
     let settled = false
     let socket
-    const finish = (connected, errorCode) => {
+    const finish = ({ connected, errorCode }) => {
       if (settled) {
         return
       }
@@ -49,11 +49,11 @@ function probeNetworkUnavailable() {
         port: 53,
       })
       socket.setTimeout(1_000)
-      socket.once("connect", () => finish(true, null))
-      socket.once("error", (error) => finish(false, error.code ?? "UNKNOWN"))
-      socket.once("timeout", () => finish(false, "TIMEOUT"))
+      socket.once("connect", () => finish({ connected: true, errorCode: null }))
+      socket.once("error", (error) => finish({ connected: false, errorCode: error.code ?? "UNKNOWN" }))
+      socket.once("timeout", () => finish({ connected: false, errorCode: "TIMEOUT" }))
     } catch (error) {
-      finish(false, error.code ?? "UNKNOWN")
+      finish({ connected: false, errorCode: error.code ?? "UNKNOWN" })
     }
   })
 }

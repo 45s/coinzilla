@@ -27,8 +27,21 @@ function hostNamespaceIds() {
 }
 
 function waitForWorkerMessage({ child, expectedType, timeoutMs }) {
-  return new Promise((resolveMessage, rejectMessage) => {
-    const finish = (error, message) => {
+  return new Promise((...promiseCallbacks) => {
+    const [resolveMessage, rejectMessage] = promiseCallbacks
+    let timer
+    let finish
+    const onMessage = (message) => {
+      if (message?.type === expectedType || message?.type === "probe-error") {
+        finish(null, message)
+      }
+    }
+    const onError = (error) => finish(error)
+    const onExit = (...exitArguments) => {
+      const [code, signal] = exitArguments
+      finish(new Error(`Sandbox worker exited before its probe response: ${code}/${signal}`))
+    }
+    finish = (error, message) => {
       clearTimeout(timer)
       child.removeListener("message", onMessage)
       child.removeListener("error", onError)
@@ -39,14 +52,7 @@ function waitForWorkerMessage({ child, expectedType, timeoutMs }) {
         resolveMessage(message)
       }
     }
-    const onMessage = (message) => {
-      if (message?.type === expectedType) {
-        finish(null, message)
-      }
-    }
-    const onError = (error) => finish(error)
-    const onExit = (code, signal) => finish(new Error("Sandbox worker exited before its probe response: " + code + "/" + signal))
-    const timer = setTimeout(() => finish(new Error("Sandbox worker probe timed out")), timeoutMs)
+    timer = setTimeout(() => finish(new Error("Sandbox worker probe timed out")), timeoutMs)
     child.on("message", onMessage)
     child.once("error", onError)
     child.once("exit", onExit)
@@ -54,7 +60,8 @@ function waitForWorkerMessage({ child, expectedType, timeoutMs }) {
 }
 
 function sendWorkerMessage({ child, message }) {
-  return new Promise((resolveMessage, rejectMessage) => {
+  return new Promise((...promiseCallbacks) => {
+    const [resolveMessage, rejectMessage] = promiseCallbacks
     child.send(message, (error) => {
       if (error) {
         rejectMessage(error)
@@ -75,7 +82,7 @@ function cgroupPathForProcess({ pid }) {
 
 function assertCgroupSetting({ cgroupPath, name, expectedValue }) {
   const actualValue = readFileSync(join(cgroupPath, name), "utf8").trim()
-  assert.equal(actualValue, expectedValue, "Sandbox cgroup must enforce " + name)
+  assert.equal(actualValue, expectedValue, `Sandbox cgroup must enforce ${name}`)
 }
 
 function assertSandboxCgroupProfile({ child }) {
@@ -112,14 +119,17 @@ function assertSandboxCgroupProfile({ child }) {
 }
 
 function waitForChildClose({ child, timeoutMs }) {
-  return new Promise((resolveClose) => {
-    const finish = (closed) => {
+  return new Promise((...promiseCallbacks) => {
+    const [resolveClose] = promiseCallbacks
+    let timer
+    let finish
+    const onClose = () => finish(true)
+    finish = (closed) => {
       clearTimeout(timer)
       child.removeListener("close", onClose)
       resolveClose(closed)
     }
-    const onClose = () => finish(true)
-    const timer = setTimeout(() => finish(false), timeoutMs)
+    timer = setTimeout(() => finish(false), timeoutMs)
     child.once("close", onClose)
   })
 }
@@ -129,9 +139,15 @@ async function terminateSandboxChild({ child }) {
     return
   }
   child.kill("SIGTERM")
-  if (!await waitForChildClose({ child, timeoutMs: 2_000 })) {
+  if (!await waitForChildClose({
+    child,
+    timeoutMs: 2_000,
+  })) {
     child.kill("SIGKILL")
-    await waitForChildClose({ child, timeoutMs: 2_000 })
+    await waitForChildClose({
+      child,
+      timeoutMs: 2_000,
+    })
   }
 }
 
@@ -167,7 +183,7 @@ test("real Linux sandbox isolates namespaces, filesystem, network, child process
   const response = await responsePromise
   assert.equal(response.type, "probe-result", "Sandbox probe worker must return a structured result")
 
-  const results = response.results
+  const { results } = response
   assert.equal(results.secretEnvironmentAbsent, true, "Launcher must not forward caller secrets into the worker")
   assert.equal(results.readOnlyFilesystem.blocked, true, "Worker must not write into the allowlisted source filesystem")
   assert.equal(results.network.connected, false, "Worker must not establish an outbound network connection")
@@ -186,6 +202,8 @@ test("real Linux sandbox isolates namespaces, filesystem, network, child process
       type: "done",
     },
   })
-  assert.equal(await waitForChildClose({ child, timeoutMs: 5_000 }), true,
-    "Sandbox worker must exit cleanly so the run cgroup can be removed")
+  assert.equal(await waitForChildClose({
+    child,
+    timeoutMs: 5_000,
+  }), true, "Sandbox worker must exit cleanly so the run cgroup can be removed")
 })

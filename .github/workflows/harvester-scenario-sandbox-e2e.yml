@@ -13,7 +13,7 @@ concurrency:
 jobs:
   sandbox-acceptance:
     name: Verify real Linux sandbox boundary
-    runs-on: [self-hosted, linux, scenario-sandbox]
+    runs-on: [self-hosted, linux]
     timeout-minutes: 20
 
     steps:
