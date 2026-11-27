@@ -740,8 +740,7 @@ function resolveTrustedNodeRuntime({ nodeExecutable, realpathSync, verifyExecuta
   return runtime
 }
 
-function verifyLinuxSandboxRuntime({ bwrap, prlimit, execFileSync, arch, cgroupController }) {
-  cgroupController.verify()
+function verifyLinuxSandboxRuntime({ bwrap, prlimit, execFileSync, arch }) {
   verifySandboxTools({
     bwrap,
     prlimit,
@@ -780,82 +779,82 @@ function createVerifiedCgroupController({
   return controller
 }
 
-function createLinuxBubblewrapSandboxLauncherInternal({
-  platform,
-  arch,
-  repositoryRoot,
-  nodeExecutable,
-  bwrapPath,
-  prlimitPath,
-  shellPath,
-  cgroupController,
-  maxOutputBytes,
-  spawn,
-  execFileSync,
-  existsSync,
-  realpathSync,
-  statSync,
-  readFileSync,
-  verifyExecutable,
-  accessSync,
-  mkdirSync,
-  writeFileSync,
-  rmdirSync,
-  randomUUID,
-}) {
-  if (platform !== "linux") {
-    throw new Error("The trusted Bubblewrap scenario sandbox is supported only on Linux")
-  }
-  assertMaxOutputBytes({ maxOutputBytes })
-  const verify = resolveExecutableVerifier({
-    verifyExecutable,
-    realpathSync,
-    statSync,
-    readFileSync,
-  })
-  const { bwrap, prlimit, shell } = resolveSandboxTools({
-    bwrapPath,
-    prlimitPath,
-    shellPath,
-    existsSync,
+function createVerifiedSandboxTools({ options, verify }) {
+  return resolveSandboxTools({
+    bwrapPath: options.bwrapPath,
+    prlimitPath: options.prlimitPath,
+    shellPath: options.shellPath,
+    existsSync: options.existsSync,
     verifyExecutable: verify,
   })
-  const verifiedCgroupController = createVerifiedCgroupController({
-    cgroupController,
-    readFileSync,
-    realpathSync,
-    accessSync,
-    mkdirSync,
-    writeFileSync,
-    existsSync,
-    rmdirSync,
-    randomUUID,
+}
+
+function createVerifiedCgroupController({ options }) {
+  const controller = options.cgroupController ?? createLinuxCgroupController({
+    readFileSync: options.readFileSync,
+    realpathSync: options.realpathSync,
+    accessSync: options.accessSync,
+    mkdirSync: options.mkdirSync,
+    writeFileSync: options.writeFileSync,
+    existsSync: options.existsSync,
+    rmdirSync: options.rmdirSync,
+    randomUUID: options.randomUUID,
   })
+  controller.verify()
+  return controller
+}
+
+function createVerifiedNodeRuntime({ options, verify }) {
+  const repositoryRoot = options.realpathSync(resolve(options.repositoryRoot))
+  const nodeRuntime = resolveTrustedNodeRuntime({
+    nodeExecutable: options.nodeExecutable,
+    realpathSync: options.realpathSync,
+    verifyExecutable: verify,
+  })
+  return {
+    repositoryRoot,
+    nodeRuntime,
+  }
+}
+
+function createLinuxBubblewrapSandboxLauncherInternal(options) {
+  if (options.platform !== "linux") {
+    throw new Error("The trusted Bubblewrap scenario sandbox is supported only on Linux")
+  }
+  assertMaxOutputBytes({ maxOutputBytes: options.maxOutputBytes })
+  const verify = resolveExecutableVerifier({
+    verifyExecutable: options.verifyExecutable,
+    realpathSync: options.realpathSync,
+    statSync: options.statSync,
+    readFileSync: options.readFileSync,
+  })
+  const { bwrap, prlimit, shell } = createVerifiedSandboxTools({
+    options,
+    verify,
+  })
+  const cgroupController = createVerifiedCgroupController({ options })
   verifyLinuxSandboxRuntime({
     bwrap,
     prlimit,
-    execFileSync,
-    arch,
-    cgroupController: verifiedCgroupController,
+    execFileSync: options.execFileSync,
+    arch: options.arch,
   })
-  const resolvedRepositoryRoot = realpathSync(resolve(repositoryRoot))
-  const nodeRuntime = resolveTrustedNodeRuntime({
-    nodeExecutable,
-    realpathSync,
-    verifyExecutable: verify,
+  const { repositoryRoot, nodeRuntime } = createVerifiedNodeRuntime({
+    options,
+    verify,
   })
   return createLinuxLauncher({
     bwrap,
     prlimit,
     shell,
-    cgroupController: verifiedCgroupController,
-    repositoryRoot: resolvedRepositoryRoot,
+    cgroupController,
+    repositoryRoot,
     nodeExecutable: nodeRuntime.path,
     nodeRuntimeSha256: nodeRuntime.sha256,
-    spawn,
-    existsSync,
-    realpathSync,
-    maxOutputBytes,
+    spawn: options.spawn,
+    existsSync: options.existsSync,
+    realpathSync: options.realpathSync,
+    maxOutputBytes: options.maxOutputBytes,
   })
 }
 

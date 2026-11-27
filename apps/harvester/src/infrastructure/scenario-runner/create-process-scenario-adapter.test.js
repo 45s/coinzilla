@@ -654,7 +654,8 @@ test("Linux sandbox launcher rejects a mismatched isolation profile before spawn
       path,
       sha256: "b".repeat(64),
     }),
-    execFileSync: (path, args) => {
+    execFileSync: (...execArguments) => {
+      const [path, args] = execArguments
       if (args[0] === "--help") {
         return "bubblewrap --seccomp --preserve-fds"
       }
