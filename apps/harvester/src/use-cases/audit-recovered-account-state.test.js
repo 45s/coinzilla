@@ -825,12 +825,12 @@ test("sorts multiple unowned open-order commitments deterministically", () => {
     }),
     openOrders: [
       externalOrder({
-        brokerOrderId: "9003",
-        clientOrderId: "external-9003",
+        brokerOrderId: "external-9003",
+        clientOrderId: "external-client-9003",
       }),
       externalOrder({
-        brokerOrderId: "9002",
-        clientOrderId: "external-9002",
+        brokerOrderId: "external-9002",
+        clientOrderId: "external-client-9002",
       }),
     ],
     markets: [market],
@@ -838,7 +838,7 @@ test("sorts multiple unowned open-order commitments deterministically", () => {
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.deepEqual(
     result.data.unownedOpenOrders.map(({ brokerOrderId }) => brokerOrderId),
-    ["9002", "9003"],
+    ["external-9002", "external-9003"],
   )
   assert.deepEqual(result.data.blockedMarkets, [market.symbol])
 })
