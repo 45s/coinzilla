@@ -13,7 +13,7 @@
 
 **Secondary / deferred while trading is broken:** process-restart recovery (#654), durable facts/ledger expansion, SQLite and relational trading-history persistence (#1854), history APIs/projections, account-wide audit/reporting expansion, observability, architecture, multi-provider backlog, volatility calibration, scenario-lab work, and roadmap/maintainability cleanup. Existing safeguards remain; do not weaken order ownership or fill accounting to make tests pass. Do not start secondary tasks or describe them as progress until the trading P0 is resolved.
 
-## Secondary backlog — not current execution priority
+### Secondary backlog — not current execution priority
 
 | Priority / area | Canonical issue | Current status |
 | --- | --- | --- |
