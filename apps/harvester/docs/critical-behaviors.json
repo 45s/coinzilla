@@ -576,6 +576,41 @@
           "path": "src/use-cases/conservative-trading-engine.test.js",
           "name": "reconciles the recovery SELL after any partial BUY fill without completing the BUY lifecycle",
           "kind": "integration"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "fails closed when an active Position is missing its RecoveryLedger",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "fails closed when Position.spent and RecoveryLedger buyCost diverge",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "fails closed when active recovery SELL commitments exceed sellable Position inventory",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "rejects a negative remaining quantity on an active recovery SELL",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a Conservative BUY while RecoveryLedger buyCost remains non-zero after Position reset",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "fails closed when Conservative recovery admission dependencies are unavailable",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "fails closed when Conservative recovery admission accounting contains an invalid decimal",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
