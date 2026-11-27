@@ -211,21 +211,12 @@ function createResolutionEvidence({
   }
 }
 /**
- * Durably resolve one Recovery Seller STOP after explicit operator review.
+ * Validate and prepare the canonical Recovery Seller STOP resolution evidence.
  *
- * The active STOP is not cleared unless the domain prerequisites pass and the
- * Operational State Store confirms the OPERATOR_ACTION resolution fact.
- *
- * @param {object} input
- * @param {object} input.operationalStateStore Durable Operational State Store.
- * @param {string} input.blockerId Identity returned by the durable STOP-raise fact.
- * @param {object} input.stopState Current immutable RS STOP state.
- * @param {string} input.operatorId Stable operator identity.
- * @param {string} input.actionId Unique operator action identity.
- * @param {boolean} input.causeFixed True only after the underlying cause is fixed.
- * @param {object} input.reconciliation Authoritative order/fill/balance reconciliation evidence.
- * @param {object} input.accounting Verified Portfolio/legacy/reservation accounting evidence.
- * @returns {Promise<object>} Result containinfunction prepareRecoverySellerStopResolution(input) {
+ * @param {object} input Authenticated operator action and authoritative evidence.
+ * @returns {object} The next STOP state and canonical evidence digest.
+ */
+function prepareRecoverySellerStopResolution(input) {
   validateStopResolutionEvidence({
     blockerId: input.blockerId,
     operatorIdentity: input.operatorIdentity,
@@ -278,6 +269,12 @@ async function persistRecoverySellerStopResolution(input) {
   })
 }
 
+/**
+ * Persist an authenticated Recovery Seller STOP resolution.
+ *
+ * @param {object} input Authenticated operator action and authoritative evidence.
+ * @returns {Promise<object>} Durable resolution result.
+ */
 export async function resolveRecoverySellerStop({
   operationalStateStore,
   blockerId,

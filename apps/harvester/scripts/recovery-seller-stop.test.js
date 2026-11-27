@@ -56,11 +56,9 @@ function createContext() {
   }
 }
 
-function createHarness({ activeBlockerId = blockerId } = {}) {
-  let receivedEvidence = null
-  let resolveCalls = 0
-  let createStoreCalls = 0
-  const record = {
+
+function createResolvedRecord() {
+  return {
     factType: "SAFETY_BLOCKER_RESOLVED",
     factId: "safety-blocker-resolved:test",
     data: {
@@ -73,7 +71,10 @@ function createHarness({ activeBlockerId = blockerId } = {}) {
       evidenceDigest: "c".repeat(64),
     },
   }
-  const operationalStateStore = {
+}
+
+function createOperationalStateStore(record) {
+  return {
     readAll: async () => ({
       ok: true,
       data: {
@@ -81,11 +82,14 @@ function createHarness({ activeBlockerId = blockerId } = {}) {
       },
     }),
   }
-  const workflow = {
+}
+
+function createWorkflowHarness({ activeBlockerId, record, state }) {
+  return {
     getBlockerId: () => activeBlockerId,
     resolve: async (evidence) => {
-      resolveCalls += 1
-      receivedEvidence = evidence
+      state.resolveCalls += 1
+      state.receivedEvidence = evidence
       return {
         ok: true,
         data: {
@@ -98,21 +102,36 @@ function createHarness({ activeBlockerId = blockerId } = {}) {
     isBuyAdmissionBlocked: () => true,
     isSellAdmissionBlocked: () => true,
   }
+}
+
+function createHarness({ activeBlockerId = blockerId } = {}) {
+  const state = {
+    receivedEvidence: null,
+    resolveCalls: 0,
+    createStoreCalls: 0,
+  }
+  const record = createResolvedRecord()
+  const operationalStateStore = createOperationalStateStore(record)
+  const workflow = createWorkflowHarness({
+    activeBlockerId,
+    record,
+    state,
+  })
   return {
     record,
     workflow,
     operationalStateStore,
     get receivedEvidence() {
-      return receivedEvidence
+      return state.receivedEvidence
     },
     get resolveCalls() {
-      return resolveCalls
+      return state.resolveCalls
     },
     get createStoreCalls() {
-      return createStoreCalls
+      return state.createStoreCalls
     },
     createStore: async () => {
-      createStoreCalls += 1
+      state.createStoreCalls += 1
       return operationalStateStore
     },
     createWorkflow: async () => ({
@@ -121,7 +140,6 @@ function createHarness({ activeBlockerId = blockerId } = {}) {
     }),
   }
 }
-
 test("authenticates the local OS account before attempting RS STOP resolution", async () => {
   const harness = createHarness()
   const output = []

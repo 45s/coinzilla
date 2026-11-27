@@ -597,7 +597,10 @@ function validateSafetyBlockerResolutionOwnership({ raisedBlocker, resolution })
       throw new Error("Recovery Seller STOP must remain exclusively owned by its operator-action resolver")
     }
     if (hasOperatorMetadata) {
-      validateStructuredRecoverySellerStopResolution({ raisedBlocker, resolution })
+      validateStructuredRecoverySellerStopResolution({
+        raisedBlocker,
+        resolution,
+      })
     } else {
       validateLegacyRecoverySellerStopResolution(resolution)
     }
