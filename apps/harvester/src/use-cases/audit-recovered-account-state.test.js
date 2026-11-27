@@ -448,7 +448,10 @@ function shiftCommissionBaselineSequence({ accountSnapshot, sequence }) {
   }
 }
 
-function isNotAsset({ balance, assetCode }) {
+function isNotAsset({
+      balance,
+      assetCode,
+    }) {
   return balance.asset !== assetCode
 }
 
@@ -1157,7 +1160,10 @@ test("fails closed when the durable baseline omits a relevant market asset", () 
     data: {
       ...projection.data,
       accountSnapshots: projection.data.accountSnapshots.map((entry) =>
-        removeAssetFromPreflightSnapshot({ entry, assetCode: "BTC" })
+        removeAssetFromPreflightSnapshot({
+          entry,
+          assetCode: "BTC",
+        })
       ),
     },
   }
