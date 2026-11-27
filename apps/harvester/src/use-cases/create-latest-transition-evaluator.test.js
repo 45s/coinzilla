@@ -333,7 +333,7 @@ test("forwards the original dust-completion failure while retaining the fail-clo
 
 
 function configureResidualSellThroughState({ dependencies, symbol, price } = {}) {
-  const state = dependencies.state
+  const { state } = dependencies
   state.paused.add(symbol)
   state.recoveryManagedPausedMarkets.add(symbol)
   state.completedRecoverySellSymbols = new Set([symbol])
@@ -501,7 +501,11 @@ function configureResidualSellThroughDependencies(input = {}) {
     pauses,
     completionCalls,
   })
-  return { submissions, pauses, completionCalls }
+  return {
+    submissions,
+    pauses,
+    completionCalls,
+  }
 }
 
 test("submits the residual SELL on reevaluation after the recovery SELL fill without completing or pausing the cycle", async () => {
