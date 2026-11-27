@@ -401,13 +401,23 @@ test("exposes a write-only durable flush without draining the global EventBus", 
       start: async () => ({ ok: true }),
       flush: async () => {
         calls.push("global-flush")
-        return { ok: true, durable: true }
+        return {
+          ok: true,
+          durable: true,
+        }
       },
       flushWrites: async () => {
         calls.push("write-only-flush")
-        return { ok: true, durable: true }
+        return {
+          ok: true,
+          durable: true,
+        }
       },
-      close: async () => ({ ok: true, closed: true, durable: true }),
+      close: async () => ({
+        ok: true,
+        closed: true,
+        durable: true,
+      }),
     }),
   })
 
@@ -429,9 +439,16 @@ test("fails closed when the underlying Journal has no write-only flush capabilit
       start: async () => ({ ok: true }),
       flush: async () => {
         calls.push("global-flush")
-        return { ok: true, durable: true }
+        return {
+          ok: true,
+          durable: true,
+        }
       },
-      close: async () => ({ ok: true, closed: true, durable: true }),
+      close: async () => ({
+        ok: true,
+        closed: true,
+        durable: true,
+      }),
     }),
   })
 
