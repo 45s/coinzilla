@@ -202,7 +202,11 @@ function assertOperationalStateCanStart({
     stickySafetyBlockers.length === 0
   const singleRecoverySellerStop = stickySafetyBlockers.length === 1 &&
     stickySafetyBlockers[0].scope === "ACCOUNT" &&
-    stickySafetyBlockers[0].reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+    stickySafetyBlockers[0].reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION" &&
+    (
+      stickySafetyBlockers[0].producer === "RECOVERY_SELLER_STOP_WORKFLOW" ||
+      stickySafetyBlockers[0].producer === undefined
+    )
   const accountBlockerResolutionRestart = accountRecoverySnapshotRequired === true &&
     stickySafetyBlockers.every((blocker) => blocker.scope !== "ACCOUNT")
   if (
