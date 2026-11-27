@@ -96,6 +96,16 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: pnpm run check:helper-names:changed -- "${BASE_SHA}"
 
+      - name: Test large production module inventory report
+        run: node --test scripts/report-large-production-modules.test.js
+
+      - name: Report large production modules (report-only)
+        run: pnpm run report:large-modules
+
+      - name: Report full-tree helper naming baseline (report-only; not a gate)
+        continue-on-error: true
+        run: pnpm run check:helper-names
+
       - name: Enforce repository-wide production module filenames
         run: pnpm run check:module-names
 

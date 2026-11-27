@@ -43,6 +43,7 @@
     "check:test-matrix": "node --test scripts/workspace-test-matrix.test.js && node scripts/check-workspace-test-matrix.js",
     "check:workspace-dependency-policy": "node --test scripts/workspace-dependency-policy.test.js && node scripts/check-workspace-dependency-policy.js",
     "quality": "pnpm test && pnpm lint && pnpm run check:syntax && pnpm run check:agent-policy && pnpm run test:external-links",
+    "report:large-modules": "node scripts/report-large-production-modules.js",
     "report:module-graph": "node scripts/report-module-graph.js",
     "db:export": "pnpm --filter @coinzilla/harvester persistence:export",
     "sync:main": "node scripts/sync-main.js",
