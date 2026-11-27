@@ -33,6 +33,7 @@ test("starts the local API without requiring bearer-token configuration", async 
   const service = await startTradingHistoryApi({
     database,
     eventBus,
+    platform: "linux",
     env: {
       TRADING_MODE: "testnet",
       HARVESTER_API_HOST: "0.0.0.0",
@@ -308,4 +309,107 @@ test("Scenario Runner host marks runtime simulation executable only with a verif
     "Simulation execution does not promote production acceptance.")
   await host.runner.close()
   await eventBus.close()
+})
+
+
+async function waitForScenarioRun({ apiBase, runId }) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const response = await fetch(`${apiBase}/runs/${encodeURIComponent(runId)}`)
+    assert.equal(response.status, 200,
+      "The local HTTP API must expose the accepted run for authoritative status recovery.")
+    const envelope = await response.json()
+    if (["Completed", "Failed", "Cancelled", "Timed out", "Blocked"].includes(envelope.data.status)) {
+      return envelope.data
+    }
+    await new Promise((complete) => setTimeout(complete, 20))
+  }
+  return null
+}
+
+async function executeScenarioThroughApi({ apiBase, scenario }) {
+  const response = await fetch(`${apiBase}/runs`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      strategyId: "RS",
+      scenarioId: scenario.id,
+      input: scenario.defaultInput,
+    }),
+  })
+  assert.equal(response.status, 202,
+    `The local HTTP API must accept scenario ${scenario.id}.`)
+  const envelope = await response.json()
+  return waitForScenarioRun({
+    apiBase,
+    runId: envelope.data.runId,
+  })
+}
+
+function assertScenarioRunSucceeded({ scenario, result }) {
+  assert.ok(result, `Scenario ${scenario.id} must reach a terminal state.`)
+  assert.equal(result.status, "Completed",
+    `Scenario ${scenario.id} must complete its production-flow simulation.`)
+  assert.equal(result.output.passed, true,
+    `Scenario ${scenario.id} must satisfy its expected assertions.`)
+  assert.ok(result.output.assertions.length > 0,
+    `Scenario ${scenario.id} must return its assertion evidence.`)
+  assert.ok(result.output.trace.length > 0,
+    `Scenario ${scenario.id} must return its execution trace.`)
+  assert.equal(result.replayProvenance.verified, false,
+    "Local simulation must not imply trusted exact-replay provenance.")
+}
+
+test("executes every executable RS production-flow scenario through the local Harvester HTTP API on Windows", { skip: process.platform !== "win32" }, async () => {
+  const eventBus = new EventBus()
+  const service = await startTradingHistoryApi({
+    database: createDatabase(),
+    eventBus,
+    env: {
+      TRADING_MODE: "testnet",
+      HARVESTER_API_PORT: "0",
+      COINZILLA_SOURCE_REVISION: "d".repeat(40),
+    },
+    logger: { info() {} },
+  })
+  const apiBase = `http://127.0.0.1:${service.address.port}/api/v1/scenario-runner`
+
+  try {
+    const catalogResponse = await fetch(`${apiBase}/catalog`)
+    assert.equal(catalogResponse.status, 200,
+      "The local Harvester API must expose the scenario catalogue on Windows.")
+    const catalogEnvelope = await catalogResponse.json()
+    const scenarios = catalogEnvelope.data
+      .find((strategy) => strategy.strategyId === "RS")
+      .scenarios.filter((scenario) => scenario.executable === true)
+    assert.equal(scenarios.length, 12,
+      "All twelve current RS production-flow scenarios must be executable in local Windows simulation.")
+    const completedRuns = []
+    for (const scenario of scenarios) {
+      const result = await executeScenarioThroughApi({
+        apiBase,
+        scenario,
+      })
+      assertScenarioRunSucceeded({
+        scenario,
+        result,
+      })
+      completedRuns.push(result)
+    }
+    const historyResponse = await fetch(`${apiBase}/runs`)
+    assert.equal(historyResponse.status, 200,
+      "The Dashboard history endpoint must return completed Windows simulation runs.")
+    const historyEnvelope = await historyResponse.json()
+    assert.equal(historyEnvelope.data.length, scenarios.length,
+      "Every completed Windows scenario must appear in authoritative run history.")
+    assert.deepEqual(
+      historyEnvelope.data.map((run) => run.runId).sort(),
+      completedRuns.map((run) => run.runId).sort(),
+      "Run history must contain the exact completed scenario run identities.",
+    )
+  } finally {
+    await service.close()
+    await eventBus.close()
+  }
 })

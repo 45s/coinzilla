@@ -4,6 +4,7 @@ import { EventEmitter } from "node:events"
 import { fork } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import { createProcessScenarioAdapter } from "./create-process-scenario-adapter.js"
+import { createNodeGuardedSimulationLauncher } from "./create-node-guarded-simulation-launcher.js"
 import { PassThrough } from "node:stream"
 import {
   buildScenarioSeccompFilter,
@@ -910,4 +911,21 @@ test("process adapter retains cleanup handle when sandbox setup fails after spaw
     runId: "run-worker-setup-cleanup-failure",
   }), true, "A later confirmed cgroup cleanup must release the retained handle")
   assert.equal(fixture.cleanupAttempts(), 3)
+})
+
+test("keeps the Windows guarded simulation boundary distinct from OS sandbox verification", () => {
+  const guardedAdapter = createProcessScenarioAdapter({
+    strategyId: "RS",
+    spawnSandboxedWorker: createNodeGuardedSimulationLauncher(),
+  })
+  assert.equal(guardedAdapter.simulationBoundaryVerified, true)
+  assert.equal(guardedAdapter.osSandboxVerified, false)
+
+  const customAdapter = createProcessScenarioAdapter({
+    strategyId: "RS",
+    spawnSandboxedWorker: spawnTestWorker,
+  })
+  assert.equal(customAdapter.simulationBoundaryVerified, false,
+    "A caller-supplied process launcher must not claim the factory-verified simulation boundary.")
+  assert.equal(customAdapter.osSandboxVerified, false)
 })
