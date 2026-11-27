@@ -11466,10 +11466,10 @@ function createRecoverySellDeferralStrategyPolicy({ positionId } = {}) {
 
 async function createRecoverySellDeferralHarness({ failDeferralFlush = false } = {}) {
   const seeded = makeSeededRecoveryState()
-  const positionId = seeded.portfolio.getPosition({
+  const { positionId } = seeded.portfolio.getPosition({
     marketId: market.id,
     strategyId: StrategyId.COIN_GRABBER,
-  }).positionId
+  })
   let hasExternalOrder = false
   let flushCount = 0
   const journalEvents = []
