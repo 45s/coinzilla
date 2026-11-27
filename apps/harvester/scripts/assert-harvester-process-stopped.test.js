@@ -282,7 +282,7 @@ test("uses the operating-system process probe without treating inspection errors
     "The current process must be classified as alive by the platform process probe.",
   )
   assert.equal(
-    isHarvesterProcessAlive(Number.MAX_SAFE_INTEGER),
+    isHarvesterProcessAlive(2_000_000_000),
     false,
     "An impossible process ID must be classified as absent when the OS returns ESRCH.",
   )
