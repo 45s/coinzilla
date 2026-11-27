@@ -1740,6 +1740,42 @@
         "Bound EventBus flush, notification close, observability cleanup, logger close and lock release; retain process ownership on any failure/timeout, and retry pending operations without overlap.",
         "Every started provider runtime must return ok:true and status:STOPPED before the aggregate runtime may report STOPPED; active account locks remain held until outer cleanup. The aggregate durable PROCESS_STOPPED acknowledgement is true only when every started provider confirms it. When the Operational State Store is absent, the outer handler must pass the enabled Journal-backed STOPPED barrier; if an enabled store's PROCESS_STOPPED append fails or times out, shutdown is incomplete. Release the final process-lock group only after all required cleanup and logger-close stages succeed."
       ]
+    },
+    {
+      "id": "RECOVERY_SELLER_STOP_RESOLUTION",
+      "title": "Authenticated Recovery Seller STOP resolution and no-auto-resume boundary",
+      "sourceModules": [
+        "src/use-cases/create-recovery-seller-stop-workflow.js",
+        "src/use-cases/resolve-recovery-seller-stop.js",
+        "src/infrastructure/security/local-operator-identity.js",
+        "src/use-cases/record-safety-control-facts.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "keeps RS BUY and SELL admission blocked after durable STOP resolution",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "rejects forged OS-account identity when resolving Recovery Seller STOP",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "rejects non-authoritative reconciliation evidence for Recovery Seller STOP resolution",
+          "kind": "failure"
+        }
+      ],
+      "runtimeStatus": "offline-only",
+      "limitation": "Offline operator resolution uses a trusted local OS-account principal and operator-reviewed authoritative reconciliation evidence. It does not clear in-process admission gates or resume execution; controlled restart with fresh authoritative reconciliation and PREFLIGHT remains a separate acceptance gate.",
+      "invariants": [
+        "Only a WeakSet-authenticated OS-account principal may resolve an RS STOP; copied identity fields are rejected.",
+        "Resolution is durably recorded with operator/action/evidence metadata and exact blocker identity.",
+        "Successful resolution keeps BUY and SELL admission closed in the current process; no order submission or auto-resume occurs.",
+        "A controlled restart may re-enable execution only after fresh authoritative account reconciliation and PREFLIGHT."
+      ]
     }
   ],
   "coverageBaseline": {

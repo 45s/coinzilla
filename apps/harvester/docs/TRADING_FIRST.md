@@ -298,3 +298,9 @@ The durable RS STOP fact retains `scope: ACCOUNT` because the safety-fact schema
 Market-scoped blockers remain local to their symbol. The ADR-0008 Recovery Seller SELL exception is limited to the documented market-level strategy safety pause and never bypasses a generic account blocker. The owner-approved RS STOP exception is a distinct strategy-purpose rule and does not override any independent `scope: ACCOUNT` blocker.
 
 Do not confuse an account open-order audit classification of `BLOCKED` with this safety gate. ADR-0004 remains authoritative: external orders stay unowned and untouched; `IGNORE` permits scoped continuation, while `BLOCK` prevents trading only on the affected market.
+
+## Recovery Seller STOP resolution boundary
+
+Recovery Seller STOP resolution requires a trusted local OS-account principal, explicit cause-fixed acknowledgement, a durable blocker identity, authoritative account-wide order/fill/balance reconciliation, and verified Portfolio/legacy/reservation accounting. Copying operator identity fields or supplying UI evidence is not authentication.
+
+Durable STOP resolution does not clear in-process BUY/SELL admission gates or resume trading. The current process remains blocked until a separate controlled restart performs fresh authoritative reconciliation and PREFLIGHT. No automatic clear, self-resume, or implicit restart is permitted.

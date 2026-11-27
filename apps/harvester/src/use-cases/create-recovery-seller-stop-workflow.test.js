@@ -5,6 +5,7 @@ import path from "node:path"
 import test from "node:test"
 import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-store.js"
 import { createRecoverySellerStopWorkflow } from "./create-recovery-seller-stop-workflow.js"
+import { authenticateLocalOperator } from "../infrastructure/security/local-operator-identity.js"
 import { recordSafetyBlockerRaised } from "./record-safety-control-facts.js"
 
 async function createStore(t) {
@@ -35,12 +36,34 @@ async function createWorkflow(t) {
   }
 }
 
-function validResolutionEvidence() {
+
+function validResolutionEvidence({ blockerId } = {}) {
+  const operatorId = "operator-45s"
+  const actionId = "rs-stop-reset-2"
+  const resolutionReason = "Cause fixed and authoritative reconciliation completed"
+  const operatorIdentity = authenticateLocalOperator({
+    operatorId,
+    getUserInfo: () => ({ username: operatorId }),
+  })
   return {
-    operatorId: "operator-45s",
-    actionId: "rs-stop-reset-2",
+    operatorIdentity,
+    operatorId,
+    actionId,
+    resolutionReason,
     causeFixed: true,
     reconciliation: {
+      source: "AUTHORITATIVE_ACCOUNT_RECONCILIATION",
+      scope: "ACCOUNT",
+      status: "READY",
+      allConfiguredMarketsAudited: true,
+      auditedMarkets: ["BTCUSDT"],
+      reconciliationId: "rs-stop-audit-20261127",
+      capturedAt: "2026-11-27T00:00:00.000Z",
+      operatorId,
+      operatorAuthMethod: "OS_ACCOUNT",
+      actionId,
+      resolutionReason,
+      blockerIds: blockerId ? [blockerId] : [],
       ordersReconciled: true,
       fillsReconciled: true,
       balancesReconciled: true,
@@ -56,7 +79,6 @@ function validResolutionEvidence() {
     },
   }
 }
-
 test("persists an RS investment STOP before exposing the stopped state", async (t) => {
   const { operationalStateStore, workflow } = await createWorkflow(t)
   const result = await workflow.latch({
@@ -107,19 +129,21 @@ test("restores a persisted RS STOP and does not append a duplicate blocker", asy
   )
 })
 
-test("clears RS STOP only after explicit operator evidence is durably recorded", async (t) => {
+test("keeps RS BUY and SELL admission blocked after durable STOP resolution", async (t) => {
   const { operationalStateStore, workflow } = await createWorkflow(t)
   await workflow.latch({
     explanation: "The RS BUY acknowledgement is unresolved",
   })
 
-  const result = await workflow.resolve(validResolutionEvidence())
+  const blockerId = workflow.getBlockerId()
+  const result = await workflow.resolve(validResolutionEvidence({ blockerId }))
   const read = await operationalStateStore.readAll()
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(workflow.getStopState().status, "CLEAR")
-  assert.equal(workflow.isBuyAdmissionBlocked(), false)
-  assert.equal(workflow.isSellAdmissionBlocked(), false)
+  assert.equal(workflow.isBuyAdmissionBlocked(), true)
+  assert.equal(workflow.isSellAdmissionBlocked(), true)
+  assert.equal(workflow.requiresControlledRestart(), true)
   assert.equal(workflow.getBlockerId(), null)
   assert.equal(
     read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length,
@@ -128,6 +152,48 @@ test("clears RS STOP only after explicit operator evidence is durably recorded",
   const raisedRecord = read.data.records.find((entry) => entry.factType === "SAFETY_BLOCKER_RAISED")
   assert.equal(raisedRecord.data.producer, "RECOVERY_SELLER_STOP_WORKFLOW")
 })
+ 
+test("rejects forged OS-account identity when resolving Recovery Seller STOP", async (t) => {
+  const { operationalStateStore, workflow } = await createWorkflow(t)
+  await workflow.latch({ explanation: "The RS BUY acknowledgement is unresolved" })
+  const blockerId = workflow.getBlockerId()
+  const evidence = validResolutionEvidence({ blockerId })
+  evidence.operatorIdentity = {
+    operatorId: evidence.operatorId,
+    authMethod: "OS_ACCOUNT",
+  }
+
+  const result = await workflow.resolve(evidence)
+  const read = await operationalStateStore.readAll()
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /authenticated operating-system operator identity/)
+  assert.equal(workflow.getStopState().status, "STOPPED")
+  assert.equal(workflow.isBuyAdmissionBlocked(), true)
+  assert.equal(workflow.isSellAdmissionBlocked(), false)
+  assert.equal(workflow.getBlockerId(), blockerId)
+  assert.equal(read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length, 0)
+})
+
+test("rejects non-authoritative reconciliation evidence for Recovery Seller STOP resolution", async (t) => {
+  const { operationalStateStore, workflow } = await createWorkflow(t)
+  await workflow.latch({ explanation: "The RS BUY acknowledgement is unresolved" })
+  const blockerId = workflow.getBlockerId()
+  const evidence = validResolutionEvidence({ blockerId })
+  evidence.reconciliation.source = "USER_SUPPLIED"
+
+  const result = await workflow.resolve(evidence)
+  const read = await operationalStateStore.readAll()
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /authoritative account reconciliation/)
+  assert.equal(workflow.getStopState().status, "STOPPED")
+  assert.equal(workflow.isBuyAdmissionBlocked(), true)
+  assert.equal(workflow.isSellAdmissionBlocked(), false)
+  assert.equal(workflow.getBlockerId(), blockerId)
+  assert.equal(read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length, 0)
+})
+
 
 test("keeps account admission blocked when durable STOP resolution persistence fails", async (t) => {
   const operationalStateStore = await createStore(t)
@@ -157,7 +223,7 @@ test("keeps account admission blocked when durable STOP resolution persistence f
   const blockerId = workflow.getBlockerId()
 
   failResolution = true
-  const result = await workflow.resolve(validResolutionEvidence())
+  const result = await workflow.resolve(validResolutionEvidence({ blockerId }))
   const read = await operationalStateStore.readAll()
 
   assert.equal(result.ok, false)
