@@ -2067,7 +2067,37 @@ function makeBuyFill({
   })
 }
 
-async function createWriteOnlyDurableIntentPublisher({ events, sequence, onEvent }) {
+async function createPendingCancellationIntentPublisher() {
+  let resolvePendingPublication
+  const pendingPublication = new Promise((resolve) => { resolvePendingPublication = resolve })
+  let globalFlushCalls = 0
+  let writeOnlyFlushCalls = 0
+
+  return {
+    eventPublisher: {
+      publish: (event) => event.name === "order.cancel_requested" ? pendingPublication : ({ ok: true }),
+      flush: async () => {
+        globalFlushCalls += 1
+        return {
+          ok: false,
+          errors: [new Error("optional observer failure")],
+        }
+      },
+      flushWrites: async () => {
+        writeOnlyFlushCalls += 1
+        return {
+          ok: true,
+          durable: true,
+        }
+      },
+    },
+    resolve: () => resolvePendingPublication({ ok: true }),
+    getGlobalFlushCalls: () => globalFlushCalls,
+    getWriteOnlyFlushCalls: () => writeOnlyFlushCalls,
+  }
+}
+
+function createWriteOnlyDurableIntentPublisher({ events, sequence, onEvent }) {
   let globalFlushCalls = 0
   let writeOnlyFlushCalls = 0
 
@@ -2151,7 +2181,7 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
       if (event.name === "order.cancel_requested") sequence.push("publish:cancel_requested")
       if (event.name === "order.cancelled") {
         const registered = harness.engine.getOrders().find((order) => order.clientOrderId === event.data.clientOrderId)
-        assert.equal(registered.status, "CANCELED")
+        assert.equal(registered.status, "CANCELED", "The cancellation lifecycle event must follow the canonical terminal order state.")
       }
     },
   })
@@ -2181,8 +2211,8 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
   })
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
   const sellOrder = harness.engine.getOrders().find((order) => order.side === "SELL")
-  assert.ok(buyOrder)
-  assert.ok(sellOrder)
+  assert.ok(buyOrder, "The existing BUY order must be restored before cancellation intent is tested.")
+  assert.ok(sellOrder, "The recovery SELL must be active before the BUY fill triggers cancellation.")
 
   await applyCompletedBuyAndAssertDurableSellCancellation({
     harness,
@@ -2197,11 +2227,8 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
 })
 
 test("does not cancel a recovery SELL when cancellation intent publication is still pending", async () => {
-  let resolvePendingPublication
-  const pendingPublication = new Promise((resolve) => { resolvePendingPublication = resolve })
+  const pendingPublisher = createPendingCancellationIntentPublisher()
   let cancelCalls = 0
-  let writeOnlyFlushCalls = 0
-  let globalFlushCalls = 0
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
@@ -2209,23 +2236,7 @@ test("does not cancel a recovery SELL when cancellation intent publication is st
     seedExistingBuy: true,
     baseFreeBalance: "1",
     onCancelOrderStarted: () => { cancelCalls += 1 },
-    eventPublisher: {
-      publish: (event) => event.name === "order.cancel_requested" ? pendingPublication : ({ ok: true }),
-flush: async () => {
-        globalFlushCalls += 1
-        return {
-          ok: false,
-          errors: [new Error("optional observer failure")],
-        }
-      },
-      flushWrites: async () => {
-        writeOnlyFlushCalls += 1
-        return {
-          ok: true,
-          durable: true,
-        }
-      },
-    },
+    eventPublisher: pendingPublisher.eventPublisher,
   })
   await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -2249,10 +2260,10 @@ flush: async () => {
       }),
     },
   })
-  resolvePendingPublication({ ok: true })
+  pendingPublisher.resolve()
   assert.equal(result.ok, false, "Pending cancellation-intent publication must not be acknowledged as durable.")
-  assert.equal(globalFlushCalls, 0, "Pending intent publication must not trigger a global EventBus flush.")
-  assert.equal(writeOnlyFlushCalls, 1, "Only the preceding SELL submission intent may reach the write-only Journal barrier.")
+  assert.equal(pendingPublisher.getGlobalFlushCalls(), 0, "Pending intent publication must not trigger a global EventBus flush.")
+  assert.equal(pendingPublisher.getWriteOnlyFlushCalls(), 1, "Only the preceding SELL submission intent may reach the write-only Journal barrier.")
   assert.equal(cancelCalls, 0, "The broker must not receive cancellation before its durable intent is confirmed.")
   assert.ok(
     harness.pauses.includes("RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE"),
@@ -2264,6 +2275,7 @@ flush: async () => {
     "The existing recovery SELL must remain OPEN when cancellation intent publication is pending.",
   )
 })
+
 
 test("does not cancel a recovery SELL when its durable cancellation intent flush fails", async () => {
   let flushCount = 0
