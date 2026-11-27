@@ -9,6 +9,16 @@ const test = (...args) => {
   return nodeTest(`[create-latest-transition-evaluator.test.js] ${name}`, ...testArgs)
 }
 
+function createDurableEventPublisherStub() {
+  return {
+    publish: () => ({ ok: true }),
+    flush: async () => ({
+      ok: true,
+      durable: true,
+    }),
+  }
+}
+
 function createDependencies({ hardPause = false } = {}) {
   const symbol = "DOGEUSDT"
   const state = {
@@ -57,13 +67,7 @@ function createDependencies({ hardPause = false } = {}) {
     pairs: { [symbol]: { enabled: true } },
     settings: {},
     logger: { debug: () => {} },
-    eventPublisher: {
-      publish: () => ({ ok: true }),
-      flush: async () => ({
-        ok: true,
-        durable: true,
-      }),
-    },
+    eventPublisher: createDurableEventPublisherStub(),
     strategyPolicy: {
       evaluate: () => ({
         actions: [],
