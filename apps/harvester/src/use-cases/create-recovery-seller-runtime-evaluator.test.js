@@ -63,7 +63,8 @@ const snapshot = Object.freeze({
 function createRuntimeEvaluator({
   capture,
   stopStateOverride,
-  accountAdmissionBlocked,
+  buyAdmissionBlocked,
+  sellAdmissionBlocked,
   isMarketPriceFresh,
   isStopping,
   hasBlockingOpenOrdersForSymbol,
@@ -78,6 +79,7 @@ function createRuntimeEvaluator({
           stopState: input.stopState,
           strategyStopped: input.strategyStopped,
           buyAdmissionBlocked: input.buyAdmissionBlocked,
+          sellAdmissionBlocked: input.sellAdmissionBlocked,
           marketPaused: input.marketPaused,
           reconciliationComplete: input.reconciliationComplete,
         })
@@ -85,7 +87,8 @@ function createRuntimeEvaluator({
     },
     recoverySellerStopWorkflow: {
       getState: () => stopStateOverride,
-      isAccountAdmissionBlocked: () => accountAdmissionBlocked,
+      isBuyAdmissionBlocked: () => buyAdmissionBlocked,
+      isSellAdmissionBlocked: () => sellAdmissionBlocked,
     },
     recoverySellerPairs,
     getRecoverySellerMarketMetadata: async () => marketMetadata,
@@ -113,7 +116,8 @@ function createRuntimeEvaluator({
 function createRuntime({
   stateOverrides = {},
   stopStateOverride = stopState,
-  accountAdmissionBlocked = false,
+  buyAdmissionBlocked = false,
+  sellAdmissionBlocked = false,
   isMarketPriceFresh = () => true,
   isStopping = () => false,
   hasBlockingOpenOrdersForSymbol = () => false,
@@ -130,7 +134,8 @@ function createRuntime({
   const evaluate = createRuntimeEvaluator({
     capture,
     stopStateOverride,
-    accountAdmissionBlocked,
+    buyAdmissionBlocked,
+    sellAdmissionBlocked,
     isMarketPriceFresh,
     isStopping,
     hasBlockingOpenOrdersForSymbol,
@@ -169,6 +174,8 @@ test("builds the runtime snapshot from canonical market, account and stop state"
     "The runtime snapshot must carry the canonical account STOP state.")
   assert.equal(snapshotInput.buyAdmissionBlocked, false,
     "A RUNNING STOP state and clear admission latch must allow BUY admission.")
+  assert.equal(snapshotInput.sellAdmissionBlocked, false,
+    "A clear STOP persistence boundary must not block an otherwise eligible SELL.")
 })
 
 test("fails closed for stopped, paused or unreconciled runtime state", async () => {
@@ -196,7 +203,7 @@ test("fails closed for stopped, paused or unreconciled runtime state", async () 
 
 test("blocks new BUY admission while allowing the runtime to remain active for eligible SELLs", async () => {
   const runtime = createRuntime({
-    accountAdmissionBlocked: true,
+    buyAdmissionBlocked: true,
     stopStateOverride: Object.freeze({
       status: "CLEAR",
       decision: null,
@@ -210,7 +217,9 @@ test("blocks new BUY admission while allowing the runtime to remain active for e
   assert.equal(snapshotInput.strategyStopped, false,
     "Account STOP must not mark the whole strategy runtime as shut down.")
   assert.equal(snapshotInput.buyAdmissionBlocked, true,
-    "An unresolved account STOP persistence attempt must block new BUY spending.")
+    "An RS STOP must block new BUY spending.")
+  assert.equal(snapshotInput.sellAdmissionBlocked, false,
+    "A durable RS STOP must leave the first recovery SELL independently eligible.")
   assert.equal(runtime.getBuyDecisionInput().strategyStopped, true,
     "The BUY policy must receive the admission gate without globally stopping the runtime.")
 })
@@ -478,7 +487,11 @@ function createRuntimeLifecycleEvaluator({ workflow, market, baseAsset, quoteAss
   const accountSnapshotForRuntime = createRuntimeLifecycleAccountSnapshot({ baseAsset })
   return createRecoverySellerRuntimeEvaluator({
     recoverySellerWorkflow: workflow,
-    recoverySellerStopWorkflow: { getState: () => stopState },
+    recoverySellerStopWorkflow: {
+      getState: () => stopState,
+      isBuyAdmissionBlocked: () => false,
+      isSellAdmissionBlocked: () => false,
+    },
     recoverySellerPairs: {
       [symbol]: {
         sellQuantity: "0.01",
@@ -574,4 +587,25 @@ test("composes a filled recovery BUY into one reserved mixed SELL and blocks a d
     "The runtime must not submit a second SELL or a new BUY while the cycle SELL is unresolved.")
   assert.equal(fixture.metrics.sellEvaluations, 1,
     "The SELL policy must not be reevaluated while the owned SELL order is active.")
+})
+
+
+test("keeps RS SELL admission closed while STOP persistence is pending", async () => {
+  const runtime = createRuntime({
+    buyAdmissionBlocked: true,
+    sellAdmissionBlocked: true,
+    stopStateOverride: Object.freeze({
+      status: "CLEAR",
+      decision: null,
+    }),
+  })
+  const result = await runtime.evaluate(runtime.input)
+  const snapshotInput = runtime.getSnapshotInput()
+
+  assert.equal(result.ok, true,
+    "An unverified STOP persistence boundary must remain a safe evaluation result.")
+  assert.equal(snapshotInput.buyAdmissionBlocked, true,
+    "BUY admission must remain blocked while the STOP fact is pending.")
+  assert.equal(snapshotInput.sellAdmissionBlocked, true,
+    "SELL admission must remain blocked until STOP durability is confirmed.")
 })

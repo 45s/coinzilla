@@ -48,6 +48,8 @@ function createRecoverySellerWorkflow({ onSnapshot } = {}) {
         lastBuyPrice: undefined,
         stopState: input.stopState,
         strategyStopped: input.strategyStopped,
+        buyAdmissionBlocked: input.buyAdmissionBlocked,
+        sellAdmissionBlocked: input.sellAdmissionBlocked,
         marketPaused: input.marketPaused,
         reconciliationComplete: input.reconciliationComplete,
       })
@@ -58,6 +60,8 @@ function createRecoverySellerWorkflow({ onSnapshot } = {}) {
 function createRecoverySellerStopWorkflow({ onLatch } = {}) {
   return {
     getState: async () => stopState,
+    isBuyAdmissionBlocked: () => false,
+    isSellAdmissionBlocked: () => false,
     latch: async () => {
       onLatch()
       return {
