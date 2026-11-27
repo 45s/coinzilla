@@ -240,7 +240,7 @@ function handleNoExecutableActions({ dependencies, context, allocation } = {}) {
   })
 }
 
-function prepareConservativeTransitionAllocation({ dependencies, context, excludedActiveOrderClientId } = {}) {
+async function prepareConservativeTransitionAllocation({ dependencies, context, excludedActiveOrderClientId } = {}) {
   const balances = getPortfolioBalanceContext({
     dependencies,
     context: {
@@ -267,7 +267,7 @@ function prepareConservativeTransitionAllocation({ dependencies, context, exclud
   if (noExecutableActions) {
     const hasResidualSell = context.effectiveActions.some((action) => action.side === "SELL")
     if (!context.preflightOnly && hasResidualSell) {
-      publishStrategyDecision({
+      await publishStrategyDecision({
         dependencies,
         context,
         balances,
@@ -276,7 +276,7 @@ function prepareConservativeTransitionAllocation({ dependencies, context, exclud
     }
     return { result: noExecutableActions }
   }
-  publishStrategyDecision({
+  await publishStrategyDecision({
     dependencies,
     context,
     balances,
@@ -308,7 +308,7 @@ async function executeConservativeLatestTransition({ dependencies, options, gate
     },
   })
   if (!context.preflightOnly && context.effectiveActions.length === 0 && context.decision.inventoryDisposition !== undefined) {
-    publishStrategyDecision({
+    await publishStrategyDecision({
       dependencies,
       context,
     })
@@ -327,7 +327,7 @@ async function executeConservativeLatestTransition({ dependencies, options, gate
   if (noActions) {
     return noActions
   }
-  const allocation = prepareConservativeTransitionAllocation({
+  const allocation = await prepareConservativeTransitionAllocation({
     dependencies,
     context,
     excludedActiveOrderClientId,

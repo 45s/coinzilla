@@ -57,6 +57,10 @@ function createDependencies({ hardPause = false } = {}) {
     pairs: { [symbol]: { enabled: true } },
     settings: {},
     logger: { debug: () => {} },
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({ ok: true, durable: true }),
+    },
     strategyPolicy: {
       evaluate: () => ({
         actions: [],
@@ -351,6 +355,7 @@ function configureDustCompletionFailureMarket({ dependencies, symbol, publishedE
       publishedEvents.push(event)
       return { ok: true }
     },
+    flush: async () => ({ ok: true, durable: true }),
   }
 }
 
@@ -798,6 +803,42 @@ function assertResidualSellOutcomeScenario({ scenario, dependencies, tracked, re
   assert.equal(result.errors[0], scenario.submitResult.errors[0])
 }
 
+test("fails closed before completion or residual SELL submission when recovery evidence cannot be durably flushed", async () => {
+  const dependencies = createDependencies()
+  const tracked = configureResidualSellThroughDependencies({
+    dependencies,
+    symbol: "DOGEUSDT",
+    activeQuantity: "2.8",
+    sellQuantity: "1.7",
+    keepQuantity: 1,
+    price: "0.05719",
+    baseAssetId: "asset:DOGE",
+    quoteAssetId: "asset:USDT",
+  })
+  const failure = new Error("Journal fsync failed before recovery decision evidence was durable")
+  failure.code = "RECOVERY_DECISION_EVIDENCE_FLUSH_FAILED"
+  const pauses = []
+  dependencies.pause = async (input) => {
+    pauses.push(input)
+  }
+  dependencies.eventPublisher = {
+    publish: () => ({ ok: true }),
+    flush: async () => ({ ok: false, errors: [failure] }),
+  }
+  const evaluate = createLatestTransitionEvaluator(dependencies)
+
+  const result = await evaluate({
+    symbol: "DOGEUSDT",
+    shutdownRecoveryOnly: true,
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.errors[0], failure)
+  assert.equal(tracked.submissions.length, 0)
+  assert.equal(tracked.completionCalls.count, 0)
+  assert.equal(pauses.length, 1)
+  assert.equal(pauses[0].error, failure)
+})
 test("preserves unknown, rejected, and blocked residual SELL outcomes without completing recovery or placing a BUY", async () => {
   for (const scenario of createResidualSellOutcomeScenarios()) {
     const outcome = await runResidualSellOutcomeScenario({ scenario })

@@ -11,6 +11,7 @@ function createCandidateNotionalDependencies({ events } = {}) {
         events.push(event)
         return { ok: true }
       },
+      flush: async () => ({ ok: true, durable: true }),
     },
     pairs: {
       DOGEUSDT: {
@@ -85,7 +86,7 @@ function assertCandidateNotionalEvidence({ events } = {}) {
   assert.equal(evidence.inventoryDisposition.evaluatedNotional, "0.005", "Disposition notional must retain the strategy's full residual evaluation.")
 }
 
-test("keeps residual notional distinct from a zero exchange-rounded candidate notional", () => {
+test("keeps residual notional distinct from a zero exchange-rounded candidate notional", async () => {
   const events = []
   const dependencies = createCandidateNotionalDependencies({ events })
   const context = createCandidateNotionalContext()
