@@ -339,3 +339,14 @@ test("serves only active Harvester provider accounts through the read-only excha
   const missing = await fetch(`${baseUrl}/api/v1/exchanges/accounts/bitunix-live`)
   assert.equal(missing.status, 404)
 })
+
+test("allows the Dashboard HTTP API from a dynamically selected localhost port", async (t) => {
+  const { queries } = createQueries()
+  const { baseUrl } = await startApi({ t, queries })
+  for (const origin of ["http://127.0.0.1:4300", "http://localhost:4317"]) {
+    const response = await fetch(`${baseUrl}/api/v1/trading/metadata`, { headers: { Origin: origin } })
+    assert.equal(response.status, 200, `The local API must serve a Dashboard on ${origin}.`)
+    assert.equal(response.headers.get("access-control-allow-origin"), origin, `The API must grant CORS only to the exact local Dashboard origin ${origin}.`)
+    await response.text()
+  }
+})

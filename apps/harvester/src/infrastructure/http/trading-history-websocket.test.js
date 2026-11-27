@@ -560,3 +560,23 @@ test("rejects an oversized application snapshot for its client without stopping 
   assert.equal(response.status, 200, "Rejecting an oversized WebSocket message must not stop the shared HTTP server.")
   await response.text()
 })
+
+test("accepts Dashboard WebSocket upgrades from a dynamically selected localhost port", async (t) => {
+  const eventBus = new EventBus()
+  const api = await startApi({ t, eventBus })
+  const socket = createConnection({ host: "127.0.0.1", port: api.address.port })
+  t.after(() => socket.destroy())
+  const response = new Promise((resolve, reject) => {
+    socket.once("data", (chunk) => resolve(chunk.toString("utf8")))
+    socket.once("error", reject)
+  })
+  socket.write([
+    "GET /api/v1/trading/events HTTP/1.1",
+    `Host: 127.0.0.1:${api.address.port}`,
+    "Upgrade: websocket", "Connection: Upgrade",
+    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+    "Sec-WebSocket-Version: 13", "Origin: http://localhost:4317", "", "",
+  ].join("\\r\\n"))
+  assert.match(await response, /^HTTP\\/1\\.1 101 Switching Protocols/,
+    "A local Dashboard on a dynamically selected port must complete the Harvester WebSocket handshake.")
+})

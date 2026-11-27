@@ -4,16 +4,13 @@ import { attachTradingHistoryWebSocket } from "./trading-history-websocket.js"
 import { handleOperatorControlRequest } from "./operator-control-api.js"
 import { handleExchangeAccountRequest } from "./exchange-account-api.js"
 import { handleScenarioRunnerRequest } from "./scenario-runner-api.js"
+import { isLocalDashboardOrigin } from "./is-local-dashboard-origin.js"
 
 const API_PREFIX = "/api/v1/trading"
 const METADATA_ROUTE = `${API_PREFIX}/metadata`
 const BITUNIX_FUTURES_MARKETS_ROUTE = "/api/v1/markets/bitunix/futures"
 const DEFAULT_HOST = "127.0.0.1"
 const DEFAULT_PORT = 4201
-const ALLOWED_BROWSER_ORIGINS = new Set([
-  "http://127.0.0.1:4200",
-  "http://localhost:4200",
-])
 const MAX_HEADER_SIZE = 8_192
 const REQUEST_TIMEOUT_MS = 5_000
 const HEADERS_TIMEOUT_MS = 6_000
@@ -101,7 +98,7 @@ function createResponseHeaders({ origin } = {}) {
     "Content-Type": "application/json; charset=utf-8",
     "X-Content-Type-Options": "nosniff",
   }
-  if (ALLOWED_BROWSER_ORIGINS.has(origin)) {
+  if (isLocalDashboardOrigin(origin)) {
     headers["Access-Control-Allow-Origin"] = origin
     headers.Vary = "Origin"
   }
@@ -498,7 +495,7 @@ async function handleTradingHistoryRequest({
 function createRequestHandler({ queries, environment, logger, operator, marketData, exchangeAccounts, scenarioRunner, scenarioRunnerCatalog } = {}) {
   return async (...requestArguments) => {
     const [request, response] = requestArguments
-    response.tradingHistoryOrigin = ALLOWED_BROWSER_ORIGINS.has(request.headers.origin)
+    response.tradingHistoryOrigin = isLocalDashboardOrigin(request.headers.origin)
       ? request.headers.origin
       : undefined
     response.scenarioRunnerOrigin = response.tradingHistoryOrigin

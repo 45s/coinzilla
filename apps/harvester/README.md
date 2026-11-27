@@ -479,4 +479,4 @@ The optional inbound operator interface, its inline navigation and control-confi
 
 ## Dashboard operator controls
 
-The local Dashboard Operator workspace reads status, markets, portfolio positions, open orders, and balances from the running Harvester process. It also exposes confirmed BUY pause/resume commands (`pause`, `unpause`, `pauseallbuys`, `resumeallbuys`) through the same operator facade used by Telegram. The local API remains unauthenticated and must not be exposed beyond `127.0.0.1`.
+The local Dashboard Operator workspace reads status, markets, portfolio positions, open orders, and balances from the running Harvester process. It also exposes confirmed BUY pause/resume commands (`pause`, `unpause`, `pauseallbuys`, `resumeallbuys`) through the same operator facade used by Telegram. The local API remains unauthenticated and must not be exposed beyond `127.0.0.1`. Browser access is restricted to HTTP origins on `localhost` or `127.0.0.1`; any valid local port is accepted because Angular CLI may select the next available port when `4200` is occupied. The API listener itself remains fixed to loopback on `127.0.0.1:4201`.

@@ -25,7 +25,7 @@ pnpm install
 pnpm --filter @coinzilla/dashboard start
 ```
 
-The development server binds to `127.0.0.1`. Open the URL printed by Angular CLI. Run `pnpm --filter @coinzilla/harvester dev` in a separate terminal. The local API starts with Harvester at `http://127.0.0.1:4201`; no token is required. Exchanges and Open Orders open the local WebSocket at `/api/v1/trading/events`, receive a full account snapshot on connect/reconnect, and make no HTTP requests. Bots consumes complete versioned operator snapshots from the same socket, distinguishes socket health from snapshot freshness, and never polls REST for runtime state. Persisted Orders/Fills/Commissions continue to use their existing HTTP resources and WebSocket invalidation hints; those HTTP snapshots remain authoritative for persisted history.
+The development server binds to `127.0.0.1`. Open the URL printed by Angular CLI; it may choose a port other than `4200` if that port is occupied. Harvester accepts the local Dashboard origin on any valid `localhost` or `127.0.0.1` HTTP port while keeping its API listener loopback-only. Run `pnpm --filter @coinzilla/harvester dev` in a separate terminal. The local API starts with Harvester at `http://127.0.0.1:4201`; no token is required. Exchanges and Open Orders open the local WebSocket at `/api/v1/trading/events`, receive a full account snapshot on connect/reconnect, and make no HTTP requests. Bots consumes complete versioned operator snapshots from the same socket, distinguishes socket health from snapshot freshness, and never polls REST for runtime state. Persisted Orders/Fills/Commissions continue to use their existing HTTP resources and WebSocket invalidation hints; those HTTP snapshots remain authoritative for persisted history.
 
 Build and test:
 
