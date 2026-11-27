@@ -1870,7 +1870,7 @@
       "branches": 83.22,
       "functions": 96
     },
-    "note": "The original 30 critical-module floors retain their measured baseline provenance. The seven additional critical modules introduced by release PR #1662 were measured from its develop source head and then re-measured with all 37 modules enforced in workflow run 44966859719; their per-module baseline and minimum values are recorded in moduleCoverage. The start-provider-accounts.js module was separately measured from develop 6405aafa1824e61de7fee420f54b436eed30cb5e in workflow run 45934755515 (Harvester job 140295275348); its measured baseline is lines 92.78%, branches 76.83%, functions 97.87%, with policy floors 90%, 75%, and 95%. The Recovery Seller STOP workflow and resolver were measured from develop source SHA 2a030b960ba43a6911a98b2f5b2662b04eef5453 in workflow run 46041844024 (Harvester job 140651244165), before their implementation changes; measured baselines and non-weakened minimum floors are recorded in moduleCoverage."
+    "note": "The original 30 critical-module floors retain their measured baseline provenance. The seven additional critical modules introduced by release PR #1662 were measured from its develop source head and then re-measured with all 37 modules enforced in workflow run 44966859719; their per-module baseline and minimum values are recorded in moduleCoverage. The start-provider-accounts.js module was separately measured from develop 6405aafa1824e61de7fee420f54b436eed30cb5e in workflow run 45934755515 (Harvester job 140295275348); its measured baseline is lines 92.78%, branches 76.83%, functions 97.87%, with policy floors 90%, 75%, and 95%. The Recovery Seller STOP workflow and resolver were measured from develop source SHA 2a030b960ba43a6911a98b2f5b2662b04eef5453 in workflow run 46041844024 (Harvester job 140651244165), before their implementation changes; measured baselines and non-weakened minimum floors are recorded in moduleCoverage. Exact implementation-head coverage from run 46045551059 (Harvester job 140663786408): STOP workflow 96.53% lines / 93.22% branches / 100% functions; STOP resolver 98.78% lines / 92.45% branches / 100% functions."
   },
   "moduleCoverage": [
     {
@@ -2840,8 +2840,8 @@
         "functions": 95
       },
       "latestObserved": {
-        "lines": 96.59,
-        "branches": 92.59,
+        "lines": 96.53,
+        "branches": 93.22,
         "functions": 100
       }
     },
@@ -2858,8 +2858,8 @@
         "functions": 95
       },
       "latestObserved": {
-        "lines": 100,
-        "branches": 88.89,
+        "lines": 98.78,
+        "branches": 92.45,
         "functions": 100
       }
     }
