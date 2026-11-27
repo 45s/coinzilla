@@ -385,16 +385,9 @@ function applyThirdAssetCommission({
   })
 }
 
-function applyThirdAssetCommissionDeltas({
-  recoveredState,
-  marketsBySymbol,
-  baselineByAsset,
-  baselineSequenceByAsset,
-  expectedDeltas,
-}) {
+function createCommissionAssetIdentityMaps({ marketsBySymbol }) {
   const commissionAssetIdByCode = new Map()
   const commissionAssetCodeById = new Map()
-  const thirdAssetCommissionCodes = new Set()
   for (const market of marketsBySymbol.values()) {
     for (const asset of [market.baseAsset, market.quoteAsset]) {
       registerCommissionAssetIdentity({
@@ -404,47 +397,77 @@ function applyThirdAssetCommissionDeltas({
       })
     }
   }
+  return {
+    commissionAssetIdByCode,
+    commissionAssetCodeById,
+  }
+}
+
+function applyRecoveredFillCommissionDeltas({
+  fill,
+  marketsBySymbol,
+  baselineByAsset,
+  baselineSequenceByAsset,
+  expectedDeltas,
+  commissionAssetIdByCode,
+  commissionAssetCodeById,
+  thirdAssetCommissionCodes,
+}) {
+  if (typeof fill?.symbol !== "string" || !Array.isArray(fill.commissions)) {
+    throw new TypeError("Recovered Journal fill is missing symbol or commission facts")
+  }
+  const market = marketsBySymbol.get(fill.symbol)
+  if (!market) {
+    throw new Error(`Canonical Market metadata is missing for recovered fill ${fill.symbol}`)
+  }
+  for (const commission of fill.commissions) {
+    const amount = requireAmount({
+      value: commission?.amount,
+      field: `${fill.symbol}.commission.amount`,
+    })
+    if (compareDecimal({ left: amount, right: "0" }) < 0) {
+      throw new Error(`Recovered commission amount cannot be negative for ${fill.symbol}`)
+    }
+    const isThirdAsset = validateCommissionIdentity({
+      commission,
+      market,
+      commissionAssetIdByCode,
+      commissionAssetCodeById,
+    })
+    if (!isThirdAsset) {
+      continue
+    }
+    applyThirdAssetCommission({
+      commission: { ...commission, amount },
+      fill,
+      market,
+      baselineByAsset,
+      baselineSequenceByAsset,
+      expectedDeltas,
+      thirdAssetCommissionCodes,
+    })
+  }
+}
+
+function applyThirdAssetCommissionDeltas({
+  recoveredState,
+  marketsBySymbol,
+  baselineByAsset,
+  baselineSequenceByAsset,
+  expectedDeltas,
+}) {
+  const identityMaps = createCommissionAssetIdentityMaps({ marketsBySymbol })
+  const thirdAssetCommissionCodes = new Set()
   for (const fill of recoveredState.journalFills) {
-    if (typeof fill?.symbol !== "string" || !Array.isArray(fill.commissions)) {
-      throw new TypeError("Recovered Journal fill is missing symbol or commission facts")
-    }
-    const market = marketsBySymbol.get(fill.symbol)
-    if (!market) {
-      throw new Error(`Canonical Market metadata is missing for recovered fill ${fill.symbol}`)
-    }
-    for (const commission of fill.commissions) {
-      const amount = requireAmount({
-        value: commission?.amount,
-        field: `${fill.symbol}.commission.amount`,
-      })
-      if (compareDecimal({
-        left: amount,
-        right: "0",
-      }) < 0) {
-        throw new Error(`Recovered commission amount cannot be negative for ${fill.symbol}`)
-      }
-      const isThirdAsset = validateCommissionIdentity({
-        commission,
-        market,
-        commissionAssetIdByCode,
-        commissionAssetCodeById,
-      })
-      if (!isThirdAsset) {
-        continue
-      }
-      applyThirdAssetCommission({
-        commission: {
-          ...commission,
-          amount,
-        },
-        fill,
-        market,
-        baselineByAsset,
-        baselineSequenceByAsset,
-        expectedDeltas,
-        thirdAssetCommissionCodes,
-      })
-    }
+    applyRecoveredFillCommissionDeltas({
+      fill,
+      marketsBySymbol,
+      baselineByAsset,
+      baselineSequenceByAsset,
+      expectedDeltas,
+      ...identityMaps,
+      thirdAssetCommissionCodes,
+    })
   }
   for (const asset of thirdAssetCommissionCodes) {
     if (!baselineByAsset.has(asset)) {
@@ -550,7 +573,10 @@ function validateExpectedOpenOrder({ order }) {
     left: order.originalQuantity.amount,
     right: order.executedQuantity.amount,
   })
-  if (compareDecimal({ left: remainingQuantity, right: "0" }) <= 0) {
+  if (compareDecimal({
+    left: remainingQuantity,
+    right: "0",
+  }) <= 0)
     throw new Error(`Recovered active order has no remaining quantity: ${order.clientOrderId}`)
   }
   if (!["LIMIT", "LIMIT_MAKER"].includes(order.type) || !order.limitPrice) {
@@ -610,6 +636,65 @@ function createExpectedOrderCommitments({ recoveredState }) {
   }
 }
 
+function createUnownedOpenOrderCommitment({
+  order,
+  identity,
+  brokerOrderId,
+  symbol,
+  marketsBySymbol,
+}) {
+  const externalMarket = marketsBySymbol.get(symbol)
+  if (!externalMarket) {
+    throw new Error(`Canonical Market metadata is missing for unowned open order ${symbol}`)
+  }
+  const actualStatus = normalizeOrderStatus({ status: order.status })
+  if (!["OPEN", "PARTIALLY_FILLED"].includes(actualStatus)) {
+    throw new Error(`Unowned exchange order has an unsupported open status: ${brokerOrderId}`)
+  }
+  if (!["LIMIT", "LIMIT_MAKER"].includes(order.type)) {
+    throw new Error(`Unowned exchange order has an unsupported commitment type: ${brokerOrderId}`)
+  }
+  const originalQuantity = requireAmount({
+    value: identity.originalQuantity,
+    field: `Unowned order ${brokerOrderId}.originalQuantity`,
+  })
+  const executedQuantity = requireAmount({
+    value: identity.executedQuantity,
+    field: `Unowned order ${brokerOrderId}.executedQuantity`,
+  })
+  const remainingQuantity = subtractDecimal({
+    left: originalQuantity,
+    right: executedQuantity,
+  })
+  if (compareDecimal({
+    left: remainingQuantity,
+    right: "0",
+  }) <= 0) {
+    throw new Error(`Unowned exchange order has no positive remaining quantity: ${brokerOrderId}`)
+  }
+  const actualPrice = requireAmount({
+    value: getOrderPrice({ order }),
+    field: `Unowned order ${brokerOrderId}.price`,
+  })
+  if (compareDecimal({ left: actualPrice, right: "0" }) <= 0) {
+    throw new Error(`Unowned exchange order price must be positive: ${brokerOrderId}`)
+  }
+  if (!["BUY", "SELL"].includes(order.side)) {
+    throw new Error(`Unowned exchange order has an unsupported side: ${brokerOrderId}`)
+  }
+  const asset = order.side === "BUY"
+    ? externalMarket.quoteAsset.code
+    : externalMarket.baseAsset.code
+  const amount = order.side === "BUY"
+    ? multiplyDecimal({ left: remainingQuantity, right: actualPrice })
+    : remainingQuantity
+  return {
+    actualStatus,
+    asset,
+    amount,
+  }
+}
+
 function validateUnownedOpenOrder({
   order,
   identity,
@@ -620,69 +705,26 @@ function validateUnownedOpenOrder({
   blockedMarkets,
   unownedOpenOrders,
 }) {
-  const externalMarket = marketsBySymbol.get(symbol)
-  if (!externalMarket) {
-    throw new Error(`Canonical Market metadata is missing for unowned open order ${symbol}`)
-  }
-  
-  const actualStatus = normalizeOrderStatus({ status: order.status })
-  if (!["OPEN", "PARTIALLY_FILLED"].includes(actualStatus)) {
-    throw new Error(`Unowned exchange order has an unsupported open status: ${brokerOrderId}`)
-  }
-  if (!["LIMIT", "LIMIT_MAKER"].includes(order.type)) {
-    throw new Error(`Unowned exchange order has an unsupported commitment type: ${brokerOrderId}`)
-  }
-  const originalQuantity = requireAmount({
-    
-    value: identity.originalQuantity,
-    field: `Unowned order ${brokerOrderId}.originalQuantity`,
+  const commitment = createUnownedOpenOrderCommitment({
+    order,
+    identity,
+    brokerOrderId,
+    symbol,
+    marketsBySymbol,
   })
-  const executedQuantity = requireAmount({
-    value: identity.executedQuantity,
-    field: `Unowned order ${brokerOrderId}.executedQuantity`,
+  addAmount({
+    amounts: expectedLocked,
+    asset: commitment.asset,
+    amount: commitment.amount,
   })
-  
-  const remainingQuantity = subtractDecimal({ left: originalQuantity, 
-    right: executedQuantity })
-  if (compareDecimal({ left: remainingQuantity, 
-    right: "0" }) <= 0) {
-    throw new Error(`Unowned exchange order has no positive remaining quantity: ${brokerOrderId}`)
-  }
-  const actualPrice = requireAmount({
-    value: getOrderPrice({ order }),
-    field: `Unowned order ${brokerOrderId}.price`,
-  })
-  if (compareDecimal({ left: actualPrice, 
-    right: "0" }) <= 0) {
-    throw new Error(`Unowned exchange order price must be positive: ${brokerOrderId}`)
-  }
-  if (order.side === "BUY") {
-    addAmount({
-      amounts: expectedLocked,
-      asset: externalMarket.quoteAsset.code,
-      amount: multiplyDecimal({ left: remainingQuantity, 
-        right: actualPrice }),
-    })
-  } else if (order.side === "SELL") {
-    addAmount({
-      amounts: expectedLocked,
-      asset: externalMarket.baseAsset.code,
-      amount: remainingQuantity,
-    })
-  } else {
-    throw new Error(`Unowned exchange order has an unsupported side: ${brokerOrderId}`)
-  }
   blockedMarkets.add(symbol)
   unownedOpenOrders.push(Object.freeze({
     brokerOrderId,
-    
     clientOrderId: identity.clientOrderId,
-    
     symbol,
-    
     side: order.side,
     type: order.type,
-    status: actualStatus,
+    status: commitment.actualStatus,
   }))
 }
 
@@ -709,6 +751,53 @@ function validateOwnedOpenOrder({ order, identity, expected, symbol, brokerOrder
   actualOpenByBrokerId.set(brokerOrderId, order)
 }
 
+function inspectExchangeOpenOrder({ order, context }) {
+  const identity = getOpenOrderIdentity({ order })
+  const { brokerOrderId, symbol } = identity
+  if (
+    typeof brokerOrderId !== "string" ||
+    !brokerOrderId.trim() ||
+    typeof symbol !== "string" ||
+    !symbol.trim() ||
+    typeof identity.clientOrderId !== "string" ||
+    !identity.clientOrderId.trim()
+  ) {
+    throw new Error("Exchange open-order snapshot contains an order without canonical identity")
+  }
+  if (context.seenOpenOrderIds.has(brokerOrderId)) {
+    throw new Error(`Exchange open-order snapshot contains duplicate brokerOrderId ${brokerOrderId}`)
+  }
+  context.seenOpenOrderIds.add(brokerOrderId)
+  const expected = context.expectedByBrokerId.get(brokerOrderId)
+  if (expected) {
+    validateOwnedOpenOrder({
+      order,
+      identity,
+      expected,
+      symbol,
+      brokerOrderId,
+      actualOpenByBrokerId: context.actualOpenByBrokerId,
+    })
+    return
+  }
+  if (context.recoveredByBrokerId.has(brokerOrderId)) {
+    throw new Error(`Exchange reports a non-active recovered order as open: ${brokerOrderId}`)
+  }
+  if (context.recoveredByClientOrderId.has(identity.clientOrderId)) {
+    throw new Error(`Unowned exchange order clientOrderId conflicts with recovered order ownership: ${identity.clientOrderId}`)
+  }
+  validateUnownedOpenOrder({
+    order,
+    identity,
+    brokerOrderId,
+    symbol,
+    marketsBySymbol: context.marketsBySymbol,
+    expectedLocked: context.expectedLocked,
+    blockedMarkets: context.blockedMarkets,
+    unownedOpenOrders: context.unownedOpenOrders,
+  })
+}
+
 function inspectExchangeOpenOrders({
   openOrders,
   expectedByBrokerId,
@@ -717,64 +806,32 @@ function inspectExchangeOpenOrders({
   marketsBySymbol,
   expectedLocked,
 }) {
-  const actualOpenByBrokerId = new Map()
-  const seenOpenOrderIds = new Set()
-  const unownedOpenOrders = []
-  const blockedMarkets = new Set()
-  for (const order of openOrders) {
-    const identity = getOpenOrderIdentity({ order })
-    const { brokerOrderId, symbol } = identity
-    if (typeof brokerOrderId !== "string" || !brokerOrderId.trim() ||
-        typeof symbol !== "string" || !symbol.trim() ||
-        typeof identity.clientOrderId !== "string" || !identity.clientOrderId.trim()) {
-      throw new Error("Exchange open-order snapshot contains an order without canonical identity")
-    }
-    if (seenOpenOrderIds.has(brokerOrderId)) {
-      throw new Error(`Exchange open-order snapshot contains duplicate brokerOrderId ${brokerOrderId}`)
-    }
-    seenOpenOrderIds.add(brokerOrderId)
-    const expected = expectedByBrokerId.get(brokerOrderId)
-    if (!expected) {
-      if (recoveredByBrokerId.has(brokerOrderId)) {
-        throw new Error(`Exchange reports a non-active recovered order as open: ${brokerOrderId}`)
-      }
-      if (recoveredByClientOrderId.has(identity.clientOrderId)) {
-        throw new Error(`Unowned exchange order clientOrderId conflicts with recovered order ownership: ${identity.clientOrderId}`)
-      }
-      validateUnownedOpenOrder({
-        order,
-        identity,
-        
-      
-          
-        brokerOrderId,
-        symbol,
-        marketsBySymbol,
-        expectedLocked,
-        blockedMarkets,
-        unownedOpenOrders,
-      })
-      continue
-    }
-    validateOwnedOpenOrder({
-      order,
-      identity,
-      
-      expected,
-      symbol,
-      brokerOrderId,
-      actualOpenByBrokerId,
-    })
+  const context = {
+    expectedByBrokerId,
+    recoveredByBrokerId,
+    recoveredByClientOrderId,
+    marketsBySymbol,
+    expectedLocked,
+    actualOpenByBrokerId: new Map(),
+    seenOpenOrderIds: new Set(),
+    unownedOpenOrders: [],
+    blockedMarkets: new Set(),
   }
-  if (actualOpenByBrokerId.size !== expectedByBrokerId.size) {
-    const missing = [...expectedByBrokerId.keys()].filter((id) => !actualOpenByBrokerId.has(id))
+  for (const order of openOrders) {
+    inspectExchangeOpenOrder({ order, context })
+  }
+  if (context.actualOpenByBrokerId.size !== expectedByBrokerId.size) {
+    const missing = [...expectedByBrokerId.keys()].filter((id) =>
+      !context.actualOpenByBrokerId.has(id)
+    )
     throw new Error(`Recovered active orders are missing from the exchange open-order snapshot: ${missing.join(", ")}`)
   }
-  
-  return { actualOpenByBrokerId, 
-    unownedOpenOrders, 
-    blockedMarkets, 
-    seenOpenOrderIds }
+  return {
+    actualOpenByBrokerId: context.actualOpenByBrokerId,
+    unownedOpenOrders: context.unownedOpenOrders,
+    blockedMarkets: context.blockedMarkets,
+    seenOpenOrderIds: context.seenOpenOrderIds,
+  }
 }
 
 function validateLockedBalances({
@@ -893,77 +950,86 @@ function prepareExpectedAccountBalances({
   }
 }
 
-function runRecoveredAccountAudit(options) {
-    const {
-      projection,
-      recoveredState,
-      currentAccountSnapshot,
-      
-      openOrders,
-      
-      
-      markets,
-      exchangeTradeHistory,
-      requireCompleteTradeHistory = false,
-      tradeHistoryScope = "ACCOUNT",
-      targetMarket,
-    } = options
-    const validationResult = validateAuditInput({
-      projection,
-      recoveredState,
-      currentAccountSnapshot,
-      openOrders,
-      markets,
-      targetMarket,
-    })
-    if (validationResult) {
-      return validationResult
-    }
-    const tradeHistoryAudit = auditTradeHistory({
-      requireCompleteTradeHistory,
-      tradeHistoryScope,
-      recoveredState,
-      exchangeTradeHistory,
-      targetMarket,
-      currentAccountSnapshot,
-    })
-    const balanceContext = prepareExpectedAccountBalances({
-      projection,
-      recoveredState,
-      currentAccountSnapshot,
-      openOrders,
-      markets,
-      targetMarket,
-    })
-    const { accountBalances, marketContext, thirdAssetCommissionCodes, assetCodes, marketAssetCodes } = balanceContext
-    const orderCommitments = createExpectedOrderCommitments({ recoveredState })
-    const exchangeOrders = inspectExchangeOpenOrders({
-      openOrders,
-      expectedByBrokerId: orderCommitments.expectedByBrokerId,
-      recoveredByBrokerId: orderCommitments.recoveredByBrokerId,
-      recoveredByClientOrderId: orderCommitments.recoveredByClientOrderId,
-      marketsBySymbol: marketContext.marketsBySymbol,
-      expectedLocked: orderCommitments.expectedLocked,
-    })
-    validateLockedBalances({
-      expectedLocked: orderCommitments.expectedLocked,
-      currentByAsset: accountBalances.currentByAsset,
-      baselineByAsset: accountBalances.baselineByAsset,
-      thirdAssetCommissionCodes,
-      marketAssetCodes,
-    })
-    return createAuditResult({
-      assetCodes,
-      openOrders,
-      expectedLocked: orderCommitments.expectedLocked,
-      unownedOpenOrders: exchangeOrders.unownedOpenOrders,
-      blockedMarkets: exchangeOrders.blockedMarkets,
-      targetMarket,
-      tradeHistoryAudit,
-      currentAccountSnapshot,
-      recoverySellerPositionsChecked: marketContext.recoverySellerPositionsChecked,
-    })
+function prepareRecoveredAccountAudit({ options }) {
+  const {
+    projection,
+    recoveredState,
+    currentAccountSnapshot,
+    openOrders,
+    markets,
+    exchangeTradeHistory,
+    requireCompleteTradeHistory = false,
+    tradeHistoryScope = "ACCOUNT",
+    targetMarket,
+  } = options
+  const validationResult = validateAuditInput({
+    projection,
+    recoveredState,
+    currentAccountSnapshot,
+    openOrders,
+    markets,
+    targetMarket,
+  })
+  if (validationResult) {
+    return { validationResult }
+  }
+  const tradeHistoryAudit = auditTradeHistory({
+    requireCompleteTradeHistory,
+    tradeHistoryScope,
+    recoveredState,
+    exchangeTradeHistory,
+    targetMarket,
+    currentAccountSnapshot,
+  })
+  const balanceContext = prepareExpectedAccountBalances({
+    projection,
+    recoveredState,
+    currentAccountSnapshot,
+    openOrders,
+    markets,
+    targetMarket,
+  })
+  const orderCommitments = createExpectedOrderCommitments({ recoveredState })
+  const exchangeOrders = inspectExchangeOpenOrders({
+    openOrders,
+    expectedByBrokerId: orderCommitments.expectedByBrokerId,
+    recoveredByBrokerId: orderCommitments.recoveredByBrokerId,
+    recoveredByClientOrderId: orderCommitments.recoveredByClientOrderId,
+    marketsBySymbol: balanceContext.marketContext.marketsBySymbol,
+    expectedLocked: orderCommitments.expectedLocked,
+  })
+  validateLockedBalances({
+    expectedLocked: orderCommitments.expectedLocked,
+    currentByAsset: balanceContext.accountBalances.currentByAsset,
+    baselineByAsset: balanceContext.accountBalances.baselineByAsset,
+    thirdAssetCommissionCodes: balanceContext.thirdAssetCommissionCodes,
+    marketAssetCodes: balanceContext.marketAssetCodes,
+  })
+  return {
+    tradeHistoryAudit,
+    balanceContext,
+    orderCommitments,
+    exchangeOrders,
+  }
+}
 
+function runRecoveredAccountAudit(options) {
+  const context = prepareRecoveredAccountAudit({ options })
+  if (context.validationResult) {
+    return context.validationResult
+  }
+  const { balanceContext, orderCommitments, exchangeOrders, tradeHistoryAudit } = context
+  return createAuditResult({
+    assetCodes: balanceContext.assetCodes,
+    openOrders: options.openOrders,
+    expectedLocked: orderCommitments.expectedLocked,
+    unownedOpenOrders: exchangeOrders.unownedOpenOrders,
+    blockedMarkets: exchangeOrders.blockedMarkets,
+    targetMarket: options.targetMarket,
+    tradeHistoryAudit,
+    currentAccountSnapshot: options.currentAccountSnapshot,
+    recoverySellerPositionsChecked: balanceContext.marketContext.recoverySellerPositionsChecked,
+  })
 }
 
 export function auditRecoveredAccountState(options = {}) {

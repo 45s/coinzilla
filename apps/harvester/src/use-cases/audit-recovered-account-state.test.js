@@ -23,8 +23,15 @@ const record = (...[name, data, lineNumber]) => {
   const id = `record-${lineNumber}-${name}-${data.clientOrderId ?? data.fillId ?? data.phase ?? "event"}`
   return {
     id,
-    payload: { id, name, data },
-    position: { fileName: "2026-11-05_08-00-00.jsonl", lineNumber },
+    payload: {
+      id,
+      name,
+      data,
+    },
+    position: {
+      fileName: "2026-11-05_08-00-00.jsonl",
+      lineNumber,
+    },
   }
 }
 
