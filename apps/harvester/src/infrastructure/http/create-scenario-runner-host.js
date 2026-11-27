@@ -157,7 +157,7 @@ function resolveAdapterReadiness({ adapter }) {
   if (adapter.osSandboxVerified !== true && adapter.simulationBoundaryVerified !== true) {
     return {
       executable: false,
-      reason: "A verified OS sandbox or trusted guarded-simulation worker is required for the registered adapter.",
+      reason: "OS-level sandbox isolation has not been verified and no trusted guarded-simulation worker is registered for the adapter.",
     }
   }
   return {

@@ -64,3 +64,29 @@ jobs:
           path: apps/harvester/reports/conservative-scenarios/*.json
           if-no-files-found: warn
           retention-days: 14
+
+  windows-local-scenario:
+    name: Verify local Scenario Runner on Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.11.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Windows Scenario Runner integration tests
+        run: pnpm --filter @coinzilla/harvester exec node --test src/infrastructure/http/start-trading-history-api.test.js

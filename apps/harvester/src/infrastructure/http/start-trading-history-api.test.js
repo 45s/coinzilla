@@ -312,13 +312,12 @@ test("Scenario Runner host marks runtime simulation executable only with a verif
 })
 
 
-test("enables the local simulation worker on Windows without Linux sandbox configuration", async () => {
+test("enables the local simulation worker on Windows without Linux sandbox configuration", { skip: process.platform !== "win32" }, async () => {
   const eventBus = new EventBus()
   let serverInput
   const service = await startTradingHistoryApi({
     database: createDatabase(),
     eventBus,
-    platform: "win32",
     env: {
       TRADING_MODE: "testnet",
       COINZILLA_SOURCE_REVISION: "d".repeat(40),

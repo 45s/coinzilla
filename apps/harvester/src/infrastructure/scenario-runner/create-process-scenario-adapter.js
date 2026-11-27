@@ -481,9 +481,8 @@ function createExecutionPromise({
 }
 
 /**
- * Orchestrate a worker that must be launched by a trusted OS-level sandbox.
- * This module enforces lifecycle and output limits but does not create the
- * filesystem, network, process or memory isolation itself.
+ * Orchestrate a worker launched by an OS sandbox or trusted simulation launcher.
+ * This module enforces lifecycle and output limits but does not create OS isolation.
  */
 
 
@@ -517,7 +516,7 @@ function validateProcessScenarioAdapterOptions({
     throw new TypeError("Process scenario adapter requires strategyId")
   }
   if (typeof spawnSandboxedWorker !== "function") {
-    throw new TypeError("Process scenario adapter requires a trusted OS sandbox launcher")
+    throw new TypeError("Process scenario adapter requires a worker launcher")
   }
   if (typeof workerPath !== "string" || !workerPath.trim()) {
     throw new TypeError("Process scenario adapter requires workerPath")
@@ -553,7 +552,7 @@ function spawnScenarioWorker({ spawnSandboxedWorker, workerPath, maxOutputBytes 
 
 function assertWorkerCanStart({ osSandboxVerified, simulationBoundaryVerified, signal }) {
   if (!osSandboxVerified && !simulationBoundaryVerified) {
-    throw new Error("A verified OS sandbox or trusted guarded-simulation worker is required")
+    throw new Error("OS-level sandbox isolation has not been verified and no trusted guarded-simulation worker is registered")
   }
   if (signal?.aborted) {
     throw new Error("Scenario worker execution was cancelled before startup")
