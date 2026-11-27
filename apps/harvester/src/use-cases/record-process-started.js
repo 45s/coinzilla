@@ -67,7 +67,10 @@ function mapDurableProcessIdentitySource({ source = {} } = {}) {
 }
 
 function mapDurableProcessIdentity({ processIdentity, runtimeSessionId }) {
-  const identity = validateProcessIdentityEnvelope({ processIdentity, runtimeSessionId })
+  const identity = validateProcessIdentityEnvelope({
+    processIdentity,
+    runtimeSessionId,
+  })
   const source = mapDurableProcessIdentitySource({ source: processIdentity.source ?? {} })
   return {
     application: "harvester",

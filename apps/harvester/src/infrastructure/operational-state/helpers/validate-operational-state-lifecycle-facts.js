@@ -405,7 +405,10 @@ function validateDurableProcessIdentitySource({ source } = {}) {
 }
 
 function validateDurableProcessIdentity({ processIdentity, runtimeSessionId } = {}) {
-  const source = validateDurableProcessIdentityEnvelope({ processIdentity, runtimeSessionId })
+  const source = validateDurableProcessIdentityEnvelope({
+    processIdentity,
+    runtimeSessionId,
+  })
   validateDurableProcessIdentitySource({ source })
 }
 
