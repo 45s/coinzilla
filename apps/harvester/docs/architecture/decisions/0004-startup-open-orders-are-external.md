@@ -85,7 +85,7 @@ This ADR does not wire historical Journal replay, the retained offline projectio
 
 Implemented and merged in [PR #1166](https://github.com/45s/coinzilla/pull/1166), merge commit `48af5b7670177697a8c1cbcb3bcb0d677cf662d2`. Tracking issue [#1157](https://github.com/45s/coinzilla/issues/1157) is closed.
 
-Every unmatched order in the startup snapshot is external, regardless of client-order-ID prefix. The configured per-market `IGNORE`/`BLOCK` policy applies uniformly. Startup orders are not adopted or modified. Later unmatched `h-` execution reports remain fail-closed. The account-wide snapshot, Journal durability barriers, balance semantics, current-process ownership and shutdown safety remain intact.
+Every unmatched order in the startup snapshot is external, regardless of client-order-ID prefix. The configured per-market `IGNORE`/`BLOCK` policy applies uniformly. Startup orders are not adopted or modified. Later unmatched execution reports are classified by the current process's generated order-ID namespace: prior-session `h-` IDs remain external and follow the configured policy, while an unmatched current-session ID remains fail-closed. The account-wide snapshot, Journal durability barriers, balance semantics, current-process ownership and shutdown safety remain intact.
 
 Exact-head verification for #1166 passed the Harvester targeted tests (5 configured files), Harvester unit suite (1,630 passed), workspace unit tests, workspace coverage jobs and gate, syntax/actionlint, changed-file ESLint, Markdown style, dependency audit, external documentation links and Utils unit tests. The read-only Binance TESTNET integration job was skipped. No TESTNET/LIVE exchange operation was performed.
 
