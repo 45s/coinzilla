@@ -30,7 +30,7 @@
       <span class="status-dot muted"></span>
       <div>
         <strong>Harvester API</strong>
-        <small>Connect from an account or records page</small>
+        <small>Live status is shown on Overview</small>
       </div>
     </div>
     <div class="sidebar-footer">COINZILLA <span>•</span> DASHBOARD</div>
@@ -45,8 +45,8 @@
       </div>
       <div class="topbar-actions">
         @if (activePage() === 'overview') {
-          <span class="demo-pill"><span></span> MOCK DATA</span>
-          <span class="environment-pill">PREVIEW</span>
+          <span class="demo-pill persisted-pill"><span></span> LIVE SYSTEM VIEW</span>
+          <span class="environment-pill">HARVESTER</span>
         } @else if (activePage() === 'operator') {
           <span class="demo-pill persisted-pill"><span></span> LIVE CONTROL</span>
           <span class="environment-pill">HARVESTER</span>
@@ -142,7 +142,7 @@
       <footer class="page-footer">
         <span>Coinzilla Dashboard</span>
         @if (activePage() === 'overview') {
-          <span>Overview values are fictional demo data</span>
+          <span>Live runtime, market and Portfolio snapshots · Read only</span>
         } @else if (activePage() === 'operator') {
           <span>Local operator controls · Commands require confirmation</span>
         } @else if (activePage() === 'bots') {
