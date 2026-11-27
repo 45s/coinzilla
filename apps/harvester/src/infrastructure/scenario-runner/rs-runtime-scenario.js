@@ -2374,17 +2374,25 @@ function resolveRuntimeScenarioInput({ scenarioId, input, signal }) {
   }
 }
 
+function isRuntimeScenarioExpectedSubmissionFailure({ scenarioId }) {
+  return [
+    "RS-RUNTIME-SELL-REJECTION-001",
+    "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001",
+    "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001",
+    "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001",
+    "RS-RUNTIME-SELL-BROKER-EXCEPTION-001",
+    "RS-RUNTIME-SELL-RESERVATION-FAILURE-001",
+  ].includes(scenarioId)
+}
+
 async function executeRuntimeScenarioAdmission({ runtime, scenarioId, effectiveInput }) {
   if (scenarioId !== "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001") {
     const execution = await executeRuntimeScenarioDispatch({
       runtime,
       effectiveInput,
-      expectRejection: scenarioId === "RS-RUNTIME-SELL-REJECTION-001" ||
-        scenarioId === "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001" ||
-        scenarioId === "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001" ||
-        scenarioId === "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001" ||
-        scenarioId === "RS-RUNTIME-SELL-BROKER-EXCEPTION-001" ||
-        scenarioId === "RS-RUNTIME-SELL-RESERVATION-FAILURE-001",
+      expectRejection: isRuntimeScenarioExpectedSubmissionFailure({
+        scenarioId,
+      }),
     })
     return {
       execution,
