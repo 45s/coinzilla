@@ -1,7 +1,7 @@
 # Harvester roadmap
 
 **Scope:** current Harvester priorities only. Issue threads own task details and status; domain specifications and ADRs own behavior.
-**Last reviewed:** 2026-11-26
+**Last reviewed:** 2026-11-27
 
 > Historical delivery notes and the pre-cleanup roadmap are preserved in [the consolidated roadmap archive](../../docs/archive/roadmap-history-2026-11-26.md#harvester-roadmap). Earlier extracted history remains in [the audit roadmap history](docs/audits/ROADMAP_HISTORY.md).
 
@@ -9,12 +9,13 @@
 
 | Priority / area | Canonical issue | Current status |
 | --- | --- | --- |
-| Shutdown cleanup deadlines and process-lock release | [#1186](https://github.com/45s/coinzilla/issues/1186), [#1479](https://github.com/45s/coinzilla/issues/1479) | Implementation in progress in [PR #1891](https://github.com/45s/coinzilla/pull/1891): bounded outer cleanup, single-flight retries, one phase-scoped runtime-stop diagnostic, and lock release only after logger/resource cleanup, with real child-process acceptance. Exact-head CI corrections are being completed; historical process-exit and lock-release evidence remains separate. |
 | Conservative ownership and shutdown incident | [#1856](https://github.com/45s/coinzilla/issues/1856) | Fix merged in [PR #1858](https://github.com/45s/coinzilla/pull/1858). Issue remains open for historical exchange-identity and original-runtime evidence; do not claim the old run's final STOP/process/lock outcome without its evidence. |
+| Shutdown cleanup deadlines and process-lock release | [#1186](https://github.com/45s/coinzilla/issues/1186), [#1479](https://github.com/45s/coinzilla/issues/1479) | Implementation and regression fixes in [PR #1891](https://github.com/45s/coinzilla/pull/1891); bounded outer cleanup and explicit lock-release acknowledgements are being verified on the exact head. Historical process-exit/lock-release evidence remains separate. |
 | Conservative exhaustive scenario coverage | [#1763](https://github.com/45s/coinzilla/issues/1763) | Active source-mapped scenario matrix and exact-head evidence. |
 | Recovery Seller terminal SELL acceptance | [#1842](https://github.com/45s/coinzilla/issues/1842) | Non-FILLED terminal SELL STOP fix merged in [PR #1875](https://github.com/45s/coinzilla/pull/1875). Its merge-commit coverage run exposed an uncovered missing-broker-ID guard in terminal fill reconciliation; this test-only follow-up covers absent and whitespace-only IDs without changing runtime behavior. |
 | Multi-provider execution and market-data routing | [#1339](https://github.com/45s/coinzilla/issues/1339) | Harvester-owned cross-provider backlog; keep provider contracts and routing boundaries explicit. |
 | Relational trading-history startup diagnosis | [#1854](https://github.com/45s/coinzilla/issues/1854) | Diagnostic evidence merged in [PR #1855](https://github.com/45s/coinzilla/pull/1855). The exact operator-database migration failure remains unconfirmed; preserve fail-closed migration behavior. |
+| Debug archive evidence identity handling | [#1893](https://github.com/45s/coinzilla/issues/1893) | Ensure independently valid log and recovery-facts sources are published with explicit identity-mismatch metadata instead of losing the diagnostic archive. |
 | Binance historical order identity evidence | [#1851](https://github.com/45s/coinzilla/issues/1851) | Identity correction merged in [PR #1849](https://github.com/45s/coinzilla/pull/1849); original historical row pairing remains unproven. |
 | Reliability engineering baseline | [#1639](https://github.com/45s/coinzilla/issues/1639) | R0 baseline and incident triage; use the dated report for findings and evidence gaps. |
 | Volatility protection calibration | [#1016](https://github.com/45s/coinzilla/issues/1016) | Multi-symbol synthetic CLI regression is in PR #1871; historical threshold calibration remains outstanding. |

@@ -359,7 +359,7 @@ terminal-capture files. See [Logging](./docs/LOGGING.md) for destinations, lifec
 
 ## Debug evidence archive
 
-For a lightweight TESTNET debug archive, stop Harvester and run `pnpm --filter @coinzilla/harvester archive:debug`. It publishes only the newest completed TESTNET session logs and `recovery-facts/` as a directory under `archives/<timestamp>_<id>_debug/` in the private `45s/coinzilla-archive` repository. Databases and cumulative logs are excluded. See the [local DEV reset and archive runbook](./docs/operations/local-dev-reset-and-archive.md).
+For a lightweight TESTNET debug archive, stop Harvester and run `pnpm --filter @coinzilla/harvester archive:debug`. It publishes only the newest completed TESTNET session logs and `recovery-facts/` as a directory under `archives/<timestamp>_<id>_debug/` in the private `45s/coinzilla-archive` repository. Databases and cumulative logs are excluded. The manifest records whether the selected log session and latest recovery-facts checkpoint share a runtime identity; a mismatch is warned about and preserved as independent, non-correlatable evidence. See the [local DEV reset and archive runbook](./docs/operations/local-dev-reset-and-archive.md).
 
 ## Implementation style
 

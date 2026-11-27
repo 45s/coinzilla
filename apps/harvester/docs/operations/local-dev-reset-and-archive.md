@@ -53,7 +53,7 @@ For focused debugging, run this after Harvester has stopped:
 pnpm run archive:debug
 ```
 
-This uses the same TESTNET session selection, recovery-facts consistency checks, manifest, checksums, and verified directory-based publication as `archive:push`. The archive folder keeps the normal timestamp/ID format with a `_debug` suffix.
+This uses the same TESTNET session selection, recovery-facts ledger-integrity checks, manifest, checksums, and verified directory-based publication as `archive:push`. The archive folder keeps the normal timestamp/ID format with a `_debug` suffix. The log session and latest recovery-facts checkpoint are recorded as separate evidence sources. If their `runtimeSessionId` values differ, the command emits a warning but still publishes both independently valid sources; `manifest.json` records `runtimeIdentity.status: "mismatched"` and `runtimeIdentity.correlation: "independent-evidence-do-not-correlate"`. Do not infer that the two sources belong to one runtime session. Invalid or inconsistent recovery-facts ledgers still fail closed.
 
 The debug archive includes only:
 
