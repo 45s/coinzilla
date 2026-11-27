@@ -134,9 +134,7 @@ Harvester now composes a dedicated Node child-process worker by default on Windo
 
 A Windows-specific GitHub Actions job now runs the local API composition test on `windows-latest`. Its result must be checked on the exact final PR head before claiming Windows acceptance.
 
-
 The dedicated Linux sandbox E2E workflow is manual-dispatch only. It does not run on pull requests and is not a required functional-development gate. Use it only when deliberately validating the optional Linux OS-isolation layer; its self-hosted runner availability must not block Windows local scenario work.
-
 
 ## Superseding Windows acceptance status — 2026-11-27
 

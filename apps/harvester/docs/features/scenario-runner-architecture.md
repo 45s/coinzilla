@@ -353,9 +353,7 @@ The Windows worker is a functional-development boundary for repository-owned sce
 
 A Windows-specific CI job runs the Harvester local API composition integration tests on `windows-latest`; do not claim Windows acceptance until that job passes on the exact PR head.
 
-
 The trusted Linux sandbox E2E workflow is intentionally manual-dispatch only and is not part of pull-request CI. A missing or queued self-hosted Linux runner therefore cannot block ordinary development or merge checks for the Windows local simulation path. Run it only when separately validating the optional Linux OS-isolation layer.
-
 
 ## Current local functional acceptance — 2026-11-27 (supersedes older non-executable host snapshots)
 
