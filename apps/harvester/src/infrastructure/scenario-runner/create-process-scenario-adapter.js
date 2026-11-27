@@ -605,6 +605,80 @@ function retainSandboxCleanupHandle({ error, children, runId }) {
   }
 }
 
+function spawnScenarioWorkerAndRetainFailure({
+  spawnSandboxedWorker,
+  workerPath,
+  maxOutputBytes,
+  children,
+  runId,
+}) {
+  try {
+    return spawnScenarioWorker({
+      spawnSandboxedWorker,
+      workerPath,
+      maxOutputBytes,
+    })
+  } catch (error) {
+    retainSandboxCleanupHandle({
+      error,
+      children,
+      runId,
+    })
+    throw error
+  }
+}
+
+function assertWorkerChildCompatible({ child }) {
+  if (!child || typeof child.send !== "function" ||
+    typeof child.once !== "function" || typeof child.kill !== "function") {
+    throw new TypeError("OS sandbox launcher must return a ChildProcess-compatible worker")
+  }
+}
+
+function createWorkerExecutionPromise({
+  child,
+  runId,
+  signal,
+  children,
+  terminationGraceMs,
+  maxOutputBytes,
+  strategyId,
+  scenarioId,
+  input,
+  onStarted,
+}) {
+  let execution
+  execution = createExecutionPromise({
+    child,
+    runId,
+    signal,
+    children,
+    terminationGraceMs,
+    maxOutputBytes,
+    onReady: () => {
+      if (signal?.aborted) {
+        return
+      }
+      dispatchScenarioExecution({
+        child,
+        execution,
+        runId,
+        strategyId,
+        scenarioId,
+        input,
+        terminationGraceMs,
+      })
+    },
+    onStarted: () => {
+      confirmWorkerExecutionStarted({
+        signal,
+        onStarted,
+      })
+    },
+  })
+  return execution.promise
+}
+
 function createWorkerExecutor({
   strategyId,
   spawnSandboxedWorker,
@@ -619,61 +693,27 @@ function createWorkerExecutor({
       osSandboxVerified,
       signal,
     })
-    let child
-    try {
-      child = spawnScenarioWorker({
-        spawnSandboxedWorker,
-        workerPath,
-        maxOutputBytes,
-      })
-    } catch (error) {
-      retainSandboxCleanupHandle({
-        error,
-        children,
-        runId,
-      })
-      throw error
-    }
-    if (!child || typeof child.send !== "function" ||
-      typeof child.once !== "function" || typeof child.kill !== "function") {
-      const error = new TypeError("OS sandbox launcher must return a ChildProcess-compatible worker")
-      if (child && typeof child === "object" && typeof child.sandboxCleanup === "function") {
-        child.sandboxSetupError = error
-        children.set(runId, child)
-        error.sandboxCleanupHandle = child
-      }
-      throw error
-    }
+    const child = spawnScenarioWorkerAndRetainFailure({
+      spawnSandboxedWorker,
+      workerPath,
+      maxOutputBytes,
+      children,
+      runId,
+    })
+    assertWorkerChildCompatible({ child })
     children.set(runId, child)
-    const execution = createExecutionPromise({
+    return createWorkerExecutionPromise({
       child,
       runId,
       signal,
       children,
       terminationGraceMs,
       maxOutputBytes,
-      onReady: () => {
-        if (signal?.aborted) {
-          return
-        }
-        dispatchScenarioExecution({
-          child,
-          execution,
-          runId,
-          strategyId,
-          scenarioId,
-          input,
-          terminationGraceMs,
-        })
-      },
-      onStarted: () => {
-        confirmWorkerExecutionStarted({
-          signal,
-          onStarted,
-        })
-      },
+      strategyId,
+      scenarioId,
+      input,
+      onStarted,
     })
-    return execution.promise
   }
 }
 
