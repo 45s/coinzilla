@@ -421,7 +421,7 @@ function createRecoveryProjectionRecords(options) {
       lineOffset,
     }),
     ...createSellCycleRecords({
-      freeQuantity: options.freeQuantity,
+      freeQuantity: options.freeQuantity ?? "0.01",
       thirdAssetCommission: options.thirdAssetCommission,
       lineOffset,
     }),
