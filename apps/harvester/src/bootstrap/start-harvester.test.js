@@ -1463,7 +1463,10 @@ class TestnetTradingRecoveryScenario {
       this.twoOrdersSubmitted,
       "the initial BUY and recovery SELL submissions after the first BUY fill",
       () => ({
-        submittedOrders: this.submittedOrders.map(({ side, price }) => ({ side, price })),
+        submittedOrders: this.submittedOrders.map(({ side, price }) => ({
+          side,
+          price,
+        })),
         userDataReady: this.runtime.userDataReady,
         userDataStatus: this.runtime.userDataStatus,
         errors: this.runtimeErrors,

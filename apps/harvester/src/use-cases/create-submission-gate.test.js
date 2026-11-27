@@ -289,7 +289,10 @@ test("blocks a Conservative BUY while an owned recovery SELL remains active afte
   const result = createSubmissionGate(dependencies)({
     order: {
       ...createOrder({ side: "BUY" }),
-      market: { id: "binance:DOGEUSDT", symbol: "DOGEUSDT" },
+      market: {
+        id: "binance:DOGEUSDT",
+        symbol: "DOGEUSDT",
+      },
     },
     purpose: "STANDING_BUY",
   })

@@ -217,7 +217,10 @@ function createFixtureBroker({
   }
 }
 
-function createFixtureAppConfig(externalOrdersPolicy, orderQuantity = 10) {
+function createFixtureAppConfig({
+  externalOrdersPolicy,
+  orderQuantity = 10,
+} = {}) {
   return {
     strategies: {
       CG_coinGrabber: {
@@ -422,7 +425,10 @@ const createFixture = ({
   })
   const accounting = createFixtureAccounting({ market })
   let ready = initiallyReady
-  const appConfig = createFixtureAppConfig(externalOrdersPolicy, orderQuantity)
+  const appConfig = createFixtureAppConfig({
+    externalOrdersPolicy,
+    orderQuantity,
+  })
   const engine = createFixtureEngine({
     broker: brokerState.broker,
     appConfig,

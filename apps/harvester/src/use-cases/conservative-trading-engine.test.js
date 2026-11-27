@@ -3382,6 +3382,50 @@ async function createCompleteCycleHarness({ scenario, keepQuantity }) {
   return harness
 }
 
+async function applyFirstCycleBuyPartialFill({ scenario, firstBuy }) {
+  const partialFill = makeCommissionedCycleFill({
+    order: firstBuy,
+    tradeId: "cycle-buy-1-partial",
+    quantity: "0.4",
+    commissionAsset: "BASE",
+    executedAt: 10,
+  })
+  const result = await scenario.harness.engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makePartiallyFilledOrder({
+        order: firstBuy,
+        executedQuantity: "0.4",
+        updatedAt: 2,
+      }),
+      fill: partialFill,
+    },
+  })
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.waitingForFullFill, true)
+}
+
+async function applyFirstCycleBuyFinalFill({ scenario, firstBuy }) {
+  const finalFill = makeCommissionedCycleFill({
+    order: firstBuy,
+    tradeId: "cycle-buy-1-final",
+    quantity: "0.6",
+    commissionAsset: "QUOTE",
+    executedAt: 11,
+  })
+  const result = await scenario.harness.engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({
+        order: firstBuy,
+      }),
+      fill: finalFill,
+    },
+  })
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(result.data.reevaluate, true)
+}
+
 async function runFirstCycleBuy({ scenario }) {
   const started = await scenario.harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -3394,44 +3438,14 @@ async function runFirstCycleBuy({ scenario }) {
   assert.equal(started.ok, true, started.errors?.[0]?.message)
   const firstBuy = scenario.harness.engine.getOrders().find((order) => order.side === "BUY")
   assert.ok(firstBuy)
-  const partialFill = makeCommissionedCycleFill({
-    order: firstBuy,
-    tradeId: "cycle-buy-1-partial",
-    quantity: "0.4",
-    commissionAsset: "BASE",
-    executedAt: 10,
+  await applyFirstCycleBuyPartialFill({
+    scenario,
+    firstBuy,
   })
-  const partial = await scenario.harness.engine.processUserDataEvent({
-    event: {
-      executionType: "TRADE",
-      executedOrder: makePartiallyFilledOrder({
-        order: firstBuy,
-        executedQuantity: "0.4",
-        updatedAt: 2,
-      }),
-      fill: partialFill,
-    },
+  await applyFirstCycleBuyFinalFill({
+    scenario,
+    firstBuy,
   })
-  assert.equal(partial.ok, true, partial.errors?.[0]?.message)
-  assert.equal(partial.data.waitingForFullFill, true)
-  const finalFill = makeCommissionedCycleFill({
-    order: firstBuy,
-    tradeId: "cycle-buy-1-final",
-    quantity: "0.6",
-    commissionAsset: "QUOTE",
-    executedAt: 11,
-  })
-  const completed = await scenario.harness.engine.processUserDataEvent({
-    event: {
-      executionType: "TRADE",
-      executedOrder: makeFilledOrder({
-        order: firstBuy,
-      }),
-      fill: finalFill,
-    },
-  })
-  assert.equal(completed.ok, true, completed.errors?.[0]?.message)
-  assert.equal(completed.data.reevaluate, true)
   await scenario.harness.engine.evaluateLatest({
     symbol: "DOGEUSDT",
   })

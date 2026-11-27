@@ -1,6 +1,5 @@
 import nodeTest from "node:test"
 import assert from "node:assert/strict"
-import { compareDecimal } from "@coinzilla/utils"
 import { createDogeTradingReplay } from "./doge-zro-conservative-replay-harness.js"
 
 const test = (...testArguments) => {
