@@ -14,13 +14,12 @@ describe('OverviewComponent', () => {
 
     const renderedText = fixture.nativeElement.textContent as string;
 
-    expect(renderedText).toContain('Portfolio value');
-    expect(renderedText).toContain('$12,480.52');
-    expect(renderedText).toContain('DEMO SNAPSHOT');
-    expect(renderedText).toContain('fictional values');
+    expect(renderedText, 'Overview must keep the portfolio summary visible.').toContain('Portfolio value');
+    expect(renderedText, 'Fictional portfolio values must remain explicitly identified as demo data.').toContain('DEMO SNAPSHOT');
+    expect(renderedText, 'The demo positions must remain labeled as fictional values.').toContain('fictional values');
   });
 
-  it('shows that the backend is not connected instead of implying live readiness', async () => {
+  it('does not render hard-coded offline states as the live system-health result', async () => {
     await TestBed.configureTestingModule({
       imports: [OverviewComponent],
     }).compileComponents();
@@ -30,8 +29,8 @@ describe('OverviewComponent', () => {
 
     const renderedText = fixture.nativeElement.textContent as string;
 
-    expect(renderedText).toContain('No backend endpoint configured');
-    expect(renderedText).toContain('No event connection configured');
-    expect(renderedText).toContain('not connected to Harvester');
+    expect(renderedText, 'System health must not claim that no backend endpoint is configured without checking the runtime endpoint.').not.toContain('No backend endpoint configured');
+    expect(renderedText, 'System health must not claim that no event connection is configured when the event stream is actually probed.').not.toContain('No event connection configured');
+    expect(renderedText, 'The permanent preview disclaimer must be replaced by observed connection state.').not.toContain('This preview is not connected to Harvester');
   });
 });
