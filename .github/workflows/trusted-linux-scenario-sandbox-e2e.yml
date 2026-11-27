@@ -1,0 +1,65 @@
+name: Trusted Linux Scenario Sandbox E2E
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trusted-linux-sandbox:
+    name: Trusted Linux namespace and cgroup acceptance
+    # This is a dedicated, ephemeral runner. Do not replace with ubuntu-latest:
+    # hosted CI does not prove delegated cgroup-v2 or the actual host boundary.
+    runs-on: [self-hosted, linux, scenario-sandbox]
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out exact PR revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Verify trusted runner prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = "Linux"
+          command -v bwrap
+          command -v prlimit
+          test -r /sys/fs/cgroup/cgroup.controllers
+          relative_cgroup="$(awk -F: '$1 == "0" { print $3 }' /proc/self/cgroup)"
+          test -n "$relative_cgroup"
+          delegated_cgroup="$(readlink -f "/sys/fs/cgroup$relative_cgroup")"
+          case "$delegated_cgroup" in /sys/fs/cgroup/*) ;; *) echo "Runner cgroup escaped cgroup v2 root"; exit 1 ;; esac
+          test -w "$delegated_cgroup"
+          grep -qw memory "$delegated_cgroup/cgroup.controllers"
+          grep -qw cpu "$delegated_cgroup/cgroup.controllers"
+          grep -qw pids "$delegated_cgroup/cgroup.controllers"
+          grep -Eq '(^| )\+?memory( |$)' "$delegated_cgroup/cgroup.subtree_control"
+          grep -Eq '(^| )\+?cpu( |$)' "$delegated_cgroup/cgroup.subtree_control"
+          grep -Eq '(^| )\+?pids( |$)' "$delegated_cgroup/cgroup.subtree_control"
+          printf 'kernel: '; uname -r
+          printf 'delegated cgroup: %s\n' "$delegated_cgroup"
+          printf 'cgroup controllers: '; cat "$delegated_cgroup/cgroup.controllers"
+          printf 'delegated subtree controllers: '; cat "$delegated_cgroup/cgroup.subtree_control"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.11.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run trusted Linux sandbox E2E
+        env:
+          SCENARIO_RUNNER_LINUX_SANDBOX_E2E: "1"
+        run: pnpm --filter @coinzilla/harvester test:scenario-sandbox-e2e
