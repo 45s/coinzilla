@@ -22,6 +22,11 @@ function createTestSandboxLauncher() {
     cpuTimeLimitMs: 30_000,
     wallTimeLimitMs: 30_000,
     maxOutputBytes: 1_048_576,
+    bwrapSha256: "a".repeat(64),
+    prlimitSha256: "b".repeat(64),
+    shellSha256: "c".repeat(64),
+    nodeRuntimeSha256: "d".repeat(64),
+    cgroupV2Verified: true,
   }
   return launcher
 }

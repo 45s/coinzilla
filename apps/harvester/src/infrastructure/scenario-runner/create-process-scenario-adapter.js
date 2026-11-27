@@ -22,6 +22,17 @@ const REQUIRED_SANDBOX_PROFILE = Object.freeze({
  * A launcher may attach this attestation only after applying and verifying
  * the required OS-level profile. Node module guards do not satisfy this contract.
  */
+function hasTrustedSandboxIdentity({ attestation }) {
+  const digestFields = [
+    "bwrapSha256",
+    "prlimitSha256",
+    "shellSha256",
+    "nodeRuntimeSha256",
+  ]
+  return attestation.cgroupV2Verified === true && digestFields.every((field) =>
+    typeof attestation[field] === "string" && /^[a-f0-9]{64}$/i.test(attestation[field]))
+}
+
 function hasVerifiedSandboxAttestation({ spawnSandboxedWorker, maxOutputBytes }) {
   const attestation = spawnSandboxedWorker.isolationAttestation
   if (!attestation || attestation.level !== "os") {
@@ -31,7 +42,8 @@ function hasVerifiedSandboxAttestation({ spawnSandboxedWorker, maxOutputBytes })
     ...REQUIRED_SANDBOX_PROFILE,
     maxOutputBytes,
   }
-  return Object.entries(expectedProfile).every(([key, value]) => attestation[key] === value)
+  return Object.entries(expectedProfile).every(([key, value]) => attestation[key] === value) &&
+    hasTrustedSandboxIdentity({ attestation })
 }
 
 function createWorkerEnvironment() {

@@ -57,6 +57,11 @@ function createSimulatedSandboxLauncher({
     level: "os",
     ...TEST_SANDBOX_PROFILE,
     maxOutputBytes,
+    bwrapSha256: "a".repeat(64),
+    prlimitSha256: "b".repeat(64),
+    shellSha256: "c".repeat(64),
+    nodeRuntimeSha256: "d".repeat(64),
+    cgroupV2Verified: true,
   })
   return launcher
 }
@@ -358,6 +363,8 @@ test("process adapter requests cooperative cancellation before forced terminatio
   })
 
   await new Promise((resolve) => setImmediate(resolve))
+  closeHandler()
+  assert.equal(cgroupCleanupCount, 1)
   controller.abort()
   await assert.rejects(execution, /cancelled/)
   assert.deepEqual(messages.map((message) => message.type), ["execute", "cancel"])
@@ -539,9 +546,20 @@ test("Linux sandbox launcher refuses non-Linux hosts before attestation", () => 
 
 test("Linux sandbox launcher attests the required OS profile and passes a seccomp filter", async () => {
   let spawned
+  let closeHandler
+  let cgroupCleanupCount = 0
   const child = {
+    pid: 4321,
     stdio: [null, null, null, null, new PassThrough()],
-    kill() {},
+    kill() {
+      return true
+    },
+    once(event, handler) {
+      if (event === "close") {
+        closeHandler = handler
+      }
+      return this
+    },
   }
   const launcher = createLinuxBubblewrapSandboxLauncher({
     platform: "linux",
@@ -553,6 +571,17 @@ test("Linux sandbox launcher attests the required OS profile and passes a seccom
       path,
       sha256: "a".repeat(64),
     }),
+    cgroupController: {
+      verify() {},
+      create() {
+        return {
+          cgroupProcsPath: "/sys/fs/cgroup/scenario-test/cgroup.procs",
+          cleanup() {
+            cgroupCleanupCount += 1
+          },
+        }
+      },
+    },
     execFileSync: (path) => path.includes("bwrap") ? "bubblewrap 0.9.0" : "prlimit from util-linux",
     existsSync: () => true,
     realpathSync: (path) => path,
@@ -578,8 +607,11 @@ test("Linux sandbox launcher attests the required OS profile and passes a seccom
   assert.equal(launcher.isolationAttestation.level, "os")
   assert.equal(launcher.isolationAttestation.networkAccess, "deny")
   assert.equal(launcher.isolationAttestation.maxOutputBytes, 1_048_576)
-  assert.equal(spawned.command, "/usr/bin/prlimit")
-  assert.ok(spawned.args.includes("--as=268435456:268435456"))
+  assert.equal(launcher.isolationAttestation.cgroupV2Verified, true)
+  assert.equal(typeof launcher.isolationAttestation.shellSha256, "string")
+  assert.equal(spawned.command, "/bin/sh")
+  assert.ok(spawned.args.includes("--as=8589934592:8589934592"))
+  assert.ok(spawned.args.includes("/sys/fs/cgroup/scenario-test/cgroup.procs"))
   assert.ok(spawned.args.includes("--cpu=30:30"))
   assert.ok(spawned.args.includes("--unshare-net"))
   assert.ok(spawned.args.includes("--unshare-pid"))
