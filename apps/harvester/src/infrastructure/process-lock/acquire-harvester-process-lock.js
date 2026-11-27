@@ -111,7 +111,7 @@ function isStaleLockOwner({ existingOwner, hostname, checkProcessAlive }) {
   const validPid = Number.isSafeInteger(existingOwner?.pid) && existingOwner.pid > 0
   const validToken = typeof existingOwner?.token === "string" && existingOwner.token.trim() !== ""
   const validStartTime = typeof existingOwner?.startedAt === "string" && existingOwner.startedAt.trim() !== ""
-  return sameHost && validPid && validToken && validStartTime && !checkProcessAlive(existingOwner.pid)
+  return sameHost && validPid && validToken && validStartTime && checkProcessAlive(existingOwner.pid) === false
 }
 
 async function readCurrentLockOwner({ lockPath }) {
