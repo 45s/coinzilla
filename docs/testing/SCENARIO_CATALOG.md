@@ -406,6 +406,8 @@ The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERV
 
 **Status:** TEST-MAPPED — strategy, final submission-gate, engine, and replay cases are mapped; exact-head verification is pending.
 
+**Scenario registry:** `CON-BUY-001`.
+
 **Behavior:** Conservative must recover from actual filled inventory without opening another BUY cycle prematurely. A recovery SELL acknowledgement, terminal SELL status by itself, or proceeds reaching the accumulated BUY cost does not complete the cycle. New BUY admission opens only after the full recovery cycle is reconciled, retained inventory is allocated, and the Position recovery basis and RecoveryLedger cycle totals are reset.
 
 **Given / preconditions:**

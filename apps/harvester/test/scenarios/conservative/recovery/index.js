@@ -107,7 +107,7 @@ export const scenarios = [
       "A completed prior cycle cannot contaminate the next cycle's quote basis.",
       "No new BUY is admitted until recovery completion and Position/RecoveryLedger basis reset.",
     ],
-    relatedRequirements: ["CON-SPEC-3.1", "CON-SPEC-5.1", "CON-SPEC-5.2", "CON-SPEC-5.3", "CON-SPEC-5.4", "CON-SPEC-6.1", "CON-SPEC-6.2", "CON-SPEC-6.3"],
+    relatedRequirements: ["CON-SPEC-3.1", "CON-SPEC-3.6", "CON-SPEC-3.8", "CON-SPEC-5.1", "CON-SPEC-5.2", "CON-SPEC-5.3", "CON-SPEC-5.4", "CON-SPEC-6.1", "CON-SPEC-6.2", "CON-SPEC-6.3"],
     relatedCriticalBehaviors: [
       "PORTFOLIO_RECOVERY_LEDGER_ALIGNMENT",
       "BROKER_HISTORY_RECONCILIATION",

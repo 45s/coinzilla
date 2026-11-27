@@ -49,40 +49,6 @@ export const ADDITIONAL_TEST_MAPPINGS = Object.freeze({
       name: "fails closed when RecoveryLedger has cycle accounting but Portfolio has no Position",
     },
   ],
-  "CON-BUY-001": [
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "creates the initial BUY below last traded price and rounds down to tick",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "does not duplicate an already active BUY on repeated price events",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "creates a recovery SELL and the next standing BUY from actual filled inventory",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "allows the next BUY only after the recovery SELL is acknowledged",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "blocks the next BUY while the recovery SELL acknowledgement is pending or unknown",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "keeps the partial BUY active while continuing recovery SELL planning",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "fails closed rather than inventing a next BUY reference while active inventory lacks completed-BUY VWAP",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "respects investment-cap equality and both sides of the BUY eligibility boundary",
-    },
-  ],
   "CON-SELL-001": [
     {
       path: "src/domain/strategies/conservative/strategy.test.js",
@@ -143,32 +109,6 @@ export const ADDITIONAL_TEST_MAPPINGS = Object.freeze({
     {
       path: "src/domain/strategies/conservative/strategy.test.js",
       name: "rejects missing exchange increments and invalid strategy context",
-    },
-  ],
-  "CON-RECOVERY-001": [
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "creates a recovery SELL and the next standing BUY from actual filled inventory",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "allows the next BUY only after the recovery SELL is acknowledged",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "blocks the next BUY while the recovery SELL acknowledgement is pending or unknown",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "combines exchange-constrained dust with a later BUY and preserves the full recovery basis",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "continues selling residual inventory after cumulative recovery profit is already secured",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "does not create a duplicate residual SELL while one is active",
     },
   ],
   "CON-FEE-001": [

@@ -551,6 +551,31 @@
           "path": "test/replays/ada-conservative-recovery-replay.test.js",
           "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
           "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "keeps a pre-existing BUY untouched while planning the recovery SELL for its active Position",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "reconciles multiple BUY fills racing shutdown cancellation and replaces only the owned recovery SELL",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "fails closed when shutdown recovery SELL cancellation or replacement submission is unresolved",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "does not cancel a recovery SELL when its durable cancellation intent flush fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "reconciles the recovery SELL after any partial BUY fill without completing the BUY lifecycle",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
