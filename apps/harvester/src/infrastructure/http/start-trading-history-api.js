@@ -158,22 +158,6 @@ function createScenarioRunnerAdapter({ env, platform }) {
   }
 }
 
-function validateApiDependencies({ database, eventBus, environment }) {
-  if (database !== undefined && database !== null && typeof database.prepare !== "function") {
-    throw new TradingHistoryApiStartupError({
-      message: "The supplied Harvester relational trading-history database handle is invalid.",
-      code: "HARVESTER_TRADING_HISTORY_API_DATABASE_UNAVAILABLE",
-      environment,
-    })
-  }
-  if (!eventBus || typeof eventBus.subscribe !== "function") {
-    throw new TradingHistoryApiStartupError({
-      message: "The Harvester EventBus is unavailable; the local runtime API cannot start.",
-      code: "HARVESTER_TRADING_HISTORY_API_EVENT_BUS_UNAVAILABLE",
-      environment,
-    })
-  }
-}
 
 async function openApiServer({
   startServer,
