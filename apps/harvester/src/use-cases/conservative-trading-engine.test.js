@@ -2328,7 +2328,9 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
         return flushCount === 2
           ? {
             ok: false,
-            errors: [new Error(`journal sync failed after ${lastPublishedEventName} side=${lastPublishedEventSide} clientOrderId=${lastPublishedClientOrderId}`)]
+            errors: [new Error(
+              `journal sync failed after ${lastPublishedEventName} side=${lastPublishedEventSide} clientOrderId=${lastPublishedClientOrderId}`,
+            )]
           }
           : {
             ok: true,
