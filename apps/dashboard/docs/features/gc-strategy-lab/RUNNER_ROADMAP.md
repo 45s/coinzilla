@@ -2,9 +2,11 @@
 
 **Tracking:** Issue #1836 · [PR #1837](https://github.com/45s/coinzilla/pull/1837) (merged foundation) · Initial adapter: RS · Strategy-neutral core
 
-## Current status — 2026-11-26
+## Current status — 2026-11-27
 
-The Scenario Runner foundation is merged, but production execution remains fail-closed. PR #1887 is merged with under-target fully FILLED SELL, STOP-persistence failure and BUY-only STOP admission runtime scenarios. PR #1913 adds test-first failures for durable SELL-intent persistence before broker placement, acknowledged-outcome persistence after simulated broker acknowledgement, combined outcome/STOP persistence failure that must preserve the in-memory account admission latch, a broker transport exception classified as durable UNKNOWN with STOP/reservation retention, and failed SELL reservation callback handling before broker placement. The catalogue remains non-executable without a trusted OS sandbox and matching attestation; broader infrastructure-failure, complete replay-provenance and end-to-end acceptance coverage remain outstanding.
+The Scenario Runner foundation is merged. PR #1887 added the under-target fully FILLED SELL, STOP-persistence failure and BUY-only STOP admission runtime scenarios. PR #1913 adds five infrastructure-failure scenarios: SELL-intent persistence failure before broker placement, acknowledged-outcome persistence failure, combined outcome/STOP persistence failure, ambiguous broker placement classified as durable UNKNOWN with STOP/reservation retention, and sole-SELL reservation callback failure.
+
+The Linux Bubblewrap/prlimit process adapter is now composed behind explicit `HARVESTER_SCENARIO_SANDBOX=linux-bubblewrap`. On hosts that pass trusted executable, namespace/seccomp and delegated cgroup v2 checks, the catalogue is executable for isolated simulation only. Scenario acceptance remains PARTIAL; this is not production acceptance. Remaining gates are the manual trusted-runner adversarial sandbox E2E, production operational-state persistence, trusted build-artifact provenance/exact replay, and broader terminal-reconciliation failure plus retry/idempotency scenario coverage.
 
 ## Approved branch-only refactoring and agent preflight
 
@@ -104,13 +106,9 @@ The Harvester host now accepts explicit strategy registrations and builds its ca
 - The cancel API awaits cleanup retry and reports acceptance only after the adapter confirms termination.
 - Capacity is released only after explicit cleanup confirmation. Shutdown remains fail-closed when cleanup cannot be confirmed.
 
-
-
 ## Harvester Scenario Runner Linux sandbox — 2026-11-27
 
 The Harvester API has an explicit opt-in Linux Bubblewrap/prlimit process adapter backed by a per-run delegated cgroup v2 hard memory/CPU/pids boundary. It is unavailable on hosts that do not pass the root-owned executable, namespace, seccomp, and cgroup-controller checks. This enables simulation-only runtime scenarios; production acceptance remains PARTIAL pending adversarial end-to-end isolation acceptance and trusted replay/build provenance.
-
-
 
 ## Linux sandbox adversarial acceptance — 2026-11-27
 
