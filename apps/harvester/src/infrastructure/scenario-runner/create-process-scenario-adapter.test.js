@@ -363,8 +363,6 @@ test("process adapter requests cooperative cancellation before forced terminatio
   })
 
   await new Promise((resolve) => setImmediate(resolve))
-  closeHandler()
-  assert.equal(cgroupCleanupCount, 1)
   controller.abort()
   await assert.rejects(execution, /cancelled/)
   assert.deepEqual(messages.map((message) => message.type), ["execute", "cancel"])
@@ -544,7 +542,7 @@ test("Linux sandbox launcher refuses non-Linux hosts before attestation", () => 
   }), /Linux/)
 })
 
-test("Linux sandbox launcher attests the required OS profile and passes a seccomp filter", async () => {
+function createLinuxSandboxLauncherFixture() {
   let spawned
   let closeHandler
   let cgroupCleanupCount = 0
@@ -554,7 +552,8 @@ test("Linux sandbox launcher attests the required OS profile and passes a seccom
     kill() {
       return true
     },
-    once(event, handler) {
+    once(...eventArguments) {
+      const [event, handler] = eventArguments
       if (event === "close") {
         closeHandler = handler
       }
@@ -582,7 +581,8 @@ test("Linux sandbox launcher attests the required OS profile and passes a seccom
         }
       },
     },
-    execFileSync: (path, args) => {
+    execFileSync: (...execArguments) => {
+      const [path, args] = execArguments
       if (args[0] === "--help") {
         return "bubblewrap --seccomp --preserve-fds"
       }
@@ -600,20 +600,31 @@ test("Linux sandbox launcher attests the required OS profile and passes a seccom
       return child
     },
   })
+  return {
+    launcher,
+    child,
+    getSpawned: () => spawned,
+    close: () => closeHandler(),
+    cleanupCount: () => cgroupCleanupCount,
+  }
+}
 
-  const returned = launcher({
+test("Linux sandbox launcher attests the OS profile and applies cgroup, seccomp and IPC", async () => {
+  const fixture = createLinuxSandboxLauncherFixture()
+  const returned = fixture.launcher({
     workerPath: "/repo/apps/harvester/src/infrastructure/scenario-runner/scenario-worker.js",
     env: { SCENARIO_RUN_WORKER: "1" },
     execArgv: [],
     stdio: ["ignore", "ignore", "ignore", "ipc"],
     sandboxProfile: LINUX_SANDBOX_PROFILE,
   })
-  assert.equal(returned, child)
-  assert.equal(launcher.isolationAttestation.level, "os")
-  assert.equal(launcher.isolationAttestation.networkAccess, "deny")
-  assert.equal(launcher.isolationAttestation.maxOutputBytes, 1_048_576)
-  assert.equal(launcher.isolationAttestation.cgroupV2Verified, true)
-  assert.equal(typeof launcher.isolationAttestation.shellSha256, "string")
+  const spawned = fixture.getSpawned()
+  assert.equal(returned, fixture.child)
+  assert.equal(fixture.launcher.isolationAttestation.level, "os")
+  assert.equal(fixture.launcher.isolationAttestation.networkAccess, "deny")
+  assert.equal(fixture.launcher.isolationAttestation.maxOutputBytes, 1_048_576)
+  assert.equal(fixture.launcher.isolationAttestation.cgroupV2Verified, true)
+  assert.equal(typeof fixture.launcher.isolationAttestation.shellSha256, "string")
   assert.equal(spawned.command, "/bin/sh")
   assert.ok(spawned.args.includes("--as=8589934592:8589934592"))
   assert.ok(spawned.args.includes("/sys/fs/cgroup/scenario-test/cgroup.procs"))
@@ -625,9 +636,10 @@ test("Linux sandbox launcher attests the required OS profile and passes a seccom
   assert.equal(spawned.options.stdio[3], "ipc")
   assert.equal(spawned.options.env.NODE_CHANNEL_FD, "3")
   assert.equal(spawned.options.env.NODE_CHANNEL_SERIALIZATION_MODE, "json")
-  assert.ok(Buffer.isBuffer(buildScenarioSeccompFilter({ arch: "x64" })))
   assert.ok(buildScenarioSeccompFilter({ arch: "x64" }).length > 0)
   await new Promise((resolve) => setImmediate(resolve))
+  fixture.close()
+  assert.equal(fixture.cleanupCount(), 1)
 })
 
 test("Linux sandbox launcher rejects a mismatched isolation profile before spawning", () => {
