@@ -110,7 +110,7 @@ The `@coinzilla/utils` package uses Node.js built-in modules and the built-in `n
 ```js
 import {
   calculateTimeDiff,
-  capitalize,
+  trimAndUppercase,
   generateUUID,
   formatTimeRelatively,
 } from '@coinzilla/utils'
@@ -120,7 +120,7 @@ const hours = calculateTimeDiff({
   end: new Date('2026-01-01T02:30:00Z'),
 }) // 2.5
 
-capitalize('coinzilla') // 'COINZILLA'
+trimAndUppercase('coinzilla') // 'COINZILLA'
 generateUUID() // UUID v4 string
 formatTimeRelatively({ value: -5, unit: 'minute' }) // '5 minutes ago'
 ```
