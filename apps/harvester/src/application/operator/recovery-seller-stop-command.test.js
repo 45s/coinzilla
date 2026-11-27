@@ -1,10 +1,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { isAuthenticatedLocalOperatorIdentity } from "../src/infrastructure/security/local-operator-identity.js"
+import { isAuthenticatedLocalOperatorIdentity } from "../../infrastructure/security/local-operator-identity.js"
 import {
   parseRecoverySellerStopArguments,
   runRecoverySellerStopCommand,
-} from "./recovery-seller-stop.js"
+} from "../../../scripts/recovery-seller-stop.js"
 
 const blockerId = "b".repeat(64)
 const actionId = "rs-stop-action-001"

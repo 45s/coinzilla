@@ -1806,27 +1806,27 @@
           "kind": "integration"
         },
         {
-          "path": "scripts/recovery-seller-stop.test.js",
+          "path": "src/application/operator/recovery-seller-stop-command.test.js",
           "name": "authenticates the local OS account before attempting RS STOP resolution",
           "kind": "normal"
         },
         {
-          "path": "scripts/recovery-seller-stop.test.js",
+          "path": "src/application/operator/recovery-seller-stop-command.test.js",
           "name": "reports durable STOP resolution while keeping readiness blocked and not resuming",
           "kind": "normal"
         },
         {
-          "path": "scripts/recovery-seller-stop.test.js",
+          "path": "src/application/operator/recovery-seller-stop-command.test.js",
           "name": "rejects a mismatched OS account before reading evidence or creating the store",
           "kind": "failure"
         },
         {
-          "path": "scripts/recovery-seller-stop.test.js",
+          "path": "src/application/operator/recovery-seller-stop-command.test.js",
           "name": "rejects stale blocker identity without invoking the resolver",
           "kind": "failure"
         },
         {
-          "path": "scripts/recovery-seller-stop.test.js",
+          "path": "src/application/operator/recovery-seller-stop-command.test.js",
           "name": "requires explicit cause-fixed confirmation and rejects unknown authentication flags",
           "kind": "failure"
         }
@@ -2820,8 +2820,8 @@
         "functions": 100
       },
       "minimum": {
-        "lines": 90,
-        "branches": 85,
+        "lines": 95,
+        "branches": 90,
         "functions": 95
       },
       "latestObserved": {
