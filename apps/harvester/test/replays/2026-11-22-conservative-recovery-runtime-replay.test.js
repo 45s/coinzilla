@@ -59,9 +59,16 @@ async function createArchivedAdmissionReplay({ scenario }) {
   return createDogeTradingReplay({
     marketSymbol: scenario.symbol,
     appConfig: createAppConfig(scenario),
-    scenarioExpectations: createScenarioExpectations({
+    scenarioExpectations: {
       initialPrice: scenario.initialPrice,
-    }),
+      buyPrice: scenario.buys[0].price,
+      nextBuyPrice: scenario.buys[1]?.price ?? scenario.sell.price,
+      sellPrice: scenario.sell.price,
+      sellFillPrice: scenario.sell.price,
+      expectedSellQuantity: scenario.sell.quantity,
+      expectedFreeQuantity: scenario.expectedFreeQuantity,
+      expectedProfit: scenario.expectedRealizedNetProfit,
+    },
     exchangeFilters: scenario.exchangeFilters,
   })
 }
