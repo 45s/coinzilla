@@ -131,10 +131,25 @@ test("accepts confirmed operator commands from a Dashboard on a dynamic localhos
   let received = false
   const response = createResponse()
   await handleOperatorControlRequest({
-    request: createRequest({ method: "POST", origin: "http://localhost:4317",
-      body: { command: "pauseallbuys", requestId: "dashboard-dynamic-port" } }),
-    response, pathname: "/api/v1/trading/operator/commands",
-    operator: { async pauseAllBuys() { received = true; return { ok: true, data: { paused: true } } } },
+    request: createRequest({
+      method: "POST",
+      origin: "http://localhost:4317",
+      body: {
+        command: "pauseallbuys",
+        requestId: "dashboard-dynamic-port",
+      },
+    }),
+    response,
+    pathname: "/api/v1/trading/operator/commands",
+    operator: {
+      async pauseAllBuys() {
+        received = true
+        return {
+          ok: true,
+          data: { paused: true },
+        }
+      },
+    },
   })
   assert.equal(response.status, 200, "A valid local Dashboard origin must be allowed to submit a confirmed command.")
   assert.equal(received, true, "The local command must reach the existing operator facade.")
