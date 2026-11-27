@@ -25,7 +25,8 @@
     "src/use-cases/create-conservative-shutdown-safety.js",
     "src/use-cases/record-safety-control-facts.js",
     "src/use-cases/resolve-user-data-account-blockers.js",
-    "src/use-cases/resolve-user-data-account-blockers.helpers.js"
+    "src/use-cases/resolve-user-data-account-blockers.helpers.js",
+    "src/bootstrap/providers/start-provider-accounts.js"
   ],
   "behaviors": [
     {
