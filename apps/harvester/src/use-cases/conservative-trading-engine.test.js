@@ -477,7 +477,7 @@ function createSeededBuyOrder({ targetMarket, status, brokerOrderId, acknowledge
     type: "LIMIT_MAKER",
     limitPrice: new Money({
       amount: "99",
-      asset: quoteAsset,
+      asset: targetMarket.quoteAsset,
     }),
     originalQuantity: new Quantity({
       amount: "1",
@@ -500,12 +500,16 @@ function createSeededBuyOrder({ targetMarket, status, brokerOrderId, acknowledge
   return new CanonicalOrder(order)
 }
 
-function createSeededOpenBuyOrderRegistry({ targetMarket, positionId }) {
+function createSeededOpenBuyOrderRegistry({
+  targetMarket,
+  positionId,
+  orderRegistry = OrderRegistry.empty(),
+}) {
   const pendingOrder = createSeededBuyOrder({
     targetMarket,
     status: "PENDING",
   })
-  const pendingRegistry = OrderRegistry.empty().registerPending({
+  const pendingRegistry = orderRegistry.registerPending({
     order: pendingOrder,
     ownership: {
       strategyId: StrategyId.COIN_GRABBER,
@@ -525,10 +529,21 @@ function createSeededOpenBuyOrderRegistry({ targetMarket, positionId }) {
 }
 
 async function createHarnessFromOptions(options = {}) {
+  const initialPosition = options.seedExistingBuy
+    ? options.initialPortfolio?.getPosition({
+        marketId: market.id,
+        strategyId: StrategyId.COIN_GRABBER,
+      })
+    : null
+  if (options.seedExistingBuy) {
+    assert.ok(initialPosition, "A seeded existing BUY requires its owned Portfolio Position.")
+  }
   const initialState = options.seedExistingBuy
     ? {
         ...options.initialState,
         orderRegistry: createSeededOpenBuyOrderRegistry({
+          targetMarket: market,
+          positionId: initialPosition.positionId,
           orderRegistry: options.initialState?.orderRegistry ?? OrderRegistry.empty(),
         }),
       }
@@ -995,6 +1010,7 @@ test("waits for executions behind an immediate FILLED acknowledgement before eva
 test("pauses an immediately FILLED acknowledged order when execution history is incomplete", async () => {
   const harness = await createHarness({
     immediateFilledAcknowledgement: true,
+    accountingApplied: false,
     getAcknowledgedFills: () => [],
   })
   const result = await harness.engine.processMarketPrice({
