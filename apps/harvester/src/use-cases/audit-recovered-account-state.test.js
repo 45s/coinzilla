@@ -19,14 +19,14 @@ code: "USDT" }),
 const feeAsset = new Asset({ id: "binance:BNB",
 code: "BNB" })
 
-const record = (...[name, data, lineNumber]) => ({
-  id: `record-${  lineNumber}`,
-  payload: { id: `record-${  lineNumber}`,
-name,
-data },
-  position: { fileName: "2026-11-05_08-00-00.jsonl",
-lineNumber },
-})
+const record = (...[name, data, lineNumber]) => {
+  const id = `record-${lineNumber}-${name}-${data.clientOrderId ?? data.fillId ?? data.phase ?? "event"}`
+  return {
+    id,
+    payload: { id, name, data },
+    position: { fileName: "2026-11-05_08-00-00.jsonl", lineNumber },
+  }
+}
 
 function createOpeningRecords() {
   const balances = [
@@ -565,7 +565,10 @@ function createEthAccountSnapshot({ ethAsset }) {
   })
 }
 const recoveryProjection = (options = {}) => projectHarvesterJournalRecovery({
-  records: createRecoveryProjectionRecords(options),
+  records: createRecoveryProjectionRecords({
+    includeCommissionBaseline: true,
+    ...options,
+  }),
 })
 const restoreState = (options) => {
   const projection = recoveryProjection(options)
@@ -758,6 +761,21 @@ test("keeps an unresolved Recovery Seller BUY order deferred until canonical rec
     marketMetadata: new Map([["BTCUSDT", market]]),
   })
 
+  assert.equal(restored.ok, false)
+  assert.match(restored.errors?.[0]?.message ?? "", /Recovery Seller Journal replay is deferred/)
+})
+
+test("defers a FILLED Recovery Seller BUY when Journal fill evidence is incomplete", () => {
+  const projection = recoveryProjection({
+    recoverySellerBuy: true,
+    recoverySellerBuyStatus: "FILLED",
+    recoverySellerBuyFill: false,
+  })
+  assert.equal(projection.ok, true, projection.errors?.map(({ message }) => message).join("; "))
+  const restored = restoreHarvesterJournalState({
+    projection,
+    marketMetadata: new Map([["BTCUSDT", market]]),
+  })
   assert.equal(restored.ok, false)
   assert.match(restored.errors?.[0]?.message ?? "", /Recovery Seller Journal replay is deferred/)
 })

@@ -517,65 +517,89 @@ function validateAccountBalances({ assetCodes, baselineByAsset, currentByAsset, 
   }
 }
 
-function createExpectedOrderCommitments({ recoveredState }) {
-  const expectedOpenOrders = recoveredState.orderRegistry.getActiveOrders({})
-  const expectedByBrokerId = new Map()
+function indexRecoveredOrders({ orders }) {
   const recoveredByBrokerId = new Map()
   const recoveredByClientOrderId = new Map()
-  const expectedLocked = new Map()
-  for (const order of recoveredState.orderRegistry.orders) {
+  for (const order of orders) {
     if (recoveredByClientOrderId.has(order.clientOrderId)) {
       throw new Error(`Recovered OrderRegistry contains duplicate clientOrderId ${order.clientOrderId}`)
     }
     recoveredByClientOrderId.set(order.clientOrderId, order)
-    if (typeof order.brokerOrderId === "string" && order.brokerOrderId.trim()) {
-      if (recoveredByBrokerId.has(order.brokerOrderId)) {
-        throw new Error(`Recovered OrderRegistry contains duplicate brokerOrderId ${order.brokerOrderId}`)
-      }
-      recoveredByBrokerId.set(order.brokerOrderId, order)
-    }
-  }
-  for (const order of expectedOpenOrders) {
-    
-    if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
-      throw new Error(`Recovered active order remains unresolved and cannot pass account audit: ${order.clientOrderId}`)
-    }
     if (typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
-      throw new Error(`Recovered active order has no brokerOrderId: ${order.clientOrderId}`)
+      continue
     }
-    if (expectedByBrokerId.has(order.brokerOrderId)) {
+    if (recoveredByBrokerId.has(order.brokerOrderId)) {
       throw new Error(`Recovered OrderRegistry contains duplicate brokerOrderId ${order.brokerOrderId}`)
     }
-    expectedByBrokerId.set(order.brokerOrderId, order)
-    const remainingQuantity = subtractDecimal({
-      left: order.originalQuantity.amount,
-      right: order.executedQuantity.amount,
+    recoveredByBrokerId.set(order.brokerOrderId, order)
+  }
+  return {
+    recoveredByBrokerId,
+    recoveredByClientOrderId,
+  }
+}
+
+function validateExpectedOpenOrder({ order }) {
+  if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
+    throw new Error(`Recovered active order remains unresolved and cannot pass account audit: ${order.clientOrderId}`)
+  }
+  if (typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
+    throw new Error(`Recovered active order has no brokerOrderId: ${order.clientOrderId}`)
+  }
+  const remainingQuantity = subtractDecimal({
+    left: order.originalQuantity.amount,
+    right: order.executedQuantity.amount,
+  })
+  if (compareDecimal({ left: remainingQuantity, right: "0" }) <= 0) {
+    throw new Error(`Recovered active order has no remaining quantity: ${order.clientOrderId}`)
+  }
+  if (!["LIMIT", "LIMIT_MAKER"].includes(order.type) || !order.limitPrice) {
+    throw new Error(`Recovered active order is not a supported LIMIT commitment: ${order.clientOrderId}`)
+  }
+  if (!["BUY", "SELL"].includes(order.side)) {
+    throw new Error(`Recovered active order has an unsupported side: ${order.clientOrderId}`)
+  }
+  return remainingQuantity
+}
+
+function addExpectedOrderCommitment({ order, expectedByBrokerId, expectedLocked }) {
+  const remainingQuantity = validateExpectedOpenOrder({ order })
+  if (expectedByBrokerId.has(order.brokerOrderId)) {
+    throw new Error(`Recovered OrderRegistry contains duplicate brokerOrderId ${order.brokerOrderId}`)
+  }
+  expectedByBrokerId.set(order.brokerOrderId, order)
+  const asset = order.side === "BUY"
+    ? order.market.quoteAsset.code
+    : order.market.baseAsset.code
+  const amount = order.side === "BUY"
+    ? multiplyDecimal({
+      left: remainingQuantity,
+      right: order.limitPrice.amount,
     })
-    if (compareDecimal({ left: remainingQuantity, 
-      right: "0" }) <= 0) {
-      throw new Error(`Recovered active order has no remaining quantity: ${order.clientOrderId}`)
-    }
-    if (!["LIMIT", "LIMIT_MAKER"].includes(order.type) || !order.limitPrice) {
-      throw new Error(`Recovered active order is not a supported LIMIT commitment: ${order.clientOrderId}`)
-    }
-    if (order.side === "BUY") {
-      addAmount({
-        amounts: expectedLocked,
-        asset: order.market.quoteAsset.code,
-        amount: multiplyDecimal({
-          left: remainingQuantity,
-          right: order.limitPrice.amount,
-        }),
-      })
-    } else if (order.side === "SELL") {
-      addAmount({
-        amounts: expectedLocked,
-        asset: order.market.baseAsset.code,
-        amount: remainingQuantity,
-      })
-    } else {
-      throw new Error(`Recovered active order has an unsupported side: ${order.clientOrderId}`)
-    }
+    : remainingQuantity
+  addAmount({
+    amounts: expectedLocked,
+    asset,
+    amount,
+  })
+}
+
+function createExpectedOrderCommitments({ recoveredState }) {
+  const expectedOpenOrders = recoveredState.orderRegistry.getActiveOrders({})
+  const {
+    recoveredByBrokerId,
+    recoveredByClientOrderId,
+  } = indexRecoveredOrders({
+    orders: recoveredState.orderRegistry.orders,
+  })
+  const expectedByBrokerId = new Map()
+  const expectedLocked = new Map()
+  for (const order of expectedOpenOrders) {
+    addExpectedOrderCommitment({
+      order,
+      expectedByBrokerId,
+      expectedLocked,
+    })
   }
   return {
     expectedOpenOrders,

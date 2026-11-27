@@ -1033,10 +1033,14 @@ sequence })
   if (order.side === "BUY") {
     order.lastBuyFillSequence = sequence
   }
-  if (order.side === "SELL" && compareDecimal({
-    left: cumulativeFillQuantity,
-    right: order.quantity,
-  }) === 0) {
+  if (
+    order.side === "SELL" &&
+    order.strategyId !== "RECOVERY_SELLER" &&
+    compareDecimal({
+      left: cumulativeFillQuantity,
+      right: order.quantity,
+    }) === 0
+  ) {
     const previousFullyFilledSell = state.lastFullyFilledSellBySymbol.get(order.symbol)
     if (previousFullyFilledSell && previousFullyFilledSell.outcome !== "CONTINUE_SELL_THROUGH") {
       throw new Error(`Multiple fully filled Harvester SELL orders require an explicit continue-sell-through outcome for ${order.symbol}`)

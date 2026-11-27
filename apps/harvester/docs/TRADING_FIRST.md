@@ -299,7 +299,6 @@ Market-scoped blockers remain local to their symbol. The ADR-0008 Recovery Selle
 
 Do not confuse an account open-order audit classification of `BLOCKED` with this safety gate. ADR-0004 remains authoritative: external orders stay unowned and untouched; `IGNORE` permits scoped continuation, while `BLOCK` prevents trading only on the affected market.
 
-
 ## Offline Recovery Seller Journal replay boundary
 
 The read-only account audit replays only terminal, fully owned Recovery Seller BUY orders/fills (`RECOVERY_BUY`, BUY side, valid position/cycle identity) and includes their Portfolio base-quantity and quote-cash-flow deltas. This permits offline reconciliation of confirmed RS BUY inventory without attributing it to Conservative strategy positions.
