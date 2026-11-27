@@ -221,6 +221,15 @@ test("fails closed when process liveness cannot be determined", async (t) => {
     /safely inspect|permission denied|process lock exists/i,
     "Permission-denied process inspection must be treated as potentially alive.",
   )
+  await assert.rejects(
+    assertHarvesterProcessStopped({
+      lockDirectory,
+      hostname: CURRENT_HOST,
+      isProcessAlive: () => undefined,
+    }),
+    /process lock exists/i,
+    "Only an explicit false liveness result may authorize stale-lock reclamation.",
+  )
   assert.deepEqual(
     JSON.parse(await readFile(lockPath, "utf8")),
     owner,
@@ -285,5 +294,37 @@ test("uses the operating-system process probe without treating inspection errors
     isHarvesterProcessAlive(2_000_000_000),
     false,
     "An impossible process ID must be classified as absent when the OS returns ESRCH.",
+  )
+})
+
+test("retains owner metadata without a valid ownership token", async (t) => {
+  const lockDirectory = await createLockDirectory()
+  t.after(() => rm(lockDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const lockPath = await writeFile(path.join(lockDirectory, ".harvester-trading-test.lock"), JSON.stringify({
+    pid: 456789,
+    hostname: CURRENT_HOST,
+    startedAt: STARTED_AT,
+  }), "utf8").then(() => path.join(lockDirectory, ".harvester-trading-test.lock"))
+
+  await assert.rejects(
+    assertHarvesterProcessStopped({
+      lockDirectory,
+      hostname: CURRENT_HOST,
+      isProcessAlive: () => false,
+    }),
+    /metadata.*invalid|safely inspect/i,
+    "An owner record without its ownership token must not be reclaimed.",
+  )
+  assert.equal(
+    await readFile(lockPath, "utf8"),
+    JSON.stringify({
+      pid: 456789,
+      hostname: CURRENT_HOST,
+      startedAt: STARTED_AT,
+    }),
+    "A lock without valid ownership metadata must remain unchanged.",
   )
 })
