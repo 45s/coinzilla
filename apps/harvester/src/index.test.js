@@ -1867,6 +1867,48 @@ test("classifies a failed flush as retryable only while the Journal writer is he
   })
 })
 
+test("fails closed when process Journal publisher lacks write-only flush capability", async () => {
+  let flushResult
+  await runMain({
+    createJournalService: () => ({
+      ready: Promise.resolve({ ok: true }),
+      status: {
+        state: "ready",
+        started: true,
+        closed: false,
+        writeFailed: false,
+        writeErrorCount: 0,
+      },
+      flush: async () => ({ ok: true, durable: true }),
+      close: async () => ({ ok: true, closed: true, durable: true }),
+    }),
+    start: async ({ eventPublisher }) => {
+      flushResult = await eventPublisher.flushWrites()
+      return {
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "read-only",
+        subscriptions: [],
+        stop: async () => ({
+          ok: true,
+          status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
+        }),
+      }
+    },
+    logger: { info() {}, system() {}, error() {} },
+    registerSignalHandler: () => {},
+  })
+
+  assert.equal(flushResult.ok, false, "The process publisher must fail closed without Journal write-only durability.")
+  assert.match(flushResult.errors[0].message, /write-only durable flush is unavailable/)
+  assert.deepEqual(flushResult.recoveryFailure, {
+    category: "DURABILITY",
+    stage: "JOURNAL_FLUSH_FAILURE",
+    retryable: true,
+  })
+})
+
 test("fails closed when Journal health metadata cannot classify a failed flush", async () => {
   let flushResult
   await runMain({
