@@ -1,0 +1,45 @@
+name: Harvester Operational State Platform Tests
+
+on:
+  pull_request:
+    paths:
+      - "apps/harvester/src/infrastructure/operational-state/**"
+      - "apps/harvester/src/bootstrap/operational-state/**"
+      - ".github/workflows/harvester-operational-state-platform.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  operational-state:
+    name: Operational State startup (${{ matrix.os }})
+    runs-on: ${{ matrix.os }})
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.11.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test Operational State startup initialization and verification
+        run: pnpm --filter @coinzilla/harvester exec node --test src/bootstrap/operational-state/prepare-process-operational-state-store.test.js
