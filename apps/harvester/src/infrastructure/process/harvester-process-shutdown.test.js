@@ -68,10 +68,10 @@ function createShutdownChildSource({ lockModuleUrl, shutdownModuleUrl } = {}) {
   `
 }
 
-function createDurableJournalShutdownChildSource({ lockModuleUrl, shutdownModuleUrl } = {}) {
+function createDurableJournalShutdownChildSource({ eventBusModuleUrl, journalModuleUrl, lockModuleUrl, shutdownModuleUrl } = {}) {
   return `
-    import { EventBus } from "@coinzilla/event-bus"
-    import { Journal } from "@coinzilla/journal"
+    import { EventBus } from ${JSON.stringify(eventBusModuleUrl)}
+    import { Journal } from ${JSON.stringify(journalModuleUrl)}
     import { acquireHarvesterProcessLock } from ${JSON.stringify(lockModuleUrl)}
     import { createRuntimeShutdownHandler } from ${JSON.stringify(shutdownModuleUrl)}
 
@@ -365,6 +365,8 @@ test("durably closes accepted Journal writes before child exit and makes repeate
   const journalDirectory = path.join(directory, "journal")
   const lockPath = path.join(directory, ".harvester-trading.lock")
   const source = createDurableJournalShutdownChildSource({
+    eventBusModuleUrl: import.meta.resolve("@coinzilla/event-bus"),
+    journalModuleUrl: import.meta.resolve("@coinzilla/journal"),
     shutdownModuleUrl: new URL("./harvester-process-shutdown.js", import.meta.url).href,
     lockModuleUrl: new URL("../process-lock/acquire-harvester-process-lock.js", import.meta.url).href,
   })
