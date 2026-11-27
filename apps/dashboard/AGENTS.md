@@ -13,9 +13,9 @@ This file adds Dashboard-specific constraints. Repository-wide engineering, task
 ## Current implementation boundary
 
 - Overview is a live, read-only Harvester workspace. It obtains API reachability and runtime status from the existing `/api/v1/trading/operator/status` endpoint and consumes validated runtime, configured-market and Portfolio snapshots from the existing `/api/v1/trading/events` WebSocket. It must not fall back to demo data or render fabricated health, runtime, market, Portfolio, valuation or performance values. Keep API reachability, runtime status, WebSocket connectivity and valid-snapshot freshness distinct; none implies exchange readiness or trading authorization. See the [Dashboard README](README.md#current-state) for the current user-facing contract and operational setup.
-- Orders, Fills, and Commissions are read-only client pages backed by Harvester's authenticated, versioned `/api/v1` contract. They display persisted API responses only and never fall back to demo fixtures.
+- Orders, Fills, and Commissions are read-only client pages backed by Harvester's unauthenticated, versioned, loopback-only `/api/v1` contract. They display persisted API responses only and never fall back to demo fixtures. If relational history persistence is unavailable, the API returns an explicit 503 instead of fabricated empty records.
 - Do not present mock values as live account, exchange, service-health, or trading-runtime observations.
-- Keep the bearer token in browser `sessionStorage` only. Do not commit secrets, API credentials, production environment values, or user-specific configuration.
+- Do not add bearer-token handling or browser-stored credentials to Harvester's deliberately unauthenticated loopback-only API. Do not commit secrets, API credentials, production environment values, or user-specific configuration.
 - Display TESTNET/LIVE from Harvester API metadata. Do not infer trading readiness from HTTP connectivity.
 - Browser code must not access SQLite/database files, import Harvester-private modules, or call brokers/exchanges.
 - The GitHub PRs page is a public, unauthenticated, read-only GitHub REST client. It must never send credentials or mutate GitHub; Dashboard-local labels stay in browser storage and are not GitHub labels.
