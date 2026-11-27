@@ -877,8 +877,7 @@ class TestnetTradingRecoveryScenario {
           quantity: order.quantity
         })
         this.submittedOrders.push(order)
-        if (this.submittedOrders.length === 3) {this.resolveThreeOrders()}
-        if (this.submittedOrders.length === 5) {this.resolveFiveOrders()}
+        if (this.submittedOrders.length === 2) {this.resolveTwoOrders()}
         const acknowledgedOrder = new CanonicalOrder({
             clientOrderId: order.clientOrderId,
             brokerOrderId: `broker-${  order.clientOrderId}`,
@@ -977,11 +976,8 @@ class TestnetTradingRecoveryScenario {
       this.resolveRecoveryAcknowledged = resolve
     })
   
-    this.resolveThreeOrders = undefined
-    this.resolveFiveOrders = undefined
-    this.threeOrdersSubmitted = new Promise((resolve) => { this.resolveThreeOrders = resolve })
-  
-    this.fiveOrdersSubmitted = new Promise((resolve) => { this.resolveFiveOrders = resolve })
+    this.resolveTwoOrders = undefined
+    this.twoOrdersSubmitted = new Promise((resolve) => { this.resolveTwoOrders = resolve })
   
     this.marketMetadata = createMarketMetadata("BTCUSDT")
   
@@ -1463,104 +1459,38 @@ class TestnetTradingRecoveryScenario {
   }
 
   async runStep10() {
-  
-    await waitForTestSignal(this.threeOrdersSubmitted, "three order submissions after the first BUY fill", () => ({
-      submittedOrders: this.submittedOrders.map(({
-        side,
-        price
-      }) => ({
-        side,
-        price
-      })),
-      userDataReady: this.runtime.userDataReady,
-      userDataStatus: this.runtime.userDataStatus,
-      errors: this.runtimeErrors,
-    }))
-  
-    this.secondBuyIntent = this.submittedOrders.find((order) => order.side === "BUY" && order.clientOrderId !== this.clientOrderId)
-  
-    this.canonicalSecondBuy = new CanonicalOrder({
-      clientOrderId: this.secondBuyIntent.clientOrderId,
-      brokerOrderId: `broker-${  this.secondBuyIntent.clientOrderId}`,
-      market: this.marketMetadata.market,
-      side: "BUY",
-      type: "LIMIT_MAKER",
-      limitPrice: new Money({
-        amount: this.secondBuyIntent.price,
-        asset: this.marketMetadata.market.quoteAsset
+    await waitForTestSignal(
+      this.twoOrdersSubmitted,
+      "the initial BUY and recovery SELL submissions after the first BUY fill",
+      () => ({
+        submittedOrders: this.submittedOrders.map(({ side, price }) => ({ side, price })),
+        userDataReady: this.runtime.userDataReady,
+        userDataStatus: this.runtime.userDataStatus,
+        errors: this.runtimeErrors,
       }),
-      originalQuantity: new Quantity({
-        amount: this.secondBuyIntent.quantity,
-        asset: this.marketMetadata.market.baseAsset
-      }),
-      executedQuantity: new Quantity({
-        amount: this.secondBuyIntent.quantity,
-        asset: this.marketMetadata.market.baseAsset
-      }),
-      status: "FILLED",
-      createdAt: 1,
-      acknowledgedAt: 1,
-      updatedAt: 3,
-      completedAt: 3,
-    })
-  
+    )
+
+    assert.deepEqual(
+      this.submittedOrders.map(({ side }) => side),
+      ["BUY", "SELL"],
+      "An initial BUY fill may create recovery coverage, but must not create a next standing BUY during the active cycle.",
+    )
+    this.replacementSell = this.submittedOrders.find((order) => order.side === "SELL")
+    assert.ok(this.replacementSell, "The active cycle must have one recovery SELL.")
   }
 
   async runStep11() {
-    this.secondBuyFill = new Fill({
-      tradeId: "testnet-second-buy-fill",
-      brokerOrderId: this.canonicalSecondBuy.brokerOrderId,
-      clientOrderId: this.canonicalSecondBuy.clientOrderId,
-      market: this.marketMetadata.market,
-      side: "BUY",
-      price: new Money({
-        amount: this.secondBuyIntent.price,
-        asset: this.marketMetadata.market.quoteAsset
-      }),
-      quantity: new Quantity({
-        amount: this.secondBuyIntent.quantity,
-        asset: this.marketMetadata.market.baseAsset
-      }),
-      quoteQuantity: new Money({
-        amount: multiplyDecimal({
-          left: this.secondBuyIntent.price,
-          right: this.secondBuyIntent.quantity
-        }),
-        asset: this.marketMetadata.market.quoteAsset,
-      }),
-      commissions: [],
-      commissionStatus: "COMPLETE",
-    })
-  
     this.baseBalance = "0.02"
-  
-    this.userDataHandlers.onEvent({
-      event: {
-        eventType: "executionReport",
-        executionType: "TRADE",
-        executedOrder: this.canonicalSecondBuy,
-        fill: this.secondBuyFill,
-      },
-    })
-  
-    await waitForTestSignal(this.fiveOrdersSubmitted, "five order submissions after the second BUY fill", () => ({
-      submittedOrders: this.submittedOrders.map(({
-        side,
-        price
-      }) => ({
-        side,
-        price
-      })),
-      userDataReady: this.runtime.userDataReady,
-      userDataStatus: this.runtime.userDataStatus,
-      errors: this.runtimeErrors,
-    }))
-  
-  
-    this.replacementSell = this.submittedOrders.filter((order) => order.side === "SELL").at(-1)
-  
-    assert.equal(this.replacementSell.side, "SELL", "TESTNET conservative recovery-cycle scenario: expected this.replacementSell.side to equal \"SELL\".")
-  
+    assert.equal(
+      this.submittedOrders.filter((order) => order.side === "BUY").length,
+      1,
+      "No second BUY may be submitted before the recovery SELL is fully reconciled and the cycle completes.",
+    )
+    assert.equal(
+      this.submittedOrders.filter((order) => order.side === "SELL").length,
+      1,
+      "The active cycle must reserve one recovery SELL.",
+    )
   }
 
   async runStep12() {
@@ -1669,7 +1599,7 @@ class TestnetTradingRecoveryScenario {
     // With no active position left, the subsequent market tick preserves the
     // existing trailing-BUY behavior: it replaces the standing BUY. Shutdown
     // then cancels the replacement BUY while leaving recovery SELLs untouched.
-    assert.equal(this.submittedOrders.length, 6, "the completed recovery cycle must leave all six expected BUY and SELL submissions recorded")
+    assert.equal(this.submittedOrders.length, 4, "the completed recovery cycle must leave the initial BUY, recovery SELL, next BUY and its trailing replacement recorded")
   
     assert.equal(this.buyCancellationCount.value, 1, "the subsequent market tick must trail the standing BUY once")
   
