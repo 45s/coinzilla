@@ -10,7 +10,7 @@ function normalizeNullableText({ value, field, maxLength } = {}) {
   if (typeof value !== "string" || value.trim() === "") {
     throw new TypeError(`${field} must be a non-empty string or null`)
   }
-  return value.trim().replace(/[\\r\\n]+/g, " ").slice(0, maxLength)
+  return value.trim().replace(/[\r\n]+/g, " ").slice(0, maxLength)
 }
 
 function validateProcessIdentityEnvelope({ processIdentity, runtimeSessionId } = {}) {

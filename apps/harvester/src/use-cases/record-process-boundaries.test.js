@@ -71,7 +71,7 @@ appConfig })
     processId: 24680,
     startedAt: "2026-11-12T00:00:00.000Z",
     source: {
-      branch: "develop",
+      branch: "feature/recovery\r\nhotfix",
       commit: "a".repeat(40),
       shortCommit: "a".repeat(8),
       commitMessage: "test durable process provenance",
@@ -112,7 +112,7 @@ appConfig })
       processId: 24680,
       startedAt: "2026-11-12T00:00:00.000Z",
       source: {
-        branch: "develop",
+        branch: "feature/recovery hotfix",
         commit: "a".repeat(40),
         workingTree: "dirty",
         metadataSource: "git",
