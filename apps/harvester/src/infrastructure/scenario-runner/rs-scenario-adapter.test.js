@@ -313,6 +313,7 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
     "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001",
     "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001",
     "RS-RUNTIME-SELL-BROKER-EXCEPTION-001",
+    "RS-RUNTIME-SELL-RESERVATION-FAILURE-001",
     "RS-RUNTIME-SELL-REJECTION-001",
     "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
     "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001",
@@ -459,4 +460,29 @@ test("production RS runtime persists UNKNOWN and blocks BUY admission after brok
     "The sole-SELL reservation must remain held pending reconciliation.")
   assert.equal(result.output.accountAdmissionBlocked, true,
     "BUY admission must remain blocked after the broker transport exception.")
+})
+
+
+test("production RS runtime fails closed when sole-SELL reservation callback fails", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-sell-reservation-failure",
+    scenarioId: "RS-RUNTIME-SELL-RESERVATION-FAILURE-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.submissionRejected, true,
+    "The production submitter must reject when the sole-SELL reservation callback fails.")
+  assert.ok(result.output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_INTENT"),
+    "The immutable SELL intent must be recorded before reservation.")
+  assert.equal(result.output.brokerSubmissionCallCount, 0,
+    "The broker must not be called unless the sole-SELL reservation is accepted.")
+  assert.equal(result.output.reservedSellCycle, null,
+    "The failed reservation callback must not leave a cycle reservation.")
+  assert.equal(result.output.stopFactAppended, true,
+    "Reservation failure must latch account STOP.")
+  assert.equal(result.output.accountAdmissionBlocked, true,
+    "BUY admission must remain blocked after reservation failure.")
 })

@@ -293,7 +293,7 @@ function validateScenarioInput({ schema, defaults, input }) {
 
 const RUNTIME_SCENARIO_READINESS_REASONS = Object.freeze([
   "Scenario infrastructure uses a run-local simulated broker and in-memory operational store; it does not prove durable production account or STOP state.",
-  "Submission-intent/outcome persistence failures, ambiguous broker-placement exceptions, combined outcome/STOP persistence failure and BUY-only STOP admission are covered; broader infrastructure-failure scenarios remain incomplete.",
+  "SELL intent/reservation/outcome persistence failures, ambiguous broker-placement exceptions, combined outcome/STOP persistence failure and BUY-only STOP admission are covered; broader infrastructure-failure scenarios remain incomplete.",
   "No trusted OS-level sandbox launcher is available; the host must continue to fail closed.",
 ])
 
@@ -345,6 +345,17 @@ export const RECOVERY_SELLER_RUNTIME_SCENARIOS = Object.freeze([
   Object.freeze({
     id: "RS-RUNTIME-SELL-BROKER-EXCEPTION-001",
     name: "Production Recovery Seller preserves an unresolved SELL after broker placement throws",
+    layer: "APPLICATION",
+    status: "PARTIAL",
+    executionStatus: "PRELIMINARY",
+    executable: false,
+    readinessReasons: RUNTIME_SCENARIO_READINESS_REASONS,
+    inputSchema: RUNTIME_FIXTURE.inputSchema,
+    input: RUNTIME_FIXTURE.input,
+  }),
+  Object.freeze({
+    id: "RS-RUNTIME-SELL-RESERVATION-FAILURE-001",
+    name: "Production Recovery Seller fails closed when sole-SELL reservation callback fails",
     layer: "APPLICATION",
     status: "PARTIAL",
     executionStatus: "PRELIMINARY",
@@ -841,6 +852,7 @@ function createRuntimeScenarioSubmitter({
   workflow,
   stopWorkflow,
   operationalStateStore,
+  scenarioId,
 }) {
   return createRecoverySellerOrderSubmitter({
     broker,
@@ -863,6 +875,11 @@ function createRuntimeScenarioSubmitter({
     onOrderValidationFailure: async () => {},
     canSubmit: () => true,
     onSellReserved: async ({ order, ownership, durableIntent }) => {
+      if (scenarioId === "RS-RUNTIME-SELL-RESERVATION-FAILURE-001") {
+        return toResult({
+          error: new Error("Simulated sole-SELL reservation callback failure"),
+        })
+      }
       const reserved = await workflow.reserveSellCycle({
         order,
         ownership,
@@ -992,6 +1009,7 @@ async function createRuntimeScenarioExecutionPorts({
     workflow: seed.workflow,
     stopWorkflow,
     operationalStateStore,
+    scenarioId,
   })
   const authorize = createRuntimeScenarioAuthorizer({
     workflow: seed.workflow,
@@ -1679,6 +1697,17 @@ function createRuntimeScenarioSubmissionPersistenceFailureExpected({ scenarioId 
       accountAdmissionBlocked: true,
     }
   }
+  if (scenarioId === "RS-RUNTIME-SELL-RESERVATION-FAILURE-001") {
+    return {
+      submissionReservationFailure: true,
+      submissionRejected: true,
+      submittedOrderCount: 0,
+      stopFactAppended: true,
+      reservationRetained: false,
+      brokerSubmissionCallCount: 0,
+      accountAdmissionBlocked: true,
+    }
+  }
   if (scenarioId === "RS-RUNTIME-SELL-BROKER-EXCEPTION-001") {
     return {
       submissionOutcomeUnknown: true,
@@ -2107,9 +2136,49 @@ function createBrokerPlacementExceptionAssertions({ output, expected }) {
   ]
 }
 
+function createSubmissionReservationFailureAssertions({ output, expected }) {
+  return [
+    createAssertion({
+      name: "sole-SELL reservation callback failure is surfaced without successful submission",
+      actual: output.submissionRejected,
+      expected: expected.submissionRejected,
+    }),
+    createAssertion({
+      name: "durable SELL intent is recorded before reservation callback",
+      actual: output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_INTENT"),
+      expected: true,
+    }),
+    createAssertion({
+      name: "broker is never invoked when sole-SELL reservation fails",
+      actual: output.brokerSubmissionCallCount,
+      expected: expected.brokerSubmissionCallCount,
+    }),
+    createAssertion({
+      name: "failed reservation callback does not create a SELL cycle reservation",
+      actual: output.reservedSellCycle !== null,
+      expected: expected.reservationRetained,
+    }),
+    createAssertion({
+      name: "reservation failure latches account STOP",
+      actual: output.stopFactAppended,
+      expected: expected.stopFactAppended,
+    }),
+    createAssertion({
+      name: "BUY admission remains blocked after reservation failure",
+      actual: output.accountAdmissionBlocked,
+      expected: expected.accountAdmissionBlocked,
+    }),
+  ]
+}
+
 function createRuntimeScenarioAssertions({ output, expected }) {
   let assertions
-  if (expected.submissionOutcomeUnknown === true) {
+  if (expected.submissionReservationFailure === true) {
+    assertions = createSubmissionReservationFailureAssertions({
+      output,
+      expected,
+    })
+  } else if (expected.submissionOutcomeUnknown === true) {
     assertions = createBrokerPlacementExceptionAssertions({
       output,
       expected,
@@ -2314,7 +2383,8 @@ async function executeRuntimeScenarioAdmission({ runtime, scenarioId, effectiveI
         scenarioId === "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001" ||
         scenarioId === "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001" ||
         scenarioId === "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001" ||
-        scenarioId === "RS-RUNTIME-SELL-BROKER-EXCEPTION-001",
+        scenarioId === "RS-RUNTIME-SELL-BROKER-EXCEPTION-001" ||
+        scenarioId === "RS-RUNTIME-SELL-RESERVATION-FAILURE-001",
     })
     return {
       execution,

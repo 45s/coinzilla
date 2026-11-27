@@ -152,6 +152,7 @@ These APPLICATION-layer cases exercise the production Recovery Seller runtime/us
 | `RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001` | Broker acknowledgement followed by failed outcome persistence remains unresolved; STOP is latched and SELL reservation retained | PARTIAL / non-executable |
 | `RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001` | Both outcome and STOP writes fail; no durable facts are claimed, SELL reservation is retained, and in-memory BUY admission remains blocked | PARTIAL / non-executable |
 | `RS-RUNTIME-SELL-BROKER-EXCEPTION-001` | Broker placement throws after invocation; UNKNOWN outcome and STOP are persisted, reservation retained, and BUY admission blocked | PARTIAL / non-executable |
+| `RS-RUNTIME-SELL-RESERVATION-FAILURE-001` | Intent is recorded but reservation callback fails; broker is not called, no reservation is retained, STOP and BUY-admission block are asserted | PARTIAL / non-executable |
 | `RS-RUNTIME-SELL-PARTIAL-CANCEL-001` | Partial terminal SELL is reconciled before STOP | PARTIAL / non-executable |
 | `RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001` | Fully FILLED under-target SELL reconciles accounting, pauses the market and latches STOP | PARTIAL / non-executable |
 | `RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001` | Failed account STOP persistence is surfaced and new BUY admission fails closed | PARTIAL / non-executable |

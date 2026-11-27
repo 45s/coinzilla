@@ -309,6 +309,10 @@ The runtime catalogue includes `RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001`
 
 The runtime catalogue includes `RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001`. It records the SELL intent, receives one simulated broker acknowledgement, then injects failures for both the submission-outcome append and the account STOP append. The scenario asserts neither failed fact is presented as durable, the sole-SELL reservation remains retained, and the in-memory account admission latch still blocks BUYs despite failed STOP persistence. This is a deterministic simulation of a double infrastructure fault; it does not prove production storage durability or live-broker safety. The scenario remains PARTIAL/non-executable.
 
+## Sole-SELL reservation callback failure runtime scenario — implementation in PR #1913
+
+The runtime catalogue includes `RS-RUNTIME-SELL-RESERVATION-FAILURE-001`. The production submitter first records the durable SELL intent, then receives a simulated failure from the sole-SELL reservation callback. It must not invoke the broker or leave a cycle reservation, and it latches account STOP so BUY admission remains blocked. This is a callback-failure simulation, not production reservation-store durability proof; the scenario remains PARTIAL/non-executable.
+
 ## Broker placement exception runtime scenario — implementation in PR #1913
 
 The runtime catalogue includes `RS-RUNTIME-SELL-BROKER-EXCEPTION-001`. The run-local simulated broker throws after the production submitter has durably recorded the SELL intent and invoked the broker port once. The production submission handler classifies the result as `UNKNOWN`, persists that outcome, latches account STOP and retains the sole-SELL reservation pending reconciliation. The regression asserts no successful submission is reported and account BUY admission remains blocked. This covers an ambiguous transport failure without retrying a possibly accepted order; it is simulation-only and remains PARTIAL/non-executable.
