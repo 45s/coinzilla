@@ -292,7 +292,12 @@ function createDustCompletionFailureMarketMetadata({ symbol } = {}) {
         {
           type: "MIN_QUANTITY",
           status: "SUPPORTED",
-          value: { amount: "1", asset: { code: "DOGE" } },
+          value: {
+            amount: "1",
+            asset: {
+              code: "DOGE",
+            },
+          },
         },
         {
           type: "QUANTITY_INCREMENT",
@@ -302,7 +307,12 @@ function createDustCompletionFailureMarketMetadata({ symbol } = {}) {
         {
           type: "MIN_NOTIONAL",
           status: "SUPPORTED",
-          value: { amount: "5", asset: { code: "USDT" } },
+          value: {
+            amount: "5",
+            asset: {
+              code: "USDT",
+            },
+          },
         },
       ],
     },
@@ -759,7 +769,11 @@ async function runResidualSellOutcomeScenario({ scenario } = {}) {
     symbol: "DOGEUSDT",
     shutdownRecoveryOnly: true,
   })
-  return { dependencies, tracked, result }
+  return {
+    dependencies,
+    tracked,
+    result,
+  }
 }
 
 function assertResidualSellOutcomeScenario({ scenario, dependencies, tracked, result } = {}) {
