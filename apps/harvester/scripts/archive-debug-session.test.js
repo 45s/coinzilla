@@ -227,6 +227,32 @@ test("publishes mismatched log and recovery evidence as independent sources with
   )
 })
 
+test("still rejects an invalid recovery-facts checkpoint instead of publishing mismatched evidence", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true
+  }))
+  const filename = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
+  const originalFacts = await readFile(filename, "utf8")
+  const facts = originalFacts.trim().split("\n").map((line) => JSON.parse(line))
+  facts.at(-1).digest = "f".repeat(64)
+  await writeFile(filename, jsonLines(facts), "utf8")
+  await assert.rejects(
+    runHarvesterDebugArchive(archiveDependencies({
+      fixture,
+      expectedIdentityStatus: "mismatched",
+    })),
+    /latest recovery-facts manifest does not match/i,
+    "An identity mismatch must not weaken recovery-facts integrity validation",
+  )
+  assert.equal(
+    await readFile(filename, "utf8"),
+    jsonLines(facts),
+    "Archive failure must leave the invalid source ledger unchanged for diagnosis",
+  )
+})
+
 test("refuses to archive while a Harvester process lock exists", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
