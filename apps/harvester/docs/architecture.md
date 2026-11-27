@@ -611,10 +611,7 @@ mutate the order registry or accounting. TRADE events must contain a canonical
 Fill and pass the durable execution-fact barrier before Portfolio/RecoveryLedger
 state is committed. A partial fill updates actual accounting but does not
 advance the strategy; the engine waits for the order's terminal state.
-Unmatched manual/external reports are diagnostic-only under the default
-per-pair `externalOrdersPolicy: "ignore"`; the explicit `"block"` policy
-retains the same-symbol restriction. Unmatched Harvester-reserved `h-`
-identities and malformed/conflicting identities remain fail-closed. A fully
+Unmatched reports are classified using the current process's generated order-ID namespace, not the generic `h-` prefix. Prior-session and manual/external reports follow the configured external-order policy (diagnostic-only under the default `ignore` policy); an unmatched ID in the current process namespace and malformed/conflicting identities remain fail-closed. A fully
 filled order triggers immediate strategy reevaluation from the latest known
 price.
 
