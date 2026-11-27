@@ -112,7 +112,7 @@ The Harvester API has an explicit opt-in Linux Bubblewrap/prlimit process adapte
 
 ## Linux sandbox adversarial acceptance — 2026-11-27
 
-The Harvester Scenario Runner has a manual self-hosted E2E workflow that exercises the real Linux Bubblewrap/prlimit/cgroup sandbox. It checks namespace separation, secret omission, read-only source, no outbound connection, no child process, and enforced cgroup limits. The workflow requires the `scenario-sandbox` runner label and delegated cgroup v2; acceptance remains pending until it passes.
+The Harvester Scenario Runner has a manual self-hosted E2E workflow that exercises the real Linux Bubblewrap/prlimit/cgroup sandbox. It checks namespace separation, secret omission, read-only source, no outbound connection, no child process, and enforced cgroup limits. The workflow requires the `scenario-sandbox` runner label and delegated cgroup v2; it also asserts that the real per-run cgroup directory is removed after child exit. Acceptance remains pending until the trusted workflow passes.
 
 ## Replay provenance trust boundary — 2026-11-27
 
