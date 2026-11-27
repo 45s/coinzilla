@@ -374,3 +374,8 @@ The participant's safety-marker loop is bounded to two complete passes: the init
 The SAFE_TO_SHUTDOWN marker is a process-local projection, not a durable fact across restarts. On restart, rebuild safety from Journal evidence and authoritative exchange state; never trust a previous process's marker. The Journal must durably flush its published lifecycle/audit evidence before cleanup. Applied fills and order facts remain governed by [ADR-0001](../architecture/decisions/0001-application-owned-recovery-facts.md) and must be persisted before in-memory Portfolio/RecoveryLedger projections change.
 
 The implementation and deterministic regression tests are tracked by [issue #1186](https://github.com/45s/coinzilla/issues/1186).
+
+
+### Recovery completion failure evidence
+
+When a Conservative strategy pause is caused by a failed recovery completion or residual-dust evaluation, the immutable `STRATEGY_MARKET_PAUSED` Operational State fact must include the sanitized original error identity (`name`, bounded `message`, and optional stable `code`) alongside the stable pause reason. Do not persist stacks or raw broker payloads. The generic pause reason remains a safety classification; it is not a substitute for the original failure. This evidence improves diagnosis without changing the fail-closed completion or BUY-admission rules.

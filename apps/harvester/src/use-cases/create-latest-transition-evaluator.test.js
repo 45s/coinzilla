@@ -277,3 +277,374 @@ test("stops Conservative evaluation when recovery filter refresh fails", async (
   assert.equal(result.errors[0], refreshError, "The evaluator must preserve the original refresh failure.")
   assert.equal(strategyEvaluated, false, "The strategy policy must not run after a failed filter refresh.")
 })
+
+
+test("forwards the original dust-completion failure while retaining the fail-closed pause", async () => {
+  const dependencies = createDependencies()
+  const symbol = "DOGEUSDT"
+  const failure = new Error("recovery completion fact append failed")
+  failure.code = "RECOVERY_COMPLETION_WRITE_FAILED"
+  const pauses = []
+  dependencies.state.completedRecoverySellSymbols = new Set([symbol])
+  dependencies.state.completedRecoverySellOrdersBySymbol = new Map([
+    [symbol, {
+      clientOrderId: "completed-sell",
+      brokerOrderId: "completed-broker-sell",
+    }],
+  ])
+  dependencies.state.trailingBuy = new Map()
+  dependencies.pairs[symbol] = {
+    enabled: true,
+    keepQuantity: 1,
+    minProfit: 0.01,
+  }
+  dependencies.pause = async (input) => {
+    pauses.push(input)
+  }
+  dependencies.completeRecoveryCycle = async () => ({
+    ok: false,
+    errors: [failure],
+  })
+  dependencies.strategyPolicy.evaluate = () => ({
+    actions: [],
+    reason: "RESIDUAL_DUST",
+    inventoryDisposition: {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      reason: "MIN_NOTIONAL",
+      quantity: "1.8",
+      minimumNotional: "5",
+      evaluatedQuantity: "1.8",
+      evaluatedNotional: "0.18",
+    },
+  })
+  const evaluate = createLatestTransitionEvaluator(dependencies)
+
+  const result = await evaluate({
+    symbol,
+    shutdownRecoveryOnly: true,
+  })
+
+  assert.equal(result.ok, false, "A failed durable completion must remain fail-closed.")
+  assert.equal(result.errors[0], failure, "The evaluator must preserve the original completion failure identity.")
+  assert.equal(pauses.length, 1, "The completion failure must produce exactly one market pause.")
+  assert.equal(pauses[0].reason, "RECOVERY_CYCLE_COMPLETION_FAILED", "The existing stable pause reason must remain compatible.")
+  assert.equal(pauses[0].error, failure, "The original failure must reach the durable pause callback, not only a generic reason.")
+})
+
+
+function configureResidualSellThroughDependencies({
+  dependencies,
+  symbol,
+  activeQuantity,
+  sellQuantity,
+  price,
+  keepQuantity,
+  baseAssetId,
+  quoteAssetId,
+} = {}) {
+  const submissions = []
+  const pauses = []
+  const completionCalls = { count: 0 }
+  dependencies.state.paused.add(symbol)
+  dependencies.state.recoveryManagedPausedMarkets.add(symbol)
+  dependencies.state.completedRecoverySellSymbols = new Set([symbol])
+  dependencies.state.completedRecoverySellOrdersBySymbol = new Map()
+  dependencies.state.trailingBuy = new Map()
+  dependencies.state.recoveryManagedCancellationClientOrderIds = new Set()
+  dependencies.state.prices.set(symbol, {
+    symbol,
+    price,
+    timestamp: 100,
+  })
+  dependencies.state.lastBuyPrices.set(symbol, price)
+  dependencies.state.registry.getActiveOrders = () => []
+  dependencies.getCurrentMarketMetadata = () => ({
+    market: {
+      id: symbol,
+      baseAsset: { id: baseAssetId },
+      quoteAsset: { id: quoteAssetId },
+    },
+  })
+  const position = {
+    baseQuantity: { amount: activeQuantity },
+    spent: { amount: "1" },
+  }
+  dependencies.getPortfolio = () => ({
+    value: {},
+    positions: [],
+    getPosition: () => position,
+  })
+  dependencies.getRecoveryLedger = () => ({
+    value: {},
+    netSellProceeds: "1.01",
+    outstandingRecoveryAmount: "0",
+  })
+  dependencies.getAccountSnapshot = () => ({
+    getFreeBalance: () => ({ amount: "100" }),
+    getPortfolioBaseQuantityBaseline: () => "0",
+    getCommittedQuoteBalanceBaseline: () => "0",
+    getCommittedBaseBalanceBaseline: () => "0",
+  })
+  dependencies.pairs[symbol] = {
+    enabled: true,
+    investment: 100,
+    orderQuantity: activeQuantity,
+    keepQuantity,
+    priceStepPercent: 0.05,
+    makerPercent: 0.1,
+    takerPercent: 0.1,
+    minProfit: 0.01,
+  }
+  dependencies.strategyPolicy.evaluate = () => ({
+    strategy: "CONSERVATIVE",
+    action: "PLACE_ORDERS",
+    reason: "CONTINUE_SELL_THROUGH",
+    actions: [{
+      side: "SELL",
+      type: "LIMIT_MAKER",
+      price,
+      quantity: sellQuantity,
+      reason: "SELL_RESIDUAL_INVENTORY_ABOVE_KEEP_QUANTITY",
+    }],
+    inventoryDisposition: {
+      status: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+      quantity: activeQuantity,
+    },
+  })
+  dependencies.allocateOrderCommitments = ({ actions }) => ({
+    ok: true,
+    data: {
+      executableActions: actions,
+      deferredActions: [],
+    },
+  })
+  dependencies.submit = async ({ decision }) => {
+    submissions.push(decision.actions)
+    return {
+      ok: true,
+      data: {
+        submittedOrders: decision.actions.map(({ side, quantity }) => ({
+          side,
+          quantity,
+        })),
+      },
+    }
+  }
+  dependencies.setShutdownRecoverySubmissionAllowed = () => {}
+  dependencies.completeRecoveryCycle = async () => {
+    completionCalls.count += 1
+    return {
+      ok: true,
+      data: { eligible: true },
+    }
+  }
+  dependencies.pause = async (input) => {
+    pauses.push(input)
+  }
+  return { submissions, pauses, completionCalls }
+}
+
+test("submits the residual SELL on reevaluation after the recovery SELL fill without completing or pausing the cycle", async () => {
+  const scenarios = [
+    {
+      symbol: "DOGEUSDT",
+      activeQuantity: "2.8",
+      sellQuantity: "1.8",
+      keepQuantity: 1,
+      price: "0.05719",
+      baseAssetId: "asset:DOGE",
+      quoteAssetId: "asset:USDT",
+    },
+    {
+      symbol: "ZROUSDT",
+      activeQuantity: "0.015",
+      sellQuantity: "0.005",
+      keepQuantity: 0.01,
+      price: "1.092",
+      baseAssetId: "asset:ZRO",
+      quoteAssetId: "asset:USDT",
+    },
+  ]
+  for (const scenario of scenarios) {
+    const dependencies = createDependencies()
+    const tracked = configureResidualSellThroughDependencies({
+      dependencies,
+      ...scenario,
+    })
+    const evaluate = createLatestTransitionEvaluator(dependencies)
+    const result = await evaluate({
+      symbol: scenario.symbol,
+      shutdownRecoveryOnly: true,
+    })
+
+    assert.equal(result.ok, true, scenario.symbol + " sell-through reevaluation must remain successful.")
+    assert.equal(tracked.submissions.length, 1, scenario.symbol + " must submit exactly one residual SELL.")
+    assert.deepEqual(tracked.submissions[0].map(({ side, quantity }) => ({ side, quantity })), [{
+      side: "SELL",
+      quantity: scenario.sellQuantity,
+    }], scenario.symbol + " must submit only the exact sellable excess above keepQuantity.")
+    assert.equal(result.data.submittedOrders[0].quantity, scenario.sellQuantity)
+    assert.equal(tracked.completionCalls.count, 0, scenario.symbol + " must not complete while sell-through is unresolved.")
+    assert.equal(tracked.pauses.length, 0, scenario.symbol + " must not pause after a successful sell-through continuation.")
+    assert.equal(dependencies.state.completedRecoverySellSymbols.has(scenario.symbol), true)
+  }
+})
+
+
+function configureResidualSellThroughDependencies({
+  dependencies,
+  symbol,
+  activeQuantity,
+  sellQuantity,
+  price,
+  keepQuantity,
+  baseAssetId,
+  quoteAssetId,
+} = {}) {
+  const submissions = []
+  const pauses = []
+  const completionCalls = { count: 0 }
+  dependencies.state.paused.add(symbol)
+  dependencies.state.recoveryManagedPausedMarkets.add(symbol)
+  dependencies.state.completedRecoverySellSymbols = new Set([symbol])
+  dependencies.state.completedRecoverySellOrdersBySymbol = new Map()
+  dependencies.state.trailingBuy = new Map()
+  dependencies.state.recoveryManagedCancellationClientOrderIds = new Set()
+  dependencies.state.prices.set(symbol, {
+    symbol,
+    price,
+    timestamp: 100,
+  })
+  dependencies.state.lastBuyPrices.set(symbol, price)
+  dependencies.state.registry.getActiveOrders = () => []
+  dependencies.getCurrentMarketMetadata = () => ({
+    market: {
+      id: symbol,
+      baseAsset: { id: baseAssetId },
+      quoteAsset: { id: quoteAssetId },
+    },
+  })
+  const position = {
+    baseQuantity: { amount: activeQuantity },
+    spent: { amount: "1" },
+  }
+  dependencies.getPortfolio = () => ({
+    value: {},
+    positions: [],
+    getPosition: () => position,
+  })
+  dependencies.getRecoveryLedger = () => ({
+    value: {},
+    netSellProceeds: "1.01",
+    outstandingRecoveryAmount: "0",
+  })
+  dependencies.getAccountSnapshot = () => ({
+    getFreeBalance: () => ({ amount: "100" }),
+    getPortfolioBaseQuantityBaseline: () => "0",
+    getCommittedQuoteBalanceBaseline: () => "0",
+    getCommittedBaseBalanceBaseline: () => "0",
+  })
+  dependencies.pairs[symbol] = {
+    enabled: true,
+    investment: 100,
+    orderQuantity: activeQuantity,
+    keepQuantity,
+    priceStepPercent: 0.05,
+    makerPercent: 0.1,
+    takerPercent: 0.1,
+    minProfit: 0.01,
+  }
+  dependencies.strategyPolicy.evaluate = () => ({
+    strategy: "CONSERVATIVE",
+    action: "PLACE_ORDERS",
+    reason: "CONTINUE_SELL_THROUGH",
+    actions: [{
+      side: "SELL",
+      type: "LIMIT_MAKER",
+      price,
+      quantity: sellQuantity,
+      reason: "SELL_RESIDUAL_INVENTORY_ABOVE_KEEP_QUANTITY",
+    }],
+    inventoryDisposition: {
+      status: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+      quantity: activeQuantity,
+    },
+  })
+  dependencies.allocateOrderCommitments = ({ actions }) => ({
+    ok: true,
+    data: {
+      executableActions: actions,
+      deferredActions: [],
+    },
+  })
+  dependencies.submit = async ({ decision }) => {
+    submissions.push(decision.actions)
+    return {
+      ok: true,
+      data: {
+        submittedOrders: decision.actions.map(({ side, quantity }) => ({
+          side,
+          quantity,
+        })),
+      },
+    }
+  }
+  dependencies.setShutdownRecoverySubmissionAllowed = () => {}
+  dependencies.completeRecoveryCycle = async () => {
+    completionCalls.count += 1
+    return {
+      ok: true,
+      data: { eligible: true },
+    }
+  }
+  dependencies.pause = async (input) => {
+    pauses.push(input)
+  }
+  return { submissions, pauses, completionCalls }
+}
+
+test("submits the residual SELL on reevaluation after the recovery SELL fill without completing or pausing the cycle", async () => {
+  const scenarios = [
+    {
+      symbol: "DOGEUSDT",
+      activeQuantity: "2.8",
+      sellQuantity: "1.8",
+      keepQuantity: 1,
+      price: "0.05719",
+      baseAssetId: "asset:DOGE",
+      quoteAssetId: "asset:USDT",
+    },
+    {
+      symbol: "ZROUSDT",
+      activeQuantity: "0.015",
+      sellQuantity: "0.005",
+      keepQuantity: 0.01,
+      price: "1.092",
+      baseAssetId: "asset:ZRO",
+      quoteAssetId: "asset:USDT",
+    },
+  ]
+  for (const scenario of scenarios) {
+    const dependencies = createDependencies()
+    const tracked = configureResidualSellThroughDependencies({
+      dependencies,
+      ...scenario,
+    })
+    const evaluate = createLatestTransitionEvaluator(dependencies)
+    const result = await evaluate({
+      symbol: scenario.symbol,
+      shutdownRecoveryOnly: true,
+    })
+
+    assert.equal(result.ok, true, scenario.symbol + " sell-through reevaluation must remain successful.")
+    assert.equal(tracked.submissions.length, 1, scenario.symbol + " must submit exactly one residual SELL.")
+    assert.deepEqual(tracked.submissions[0].map(({ side, quantity }) => ({ side, quantity })), [{
+      side: "SELL",
+      quantity: scenario.sellQuantity,
+    }], scenario.symbol + " must submit only the exact sellable excess above keepQuantity.")
+    assert.equal(result.data.submittedOrders[0].quantity, scenario.sellQuantity)
+    assert.equal(tracked.completionCalls.count, 0, scenario.symbol + " must not complete while sell-through is unresolved.")
+    assert.equal(tracked.pauses.length, 0, scenario.symbol + " must not pause after a successful sell-through continuation.")
+    assert.equal(dependencies.state.completedRecoverySellSymbols.has(scenario.symbol), true)
+  }
+})
