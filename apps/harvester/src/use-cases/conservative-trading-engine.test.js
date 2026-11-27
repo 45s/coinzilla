@@ -2067,7 +2067,7 @@ function makeBuyFill({
   })
 }
 
-async function createPendingCancellationIntentPublisher() {
+function createPendingCancellationIntentPublisher() {
   let resolvePendingPublication
   const pendingPublication = new Promise((resolve) => { resolvePendingPublication = resolve })
   let globalFlushCalls = 0
@@ -2130,7 +2130,7 @@ function createWriteOnlyDurableIntentPublisher({ events, sequence, onEvent }) {
   }
 }
 
-function applyCompletedBuyAndAssertDurableSellCancellation({
+async function applyCompletedBuyAndAssertDurableSellCancellation({
   harness,
   events,
   sequence,
