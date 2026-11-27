@@ -522,7 +522,7 @@ function createStrategyMarketPausedCallback({ store,
       transitionId: `${store.runtimeSessionId}:${++sequence.value}`,
       symbol,
       reason,
-      error,
+      ...(error === undefined ? {} : { error }),
     })
     : undefined
 }

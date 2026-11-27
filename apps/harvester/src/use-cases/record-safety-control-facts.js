@@ -27,6 +27,29 @@ const appendDurably = async ({ operationalStateStore, fact, operation }) => {
 }
 
 /** Persist a strategy pause/resume transition with a caller-owned unique transition ID. */
+function validateStrategyMarketControlAction(action) {
+  if (action !== "PAUSE" && action !== "RESUME") {
+    throw new TypeError("Strategy market-control action must be PAUSE or RESUME")
+  }
+}
+
+function validateStrategyMarketControlIdentity({ transitionId, symbol, reason } = {}) {
+  const validTransitionId = typeof transitionId === "string" &&
+    transitionId.trim() !== "" &&
+    transitionId === transitionId.trim()
+  const validSymbol = typeof symbol === "string" && /^[A-Z0-9]{3,30}$/.test(symbol)
+  const validReason = typeof reason === "string" && reason.trim() !== "" && reason === reason.trim()
+  if (!validTransitionId || !validSymbol || !validReason) {
+    throw new TypeError("Strategy market control requires a unique transition ID, canonical symbol, and reason")
+  }
+}
+
+function validateStrategyMarketControlError({ action, error } = {}) {
+  if (error !== undefined && (action !== "PAUSE" || !(error instanceof Error))) {
+    throw new TypeError("Strategy market-control error evidence is allowed only as an Error on PAUSE")
+  }
+}
+
 function createStrategyMarketControlFact({
   action,
   transitionId,
@@ -34,17 +57,16 @@ function createStrategyMarketControlFact({
   reason,
   error,
 } = {}) {
-  if (action !== "PAUSE" && action !== "RESUME") {
-    throw new TypeError("Strategy market-control action must be PAUSE or RESUME")
-  }
-  if (typeof transitionId !== "string" || !transitionId.trim() || transitionId !== transitionId.trim() ||
-      typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol) ||
-      typeof reason !== "string" || !reason.trim() || reason !== reason.trim()) {
-    throw new TypeError("Strategy market control requires a unique transition ID, canonical symbol, and reason")
-  }
-  if (error !== undefined && (action !== "PAUSE" || !(error instanceof Error))) {
-    throw new TypeError("Strategy market-control error evidence is allowed only as an Error on PAUSE")
-  }
+  validateStrategyMarketControlAction(action)
+  validateStrategyMarketControlIdentity({
+    transitionId,
+    symbol,
+    reason,
+  })
+  validateStrategyMarketControlError({
+    action,
+    error,
+  })
   const pauseData = action === "PAUSE"
     ? mapStrategyPausedData({
       symbol,

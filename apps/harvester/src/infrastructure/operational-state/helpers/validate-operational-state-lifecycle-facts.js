@@ -68,6 +68,25 @@ export function validateOperatorBuyControlFact({ factType, canonicalData, factId
   }
 }
 
+function hasOnlyStrategyPauseErrorFields(error) {
+  const allowedFields = new Set(["name", "message", "code"])
+  return Object.keys(error).every((key) => allowedFields.has(key))
+}
+
+function isValidStrategyPauseErrorName(name) {
+  return typeof name === "string" && name.length > 0 && name.length <= 80
+}
+
+function isValidStrategyPauseErrorMessage(message) {
+  return typeof message === "string" && message.length <= 240
+}
+
+function isValidStrategyPauseErrorCode(code) {
+  return code === undefined ||
+    (typeof code === "string" && code.length <= 80) ||
+    Number.isSafeInteger(code)
+}
+
 function validateStrategyPauseErrorEvidence({ factType, error } = {}) {
   if (error === undefined) {
     return
@@ -79,12 +98,10 @@ function validateStrategyPauseErrorEvidence({ factType, error } = {}) {
     throw new TypeError("Strategy pause error evidence must be a bounded sanitized name/message/code object")
   }
   const { name, message, code } = error
-  const allowedFields = new Set(["name", "message", "code"])
-  if (Object.keys(error).some((key) => !allowedFields.has(key)) ||
-      typeof name !== "string" || name.length === 0 || name.length > 80 ||
-      typeof message !== "string" || message.length > 240 ||
-      (code !== undefined && typeof code !== "string" && !Number.isSafeInteger(code)) ||
-      (typeof code === "string" && code.length > 80)) {
+  if (!hasOnlyStrategyPauseErrorFields(error) ||
+      !isValidStrategyPauseErrorName(name) ||
+      !isValidStrategyPauseErrorMessage(message) ||
+      !isValidStrategyPauseErrorCode(code)) {
     throw new TypeError("Strategy pause error evidence must be a bounded sanitized name/message/code object")
   }
 }
@@ -102,7 +119,10 @@ export function validateStrategyMarketControlFact({ factType, canonicalData, fac
       field: "data.reason",
       maxLength: 256 })
     const { error } = canonicalData
-    validateStrategyPauseErrorEvidence({ factType, error })
+    validateStrategyPauseErrorEvidence({
+      factType,
+      error,
+    })
     const prefix = factType === "STRATEGY_MARKET_PAUSED" ? "strategy-market-paused:" : "strategy-market-resumed:"
     if (!factId.startsWith(prefix) || factId.length === prefix.length) {
       throw new TypeError("Strategy market-control factId must include its unique transition identity")

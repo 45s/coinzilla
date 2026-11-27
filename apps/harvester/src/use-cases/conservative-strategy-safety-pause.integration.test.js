@@ -357,7 +357,7 @@ async function createUnknownOwnedBuyHarness({ buyOrder, raisedBlockers }) {
     strategyPolicy: {
       ...conservativeStrategyPolicy,
       evaluate: () => {
-        throw new Error("forced strategy evaluation failure")
+        throw failure
       },
     },
     cancelThrow: true,
@@ -406,6 +406,7 @@ async function assertSafetyPauseCancellationCompleted({
   buyTwo,
   recoverySell,
   pauseFacts,
+  pauseError,
 }) {
   const result = await triggerStrategySafetyPause(harness)
   assert.equal(result.ok, false)
@@ -417,6 +418,7 @@ async function assertSafetyPauseCancellationCompleted({
   assert.deepEqual(pauseFacts, [{
     symbol: "DOGEUSDT",
     reason: "STRATEGY_EVALUATION_FAILED",
+    error: pauseError,
   }])
 
   const duplicate = await harness.engine.processUserDataEvent({
@@ -439,6 +441,7 @@ test("gates BUYs before canceling only registered BUYs and reconciles cancellati
   const events = []
   const pauseFacts = []
   const harnessRef = { current: null }
+  const failure = new Error("forced strategy evaluation failure")
   const harness = await createSafetyPauseHarness({
     initialState: {
       orderRegistry: new OrderRegistry({
@@ -477,6 +480,7 @@ test("gates BUYs before canceling only registered BUYs and reconciles cancellati
     buyTwo,
     recoverySell,
     pauseFacts,
+    pauseError: failure,
   })
 })
 

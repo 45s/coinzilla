@@ -122,7 +122,12 @@ test("forwards original strategy pause failure to the durable operational-state 
     },
     recordStrategyMarketControl: async (input) => {
       recorded = input
-      return { ok: true, data: { durable: true } }
+      return {
+        ok: true,
+        data: {
+          durable: true,
+        },
+      }
     },
   })
 

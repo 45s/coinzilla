@@ -431,7 +431,7 @@ async function persistStrategySafetyPauseFact({ callback, symbol, reason, error 
     const result = await callback({
       symbol,
       reason,
-      error,
+      ...(error === undefined ? {} : { error }),
     })
     const persisted = result?.ok === true && result.data?.durable === true
     return {
