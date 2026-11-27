@@ -789,7 +789,7 @@ test("fails closed when active inventory has no positive recovery cost basis", (
 })
 
 
-test("defers a BUY below MIN_NOTIONAL without blocking a valid recovery SELL", () => {
+test("keeps recovery SELL eligible without evaluating a new BUY below MIN_NOTIONAL", () => {
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
     marketPrice,
@@ -804,14 +804,11 @@ orderQuantity: 1 },
 
   assert.equal(decision.actions.some((action) => action.side === "SELL"), true)
   assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
-  assert.deepEqual(decision.buyDisposition, {
-    status: "EXCHANGE_CONSTRAINED_BUY",
-    reason: "MIN_NOTIONAL",
-    quantity: "1",
-    notional: "0.099",
-    minimumQuantity: "1",
-    minimumNotional: "5",
-  })
+  assert.deepEqual(
+    decision.actions.map(({ side }) => side),
+    ["SELL"],
+    "An active recovery cycle suppresses BUY admission before exchange-specific BUY sizing is evaluated.",
+  )
 })
 
 test("defers a BUY below MIN_QUANTITY without emitting an invalid order", () => {
@@ -1001,7 +998,7 @@ value: { amount: "0.101" } },
   )
 })
 
-test("defers a configured BUY above MAX_QUANTITY without blocking a valid SELL", () => {
+test("keeps recovery SELL eligible without evaluating a new BUY above MAX_QUANTITY", () => {
   const { portfolio, recoveryLedger } = makeBoughtState()
   const decision = evaluateConservativeStrategy({
     marketPrice,
@@ -1024,21 +1021,29 @@ value: { amount: "50" } },
     lastBuyPrice: "0.1",
   })
 
-  assert.equal(decision.actions.some((action) => action.side === "SELL"), true)
-  assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
-  assert.equal(decision.buyDisposition.reason, "MAX_QUANTITY")
+  assert.deepEqual(
+    decision.actions.map(({ side }) => side),
+    ["SELL"],
+    "The active recovery cycle must block a new BUY before MAX_QUANTITY sizing is considered.",
+  )
 })
 
-test("fails closed rather than inventing a next BUY reference while active inventory lacks completed-BUY VWAP", () => {
+test("does not require a next BUY reference while recovery remains active", () => {
   const { portfolio, recoveryLedger } = makeBoughtState()
-  assert.throws(() => evaluateConservativeStrategy({
+  const decision = evaluateConservativeStrategy({
     marketPrice,
     pairConfig,
     settings,
     portfolio,
     recoveryLedger,
     marketMetadata,
-  }), /requires the reconciled completed-BUY VWAP/)
+  })
+
+  assert.deepEqual(
+    decision.actions.map(({ side }) => side),
+    ["SELL"],
+    "The strategy must plan recovery SELL without evaluating or inventing a next-cycle BUY reference.",
+  )
 })
 
 

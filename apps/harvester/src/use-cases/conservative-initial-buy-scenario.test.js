@@ -178,7 +178,7 @@ test("composes the initial BUY, canonical fill accounting and exact recovery/sta
     recoveryLedger,
     lastBuyPrice: "0.1",
   })
-  assert.equal(nextDecision.action, "PLACE_ORDERS", "The reconciled BUY position must produce executable recovery and standing intents.")
+  assert.equal(nextDecision.action, "PLACE_ORDERS", "The reconciled BUY position must produce recovery coverage only; a new BUY is not eligible before cycle completion.")
   assert.deepEqual(nextDecision.actions, [
     {
       side: "SELL",
@@ -189,12 +189,5 @@ test("composes the initial BUY, canonical fill accounting and exact recovery/sta
       reason: "RECOVER_INVESTED_CAPITAL_AND_MIN_PROFIT",
       requiredNetProceeds: "10.04",
     },
-    {
-      side: "BUY",
-      type: "LIMIT_MAKER",
-      price: "0.099",
-      quantity: "100",
-      reason: "NEXT_STANDING_BUY",
-    },
-  ], "The real policy must place recovery coverage first, then the next standing BUY at the exact tick-rounded prices and quantities.")
+  ], "The real policy must place recovery coverage only, at the exact tick-rounded price and quantity, until recovery-cycle completion.")
 })
