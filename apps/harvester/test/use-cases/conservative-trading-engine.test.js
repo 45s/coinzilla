@@ -1075,8 +1075,9 @@ async function assertDuplicateFillIsIdempotent({ fixture, initialBuy }) {
       acknowledgedOrder: initialBuy,
       tradeId: "trade-3",
       quantity: "5",
-      executedQuantity: "10",
+      executedQuantity: "20",
       status: "FILLED",
+      price: "0.99",
     }),
   });
 
