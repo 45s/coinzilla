@@ -1551,7 +1551,7 @@ test("sells the exact 1.8 DOGE excess from the incident 2.8 DOGE residual under 
     orderQuantity: 400,
     portfolio,
     recoveryLedger,
-    marketMetadata: sellableMetadata,
+    incidentMarketMetadata: sellableMetadata,
     lastBuyPrice: "0.0569",
   })
   const sell = decision.actions.find((action) => action.side === "SELL")
@@ -1581,7 +1581,7 @@ test("classifies the incident 2.8 DOGE residual as dust only with explicit minim
     orderQuantity: 400,
     portfolio,
     recoveryLedger,
-    marketMetadata: metadata,
+    incidentMarketMetadata: metadata,
     lastBuyPrice: "0.0569",
   })
   assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
@@ -1618,7 +1618,7 @@ test("sells the exact 0.005 ZRO excess from the incident 0.015 ZRO residual unde
     orderQuantity: 5,
     portfolio,
     recoveryLedger,
-    marketMetadata: metadata,
+    incidentMarketMetadata: metadata,
     lastBuyPrice: "1.084",
   })
   const sell = decision.actions.find((action) => action.side === "SELL")
@@ -1648,7 +1648,7 @@ test("classifies the incident 0.015 ZRO residual as quantity-step dust with expl
     orderQuantity: 5,
     portfolio,
     recoveryLedger,
-    marketMetadata: metadata,
+    incidentMarketMetadata: metadata,
     lastBuyPrice: "1.084",
   })
   assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
