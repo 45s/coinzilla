@@ -14,7 +14,7 @@ Autonomously investigate, implement, test, and document the user-data stream rec
 
 The stream repeatedly reports `recovered` while `recoveryRequired` remains true. The Journal has five empty-message `TypeError` RPC errors, five abnormal close events (code 1006), and 254 repeated `recovered` events over more than two hours. No post-disconnect account/open-order snapshot or explicit terminal recovery result is present in the Journal.
 
-**This is an immediate trading-safety blocker.** Keep the recovery gate fail-closed. Do not treat a successful WebSocket reconnect as successful application recovery.
+**Historical acceptance note — deferred.** The prior recovery-gate requirement is not the current work priority. Do not start this task while trading is broken. Preserve existing execution safeguards; do not expand recovery work or make broader recovery acceptance a prerequisite for the trading repair.
 
 ## Non-negotiable constraints
 
