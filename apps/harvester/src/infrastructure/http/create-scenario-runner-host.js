@@ -154,10 +154,10 @@ function resolveAdapterReadiness({ adapter }) {
       reason: "The registered adapter is not explicitly simulation-only.",
     }
   }
-  if (adapter.osSandboxVerified !== true) {
+  if (adapter.osSandboxVerified !== true && adapter.simulationBoundaryVerified !== true) {
     return {
       executable: false,
-      reason: "OS-level sandbox isolation has not been verified for the registered adapter.",
+      reason: "A verified OS sandbox or trusted guarded-simulation worker is required for the registered adapter.",
     }
   }
   return {

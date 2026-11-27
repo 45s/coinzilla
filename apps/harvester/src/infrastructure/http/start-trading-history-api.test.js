@@ -33,6 +33,7 @@ test("starts the local API without requiring bearer-token configuration", async 
   const service = await startTradingHistoryApi({
     database,
     eventBus,
+    platform: "linux",
     env: {
       TRADING_MODE: "testnet",
       HARVESTER_API_HOST: "0.0.0.0",
