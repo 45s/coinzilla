@@ -1017,6 +1017,7 @@ async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } =
     start: (startOptions) => options.start({
       ...startOptions,
       orderHistoryPersistence: resources.orderHistoryPersistence,
+      processIdentity: options.processIdentity,
     }),
     appConfig: resources.appConfig,
     env: options.env,

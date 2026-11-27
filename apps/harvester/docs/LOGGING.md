@@ -31,6 +31,8 @@ directory name, structured log files, terminal capture and
 `harvester.process_started` event all share one immutable process identity.
 Session files are created exclusively and are never overwritten.
 
+When the Operational State Store is enabled, its durable `PROCESS_STARTED` fact also records the allowlisted process identity (PID, runtime-session ID, original start time, package version, source revision, and worktree state). Existing facts without this optional provenance field remain readable; new production starts include it when the entrypoint process identity is available. Debug archive tooling matches recovery facts only to a completed TESTNET session with the exact same runtime-session ID. If no unique complete match exists, it reports `matchingTradingLogsAvailable=false` and preserves unrelated sessions as separate evidence; it never substitutes the newest session.
+
 The cumulative DEBUG, TRACE and terminal files append across process runs.
 The console is not a file: it displays a compact INFO-and-higher summary and
 remains independently configurable.
