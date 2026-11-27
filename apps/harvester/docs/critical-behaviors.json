@@ -1829,6 +1829,21 @@
           "path": "src/application/operator/recovery-seller-stop-command.test.js",
           "name": "requires explicit cause-fixed confirmation and rejects unknown authentication flags",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-recovery-seller-stop.test.js",
+          "name": "persists an explicit operator STOP resolution before returning a clear state",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/resolve-recovery-seller-stop.test.js",
+          "name": "does not persist or clear STOP when reconciliation or accounting evidence is incomplete",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-recovery-seller-stop.test.js",
+          "name": "does not clear STOP when the Operational State Store cannot durably record the resolution",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "offline-only",
