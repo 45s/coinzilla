@@ -6443,9 +6443,8 @@ test("invalid book updates invalidate the cached book and fail closed", async ()
 })
 
 
-test("a fully filled BUY keeps subsequent evaluations in recovery-only mode while its SELL remains open", async () => {
-  const observedReferences = []
-  const strategyPolicy = {
+function createRecoveryOnlyStrategyPolicy(observedReferences) {
+  return {
     evaluate: (input) => {
       observedReferences.push(input.lastBuyPrice ?? null)
       return evaluateConservativeStrategy({
@@ -6462,10 +6461,9 @@ test("a fully filled BUY keeps subsequent evaluations in recovery-only mode whil
       adjustmentThreshold: "0",
     }),
   }
-  const harness = await createHarness({
-    strategyPolicy,
-    accountingApplied: false,
-  })
+}
+
+async function fillInitialRecoveryOnlyBuy({ harness, observedReferences }) {
   const started = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
     priceEvent: {
@@ -6502,7 +6500,9 @@ test("a fully filled BUY keeps subsequent evaluations in recovery-only mode whil
   })
   assert.equal(harness.engine.getOrders().filter(({ side }) => side === "SELL").length, 1)
   observedReferences.length = 0
+}
 
+async function runRecoveryOnlyMarketEvaluations({ harness }) {
   for (let index = 0; index < 12; index += 1) {
     const result = await harness.engine.processMarketPrice({
       symbol: "DOGEUSDT",
@@ -6514,6 +6514,21 @@ test("a fully filled BUY keeps subsequent evaluations in recovery-only mode whil
     })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
   }
+}
+
+test("a fully filled BUY keeps subsequent evaluations in recovery-only mode while its SELL remains open", async () => {
+  const observedReferences = []
+  const harness = await createHarness({
+    strategyPolicy: createRecoveryOnlyStrategyPolicy(observedReferences),
+    accountingApplied: false,
+  })
+  await fillInitialRecoveryOnlyBuy({
+    harness,
+    observedReferences,
+  })
+  await runRecoveryOnlyMarketEvaluations({
+    harness,
+  })
 
   assert.equal(harness.orders.filter(({ side }) => side === "BUY").length, 1)
   assert.equal(harness.orders.filter(({ side }) => side === "SELL").length, 1)
