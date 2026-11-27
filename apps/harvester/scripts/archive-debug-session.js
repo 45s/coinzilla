@@ -262,84 +262,118 @@ function resolveProcessOutcome(completion) {
   }
 }
 
+function createArchiveSessionMissingFieldWarnings({
+  identity,
+  completion,
+  identityError,
+  completionError,
+} = {}) {
+  const warnings = []
+  if (!identity) {
+    warnings.push(identityError ? "PROCESS_IDENTITY_INVALID" : "PROCESS_IDENTITY_MISSING")
+  }
+  if (identity && !UUID_PATTERN.test(identity.runtimeSessionId ?? "")) {
+    warnings.push("RUNTIME_SESSION_ID_MISSING")
+  }
+  if (identity && !identity.startedAt) {
+    warnings.push("START_TIMESTAMP_MISSING")
+  }
+  if (identity && !(identity.source?.commit && /^[a-f0-9]{40,64}$/i.test(identity.source.commit))) {
+    warnings.push("SOURCE_REVISION_MISSING")
+  }
+  if (identity && !["clean", "dirty"].includes(identity.source?.workingTree)) {
+    warnings.push("WORKTREE_STATE_MISSING")
+  }
+  if (!completion) {
+    warnings.push(completionError ? "COMPLETION_RECORD_INVALID" : "COMPLETION_RECORD_MISSING")
+  } else {
+    if (identity?.runtimeSessionId && completion.runtimeSessionId !== identity.runtimeSessionId) {
+      warnings.push("COMPLETION_RUNTIME_ID_MISMATCH")
+    }
+    if (completion.logStreamsComplete !== true) {
+      warnings.push("LOG_STREAMS_INCOMPLETE")
+    }
+  }
+  return warnings
+}
+
+function isHarvesterTestnetSession({ identity } = {}) {
+  return identity?.application === "harvester" &&
+    identity?.formatVersion === 1 &&
+    identity?.environment === "testnet"
+}
+
+function resolveArchiveSessionCompletionStatus({ identity, completion, isHarvesterTestnet } = {}) {
+  if (!identity) {
+    return "identity-missing"
+  }
+  if (!isHarvesterTestnet) {
+    return "non-testnet-or-invalid"
+  }
+  if (completion?.runtimeSessionId === identity.runtimeSessionId && completion?.logStreamsComplete === true) {
+    return "complete"
+  }
+  return "incomplete"
+}
+
+function resolveArchiveSessionProcessId({ identity, recoveryCheckpoint } = {}) {
+  if (Number.isSafeInteger(identity?.processId) && identity.processId > 0) {
+    return identity.processId
+  }
+  if (identity?.runtimeSessionId === recoveryCheckpoint.runtimeSessionId) {
+    return recoveryCheckpoint.processIdentity?.processId ?? null
+  }
+  return null
+}
+
 async function readArchiveSessionEvidence({ sessionsDirectory, sessionName, recoveryCheckpoint }) {
   const sessionDirectory = path.join(sessionsDirectory, sessionName)
   const [identityResult, completionResult] = await Promise.all([
     readOptionalSessionJson(path.join(sessionDirectory, "process-identity.json")),
     readOptionalSessionJson(path.join(sessionDirectory, "process-completed.json")),
   ])
-  const identity = identityResult.value
-  const completion = completionResult.value
-  const missingFieldWarnings = []
-  if (!identity) {
-    missingFieldWarnings.push(identityResult.error ? "PROCESS_IDENTITY_INVALID" : "PROCESS_IDENTITY_MISSING")
-  }
-  if (identity && !UUID_PATTERN.test(identity.runtimeSessionId ?? "")) {
-    missingFieldWarnings.push("RUNTIME_SESSION_ID_MISSING")
-  }
-  if (identity && !identity.startedAt) {
-    missingFieldWarnings.push("START_TIMESTAMP_MISSING")
-  }
-  if (identity && !(identity.source?.commit && /^[a-f0-9]{40,64}$/i.test(identity.source.commit))) {
-    missingFieldWarnings.push("SOURCE_REVISION_MISSING")
-  }
-  if (identity && !["clean", "dirty"].includes(identity.source?.workingTree)) {
-    missingFieldWarnings.push("WORKTREE_STATE_MISSING")
-  }
-  if (!completion) {
-    missingFieldWarnings.push(completionResult.error ? "COMPLETION_RECORD_INVALID" : "COMPLETION_RECORD_MISSING")
-  } else {
-    if (identity?.runtimeSessionId && completion.runtimeSessionId !== identity.runtimeSessionId) {
-      missingFieldWarnings.push("COMPLETION_RUNTIME_ID_MISMATCH")
-    }
-    if (completion.logStreamsComplete !== true) {
-      missingFieldWarnings.push("LOG_STREAMS_INCOMPLETE")
-    }
-  }
-
-  const isHarvesterTestnet = identity?.application === "harvester" &&
-    identity?.formatVersion === 1 &&
-    identity?.environment === "testnet"
-  const completionStatus = !identity
-    ? "identity-missing"
-    : !isHarvesterTestnet
-      ? "non-testnet-or-invalid"
-      : completion?.runtimeSessionId === identity.runtimeSessionId && completion?.logStreamsComplete === true
-        ? "complete"
-        : "incomplete"
-  const durableIdentity = identity?.runtimeSessionId === recoveryCheckpoint.runtimeSessionId
-    ? recoveryCheckpoint.processIdentity
-    : null
-  const processId = Number.isSafeInteger(identity?.processId) && identity.processId > 0
-    ? identity.processId
-    : durableIdentity?.processId ?? null
+  const { value: identity, error: identityError } = identityResult
+  const { value: completion, error: completionError } = completionResult
+  const isHarvesterTestnet = isHarvesterTestnetSession({ identity })
+  const processId = resolveArchiveSessionProcessId({ identity, recoveryCheckpoint })
+  const missingFieldWarnings = createArchiveSessionMissingFieldWarnings({
+    identity,
+    completion,
+    identityError,
+    completionError,
+  })
   if (isHarvesterTestnet && processId === null) {
     missingFieldWarnings.push("PROCESS_ID_MISSING")
   }
-
   return {
     sessionName,
     relativePath: `logs/sessions/${sessionName}`,
     environment: identity?.environment ?? "unknown",
-    runtimeSessionId: UUID_PATTERN.test(identity?.runtimeSessionId ?? "")
-      ? identity.runtimeSessionId
-      : null,
+    runtimeSessionId: UUID_PATTERN.test(identity?.runtimeSessionId ?? "") ? identity.runtimeSessionId : null,
     processId,
     startedAt: typeof identity?.startedAt === "string" ? identity.startedAt : null,
     endedAt: typeof completion?.endedAt === "string" ? completion.endedAt : null,
     sourceRevision: identity?.source?.commit ?? null,
     workingTreeState: identity?.source?.workingTree ?? "unknown",
-    completionStatus,
+    completionStatus: resolveArchiveSessionCompletionStatus({
+      identity,
+      completion,
+      isHarvesterTestnet,
+    }),
     processOutcome: resolveProcessOutcome(completion),
     missingFieldWarnings,
     include: isHarvesterTestnet,
   }
 }
 
-async function findArchiveLogSessionSelection({ sessionsDirectory, recoveryCheckpoint } = {}) {
+function compareArchiveSessionNames(left, right) {
+  return left.name.localeCompare(right.name)
+}
+
+async function readArchiveSessionInventory({ sessionsDirectory, recoveryCheckpoint } = {}) {
   const sessionEntries = await readdir(sessionsDirectory, { withFileTypes: true })
   const sessions = []
-  for (const entry of sessionEntries.sort((left, right) => left.name.localeCompare(right.name))) {
+  for (const entry of sessionEntries.sort(compareArchiveSessionNames)) {
     const entryPath = path.join(sessionsDirectory, entry.name)
     const entryStats = await lstat(entryPath)
     if (entryStats.isSymbolicLink() || !entryStats.isDirectory()) {
@@ -351,43 +385,63 @@ async function findArchiveLogSessionSelection({ sessionsDirectory, recoveryCheck
       recoveryCheckpoint,
     }))
   }
+  return sessions
+}
 
-  const matchingRuntimeSessions = sessions.filter((session) =>
+function findMatchingArchiveSessions({ sessions, recoveryCheckpoint } = {}) {
+  return sessions.filter((session) =>
     session.include && session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId
   )
-  const matchingTradingLogsAvailable = matchingRuntimeSessions.length === 1 &&
-    matchingRuntimeSessions[0].completionStatus === "complete"
-  const status = matchingRuntimeSessions.length > 1
-    ? "ambiguous"
-    : matchingRuntimeSessions.length === 1
-      ? matchingTradingLogsAvailable ? "matched" : "incomplete"
-      : sessions.some((session) => session.include) ? "mismatched" : "missing"
-  const selectionReason = status === "matched"
-    ? "exact-runtime-id-match"
-    : status === "ambiguous"
-      ? "multiple-exact-runtime-candidates"
-      : status === "incomplete"
-        ? "matching-runtime-session-incomplete"
-        : "no-exact-runtime-session"
+}
 
+function resolveArchiveLogSelectionStatus({ sessions, matchingRuntimeSessions } = {}) {
+  if (matchingRuntimeSessions.length > 1) {
+    return "ambiguous"
+  }
+  if (matchingRuntimeSessions.length === 1) {
+    return matchingRuntimeSessions[0].completionStatus === "complete" ? "matched" : "incomplete"
+  }
+  return sessions.some((session) => session.include) ? "mismatched" : "missing"
+}
+
+function resolveArchiveLogSelectionReason({ status } = {}) {
+  if (status === "matched") {
+    return "exact-runtime-id-match"
+  }
+  if (status === "ambiguous") {
+    return "multiple-exact-runtime-candidates"
+  }
+  if (status === "incomplete") {
+    return "matching-runtime-session-incomplete"
+  }
+  return "no-exact-runtime-session"
+}
+
+function assignArchiveSessionSelectionReasons({ sessions, recoveryCheckpoint, status, matchingTradingLogsAvailable } = {}) {
   for (const session of sessions) {
     if (!session.include) {
       session.selectionReason = session.completionStatus === "identity-missing"
         ? "identity-unavailable"
         : "excluded-non-testnet"
-    } else if (session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId) {
-      session.selectionReason = status === "matched"
-        ? "exact-runtime-id-match"
-        : status === "ambiguous"
-          ? "ambiguous-runtime-id-candidate"
-          : "matching-runtime-session-incomplete"
-    } else {
-      session.selectionReason = matchingTradingLogsAvailable
-        ? "independent-evidence-not-selected"
-        : "independent-evidence-no-runtime-match"
+      continue
     }
+    if (session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId) {
+      if (status === "matched") {
+        session.selectionReason = "exact-runtime-id-match"
+      } else if (status === "ambiguous") {
+        session.selectionReason = "ambiguous-runtime-id-candidate"
+      } else {
+        session.selectionReason = "matching-runtime-session-incomplete"
+      }
+      continue
+    }
+    session.selectionReason = matchingTradingLogsAvailable
+      ? "independent-evidence-not-selected"
+      : "independent-evidence-no-runtime-match"
   }
+}
 
+function createArchiveLogSelectionWarnings({ sessions, recoveryCheckpoint, status } = {}) {
   const warnings = [...recoveryCheckpoint.processIdentityWarnings]
   if (status === "ambiguous") {
     warnings.push({
@@ -415,18 +469,32 @@ async function findArchiveLogSessionSelection({ sessionsDirectory, recoveryCheck
       })
     }
   }
+  return warnings
+}
 
+async function findArchiveLogSessionSelection({ sessionsDirectory, recoveryCheckpoint } = {}) {
+  const sessions = await readArchiveSessionInventory({ sessionsDirectory, recoveryCheckpoint })
+  const matchingRuntimeSessions = findMatchingArchiveSessions({ sessions, recoveryCheckpoint })
+  const status = resolveArchiveLogSelectionStatus({ sessions, matchingRuntimeSessions })
+  const matchingTradingLogsAvailable = status === "matched"
+  assignArchiveSessionSelectionReasons({
+    sessions,
+    recoveryCheckpoint,
+    status,
+    matchingTradingLogsAvailable,
+  })
   return {
     sessions,
     matchingSessionCandidates: matchingRuntimeSessions.map(({ sessionName }) => sessionName),
     matchingTradingLogsAvailable,
     logRuntimeSessionId: matchingTradingLogsAvailable ? recoveryCheckpoint.runtimeSessionId : null,
     status,
-    selectionReason,
-    warnings,
+    selectionReason: resolveArchiveLogSelectionReason({ status }),
+    warnings: createArchiveLogSelectionWarnings({ sessions, recoveryCheckpoint, status }),
     unmatchedRuntimeSessionId: matchingTradingLogsAvailable ? null : recoveryCheckpoint.runtimeSessionId,
   }
 }
+
 
 async function copySelectedLogs({
   sourceDirectory,
@@ -518,7 +586,7 @@ async function sha256File(filename) {
   return hash.digest("hex")
 }
 
-async function readLatestRecoveryCheckpoint(recoveryFactsDirectory) {
+async function readRecoveryFactLines({ recoveryFactsDirectory } = {}) {
   const manifestContent = await readFile(path.join(recoveryFactsDirectory, "manifest.jsonl"), "utf8")
   const factsContent = await readFile(path.join(recoveryFactsDirectory, "facts.jsonl"), "utf8")
   const manifestLines = manifestContent.split("\n").filter((line) => line.length > 0)
@@ -526,61 +594,87 @@ async function readLatestRecoveryCheckpoint(recoveryFactsDirectory) {
   if (manifestLines.length === 0 || factLines.length === 0) {
     throw new Error("Recovery-facts manifest and facts ledger must both contain committed records.")
   }
+  return { manifestLines, factLines }
+}
 
-  let latestManifest
-  let facts
+function parseRecoveryFactLines({ manifestLines, factLines } = {}) {
   try {
-    latestManifest = JSON.parse(manifestLines.at(-1))
-    facts = factLines.map((line) => JSON.parse(line))
+    return {
+      latestManifest: JSON.parse(manifestLines.at(-1)),
+      facts: factLines.map((line) => JSON.parse(line)),
+    }
   } catch (error) {
     throw new Error("A recovery-facts manifest/fact record is not valid JSON.", { cause: error })
   }
-  const latestFact = facts.at(-1)
+}
+
+function validateRecoveryFactsCheckpoint({ manifestLines, factLines, latestManifest, latestFact } = {}) {
   const dataCommitHash = latestManifest.lastCommittedDigest
-  if (
-    typeof dataCommitHash !== "string"
-    || !/^[a-f0-9]{64}$/i.test(dataCommitHash)
-    || latestFact.digest !== dataCommitHash
-    || String(latestManifest.sequence) !== String(latestFact.sequence)
-    || manifestLines.length !== factLines.length
-    || Number(latestManifest.recordCount) !== factLines.length
-    || !UUID_PATTERN.test(latestFact.runtimeSessionId ?? "")
-  ) {
+  const isValidDigest = typeof dataCommitHash === "string" && /^[a-f0-9]{64}$/i.test(dataCommitHash)
+  const manifestMatches = latestFact.digest === dataCommitHash &&
+    String(latestManifest.sequence) === String(latestFact.sequence) &&
+    manifestLines.length === factLines.length &&
+    Number(latestManifest.recordCount) === factLines.length
+  if (!isValidDigest || !manifestMatches || !UUID_PATTERN.test(latestFact.runtimeSessionId ?? "")) {
     throw new Error("The latest recovery-facts manifest does not match the final committed fact record.")
   }
+  return dataCommitHash
+}
 
+function resolveRecoveryProcessIdentity({ facts, runtimeSessionId } = {}) {
   const processStartFacts = facts.filter((fact) =>
-    fact.factType === "PROCESS_STARTED" &&
-    fact.runtimeSessionId === latestFact.runtimeSessionId
+    fact.factType === "PROCESS_STARTED" && fact.runtimeSessionId === runtimeSessionId
   )
-  const processIdentity = processStartFacts.length === 1
-    ? processStartFacts[0].data?.processIdentity ?? null
-    : null
-  const processIdentityWarnings = []
+  let processIdentity = null
+  const warnings = []
   if (processStartFacts.length > 1) {
-    processIdentityWarnings.push({
+    warnings.push({
       code: "TRADING_RUNTIME_PROCESS_IDENTITY_AMBIGUOUS",
       message: "More than one PROCESS_STARTED fact is bound to the latest recovery-facts runtime.",
     })
-  } else if (processStartFacts.length === 0 || processIdentity === null) {
-    processIdentityWarnings.push({
+  } else if (processStartFacts.length === 0) {
+    warnings.push({
       code: "TRADING_RUNTIME_PROCESS_IDENTITY_MISSING",
       message: "No durable process identity is available for the latest recovery-facts runtime.",
     })
+  } else {
+    processIdentity = processStartFacts[0].data?.processIdentity ?? null
+    if (processIdentity === null) {
+      warnings.push({
+        code: "TRADING_RUNTIME_PROCESS_IDENTITY_MISSING",
+        message: "No durable process identity is available for the latest recovery-facts runtime.",
+      })
+    }
   }
   if (!processIdentity?.source?.commit) {
-    processIdentityWarnings.push({
+    warnings.push({
       code: "TRADING_RUNTIME_SOURCE_REVISION_MISSING",
       message: "The durable process-start evidence does not establish the source revision.",
     })
   }
   if (!processIdentity?.source?.workingTree || processIdentity.source.workingTree === "unknown") {
-    processIdentityWarnings.push({
+    warnings.push({
       code: "TRADING_RUNTIME_WORKTREE_STATE_MISSING",
       message: "The durable process-start evidence does not establish whether the source worktree was clean or dirty.",
     })
   }
+  return { processIdentity, processIdentityWarnings: warnings }
+}
 
+async function readLatestRecoveryCheckpoint(recoveryFactsDirectory) {
+  const { manifestLines, factLines } = await readRecoveryFactLines({ recoveryFactsDirectory })
+  const { latestManifest, facts } = parseRecoveryFactLines({ manifestLines, factLines })
+  const latestFact = facts.at(-1)
+  const dataCommitHash = validateRecoveryFactsCheckpoint({
+    manifestLines,
+    factLines,
+    latestManifest,
+    latestFact,
+  })
+  const { processIdentity, processIdentityWarnings } = resolveRecoveryProcessIdentity({
+    facts,
+    runtimeSessionId: latestFact.runtimeSessionId,
+  })
   return {
     dataCommitHash,
     runtimeSessionId: latestFact.runtimeSessionId,
@@ -591,18 +685,16 @@ async function readLatestRecoveryCheckpoint(recoveryFactsDirectory) {
 }
 
 
-async function createArchiveManifest({
+async function createArchiveFileEntries({
   directory,
-  createdAt,
-  logSelection,
-  artifactProvenance = [],
+  files,
+  artifactProvenance,
+  totalBytes,
   onFileHashed,
 } = {}) {
-  const files = await listRegularFiles({ directory })
   const provenanceByArchivePath = new Map(artifactProvenance.map((artifact) => [artifact.archivePath, artifact]))
   const entries = []
   let completedBytes = 0
-  const { totalBytes } = await getTreeSize(directory)
   for (const relativePath of files) {
     const filename = path.join(directory, relativePath)
     const fileStats = await stat(filename)
@@ -622,11 +714,13 @@ async function createArchiveManifest({
       totalBytes,
     })
   }
-  const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(directory, "recovery-facts"))
-  const dataCommitHash = (await readFile(path.join(directory, "data_commit_hash"), "utf8")).trim()
-  const duplicateGroups = new Map()
+  return entries
+}
+
+function createDuplicateArchiveArtifactGroups({ artifactProvenance } = {}) {
+  const groups = new Map()
   for (const artifact of artifactProvenance) {
-    const group = duplicateGroups.get(artifact.sourceSha256) ?? {
+    const group = groups.get(artifact.sourceSha256) ?? {
       sourceSha256: artifact.sourceSha256,
       sourceSize: artifact.sourceSize,
       sourcePaths: [],
@@ -636,9 +730,9 @@ async function createArchiveManifest({
     group.sourcePaths.push(artifact.sourcePath)
     group.archivePaths.push(artifact.archivePath)
     group.archiveSha256s.push(artifact.archiveSha256)
-    duplicateGroups.set(artifact.sourceSha256, group)
+    groups.set(artifact.sourceSha256, group)
   }
-  const duplicateArtifacts = [...duplicateGroups.values()]
+  return [...groups.values()]
     .filter((group) => group.sourcePaths.length > 1)
     .map((group) => ({
       ...group,
@@ -646,7 +740,57 @@ async function createArchiveManifest({
       archivePaths: group.archivePaths.sort(),
       archiveSha256s: group.archiveSha256s.sort(),
     }))
-  const tradingProcessIdentity = recoveryCheckpoint.processIdentity
+}
+
+function createArchiveSessionManifestEntry({ session } = {}) {
+  return {
+    sessionName: session.sessionName,
+    relativePath: session.relativePath,
+    environment: session.environment,
+    runtimeSessionId: session.runtimeSessionId,
+    processId: session.processId,
+    startedAt: session.startedAt,
+    endedAt: session.endedAt,
+    sourceRevision: session.sourceRevision,
+    workingTreeState: session.workingTreeState,
+    completionStatus: session.completionStatus,
+    processOutcome: session.processOutcome,
+    selectionReason: session.selectionReason,
+    missingFieldWarnings: session.missingFieldWarnings,
+  }
+}
+
+function createTradingRuntimeManifestEntry({ recoveryCheckpoint } = {}) {
+  const processIdentity = recoveryCheckpoint.processIdentity
+  return {
+    runtimeSessionId: recoveryCheckpoint.runtimeSessionId,
+    processIdentity,
+    processId: processIdentity?.processId ?? null,
+    startedAt: processIdentity?.startedAt ?? null,
+    sourceRevision: processIdentity?.source?.commit ?? null,
+    workingTreeState: processIdentity?.source?.workingTree ?? "unknown",
+    missingFieldWarnings: recoveryCheckpoint.processIdentityWarnings.map(({ code }) => code),
+  }
+}
+
+async function createArchiveManifest({
+  directory,
+  createdAt,
+  logSelection,
+  artifactProvenance = [],
+  onFileHashed,
+} = {}) {
+  const files = await listRegularFiles({ directory })
+  const { totalBytes } = await getTreeSize(directory)
+  const entries = await createArchiveFileEntries({
+    directory,
+    files,
+    artifactProvenance,
+    totalBytes,
+    onFileHashed,
+  })
+  const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(directory, "recovery-facts"))
+  const dataCommitHash = (await readFile(path.join(directory, "data_commit_hash"), "utf8")).trim()
   return {
     formatVersion: 1,
     application: "harvester",
@@ -671,32 +815,10 @@ async function createArchiveManifest({
         ? "same-runtime-session"
         : "independent-evidence-do-not-correlate",
     },
-    tradingRuntime: {
-      runtimeSessionId: recoveryCheckpoint.runtimeSessionId,
-      processIdentity: tradingProcessIdentity,
-      processId: tradingProcessIdentity?.processId ?? null,
-      startedAt: tradingProcessIdentity?.startedAt ?? null,
-      sourceRevision: tradingProcessIdentity?.source?.commit ?? null,
-      workingTreeState: tradingProcessIdentity?.source?.workingTree ?? "unknown",
-      missingFieldWarnings: recoveryCheckpoint.processIdentityWarnings.map(({ code }) => code),
-    },
-    sessionInventory: logSelection.sessions.map((session) => ({
-      sessionName: session.sessionName,
-      relativePath: session.relativePath,
-      environment: session.environment,
-      runtimeSessionId: session.runtimeSessionId,
-      processId: session.processId,
-      startedAt: session.startedAt,
-      endedAt: session.endedAt,
-      sourceRevision: session.sourceRevision,
-      workingTreeState: session.workingTreeState,
-      completionStatus: session.completionStatus,
-      processOutcome: session.processOutcome,
-      selectionReason: session.selectionReason,
-      missingFieldWarnings: session.missingFieldWarnings,
-    })),
+    tradingRuntime: createTradingRuntimeManifestEntry({ recoveryCheckpoint }),
+    sessionInventory: logSelection.sessions.map((session) => createArchiveSessionManifestEntry({ session })),
     warnings: logSelection.warnings,
-    duplicateArtifacts,
+    duplicateArtifacts: createDuplicateArchiveArtifactGroups({ artifactProvenance }),
     recoveryFactSequence: recoveryCheckpoint.sequence,
     files: entries,
   }
