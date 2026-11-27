@@ -67,7 +67,7 @@ Current scenarios use simulated infrastructure and run-local state. No real brok
 
 PR #1913 now composes the RS simulation-only process adapter behind explicit `HARVESTER_SCENARIO_SANDBOX=linux-bubblewrap`. The launcher verifies trusted Bubblewrap/prlimit/shell/Node binaries and capabilities, then applies user/network/PID/IPC/UTS namespaces, seccomp network/child-process restrictions, a read-only runtime allowlist, a trusted Node installation directory bound read-only at its canonical host path, worker IPC preservation, RLIMIT_CPU, and a per-run delegated cgroup v2 (256 MiB hard memory, swap disabled, one CPU quota, 64 pids/threads). Seccomp allows Bubblewrap's initial `execve` to start Node while denying fork/vfork, non-thread clone, and execveat. The API remains fail-closed when the host lacks delegated cgroup controllers or any binary/capability check fails.
 
-Runtime scenarios are eligible for isolated simulation only; they remain PARTIAL and are not production-accepted. Required remaining gates: end-to-end adversarial OS isolation acceptance on a trusted delegated Linux runner, trusted build-artifact provenance/replay, production operational-state persistence acceptance, and the independent RS lifecycle correction in issue #1842.
+Runtime scenarios are eligible for isolated simulation only; they remain PARTIAL and are not production-accepted. PR #1913 added six production-path infrastructure-failure scenarios. Remaining gates: the real adversarial OS-isolation E2E on a trusted delegated Linux runner, trusted build-artifact provenance/replay, production operational-state persistence acceptance, and runner-specific retry/idempotency acceptance beyond existing duplicate-fill and exact-replay regressions. A follow-up cgroup cleanup regression is in progress on branch `fix/harvester/scenario-runner-cgroup-cleanup`; do not mark it complete until its test and implementation pass exact-head CI.
 
 ## Linux sandbox adversarial acceptance harness — 2026-11-27
 
@@ -76,3 +76,8 @@ A manual self-hosted workflow `.github/workflows/harvester-scenario-sandbox-e2e.
 ## Production RS process-adapter sandbox acceptance — 2026-11-27
 
 The manual Linux sandbox E2E exercises both an adversarial OS-boundary probe and the actual production RS process adapter/runtime evaluator inside the sandbox. It verifies a passing simulation-only SELL scenario with one simulated broker call and run-local intent/outcome facts. This is not production trading acceptance or RS domain-matrix verification; it remains pending a successful run on the trusted delegated Linux runner and trusted build provenance.
+
+
+## Scenario Runner cgroup lifecycle follow-up — 2026-11-27
+
+A test-first regression now targets cgroup leakage when sandbox worker argument construction fails before spawn. The architecture contract requires cleanup on every post-cgroup setup failure and observable cleanup failure; the implementation and exact-head CI verification remain in progress on `fix/harvester/scenario-runner-cgroup-cleanup`.
