@@ -919,6 +919,51 @@ test("passes both strategy routes to one provider while deduplicating its market
   assert.deepEqual(starts[0].executionSymbols, ["BTCUSDT"], "The shared market must be subscribed only once")
 })
 
+test("retains an account lock when runtime stop does not confirm STOPPED status", async () => {
+  const providers = [
+    createProvider({
+      providerInstanceId: "first",
+      providerType: "binance",
+      accountId: "account-one",
+    }),
+    createProvider({
+      providerInstanceId: "second",
+      providerType: "binance",
+      accountId: "account-two",
+    }),
+  ]
+  const releasedLocks = []
+  const stoppedMarketData = []
+  const runtime = await startProviderAccounts({
+    providers,
+    appConfig: appConfigForProviderSubset(providers),
+    env: { TRADING_MODE: "testnet" },
+    releaseProviderLock: async (providerInstanceId) => {
+      releasedLocks.push(providerInstanceId)
+      return { ok: true, released: true }
+    },
+    start: async (input) => ({
+      startMarketData: async () => ({ ok: true }),
+      stopMarketData: async () => {
+        stoppedMarketData.push(input.providerIdentity.providerInstanceId)
+        return { ok: true }
+      },
+      stop: async () => input.providerIdentity.providerInstanceId === "first"
+        ? { ok: true }
+        : durableProcessStopResult(),
+    }),
+  })
+
+  const result = await runtime.stop()
+
+  assert.equal(result.ok, false,
+    "An account runtime without an explicit STOPPED outcome must make aggregate shutdown incomplete.")
+  assert.deepEqual(releasedLocks, ["second"],
+    "Only the account with an explicit STOPPED result may release its process lock.")
+  assert.deepEqual(stoppedMarketData, ["second"],
+    "Market-data intake for an account with an ambiguous runtime stop must remain untouched.")
+})
+
 test("propagates a missing provider durable stop acknowledgement to the aggregate runtime", async () => {
   const providers = [
     createProvider({

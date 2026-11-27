@@ -862,6 +862,11 @@
           "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
           "name": "retains the process lock when release acknowledgement is ambiguous",
           "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
+          "name": "retains an account lock when runtime stop does not confirm STOPPED status",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
