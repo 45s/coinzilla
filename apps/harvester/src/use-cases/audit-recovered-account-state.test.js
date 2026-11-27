@@ -807,6 +807,7 @@ test("accepts balances and reservations that exactly match replayed strategy own
 test("handles market-asset, malformed, negative, and missing-market Journal commissions", () => {
   const { projection, restored } = restoreState({})
   const recoveredState = resolveRestoredOrdersAsFilled({ recoveredState: restored })
+  const firstFillId = recoveredState.journalFills[0]?.fillId
   const runAudit = (state) => auditRecoveredAccountState({
     projection,
     recoveredState: state,
@@ -816,8 +817,13 @@ test("handles market-asset, malformed, negative, and missing-market Journal comm
   })
   const withCommission = (commission) => ({
     ...recoveredState,
-    journalFills: recoveredState.journalFills.map((fill, index) =>
-      index === 0 ? { ...fill, commissions: [commission] } : fill
+    journalFills: recoveredState.journalFills.map((fill) =>
+      fill.fillId === firstFillId
+        ? {
+          ...fill,
+          commissions: [commission],
+        }
+        : fill
     ),
   })
   const marketAssetCommission = runAudit(withCommission({
@@ -838,8 +844,13 @@ test("handles market-asset, malformed, negative, and missing-market Journal comm
 
   const malformedFill = {
     ...recoveredState,
-    journalFills: recoveredState.journalFills.map((fill, index) =>
-      index === 0 ? { ...fill, commissions: null } : fill
+    journalFills: recoveredState.journalFills.map((fill) =>
+      fill.fillId === firstFillId
+        ? {
+          ...fill,
+          commissions: null,
+        }
+        : fill
     ),
   }
   const malformedCommission = runAudit(malformedFill)
