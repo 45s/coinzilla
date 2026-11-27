@@ -11,6 +11,8 @@ The shared validation API and logger fallback-redaction work are complete. Works
 
 ## Active priorities
 
+- Coordinate the `capitalize` to `trimAndUppercase` public API rename with the Entities consumer migration tracked by [issue #1598](https://github.com/45s/coinzilla/issues/1598); preserve trim-and-uppercase behavior without a compatibility alias.
+
 1. **Shared utility reuse inventory:** complete evidence-based dispositions for candidate decimal, queue, validation, and logging helpers. Reuse only genuinely domain-neutral behavior; keep domain invariants in their owning package.
 2. **Exact decimal implementation:** adopt or extend a shared implementation only when a concrete consumer contract and compatibility tests demonstrate the need.
 3. **Safe diagnostics:** preserve redaction and bounded error reporting at logger/transport boundaries.
