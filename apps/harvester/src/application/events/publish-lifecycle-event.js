@@ -5,6 +5,18 @@ import { HARVESTER_EVENT_SOURCE } from "./event-names.js"
  * Publish a mapped lifecycle DTO synchronously and best-effort.
  * The EventBus publisher owns validation and delivery-failure diagnostics.
  */
+function reportPublicationFailure({ eventPublisher, eventName, error } = {}) {
+  try {
+    eventPublisher?.reportFailure?.({
+      event: { name: eventName,
+        source: HARVESTER_EVENT_SOURCE },
+      error,
+    })
+  } catch {
+    // Best-effort publication diagnostics must not block the caller.
+  }
+}
+
 export function publishLifecycleEvent({
   eventPublisher,
   eventName,
@@ -36,11 +48,26 @@ export function publishLifecycleEvent({
   }
 
   try {
-    return eventPublisher.publish({
+    const publication = eventPublisher.publish({
       name: eventName,
       source: HARVESTER_EVENT_SOURCE,
       data: dataResult.data,
     })
+    if (publication && typeof publication.then === "function") {
+      Promise.resolve(publication).then((result) => {
+        if (result?.ok === false) {
+          const errors = Array.isArray(result.errors) && result.errors.length > 0
+            ? result.errors
+            : [new Error("Asynchronous lifecycle event publication failed")]
+          for (const error of errors) {
+            reportPublicationFailure({ eventPublisher, eventName, error })
+          }
+        }
+      }).catch((error) => reportPublicationFailure({ eventPublisher, eventName, error }))
+      return { ok: true,
+        pending: true }
+    }
+    return publication
   } catch (error) {
     return toResult({ error })
   }
