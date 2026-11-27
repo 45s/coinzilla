@@ -350,9 +350,57 @@ maxLength: 64 })
   }
 }
 
+function validateDurableProcessIdentity({ processIdentity, runtimeSessionId } = {}) {
+  if (!processIdentity || typeof processIdentity !== "object" || Array.isArray(processIdentity)) {
+    throw new TypeError("Process-start processIdentity must be an object")
+  }
+  const allowedFields = new Set(["application", "version", "runtimeSessionId", "processId", "startedAt", "source"])
+  if (Object.keys(processIdentity).some((key) => !allowedFields.has(key))) {
+    throw new TypeError("Process-start processIdentity contains unsupported fields")
+  }
+  if (processIdentity.application !== "harvester" ||
+      processIdentity.runtimeSessionId !== runtimeSessionId) {
+    throw new TypeError("Process-start processIdentity must match its Harvester runtime session")
+  }
+  requireNonEmptyString({ value: processIdentity.version, field: "data.processIdentity.version", maxLength: 80 })
+  if (!Number.isSafeInteger(processIdentity.processId) || processIdentity.processId <= 0) {
+    throw new TypeError("Process-start processIdentity.processId must be a positive safe integer")
+  }
+  const startedAt = processIdentity.startedAt
+  const startedAtDate = new Date(startedAt)
+  if (typeof startedAt !== "string" || Number.isNaN(startedAtDate.getTime()) ||
+      startedAtDate.toISOString() !== startedAt) {
+    throw new TypeError("Process-start processIdentity.startedAt must be a canonical UTC timestamp")
+  }
+  const source = processIdentity.source
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    throw new TypeError("Process-start processIdentity.source must be an object")
+  }
+  const allowedSourceFields = new Set(["branch", "commit", "workingTree", "metadataSource"])
+  if (Object.keys(source).some((key) => !allowedSourceFields.has(key))) {
+    throw new TypeError("Process-start processIdentity.source contains unsupported fields")
+  }
+  for (const field of ["branch", "commit"]) {
+    if (source[field] !== null &&
+        (typeof source[field] !== "string" || source[field].trim() !== source[field])) {
+      throw new TypeError(`Process-start processIdentity.source.${field} must be a canonical string or null`)
+    }
+  }
+  if (source.branch !== null && source.branch.length > 160) {
+    throw new TypeError("Process-start processIdentity.source.branch exceeds its length limit")
+  }
+  if (source.commit !== null && !/^[a-f0-9]{40,64}$/.test(source.commit)) {
+    throw new TypeError("Process-start processIdentity.source.commit must be a lowercase Git SHA or null")
+  }
+  if (!["clean", "dirty", "unknown"].includes(source.workingTree) ||
+      !["git", "environment", "unavailable"].includes(source.metadataSource)) {
+    throw new TypeError("Process-start processIdentity source status is invalid")
+  }
+}
+
 export function validateProcessStartedFact({ factType, canonicalData, factId, runtimeSessionId }) {
   if (factType === "PROCESS_STARTED") {
-    const allowedFields = new Set(["configurationFingerprint", "strategyName", "markets", "tradingEnabled"])
+    const allowedFields = new Set(["configurationFingerprint", "strategyName", "markets", "tradingEnabled", "processIdentity"])
     if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
       throw new TypeError("Process-start fact contains unsupported fields")
     }
@@ -373,6 +421,12 @@ maxLength: 64 })
     }
     if (factId !== `process-started:${  runtimeSessionId}`) {
       throw new TypeError("Process-start factId must match its runtime session identity")
+    }
+    if (canonicalData.processIdentity !== undefined) {
+      validateDurableProcessIdentity({
+        processIdentity: canonicalData.processIdentity,
+        runtimeSessionId,
+      })
     }
   }
 }

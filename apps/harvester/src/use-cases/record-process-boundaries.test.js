@@ -105,8 +105,20 @@ appConfig })
   assert.equal(processFacts[1].data.clean, true)
   assert.deepEqual(
     processFacts[0].data.processIdentity,
-    processIdentity,
-    "The durable PROCESS_STARTED fact must preserve the immutable process ID, runtime ID, source revision, and worktree state.",
+    {
+      application: "harvester",
+      version: "1.0.001",
+      runtimeSessionId: "process-facts-test-session",
+      processId: 24680,
+      startedAt: "2026-11-12T00:00:00.000Z",
+      source: {
+        branch: "develop",
+        commit: "a".repeat(40),
+        workingTree: "dirty",
+        metadataSource: "git",
+      },
+    },
+    "The durable PROCESS_STARTED fact must preserve the allowlisted process ID, runtime ID, source revision, and worktree state.",
   )
 })
 

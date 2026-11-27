@@ -88,9 +88,6 @@ function createFixtureFiles() {
             source: {
               branch: "develop",
               commit: "a".repeat(40),
-              shortCommit: "a".repeat(8),
-              commitMessage: "feat(harvester): test process provenance",
-              commitDate: "2026-11-24T18:00:00.000Z",
               workingTree: "clean",
               metadataSource: "git",
             },
@@ -146,9 +143,13 @@ async function assertPublishedArchive({ directory, remote, expectedIdentityStatu
   assert.equal(manifest.matchingTradingLogsAvailable, expectedIdentityStatus === "matched", "The archive must report whether a unique complete log session matches the recovery-facts runtime.")
   assert.equal(manifest.logRuntimeSessionId, expectedIdentityStatus === "matched" ? RUNTIME_SESSION_ID : null, "Only a unique exact runtime match may be labelled as the trading runtime's logs.")
   assert.equal(manifest.tradingRuntime.runtimeSessionId, manifest.recoveryRuntimeSessionId, "The trading-runtime inventory must be bound to the durable recovery-facts session identity.")
-  assert.equal(manifest.tradingRuntime.processIdentity.processId, 24680, "The durable process-start fact must preserve the original process ID.")
-  assert.equal(manifest.tradingRuntime.processIdentity.source.commit, "a".repeat(40), "The durable process-start fact must preserve the source revision.")
-  assert.equal(manifest.tradingRuntime.processIdentity.source.workingTree, "clean", "The durable process-start fact must preserve worktree state.")
+  if (expectedIdentityStatus === "matched") {
+    assert.equal(manifest.tradingRuntime.processIdentity.processId, 24680, "The durable process-start fact must preserve the original process ID.")
+    assert.equal(manifest.tradingRuntime.processIdentity.source.commit, "a".repeat(40), "The durable process-start fact must preserve the source revision.")
+    assert.equal(manifest.tradingRuntime.processIdentity.source.workingTree, "clean", "The durable process-start fact must preserve worktree state.")
+  } else {
+    assert.equal(manifest.tradingRuntime.processIdentity, null, "A process identity from a different runtime must not be borrowed for the selected recovery runtime.")
+  }
   assert.equal(
     manifest.runtimeIdentity.status,
     expectedIdentityStatus,
