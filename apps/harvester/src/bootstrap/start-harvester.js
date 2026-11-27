@@ -283,13 +283,15 @@ async function recordDurableConfigurationBaseline({ operationalStateStore,
 
 async function recordDurableProcessStart({ operationalStateStore,
   baseline,
-  tradingEnabled } = {}) {
+  tradingEnabled,
+  processIdentity } = {}) {
   await recordProcessStarted({
     operationalStateStore,
     configurationFingerprint: baseline.data.fingerprint,
     strategyName: baseline.data.strategyName,
     markets: baseline.data.markets,
     tradingEnabled,
+    processIdentity,
   }).then((started) => assertDurableOperationalStateWrite({
     result: started,
     failureMessage: "Harvester cannot connect to the broker without a durable process-start boundary",
@@ -302,6 +304,7 @@ async function persistHarvesterProcessStart({
   tradingEnabled,
   configurationFingerprint,
   enabledMarkets,
+  processIdentity,
 } = {}) {
   if (!operationalStateStore) {
     return
@@ -319,6 +322,7 @@ async function persistHarvesterProcessStart({
     operationalStateStore,
     baseline,
     tradingEnabled,
+    processIdentity,
   })
 }
 
@@ -423,6 +427,21 @@ function createCommissionAssetPublisher({ accountSnapshotManagerRef }) {
   }
 }
 
+async function persistHarvesterProcessStartFromStartup({
+  dependencies,
+  operationalStateStore,
+  startupOptions,
+} = {}) {
+  return persistHarvesterProcessStart({
+    operationalStateStore,
+    appConfig: startupOptions.appConfig,
+    tradingEnabled: startupOptions.tradingEnabled,
+    configurationFingerprint: startupOptions.configurationFingerprint,
+    enabledMarkets: startupOptions.enabledSymbols,
+    processIdentity: dependencies.processIdentity,
+  })
+}
+
 export async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
   const {
     env,
@@ -468,12 +487,10 @@ export async function prepareHarvesterStartupState({ dependencies, resolved } = 
     }
     recoverySellerStopWorkflow = stopWorkflowResult.data
   }
-  await persistHarvesterProcessStart({
+  await persistHarvesterProcessStartFromStartup({
+    dependencies,
     operationalStateStore,
-    appConfig: startupOptions.appConfig,
-    tradingEnabled: startupOptions.tradingEnabled,
-    configurationFingerprint: startupOptions.configurationFingerprint,
-    enabledMarkets: startupOptions.enabledSymbols,
+    startupOptions,
   })
   return {
     operatorControlLifecycle,
