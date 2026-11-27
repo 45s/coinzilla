@@ -3701,13 +3701,6 @@ test("completes the full Conservative lifecycle with the configured retained qua
   })
 })
 
-test("completes the full Conservative lifecycle with the supported zero keepQuantity", async () => {
-  await runCompleteConservativeCycle({ keepQuantity: "0" })
-})
-
-test("completes the full Conservative lifecycle with the configured retained quantity", async () => {
-  await runCompleteConservativeCycle({ keepQuantity: "0.1" })
-})
 
 test("does not publish recovery completion when the cycle is ineligible", async () => {
   const events = []
