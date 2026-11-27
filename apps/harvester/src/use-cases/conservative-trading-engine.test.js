@@ -469,18 +469,8 @@ function createHarnessResult({ engine, brokerState, state } = {}) {
   }
 }
 
-function createSeededOpenBuyOrderRegistry({ orderRegistry = OrderRegistry.empty() } = {}) {
-  const existingBuy = orderRegistry.orders.find((order) =>
-    order.market.id === market.id && order.side === "BUY" &&
-    ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
-  if (existingBuy) {
-    return orderRegistry
-  }
-  const positionId = createPositionId({
-    marketId: market.id,
-    strategyId: StrategyId.COIN_GRABBER,
-  })
-  const pendingOrder = new CanonicalOrder({
+function createSeededBuyOrder({ market, status, brokerOrderId, acknowledgedAt }) {
+  const order = {
     clientOrderId: "seeded-conservative-standing-buy",
     market,
     side: "BUY",
@@ -497,11 +487,25 @@ function createSeededOpenBuyOrderRegistry({ orderRegistry = OrderRegistry.empty(
       amount: "0",
       asset: baseAsset,
     }),
-    status: "PENDING",
+    status,
     createdAt: 1,
-    updatedAt: 1,
+    updatedAt: acknowledgedAt ?? 1,
+  }
+  if (brokerOrderId) {
+    order.brokerOrderId = brokerOrderId
+  }
+  if (acknowledgedAt) {
+    order.acknowledgedAt = acknowledgedAt
+  }
+  return new CanonicalOrder(order)
+}
+
+function createSeededOpenBuyOrderRegistry({ market, positionId }) {
+  const pendingOrder = createSeededBuyOrder({
+    market,
+    status: "PENDING",
   })
-  const pendingRegistry = orderRegistry.registerPending({
+  const pendingRegistry = OrderRegistry.empty().registerPending({
     order: pendingOrder,
     ownership: {
       strategyId: StrategyId.COIN_GRABBER,
@@ -509,30 +513,15 @@ function createSeededOpenBuyOrderRegistry({ orderRegistry = OrderRegistry.empty(
       purpose: "CONSERVATIVE_BUY",
     },
   }).registry
-  const openOrder = new CanonicalOrder({
-    clientOrderId: "seeded-conservative-standing-buy",
-    brokerOrderId: "seeded-conservative-standing-buy-broker",
+  const openOrder = createSeededBuyOrder({
     market,
-    side: "BUY",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({
-      amount: "99",
-      asset: quoteAsset,
-    }),
-    originalQuantity: new Quantity({
-      amount: "1",
-      asset: baseAsset,
-    }),
-    executedQuantity: new Quantity({
-      amount: "0",
-      asset: baseAsset,
-    }),
     status: "OPEN",
-    createdAt: 1,
+    brokerOrderId: "seeded-conservative-standing-buy-broker",
     acknowledgedAt: 2,
-    updatedAt: 2,
   })
-  return pendingRegistry.applyUpdate({ order: openOrder }).registry
+  return pendingRegistry.applyUpdate({
+    order: openOrder,
+  }).registry
 }
 
 async function createHarnessFromOptions(options = {}) {

@@ -55,8 +55,8 @@ function createAppConfig({ symbol, orderQuantity, keepQuantity, minProfit, price
   }
 }
 
-async function runArchivedAdmissionReplay({ t, scenario }) {
-  const replay = await createDogeTradingReplay({
+async function createArchivedAdmissionReplay({ scenario }) {
+  return createDogeTradingReplay({
     marketSymbol: scenario.symbol,
     appConfig: createAppConfig(scenario),
     scenarioExpectations: {
@@ -64,26 +64,14 @@ async function runArchivedAdmissionReplay({ t, scenario }) {
     },
     exchangeFilters: scenario.exchangeFilters,
   })
-  let stopped = false
-  t.after(async () => {
-    if (!stopped) {
-      try {
-        await replay.runtime.stop()
-      } catch {
-        // An unresolved recovery cycle is intentionally not repaired by this admission replay.
-      }
-    }
-  })
+}
 
+async function publishFirstArchivedBuy({ replay, scenario }) {
   const initialBuySubmission = replay.waitForSubmittedOrder("BUY")
   await replay.publishMarketPrice(scenario.initialPrice)
   const initialBuy = await initialBuySubmission
-  const archivedBuy = scenario.buys[0]
-  assert.equal(
-    initialBuy.price,
-    archivedBuy.price,
-    "The first Harvester BUY must match the first archived execution price.",
-  )
+  const [archivedBuy] = scenario.buys
+  assert.equal(initialBuy.price, archivedBuy.price)
   const recoverySellSubmission = replay.waitForSubmittedOrder("SELL")
   const archivedFill = getArchivedFill(archivedBuy.tradeId)
   await replay.publishOrderFill({
@@ -99,22 +87,19 @@ async function runArchivedAdmissionReplay({ t, scenario }) {
   assert.equal(
     replay.receivedExecutionReports.at(-1)?.fill?.quoteQuantity,
     archivedFill.quoteQuantity,
-    `Runtime replay must preserve exchange-reported quoteQuantity for trade ${archivedBuy.tradeId}.`,
   )
   const recoverySell = await recoverySellSubmission
   assert.equal(recoverySell.side, "SELL")
   assert.equal(recoverySell.status, "OPEN")
+}
 
-  // Drive the market through the next archived BUY price. The active recovery
-  // cycle must keep BUY admission closed; the old archived overlapping BUY is
-  // deliberately not reproduced by the current policy.
+async function assertArchivedAdmissionRemainsClosed({ replay, scenario }) {
   await replay.publishMarketPrice(
     scenario.buys[1]?.price ?? scenario.sell.price,
   )
   assert.equal(
     replay.submittedCanonicalOrders.filter(({ side }) => side === "BUY").length,
     1,
-    "No subsequent archived BUY may be submitted while the first recovery cycle remains unresolved.",
   )
   assert.equal(
     replay.submittedCanonicalOrders.filter(({ side }) => side === "SELL").length,
@@ -129,6 +114,28 @@ async function runArchivedAdmissionReplay({ t, scenario }) {
     0,
   )
   assert.equal(replay.harvesterRuntimeErrors.length, 0)
+}
+
+async function runArchivedAdmissionReplay({ t, scenario }) {
+  const replay = await createArchivedAdmissionReplay({ scenario })
+  let stopped = false
+  t.after(async () => {
+    if (!stopped) {
+      try {
+        await replay.runtime.stop()
+      } catch {
+        // An unresolved recovery cycle is intentionally not repaired by this admission replay.
+      }
+    }
+  })
+  await publishFirstArchivedBuy({
+    replay,
+    scenario,
+  })
+  await assertArchivedAdmissionRemainsClosed({
+    replay,
+    scenario,
+  })
   try {
     await replay.runtime.stop()
   } catch {
@@ -136,6 +143,7 @@ async function runArchivedAdmissionReplay({ t, scenario }) {
   }
   stopped = true
 }
+
 
 // These are explicit current-runtime test filters, not historical exchange-filter evidence; the archive did not capture decision-time filters.
 const scenarios = [
