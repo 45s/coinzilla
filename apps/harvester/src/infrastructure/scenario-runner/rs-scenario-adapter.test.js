@@ -321,10 +321,10 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
     "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001",
   ], "The production catalog must preserve all expected RS scenario IDs and their stable order.")
   const runtimeScenario = catalog.find((scenario) => scenario.id === "RS-RUNTIME-SELL-SUBMISSION-001")
-  assert.equal(runtimeScenario.executable, false,
-    "The existing runtime scenario must remain blocked until trusted OS isolation is ready.")
-  assert.equal(runtimeScenario.executionStatus, "PRELIMINARY",
-    "The runtime scenario must not claim verified execution readiness.")
+  assert.equal(runtimeScenario.executable, true,
+    "Runtime-flow scenarios are eligible for isolated simulation; the host enforces launcher attestation.")
+  assert.equal(runtimeScenario.executionStatus, "EXECUTABLE",
+    "The scenario registration advertises simulation capability; host readiness remains authoritative.")
   assert.equal(runtimeScenario.status, "PARTIAL",
     "The runtime scenario must retain its incomplete acceptance status.")
   assert.equal(runtimeScenario.layer, "APPLICATION",
@@ -333,22 +333,22 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
     "The under-target FILLED SELL STOP runtime scenario is now present in the production-flow catalogue.")
   assert.ok(runtimeScenario.readinessReasons.some((reason) => reason.includes("infrastructure-failure")),
     "General infrastructure-failure coverage remains an explicit readiness gap.")
-  assert.ok(runtimeScenario.readinessReasons.some((reason) => reason.includes("OS-level sandbox")),
-    "Missing trusted OS sandbox must remain an explicit execution readiness blocker.")
+  assert.equal(runtimeScenario.readinessReasons.some((reason) => reason.includes("OS-level sandbox")), false,
+    "Sandbox readiness is supplied by host adapter attestation, not duplicated in scenario metadata.")
   const underTargetScenario = catalog.find((scenario) =>
     scenario.id === "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001")
   assert.ok(underTargetScenario, "The under-target FILLED runtime scenario must be registered.")
   assert.equal(underTargetScenario.status, "PARTIAL",
     "The under-target FILLED SELL scenario must remain partial until all production gates are met.")
-  assert.equal(underTargetScenario.executable, false,
-    "A runtime scenario must remain non-executable until trusted OS isolation is verified.")
+  assert.equal(underTargetScenario.executable, true,
+    "Runtime scenario eligibility is for isolated simulation; host attestation controls effective readiness.")
   const stopFailureScenario = catalog.find((scenario) =>
     scenario.id === "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001")
   assert.ok(stopFailureScenario, "The STOP persistence-failure runtime scenario must be registered.")
   assert.equal(stopFailureScenario.status, "PARTIAL",
     "The STOP persistence-failure scenario must remain partial until all production gates are met.")
-  assert.equal(stopFailureScenario.executable, false,
-    "Infrastructure-failure scenarios must remain non-executable until trusted OS isolation is verified.")
+  assert.equal(stopFailureScenario.executable, true,
+    "Infrastructure-failure scenarios are eligible for isolated simulation under a verified host adapter.")
   assert.equal(catalog[0].executable, false,
     "The helper-only domain mapping must not be executable in the production runtime catalogue.")
   assert.equal(catalog[0].executionStatus, "PRELIMINARY",

@@ -119,6 +119,8 @@ function verifySandboxCapabilities({ bwrap, prlimit, execFileSync }) {
     "--unshare-pid",
     "--unshare-net",
     "--ro-bind", "/usr", "/usr",
+    "--ro-bind", "/lib", "/lib",
+    "--ro-bind", "/lib64", "/lib64",
     "--", "/usr/bin/true",
   ], {
     encoding: "utf8",
@@ -161,6 +163,7 @@ function addSystemRuntimeBinds({ args, existsSync, realpathSync }) {
   const createdDirectories = new Set()
   for (const source of ["/usr", "/bin", "/lib", "/lib64"]) {
     if (existsSync(source)) {
+      addDirectory({ args, directory: source, seen: createdDirectories })
       addReadOnlyBind({
         args,
         source: realpathSync(source),
@@ -359,6 +362,9 @@ export function createLinuxBubblewrapSandboxLauncher({
   syscallNumbers({ arch })
   const resolvedRepositoryRoot = realpathSync(resolve(repositoryRoot))
   const resolvedNodeExecutable = realpathSync(nodeExecutable)
+  if (!resolvedNodeExecutable.startsWith("/usr/")) {
+    throw new Error("The scenario sandbox requires a trusted Node runtime below /usr")
+  }
   return createLinuxLauncher({
     bwrap,
     prlimit,

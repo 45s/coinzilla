@@ -63,7 +63,7 @@ test("starts the local API without requiring bearer-token configuration", async 
     scenario.id === "RS-RUNTIME-SELL-SUBMISSION-001")
   assert.equal(runtimeScenario.executable, false,
     "The incomplete runtime scenario must remain non-executable in production.")
-  assert.equal(runtimeScenario.executionStatus, "PRELIMINARY")
+  assert.equal(runtimeScenario.executionStatus, "BLOCKED")
   assert.ok(runtimeScenario.readinessReasons.some((reason) => /sandbox/i.test(reason)),
     "The production catalogue must expose the missing OS-sandbox boundary.")
   const blockedRun = serverInput.scenarioRunner.submit({
@@ -275,6 +275,48 @@ test("derives the source revision from a clean Git checkout when build metadata 
 
   assert.equal(blocked.sourceRevision, expectedRevision,
     "A clean source checkout must stamp runs with the exact checked-out commit.")
+  await service.close()
+  await eventBus.close()
+})
+
+test("composes executable simulation catalogue only when a launcher attests the exact OS profile", async () => {
+  const database = createDatabase()
+  const eventBus = new EventBus()
+  let serverInput
+  const launcher = () => {
+    throw new Error("This test verifies catalog composition only; it does not spawn a worker.")
+  }
+  launcher.isolationAttestation = {
+    level: "os",
+    networkAccess: "deny",
+    filesystemAccess: "read-only-allowlisted-runtime",
+    processExecution: "deny-child-processes",
+    memoryLimitBytes: 268_435_456,
+    cpuTimeLimitMs: 30_000,
+    wallTimeLimitMs: 30_000,
+    maxOutputBytes: 1_048_576,
+  }
+  const service = await startTradingHistoryApi({
+    database,
+    eventBus,
+    env: { TRADING_MODE: "testnet" },
+    scenarioSandboxLauncher: launcher,
+    logger: { info() {} },
+    startServer: async (input) => {
+      serverInput = input
+      return {
+        address: { address: "127.0.0.1", port: 4201 },
+        close: async () => {},
+      }
+    },
+  })
+  const registration = serverInput.scenarioRunnerCatalog.find((item) => item.strategyId === "RS")
+  const runtimeScenario = registration.scenarios.find((item) =>
+    item.id === "RS-RUNTIME-SELL-SUBMISSION-001")
+  assert.equal(runtimeScenario.executable, true)
+  assert.equal(runtimeScenario.executionStatus, "EXECUTABLE")
+  assert.equal(runtimeScenario.status, "PARTIAL",
+    "Execution means isolated simulation is available, not production acceptance.")
   await service.close()
   await eventBus.close()
 })
