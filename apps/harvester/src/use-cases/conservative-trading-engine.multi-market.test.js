@@ -1058,7 +1058,7 @@ function createOperatorPauseRecoveryPosition({ market }) {
 
 function createOperatorPauseStrategyPolicy() {
   return {
-    evaluate: ({ marketPrice }) => {
+    evaluate: ({ marketPrice, activeOrders = [] }) => {
       const buy = {
         side: "BUY",
         type: "LIMIT_MAKER",
@@ -1074,12 +1074,18 @@ function createOperatorPauseStrategyPolicy() {
         quantity: "0.9",
         reason: "TEST_RECOVERY_SELL",
       }
+      let actions = [buy]
+      if (marketPrice.symbol === "DOGEUSDT") {
+        const hasActiveRecoverySell = activeOrders.some((order) =>
+          order.market?.symbol === marketPrice.symbol && order.side === "SELL")
+        actions = hasActiveRecoverySell ? [] : [recoverySell]
+      }
       return {
         strategy: "CONSERVATIVE",
         symbol: marketPrice.symbol,
-        action: "PLACE_ORDERS",
+        action: actions.length > 0 ? "PLACE_ORDERS" : "NO_ACTION",
         reason: "TEST_OPERATOR_PAUSE",
-        actions: marketPrice.symbol === "DOGEUSDT" ? [recoverySell, buy] : [buy],
+        actions,
       }
     },
     evaluateTrailingBuyRepricing: conservativeStrategyPolicy.evaluateTrailingBuyRepricing,
