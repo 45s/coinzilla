@@ -542,24 +542,36 @@ test("Linux sandbox launcher refuses non-Linux hosts before attestation", () => 
   }), /Linux/)
 })
 
-function createLinuxSandboxLauncherFixture() {
-  let spawned
+function createSandboxChildFixture({ onClose }) {
   let closeHandler
-  let cgroupCleanupCount = 0
   const child = {
     pid: 4321,
     stdio: [null, null, null, null, new PassThrough()],
-    kill() {
-      return true
-    },
+    kill: () => true,
     once(...eventArguments) {
       const [event, handler] = eventArguments
       if (event === "close") {
         closeHandler = handler
+        onClose(handler)
       }
       return this
     },
   }
+  return {
+    child,
+    close: () => closeHandler(),
+  }
+}
+
+function createLinuxSandboxLauncherFixture() {
+  let spawned
+  let cgroupCleanupCount = 0
+  const childFixture = createSandboxChildFixture({
+    onClose: (handler) => {
+      closeHandler = handler
+    },
+  })
+  const child = childFixture.child
   const launcher = createLinuxBubblewrapSandboxLauncher({
     platform: "linux",
     repositoryRoot: "/repo",
@@ -604,7 +616,7 @@ function createLinuxSandboxLauncherFixture() {
     launcher,
     child,
     getSpawned: () => spawned,
-    close: () => closeHandler(),
+    close: childFixture.close,
     cleanupCount: () => cgroupCleanupCount,
   }
 }
