@@ -613,7 +613,7 @@ function createCompleteReplayProvenance() {
   }
 }
 
-test("runner records complete immutable provenance and replays the original scenario input only when it matches", async () => {
+test("runner records provenance identity but blocks replay until trusted artifact verification", async () => {
   const receivedInputs = []
   let runSequence = 0
   const replayProvenance = createCompleteReplayProvenance()
