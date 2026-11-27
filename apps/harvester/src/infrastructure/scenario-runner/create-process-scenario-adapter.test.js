@@ -4,6 +4,11 @@ import { EventEmitter } from "node:events"
 import { fork } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import { createProcessScenarioAdapter } from "./create-process-scenario-adapter.js"
+import { PassThrough } from "node:stream"
+import {
+  buildScenarioSeccompFilter,
+  createLinuxBubblewrapSandboxLauncher,
+} from "./create-linux-bubblewrap-sandbox-launcher.js"
 
 const defaultWorker = fileURLToPath(new URL("./scenario-worker.js", import.meta.url))
 
@@ -513,4 +518,100 @@ test("process adapter waits for an explicit worker-ready handshake before dispat
     expectedExecuteMessage,
     result,
   })
+})
+
+
+const LINUX_SANDBOX_PROFILE = Object.freeze({
+  networkAccess: "deny",
+  filesystemAccess: "read-only-allowlisted-runtime",
+  processExecution: "deny-child-processes",
+  memoryLimitBytes: 268_435_456,
+  cpuTimeLimitMs: 30_000,
+  wallTimeLimitMs: 30_000,
+  maxOutputBytes: 1_048_576,
+})
+
+test("Linux sandbox launcher refuses non-Linux hosts before attestation", () => {
+  assert.throws(() => createLinuxBubblewrapSandboxLauncher({
+    platform: "win32",
+  }), /Linux/)
+})
+
+test("Linux sandbox launcher attests the required OS profile and passes a seccomp filter", async () => {
+  let spawned
+  const child = {
+    stdio: [null, null, null, null, new PassThrough()],
+    kill() {},
+  }
+  const launcher = createLinuxBubblewrapSandboxLauncher({
+    platform: "linux",
+    repositoryRoot: "/repo",
+    nodeExecutable: "/usr/bin/node",
+    bwrapPath: "/usr/bin/bwrap",
+    prlimitPath: "/usr/bin/prlimit",
+    verifyExecutable: ({ path }) => ({
+      path,
+      sha256: "a".repeat(64),
+    }),
+    execFileSync: () => "verified-version",
+    existsSync: () => true,
+    realpathSync: (path) => path,
+    spawn: (command, args, options) => {
+      spawned = { command, args, options }
+      return child
+    },
+  })
+
+  const returned = launcher({
+    workerPath: "/repo/apps/harvester/src/infrastructure/scenario-runner/scenario-worker.js",
+    env: { SCENARIO_RUN_WORKER: "1" },
+    execArgv: [],
+    stdio: ["ignore", "ignore", "ignore", "ipc"],
+    sandboxProfile: LINUX_SANDBOX_PROFILE,
+  })
+  assert.equal(returned, child)
+  assert.equal(launcher.isolationAttestation.level, "os")
+  assert.equal(launcher.isolationAttestation.networkAccess, "deny")
+  assert.equal(launcher.isolationAttestation.maxOutputBytes, 1_048_576)
+  assert.equal(spawned.command, "/usr/bin/prlimit")
+  assert.ok(spawned.args.includes("--as=268435456:268435456"))
+  assert.ok(spawned.args.includes("--cpu=30:30"))
+  assert.ok(spawned.args.includes("--unshare-net"))
+  assert.ok(spawned.args.includes("--unshare-pid"))
+  assert.ok(spawned.args.includes("--seccomp"))
+  assert.ok(spawned.args.includes("--preserve-fds"))
+  assert.equal(spawned.options.stdio[3], "ipc")
+  assert.ok(Buffer.isBuffer(buildScenarioSeccompFilter({ arch: "x64" })))
+  assert.ok(buildScenarioSeccompFilter({ arch: "x64" }).length > 0)
+  await new Promise((resolve) => setImmediate(resolve))
+})
+
+test("Linux sandbox launcher rejects a mismatched isolation profile before spawning", () => {
+  let spawnCalls = 0
+  const launcher = createLinuxBubblewrapSandboxLauncher({
+    platform: "linux",
+    repositoryRoot: "/repo",
+    nodeExecutable: "/usr/bin/node",
+    bwrapPath: "/usr/bin/bwrap",
+    prlimitPath: "/usr/bin/prlimit",
+    verifyExecutable: ({ path }) => ({ path, sha256: "b".repeat(64) }),
+    execFileSync: () => "verified-version",
+    existsSync: () => true,
+    realpathSync: (path) => path,
+    spawn: () => {
+      spawnCalls += 1
+      return { stdio: [] }
+    },
+  })
+  assert.throws(() => launcher({
+    workerPath: "/repo/apps/harvester/src/infrastructure/scenario-runner/scenario-worker.js",
+    env: {},
+    execArgv: [],
+    stdio: ["ignore", "ignore", "ignore", "ipc"],
+    sandboxProfile: {
+      ...LINUX_SANDBOX_PROFILE,
+      networkAccess: "allow",
+    },
+  }), /profile does not match/)
+  assert.equal(spawnCalls, 0)
 })
