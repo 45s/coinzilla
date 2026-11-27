@@ -122,7 +122,10 @@ test("retains a lock owned by another host without probing its PID", async (t) =
     force: true,
   }))
   const owner = createOwner({ hostname: "another-host" })
-  const lockPath = await writeLock({ lockDirectory, owner })
+  const lockPath = await writeLock({
+    lockDirectory,
+    owner,
+  })
 
   await assert.rejects(
     assertHarvesterProcessStopped({
@@ -173,7 +176,10 @@ test("retains a replacement lock when ownership changes during stale-lock inspec
     recursive: true,
     force: true,
   }))
-  const lockPath = await writeLock({ lockDirectory, owner: createOwner() })
+  const lockPath = await writeLock({
+    lockDirectory,
+    owner: createOwner(),
+  })
   const replacementOwner = createOwner({
     pid: 987654,
     hostname: "replacement-host",
@@ -206,7 +212,10 @@ test("fails closed when process liveness cannot be determined", async (t) => {
     force: true,
   }))
   const owner = createOwner()
-  const lockPath = await writeLock({ lockDirectory, owner })
+  const lockPath = await writeLock({
+    lockDirectory,
+    owner,
+  })
 
   await assert.rejects(
     assertHarvesterProcessStopped({
