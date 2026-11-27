@@ -311,6 +311,7 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
     "RS-RUNTIME-SELL-SUBMISSION-001",
     "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001",
     "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001",
+    "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001",
     "RS-RUNTIME-SELL-REJECTION-001",
     "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
     "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001",
@@ -402,4 +403,31 @@ test("production RS runtime fails closed when broker acknowledgement outcome per
     "The sole-SELL reservation must remain retained while the submission outcome is unresolved.")
   assert.equal(result.output.accountAdmissionBlocked, true,
     "Account BUY admission must remain blocked while broker outcome persistence is unresolved.")
+})
+
+
+test("production RS runtime keeps account admission blocked when both outcome and STOP persistence fail", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-sell-outcome-and-stop-persistence-failure",
+    scenarioId: "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.submissionRejected, true,
+    "The submitter must fail closed when both outcome and STOP persistence are unavailable.")
+  assert.equal(result.output.brokerSubmissionCallCount, 1,
+    "The simulated broker must be called once before both persistence failures.")
+  assert.ok(result.output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_INTENT"),
+    "The durable SELL intent must exist before the broker side effect.")
+  assert.equal(result.output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_OUTCOME"), false,
+    "The failed outcome append must not be reported as durable.")
+  assert.equal(result.output.stopFactAppended, false,
+    "The failed STOP append must not be reported as durable.")
+  assert.notEqual(result.output.reservedSellCycle, null,
+    "The SELL reservation must remain retained while broker outcome and STOP persistence are unresolved.")
+  assert.equal(result.output.accountAdmissionBlocked, true,
+    "The in-memory account admission latch must stay active despite STOP persistence failure.")
 })
