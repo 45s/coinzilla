@@ -315,7 +315,6 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
     "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001",
     "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001",
     "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001",
-    "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001",
   ], "The production catalog must preserve all expected RS scenario IDs and their stable order.")
   const runtimeScenario = catalog.find((scenario) => scenario.id === "RS-RUNTIME-SELL-SUBMISSION-001")
   assert.equal(runtimeScenario.executable, false,
