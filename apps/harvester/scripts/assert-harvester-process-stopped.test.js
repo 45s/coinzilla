@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { writeFileSync } from "node:fs"
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -149,7 +150,8 @@ test("retains a replacement lock when ownership changes during stale-lock inspec
       lockDirectory,
       hostname: CURRENT_HOST,
       isProcessAlive: () => {
-        return writeFile(lockPath, JSON.stringify(replacementOwner), "utf8").then(() => false)
+        writeFileSync(lockPath, JSON.stringify(replacementOwner), "utf8")
+        return false
       },
     }),
     /process lock exists|ownership changed|safely inspect/i,
