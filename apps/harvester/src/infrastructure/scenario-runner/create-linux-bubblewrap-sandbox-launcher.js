@@ -314,7 +314,7 @@ function verifySandboxCapabilities({
     execFileSync,
   }) {
   execFileSync(prlimit.path, [
-    "--as=268435456:268435456",
+    "--as=8589934592:8589934592",
     "--cpu=30:30",
     "--",
     bwrap.path,
@@ -325,6 +325,8 @@ function verifySandboxCapabilities({
     "--unshare-ipc",
     "--unshare-uts",
     "--unshare-net",
+    "--uid", "0",
+    "--gid", "0",
     "--ro-bind", "/usr", "/usr",
     "--ro-bind", "/lib", "/lib",
     "--ro-bind", "/lib64", "/lib64",
@@ -548,9 +550,23 @@ function writeSeccompFilter({ child, filter }) {
   filterPipe.end(filter)
 }
 
+function createCgroupExecArguments({ cgroupProcsPath, prlimitPath, resourceArguments }) {
+  const script = 'printf "%s\\n" "$$" > "$1" || exit 125; shift; exec "$@"'
+  return [
+    "-c",
+    script,
+    "scenario-cgroup-exec",
+    cgroupProcsPath,
+    prlimitPath,
+    ...resourceArguments,
+  ]
+}
+
 function createLinuxLauncher({
   bwrap,
   prlimit,
+  shell,
+  cgroupController,
   repositoryRoot,
   nodeExecutable,
   nodeRuntimeSha256,
@@ -564,8 +580,9 @@ function createLinuxLauncher({
       profile: sandboxProfile,
       maxOutputBytes,
     })
-    const args = [
-      "--as=268435456:268435456",
+    const cgroup = cgroupController.create()
+    const resourceArguments = [
+      "--as=8589934592:8589934592",
       "--cpu=30:30",
       "--",
       bwrap.path,
@@ -577,12 +594,25 @@ function createLinuxLauncher({
         realpathSync,
       }),
     ]
-    const child = spawn(prlimit.path, args, createSandboxSpawnOptions({ stdio }))
-    writeSeccompFilter({
-      child,
-      filter: buildScenarioSeccompFilter(),
-    })
-    return child
+    let child
+    try {
+      child = spawn(shell.path, createCgroupExecArguments({
+        cgroupProcsPath: cgroup.cgroupProcsPath,
+        prlimitPath: prlimit.path,
+        resourceArguments,
+      }), createSandboxSpawnOptions({ stdio }))
+      child.once("close", cgroup.cleanup)
+      child.once("error", cgroup.cleanup)
+      writeSeccompFilter({
+        child,
+        filter: buildScenarioSeccompFilter(),
+      })
+      return child
+    } catch (error) {
+      child?.kill("SIGKILL")
+      cgroup.cleanup()
+      throw error
+    }
   }
   launcher.isolationAttestation = Object.freeze({
     level: "os",
@@ -590,7 +620,9 @@ function createLinuxLauncher({
     maxOutputBytes,
     bwrapSha256: bwrap.sha256,
     prlimitSha256: prlimit.sha256,
+    shellSha256: shell.sha256,
     nodeRuntimeSha256,
+    cgroupV2Verified: true,
   })
   return Object.freeze(launcher)
 }
@@ -613,6 +645,7 @@ function resolveExecutableVerifier({ verifyExecutable, realpathSync, statSync, r
 function resolveSandboxTools({
     bwrapPath,
     prlimitPath,
+    shellPath,
     existsSync,
     verifyExecutable,
   }) {
@@ -626,9 +659,15 @@ function resolveSandboxTools({
     existsSync,
     verifyExecutable,
   })
+  const shell = resolveTrustedExecutable({
+    candidates: [shellPath, "/usr/bin/sh"],
+    existsSync,
+    verifyExecutable,
+  })
   return {
     bwrap,
     prlimit,
+    shell,
   }
 }
 
@@ -644,7 +683,8 @@ function resolveTrustedNodeRuntime({ nodeExecutable, realpathSync, verifyExecuta
   return runtime
 }
 
-function verifyLinuxSandboxRuntime({ bwrap, prlimit, execFileSync, arch }) {
+function verifyLinuxSandboxRuntime({ bwrap, prlimit, execFileSync, arch, cgroupController }) {
+  cgroupController.verify()
   verifySandboxTools({
     bwrap,
     prlimit,
@@ -665,6 +705,8 @@ function createLinuxBubblewrapSandboxLauncherInternal({
   nodeExecutable,
   bwrapPath,
   prlimitPath,
+  shellPath,
+  cgroupController,
   maxOutputBytes,
   spawn,
   execFileSync,
@@ -673,6 +715,11 @@ function createLinuxBubblewrapSandboxLauncherInternal({
   statSync,
   readFileSync,
   verifyExecutable,
+  accessSync,
+  mkdirSync,
+  writeFileSync,
+  rmdirSync,
+  randomUUID,
 }) {
   if (platform !== "linux") {
     throw new Error("The trusted Bubblewrap scenario sandbox is supported only on Linux")
@@ -684,17 +731,29 @@ function createLinuxBubblewrapSandboxLauncherInternal({
     statSync,
     readFileSync,
   })
-  const { bwrap, prlimit } = resolveSandboxTools({
+  const { bwrap, prlimit, shell } = resolveSandboxTools({
     bwrapPath,
     prlimitPath,
+    shellPath,
     existsSync,
     verifyExecutable: verify,
+  })
+  const resolvedCgroupController = cgroupController ?? createLinuxCgroupController({
+    readFileSync,
+    realpathSync,
+    accessSync,
+    mkdirSync,
+    writeFileSync,
+    existsSync,
+    rmdirSync,
+    randomUUID,
   })
   verifyLinuxSandboxRuntime({
     bwrap,
     prlimit,
     execFileSync,
     arch,
+    cgroupController: resolvedCgroupController,
   })
   const resolvedRepositoryRoot = realpathSync(resolve(repositoryRoot))
   const nodeRuntime = resolveTrustedNodeRuntime({
@@ -705,6 +764,8 @@ function createLinuxBubblewrapSandboxLauncherInternal({
   return createLinuxLauncher({
     bwrap,
     prlimit,
+    shell,
+    cgroupController: resolvedCgroupController,
     repositoryRoot: resolvedRepositoryRoot,
     nodeExecutable: nodeRuntime.path,
     nodeRuntimeSha256: nodeRuntime.sha256,
@@ -723,6 +784,7 @@ export function createLinuxBubblewrapSandboxLauncher(options = {}) {
     nodeExecutable: process.execPath,
     bwrapPath: "/usr/bin/bwrap",
     prlimitPath: "/usr/bin/prlimit",
+    shellPath: "/bin/sh",
     maxOutputBytes: DEFAULT_MAX_OUTPUT_BYTES,
     spawn: spawnNative,
     execFileSync: execFileSyncNative,
@@ -730,6 +792,12 @@ export function createLinuxBubblewrapSandboxLauncher(options = {}) {
     realpathSync: realpathSyncNative,
     statSync: statSyncNative,
     readFileSync: readFileSyncNative,
+    accessSync: accessSyncNative,
+    mkdirSync: mkdirSyncNative,
+    writeFileSync: writeFileSyncNative,
+    existsSync: existsSyncNative,
+    rmdirSync: rmdirSyncNative,
+    randomUUID: randomUUIDNative,
     ...options,
   })
 }
