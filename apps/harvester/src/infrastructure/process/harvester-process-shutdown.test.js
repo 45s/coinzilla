@@ -182,7 +182,7 @@ function createDurableJournalShutdownChildSource(options = {}) {
       process.stdout.write("COUNTS=" + [runtimeStopCalls, journalCloseCalls, lockReleaseCalls].join(",") + "\\n")
       process.stdout.write("SHUTDOWN_COMPLETE\\n")
     `,
-  ].join("\\n")
+  ].join("\n")
 }
 
 function startShutdownChild({ directory, source, journalDirectory } = {}) {
