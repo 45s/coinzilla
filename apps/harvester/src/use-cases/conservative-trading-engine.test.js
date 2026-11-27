@@ -2166,6 +2166,52 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
   })
 })
 
+test("does not cancel a recovery SELL when cancellation intent publication is still pending", async () => {
+  let resolvePendingPublication
+  const pendingPublication = new Promise((resolve) => { resolvePendingPublication = resolve })
+  let cancelCalls = 0
+  let flushCalls = 0
+  const seeded = makeSeededRecoveryState()
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    seedExistingBuy: true,
+    baseFreeBalance: "1",
+    onCancelOrderStarted: () => { cancelCalls += 1 },
+    eventPublisher: {
+      publish: (event) => event.name === "order.cancel_requested" ? pendingPublication : ({ ok: true }),
+      flush: async () => {
+        flushCalls += 1
+        return { ok: true, durable: true }
+      },
+    },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: { symbol: "DOGEUSDT", price: "100", timestamp: 1 },
+  })
+  const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
+  const result = await harness.engine.processUserDataEvent({
+    event: {
+      executionType: "TRADE",
+      executedOrder: makeFilledOrder({ order: buyOrder }),
+      fill: makeBuyFill({
+        order: buyOrder,
+        tradeId: "cancel-intent-publication-pending",
+        price: "99.95",
+        quantity: "1",
+        quoteQuantity: "99.95",
+      }),
+    },
+  })
+  resolvePendingPublication({ ok: true })
+  assert.equal(result.ok, false, "Pending cancellation-intent publication must not be acknowledged as durable.")
+  assert.equal(flushCalls, 1, "A pending cancellation intent must not be followed by a misleading successful Journal flush.")
+  assert.equal(cancelCalls, 0, "The broker must not receive cancellation before its durable intent is confirmed.")
+  assert.ok(harness.pauses.includes("RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE"))
+  assert.equal(harness.engine.getOrders().find((order) => order.side === "SELL").status, "OPEN")
+})
+
 test("does not cancel a recovery SELL when its durable cancellation intent flush fails", async () => {
   let flushCount = 0
   let cancelCalls = 0

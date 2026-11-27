@@ -30,7 +30,9 @@ The command is strictly diagnostic: it does not initialize, append, repair, trun
 
 Harvester uses one in-process EventBus to publish selected operational and trading-lifecycle facts. The Journal subscribes to that bus and appends event records to local JSONL files. Journal persistence is optional in configuration-only/no-broker mode; it is a required startup dependency for every broker-connected mode because the account PREFLIGHT audit must be durably recorded before market subscriptions.
 
-The Journal subscribes to the shared EventBus, so derived Telegram notification events are persisted alongside their source lifecycle events. Notification mappings must omit optional fields when the source fact is unavailable: EventBus accepts `undefined`, but the Journal intentionally rejects it under the lossless JSONL contract. In particular, a BLOCKED account-wide open-orders alert may cover multiple symbols, and a user-data subscription failure has no market symbol. Both remain safety notifications; an absent `symbol` is omitted rather than represented as `undefined` or used to suppress the alert.\n\n### Durable Journal barriers
+The Journal subscribes to the shared EventBus, so derived Telegram notification events are persisted alongside their source lifecycle events. Notification mappings must omit optional fields when the source fact is unavailable: EventBus accepts `undefined`, but the Journal intentionally rejects it under the lossless JSONL contract. In particular, a BLOCKED account-wide open-orders alert may cover multiple symbols, and a user-data subscription failure has no market symbol. Both remain safety notifications; an absent `symbol` is omitted rather than represented as `undefined` or used to suppress the alert.
+
+### Durable Journal barriers
 
 Harvester exposes two distinct Journal durability operations through `prepareOptionalJournal()` and its event publisher:
 
@@ -38,6 +40,8 @@ Harvester exposes two distinct Journal durability operations through `prepareOpt
 - `flushWrites()` waits for already-enqueued Journal writes and syncs the session without draining EventBus. It is safe to await from inside a pending EventBus handler. A successful result must explicitly include `{ ok: true, durable: true }`.
 
 Do not alias `flushWrites()` to `flush()` or fall back to the global flush when the write-only capability is unavailable. Recovery decision and recovery SELL deferral evidence must be durably acknowledged through `flushWrites()` before recovery completion or further broker submission. Missing capability, rejected publication, write failure, or missing durable acknowledgement fails closed and preserves the original failure for diagnosis. Recovery-decision persistence failures use stable pause reason `RECOVERY_DECISION_EVIDENCE_PERSISTENCE_FAILED`; blocked recovery SELL deferral-evidence failures use `RECOVERY_SELL_DEFERRAL_EVIDENCE_PERSISTENCE_FAILED`.
+
+For Journal-backed cancellation intents, publication must be synchronously accepted before the global `flush()` barrier is used to authorize broker cancellation. A pending asynchronous publication is not durable evidence and must fail closed without calling the broker or accepting a subsequent flush as proof. This does not change optional lifecycle/observer publication: those events remain non-blocking and best-effort, and their eventual failures remain diagnostic rather than trading failures.
 
 The Journal is an operational observer, not trading-state authority. Portfolio and RecoveryLedger remain in-memory application state. The offline `projectHarvesterJournalRecovery()` and `restoreHarvesterJournalState()` helpers can validate and rehydrate a candidate state for controlled offline use, but runtime startup does not invoke them or resume trading from Journal data. Journal replay is not yet wired as runtime trading-state authority. There is no database, outbox, exactly-once delivery, or per-market-price capture.
 

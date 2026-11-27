@@ -236,25 +236,12 @@ right: order.originalQuantity.amount }) !== 0) {
   }
 }
 
-function observeDurableIntentPublication({ published, eventName, logger }) {
-  if (published && typeof published.then === "function") {
-    Promise.resolve(published).then(
-      (result) => {
-        if (result?.ok === false) {
-          logger?.error?.({
-            message: "Harvester durable intent publication was rejected asynchronously",
-            eventName,
-            errors: result.errors,
-          })
-        }
-      },
-      (error) => logger?.error?.({
-        message: "Harvester durable intent publication promise rejected",
-        eventName,
-        error,
-      }),
-    )
-    return undefined
+function observeDurableIntentPublication({ published } = {}) {
+  if (published?.pending === true ||
+      (published && typeof published.then === "function")) {
+    return toResult({
+      error: new TypeError("Durable lifecycle intent publication must complete synchronously before Journal flush"),
+    })
   }
   if (published?.ok === false) {
     return published
@@ -291,11 +278,7 @@ function createDurableIntentPublisher({ eventPublisher, logger } = {}) {
       eventName,
       dataResult,
     })
-    const publicationResult = observeDurableIntentPublication({
-      published,
-      eventName,
-      logger,
-    })
+    const publicationResult = observeDurableIntentPublication({ published })
     if (publicationResult) {
       return publicationResult
     }
