@@ -201,8 +201,14 @@ function getClosingRecordLineNumber({ thirdAssetCommission, lineOffset }) {
 
 function createClosingRecords({ thirdAssetCommission, recoverySellerBuy = false, lineOffset = 0 }) {
   const baseBalance = getClosingBaseBalance({ recoverySellerBuy })
-  const quoteBalance = getClosingQuoteBalance({ thirdAssetCommission, recoverySellerBuy })
-  const closingLineNumber = getClosingRecordLineNumber({ thirdAssetCommission, lineOffset })
+  const quoteBalance = getClosingQuoteBalance({
+    thirdAssetCommission,
+    recoverySellerBuy,
+  })
+  const closingLineNumber = getClosingRecordLineNumber({
+    thirdAssetCommission,
+    lineOffset,
+  })
   const stoppedLineNumber = closingLineNumber + 1
   return [
     record("account.snapshot_captured", {
@@ -210,8 +216,18 @@ function createClosingRecords({ thirdAssetCommission, recoverySellerBuy = false,
       sourceTime: 2000,
       auditStatus: "COMPLETE",
       balances: [
-        { asset: "BTC", free: baseBalance, locked: "0", total: baseBalance },
-        { asset: "USDT", free: quoteBalance, locked: "0", total: quoteBalance },
+        {
+          asset: "BTC",
+          free: baseBalance,
+          locked: "0",
+          total: baseBalance,
+        },
+        {
+          asset: "USDT",
+          free: quoteBalance,
+          locked: "0",
+          total: quoteBalance,
+        },
         ...(thirdAssetCommission ? [{
           asset: "BNB",
           free: "0.7499",
@@ -277,8 +293,15 @@ function createRecoverySellerBuyRecords({
     ...ownership,
   }
   const records = [
-    record("order.submission_requested", { ...intent, status: "PENDING" }, 5),
-    record("order.submitted", { ...intent, brokerOrderId, status }, 6),
+    record("order.submission_requested", {
+      ...intent,
+      status: "PENDING",
+    }, 5),
+    record("order.submitted", {
+      ...intent,
+      brokerOrderId,
+      status,
+    }, 6),
   ]
   if (includeFill) {
     records.push(createRecoverySellerBuyFillRecord({
@@ -393,7 +416,10 @@ function createRecoveryProjectionRecords(options) {
     ...createOpeningRecords(),
     ...getRecoverySellerOrderRecords(options),
     ...getCommissionBaselineRecords(options),
-    createBuyFillRecord({ thirdAssetCommission: options.thirdAssetCommission, lineOffset }),
+    createBuyFillRecord({
+      thirdAssetCommission: options.thirdAssetCommission,
+      lineOffset,
+    }),
     ...createSellCycleRecords({
       freeQuantity: options.freeQuantity,
       thirdAssetCommission: options.thirdAssetCommission,
@@ -412,29 +438,35 @@ function hasThirdAssetCommission(fill) {
   return fill.commissions.some(({ asset }) => asset === "BNB")
 }
 
-function shiftCommissionBaselineSequence(accountSnapshot, sequence) {
+function shiftCommissionBaselineSequence({ accountSnapshot, sequence }) {
   if (accountSnapshot.phase !== "COMMISSION_BASELINE") {
     return accountSnapshot
   }
-  return { ...accountSnapshot, sequence }
+  return {
+    ...accountSnapshot,
+    sequence,
+  }
 }
 
-function isNotAsset(balance, assetCode) {
+function isNotAsset({ balance, assetCode }) {
   return balance.asset !== assetCode
 }
 
-function removeAssetFromPreflightSnapshot(entry, assetCode) {
+function removeAssetFromPreflightSnapshot({ entry, assetCode }) {
   if (entry.phase !== "PREFLIGHT") {
     return entry
   }
   return {
     ...entry,
-    balances: entry.balances.filter((balance) => isNotAsset(balance, assetCode)),
+    balances: entry.balances.filter((balance) => isNotAsset({ balance, assetCode })),
   }
 }
 
 function createEthMarket() {
-  const ethAsset = new Asset({ id: "binance:ETH", code: "ETH" })
+  const ethAsset = new Asset({
+    id: "binance:ETH",
+    code: "ETH",
+  })
   return new Market({
     venue: "binance",
     symbol: "ETHUSDT",
@@ -454,7 +486,12 @@ function addEthBalanceToPreflightProjection({ projection }) {
         }
         return {
           ...entry,
-          balances: [...entry.balances, { asset: "ETH", free: "0.5", locked: "0", total: "0.5" }],
+          balances: [...entry.balances, {
+            asset: "ETH",
+            free: "0.5",
+            locked: "0",
+            total: "0.5",
+          }],
         }
       }),
     },
@@ -468,9 +505,18 @@ function createExternalEthOrder({ ethMarket }) {
     market: ethMarket,
     side: "SELL",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "10", asset: market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.1", asset: ethMarket.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: ethMarket.baseAsset }),
+    limitPrice: new Money({
+      amount: "10",
+      asset: market.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "0.1",
+      asset: ethMarket.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: ethMarket.baseAsset,
+    }),
     status: "OPEN",
   })
 }
@@ -480,16 +526,34 @@ function createEthAccountSnapshot({ ethAsset }) {
     sourceTime: 3000,
     balances: [
       new Balance({
-        free: new Quantity({ amount: "0.01", asset: market.baseAsset }),
-        locked: new Quantity({ amount: "0", asset: market.baseAsset }),
+        free: new Quantity({
+          amount: "0.01",
+          asset: market.baseAsset,
+        }),
+        locked: new Quantity({
+          amount: "0",
+          asset: market.baseAsset,
+        }),
       }),
       new Balance({
-        free: new Quantity({ amount: "1000.25", asset: market.quoteAsset }),
-        locked: new Quantity({ amount: "0", asset: market.quoteAsset }),
+        free: new Quantity({
+          amount: "1000.25",
+          asset: market.quoteAsset,
+        }),
+        locked: new Quantity({
+          amount: "0",
+          asset: market.quoteAsset,
+        }),
       }),
       new Balance({
-        free: new Quantity({ amount: "0.4", asset: ethAsset }),
-        locked: new Quantity({ amount: "0.1", asset: ethAsset }),
+        free: new Quantity({
+          amount: "0.4",
+          asset: ethAsset,
+        }),
+        locked: new Quantity({
+          amount: "0.1",
+          asset: ethAsset,
+        }),
       }),
     ],
   })
@@ -733,7 +797,10 @@ test("fails closed when the third-asset baseline is journaled after the applied 
     data: {
       ...projection.data,
       accountSnapshots: projection.data.accountSnapshots.map((accountSnapshot) =>
-        shiftCommissionBaselineSequence(accountSnapshot, fill.sequence + 1)
+        shiftCommissionBaselineSequence({
+          accountSnapshot,
+          sequence: fill.sequence + 1,
+        })
       ),
     },
   }
@@ -1090,7 +1157,7 @@ test("fails closed when the durable baseline omits a relevant market asset", () 
     data: {
       ...projection.data,
       accountSnapshots: projection.data.accountSnapshots.map((entry) =>
-        removeAssetFromPreflightSnapshot(entry, "BTC")
+        removeAssetFromPreflightSnapshot({ entry, assetCode: "BTC" })
       ),
     },
   }
