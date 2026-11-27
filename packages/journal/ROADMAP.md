@@ -22,4 +22,3 @@ The Journal package's core record contract, filesystem adapter, lifecycle owners
 - Task status: GitHub issue/PR linked to the specific change
 
 Do not keep completed PR narratives, historical RED/green logs, or old phased checklists in this active roadmap.
-
