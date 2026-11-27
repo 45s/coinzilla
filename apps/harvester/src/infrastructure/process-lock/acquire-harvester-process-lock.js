@@ -77,6 +77,33 @@ function isSameLockOwner({ currentOwner, existingOwner }) {
     currentOwner?.startedAt === existingOwner.startedAt
 }
 
+function createLockRelease({ lockPath, token }) {
+  let released = false
+  return async function release() {
+    if (released) {return toResult({ released: false,
+alreadyReleased: true })}
+    try {
+      const existingOwner = JSON.parse(await readFile(lockPath, "utf8"))
+      if (existingOwner?.token !== token) {
+        const error = new Error("Harvester process lock ownership changed; refusing to remove another process lock")
+        error.code = "HARVESTER_PROCESS_LOCK_OWNERSHIP_MISMATCH"
+        error.details = { lockPath }
+        return toResult({ error })
+      }
+      await unlink(lockPath)
+      released = true
+      return toResult({ released: true })
+    } catch (error) {
+      if (error?.code === "ENOENT") {
+        released = true
+        return toResult({ released: false,
+alreadyReleased: true })
+      }
+      return toResult({ error })
+    }
+  }
+}
+
 function isStaleLockOwner({ existingOwner, hostname, checkProcessAlive }) {
   const sameHost = typeof existingOwner?.hostname === "string" &&
     typeof hostname === "string" &&
