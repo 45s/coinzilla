@@ -9,9 +9,9 @@ import { hasActiveOrder, hasActivePosition, hasOutstandingRecovery, hasSellableI
 /**
  * Evaluate the broker-independent Conservative (Free-Roll) policy.
  *
- * A price event may produce both a standing BUY and a recovery SELL. Active
- * orders are supplied by the engine so repeated market events do not duplicate
- * either side. This function creates intents only; it never performs I/O.
+ * An active recovery cycle may produce recovery SELL intents, but never a new
+ * standing BUY. The next BUY becomes eligible only after cycle completion has
+ * reset the active Position basis and RecoveryLedger totals.
  */
 function getNoActionReason({ actions, inventoryDisposition, buyDisposition }) {
   if (actions.length > 0) {return null}
@@ -775,10 +775,22 @@ function createStandingBuyCandidate({
 
 function canPlaceStandingBuy({
   context,
+  accounting,
   inventoryDisposition,
 }) {
+  const recoveryCycleUnresolved =
+    hasActivePosition({ activeQuantity: accounting.activeQuantity }) ||
+    compareDecimal({
+      left: accounting.positionSpent,
+      right: "0",
+    }) > 0 ||
+    compareDecimal({
+      left: accounting.ledger.netSellProceeds,
+      right: "0",
+    }) > 0
   return !context.hasActiveBuy &&
     !context.hasUnacknowledgedRecoverySell &&
+    !recoveryCycleUnresolved &&
     inventoryDisposition?.status !== "PRICE_FILTER_BLOCKED"
 }
 
@@ -837,6 +849,7 @@ function createStandingBuyDecision({
 }) {
   if (!canPlaceStandingBuy({
     context,
+    accounting,
     inventoryDisposition,
   })) {
     return {}
@@ -869,9 +882,8 @@ function createStandingBuyDecision({
 /**
  * Evaluate the broker-independent Conservative (Free-Roll) policy.
  *
- * A price event may produce both a standing BUY and a recovery SELL. Active
- * orders are supplied by the engine so repeated market events do not duplicate
- * either side. This function creates intents only; it never performs I/O.
+ * A recovery cycle may produce recovery SELL intents, but no new standing BUY
+ * is eligible until the Position and RecoveryLedger cycle basis are reset.
  */
 export function evaluateConservativeStrategy({
   marketPrice,

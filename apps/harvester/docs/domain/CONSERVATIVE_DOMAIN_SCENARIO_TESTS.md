@@ -19,17 +19,18 @@ After applying a valid canonical BUY Fill to the real Portfolio and RecoveryLedg
 - The strategy-owned Position quantity and spent amount reflect the fill and commission asset rules.
 - RecoveryLedger has the canonical accepted fill and correct recovery accounting.
 - A recovery SELL intent exists with the exact expected quantity and price/economic target, respecting retained quantity, fee reserve, and exchange filters.
-- A standing BUY intent exists with the correct reason, reference price, configured quantity, and exchange rounding.
-- Action ordering only when ordering is part of the contract; otherwise identify actions by named fields.
+- No next standing BUY intent exists while the Position or RecoveryLedger still represents the active recovery cycle.
+- The recovery SELL intent has the exact expected quantity and price/economic target, respecting retained quantity, fee reserve, and exchange filters.
+- A new BUY becomes eligible only after terminal order/fill reconciliation, recovery completion, retained-inventory allocation, and recovery-basis reset.
 - No duplicate or unsafe intent exists.
 
-Do not assert merely that “two actions” were returned. An incorrect quantity, fee reserve, price, reason, or cycle state can still produce two actions.
+Do not assert merely that a single action was returned. Verify its side, purpose, quantity, price, accounting basis, and the exact cycle state that keeps BUY admission closed.
 
-### Second BUY fill
+### Pre-existing BUY late fill during recovery
 
-Set up the state using the initial-fill scenario or a clear canonical setup, including the existing recovery SELL and its order lifecycle state. Apply the second BUY Fill with its own execution price, quantity and commission facts.
+Set up a canonical active recovery Position and recovery SELL together with a standing BUY that was already acknowledged before the recovery cycle became active. Deliver its late/partial fill and its cancellation/terminal evidence in different orders, including delayed and unknown outcomes.
 
-The expected business behavior includes the combined position/accounting state, cancellation/reconciliation requirement for the old recovery SELL, recalculated recovery economics from the updated position and already-confirmed net SELL proceeds, correct next BUY reference, and the safety outcome if old SELL terminal state or fill history is incomplete. Pure policy tests should assert the decision from a reconciled snapshot; application tests own broker cancellation, race ordering and barriers.
+The expected behavior is to apply each canonical BUY fill exactly once, retain the pre-existing order's ownership/lifecycle, reconcile any cancellation race through the existing durable workflow, and recalculate recovery SELL coverage from the updated Position and confirmed proceeds. Do not create a replacement or next standing BUY while the recovery cycle remains unresolved. Pure policy tests assert the decision from a reconciled snapshot; application tests own broker cancellation, race ordering and barriers.
 
 ### Partial and completed recovery SELL
 
@@ -71,7 +72,7 @@ ReconciliationBlocked is a safety disposition in this conceptual model, not perm
 
 ## Conservative required sequence scenarios
 
-The sequence below is a Conservative coverage plan, not a generic strategy lifecycle. Implement only transitions supported by the canonical Conservative specification. Use the shared methodology for transition evidence, idempotency, conflict, failure-atomicity, and recovery assertions.
+The sequence below is a Conservative coverage plan, not a generic strategy lifecycle. Implement only transitions supported by the canonical Conservative specification. A next-cycle BUY can follow only after the completed recovery transition returns to NoActiveCycle. Use the shared methodology for transition evidence, idempotency, conflict, failure-atomicity, and recovery assertions.
 
 Use these as separate, named scenario tests or tightly scoped state-machine test cases. The sequence is a coverage plan; only transitions supported by the canonical specification and current production contract should be implemented.
 
@@ -81,16 +82,15 @@ Initial state
   -> BUY partially filled
   -> BUY fully/terminally reconciled
   -> Recovery SELL planned and accepted
-  -> Recovery SELL partially filled
-  -> Second BUY arrives while recovery SELL exists
-  -> Cancel requested
-  -> Cancel/fill race reconciled from authoritative evidence
-  -> Recovery SELL recalculated from combined cost and confirmed net proceeds
-  -> Recovery SELL partially filled again
-  -> Terminal SELL reconciled
+  -> No new BUY while the recovery cycle is unresolved
+  -> Any pre-existing standing BUY late fill is reconciled exactly once
+  -> Existing recovery SELL cancellation/fill race is reconciled when replacement is required
+  -> Recovery SELL recalculated from the updated Position and confirmed net proceeds
+  -> Recovery SELL partially filled / sell-through continues
+  -> Terminal SELL and complete fill history reconciled
   -> Completion preconditions verified
-  -> Portfolio + RecoveryLedger cycle completion committed atomically
-  -> Next cycle becomes eligible
+  -> Retained inventory allocated and Portfolio + RecoveryLedger cycle completion committed atomically
+  -> Only then does the next cycle become eligible
 ~~~
 
 Required adversarial variants include:
@@ -100,7 +100,7 @@ Required adversarial variants include:
 - fill before acknowledgement, acknowledgement before fill, and terminal report before delayed fill evidence;
 - partial fill racing cancellation, including fill-history gaps and unknown cancel outcome;
 - stale, reordered and conflicting status/execution reports;
-- repeated evaluation while submit/cancel/reconcile is pending;
+- repeated, concurrent and re-entrant evaluation while submit/cancel/reconcile is pending, proving the BUY gate cannot be bypassed;
 - persistence or projection failure between staged state changes;
 - completion attempt below profit threshold, with sellable active residual, with invalid dust evidence, or with incomplete terminal evidence;
 - replay of a completed event and stale events from the previous cycle.

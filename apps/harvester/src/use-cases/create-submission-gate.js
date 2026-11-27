@@ -108,6 +108,83 @@ function getConservativeRecoverySellReservationBlocker({
   })
 }
 
+function getConservativeRecoveryCycleBuyBlocker({
+  symbol,
+  order,
+  purpose,
+  ownership,
+  dependencies,
+} = {}) {
+  if (order.side !== "BUY" ||
+      purpose === "RECOVERY_BUY" ||
+      ownership?.strategyId === StrategyId.RECOVERY_SELLER) {
+    return null
+  }
+  if (typeof dependencies.getPortfolio !== "function" ||
+      typeof dependencies.getRecoveryLedger !== "function") {
+    return defer({
+      symbol,
+      reason: "CONSERVATIVE_RECOVERY_STATE_UNAVAILABLE",
+    })
+  }
+
+  let position
+  let recoveryLedger
+  try {
+    const portfolio = dependencies.getPortfolio()
+    if (typeof portfolio?.getPosition !== "function") {
+      return defer({
+        symbol,
+        reason: "CONSERVATIVE_RECOVERY_STATE_UNAVAILABLE",
+      })
+    }
+    position = portfolio.getPosition({
+      marketId: order.market.id,
+      symbol,
+      strategyId: StrategyId.COIN_GRABBER,
+    })
+    recoveryLedger = dependencies.getRecoveryLedger({
+      marketId: order.market.id,
+    })
+  } catch {
+    return defer({
+      symbol,
+      reason: "CONSERVATIVE_RECOVERY_STATE_UNAVAILABLE",
+    })
+  }
+
+  const activeQuantity = position?.quantity?.amount ?? "0"
+  const positionSpent = position?.spent?.amount ?? "0"
+  const ledgerBuyCost = recoveryLedger?.buyCost ?? "0"
+  const netSellProceeds = recoveryLedger?.netSellProceeds ?? "0"
+  try {
+    const recoveryCycleUnresolved =
+      compareDecimal({ left: activeQuantity, right: "0" }) > 0 ||
+      compareDecimal({ left: positionSpent, right: "0" }) > 0 ||
+      compareDecimal({ left: ledgerBuyCost, right: "0" }) > 0 ||
+      compareDecimal({ left: netSellProceeds, right: "0" }) > 0
+    if (!recoveryCycleUnresolved) {
+      return null
+    }
+  } catch {
+    return defer({
+      symbol,
+      reason: "CONSERVATIVE_RECOVERY_STATE_UNAVAILABLE",
+    })
+  }
+
+  return defer({
+    symbol,
+    reason: "CONSERVATIVE_RECOVERY_CYCLE_ACTIVE",
+    details: {
+      ...(position?.positionId ? { positionId: position.positionId } : {}),
+      activeQuantity,
+      positionSpent,
+      netSellProceeds,
+    },
+  })
+}
+
 function getTradingReadinessSubmissionBlocker({
   symbol,
   marketPrice,
@@ -143,6 +220,7 @@ function getSubmissionStateBlocker(context = {}) {
   return getMarketPauseSubmissionBlocker(context) ??
     getOperatorPauseSubmissionBlocker(context) ??
     getOpenOrderSubmissionBlocker(context) ??
+    getConservativeRecoveryCycleBuyBlocker(context) ??
     getConservativeRecoverySellReservationBlocker(context) ??
     getTradingReadinessSubmissionBlocker(context)
 }
@@ -293,11 +371,13 @@ function getShutdownSubmissionBlocker({ dependencies, order, symbol, shutdownRec
   return null
 }
 
-function createSubmissionContext({ dependencies, order, purpose, symbol, shutdownRecoverySubmission } = {}) {
+function createSubmissionContext({ dependencies, order, purpose, ownership, symbol, shutdownRecoverySubmission } = {}) {
   return {
     symbol,
     order,
     purpose,
+    ownership,
+    dependencies,
     shutdownRecoverySubmission,
     marketPrice: dependencies.state.prices.get(symbol),
     state: dependencies.state,
@@ -312,7 +392,7 @@ function createSubmissionContext({ dependencies, order, purpose, symbol, shutdow
 }
 
 export function createSubmissionGate(dependencies = {}) {
-  return ({ order, purpose } = {}) => {
+  return ({ order, purpose, ownership } = {}) => {
     const { symbol } = order.market
     const accountBlocker = getAccountSafetySubmissionBlocker({
       dependencies,
@@ -339,6 +419,7 @@ export function createSubmissionGate(dependencies = {}) {
       dependencies,
       order,
       purpose,
+      ownership,
       symbol,
       shutdownRecoverySubmission,
     })

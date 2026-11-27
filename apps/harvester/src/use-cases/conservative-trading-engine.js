@@ -2588,6 +2588,8 @@ function createConservativeEngineSubmissionContext({ context } = {}) {
   context.shutdownRecoverySubmission = { allowed: false }
   context.canSubmit = createSubmissionGate({
     state: context.state,
+    getPortfolio: dependencies.getPortfolio,
+    getRecoveryLedger: dependencies.getRecoveryLedger,
     canTrade: dependencies.canTrade,
     isStopping: dependencies.isStopping,
     isMarketPriceFresh: dependencies.isMarketPriceFresh,
