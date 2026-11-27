@@ -469,17 +469,92 @@ function createHarnessResult({ engine, brokerState, state } = {}) {
   }
 }
 
+function createSeededOpenBuyOrderRegistry({ orderRegistry = OrderRegistry.empty() } = {}) {
+  const existingBuy = orderRegistry.orders.find((order) =>
+    order.market.id === market.id && order.side === "BUY" &&
+    ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status))
+  if (existingBuy) {
+    return orderRegistry
+  }
+  const positionId = createPositionId({
+    marketId: market.id,
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  const pendingOrder = new CanonicalOrder({
+    clientOrderId: "seeded-conservative-standing-buy",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "99",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status: "PENDING",
+    createdAt: 1,
+    updatedAt: 1,
+  })
+  const pendingRegistry = orderRegistry.registerPending({
+    order: pendingOrder,
+    ownership: {
+      strategyId: StrategyId.COIN_GRABBER,
+      positionId,
+      purpose: "CONSERVATIVE_BUY",
+    },
+  }).registry
+  const openOrder = new CanonicalOrder({
+    ...pendingOrder,
+    brokerOrderId: "seeded-conservative-standing-buy-broker",
+    status: "OPEN",
+    acknowledgedAt: 2,
+    updatedAt: 2,
+  })
+  return pendingRegistry.applyUpdate({ order: openOrder }).registry
+}
+
 async function createHarnessFromOptions(options = {}) {
-  const brokerState = createHarnessBrokerState({ options })
-  const state = createHarnessMutableState({ options })
-  const engine = createHarnessEngine({ options,
-brokerState,
-state })
-  await processHarnessInitialBook({ engine,
-initialBook: options.initialBook })
-  return createHarnessResult({ engine,
-brokerState,
-state })
+  const initialState = options.seedExistingBuy
+    ? {
+        ...options.initialState,
+        orderRegistry: createSeededOpenBuyOrderRegistry({
+          orderRegistry: options.initialState?.orderRegistry ?? OrderRegistry.empty(),
+        }),
+      }
+    : options.initialState
+  const effectiveOptions = {
+    ...options,
+    initialState,
+  }
+  const brokerState = createHarnessBrokerState({ options: effectiveOptions })
+  for (const order of initialState?.orderRegistry?.orders ?? []) {
+    brokerState.canonicalOrdersByClientId.set(order.clientOrderId, order)
+    if (order.brokerOrderId) {
+      brokerState.acknowledgedOrdersById.set(order.brokerOrderId, order)
+      brokerState.acknowledgedFillsByOrder.set(order.brokerOrderId, [])
+    }
+  }
+  const state = createHarnessMutableState({ options: effectiveOptions })
+  const engine = createHarnessEngine({
+    options: effectiveOptions,
+    brokerState,
+    state,
+  })
+  await processHarnessInitialBook({
+    engine,
+    initialBook: effectiveOptions.initialBook,
+  })
+  return createHarnessResult({
+    engine,
+    brokerState,
+    state,
+  })
 }
 
 
