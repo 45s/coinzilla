@@ -11,7 +11,10 @@ function createCandidateNotionalDependencies({ events } = {}) {
         events.push(event)
         return { ok: true }
       },
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
     pairs: {
       DOGEUSDT: {

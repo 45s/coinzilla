@@ -288,7 +288,7 @@ function createStrategyDecisionInputs({ context, balances, pairs } = {}) {
  *
  * @param {object} input Evaluation dependencies, context, balances and allocation.
  */
-export async function publishStrategyDecision({ dependencies, context, balances, allocation } = {}) {
+function publishStrategyDecisionEvent({ dependencies, context, balances, allocation } = {}) {
   const { eventPublisher, pairs } = dependencies
   const { decision, symbol, marketPrice } = context
   const executableActions = allocation?.executableActions ?? context.effectiveActions ?? []
@@ -315,6 +315,14 @@ export async function publishStrategyDecision({ dependencies, context, balances,
       ...(recoveryEvidence === undefined ? {} : { recoveryEvidence }),
     }),
   })
+  return {
+    eventPublisher,
+    publication,
+    recoveryEvidence,
+  }
+}
+
+async function flushRecoveryDecisionEvidence({ eventPublisher, publication, recoveryEvidence } = {}) {
   if (recoveryEvidence === undefined) {
     return publication
   }
@@ -328,5 +336,19 @@ export async function publishStrategyDecision({ dependencies, context, balances,
   if (flushed?.ok !== true || flushed?.durable !== true) {
     throw flushed?.errors?.[0] ?? new Error("Recovery strategy decision evidence was published but not durably journaled")
   }
-  return { ok: true, durable: true }
+  return {
+    ok: true,
+    durable: true,
+  }
+}
+
+/**
+ * Publish a strategy decision. Recovery decisions await a durable Journal
+ * flush before the evaluator may complete recovery or submit a residual SELL.
+ *
+ * @param {object} input Evaluation dependencies, context, balances and allocation.
+ */
+export async function publishStrategyDecision(input = {}) {
+  const result = publishStrategyDecisionEvent(input)
+  return flushRecoveryDecisionEvidence(result)
 }

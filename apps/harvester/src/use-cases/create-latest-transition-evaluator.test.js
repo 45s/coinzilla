@@ -59,7 +59,10 @@ function createDependencies({ hardPause = false } = {}) {
     logger: { debug: () => {} },
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
     strategyPolicy: {
       evaluate: () => ({
@@ -355,7 +358,13 @@ function configureDustCompletionFailureMarket({ dependencies, symbol, publishedE
       publishedEvents.push(event)
       return { ok: true }
     },
-    flush: async () => ({ ok: true, durable: true }),
+    flush: async () => {
+      dependencies.state.recoveryDecisionFlushCount = (dependencies.state.recoveryDecisionFlushCount ?? 0) + 1
+      return {
+        ok: true,
+        durable: true,
+      }
+    },
   }
 }
 
@@ -368,8 +377,11 @@ function configureDustCompletionFailureCallbacks({
   dependencies.pause = async (input) => {
     pauses.push(input)
   }
+  dependencies.state.recoveryCompletionCalls = 0
   dependencies.completeRecoveryCycle = async () => {
+    assert.equal(dependencies.state.recoveryDecisionFlushCount, 1, "The recovery decision must be durably flushed before completion is attempted.")
     assert.equal(publishedEvents.length, 1, "The recovery decision must be published before completion is attempted.")
+    dependencies.state.recoveryCompletionCalls += 1
     return {
       ok: false,
       errors: [failure],
@@ -823,7 +835,10 @@ test("fails closed before completion or residual SELL submission when recovery e
   }
   dependencies.eventPublisher = {
     publish: () => ({ ok: true }),
-    flush: async () => ({ ok: false, errors: [failure] }),
+    flush: async () => ({
+      ok: false,
+      errors: [failure],
+    }),
   }
   const evaluate = createLatestTransitionEvaluator(dependencies)
 
@@ -836,6 +851,36 @@ test("fails closed before completion or residual SELL submission when recovery e
   assert.equal(result.errors[0], failure)
   assert.equal(tracked.submissions.length, 0)
   assert.equal(tracked.completionCalls.count, 0)
+  assert.equal(pauses.length, 1)
+  assert.equal(pauses[0].error, failure)
+})
+test("fails closed before dust cycle completion when recovery decision evidence cannot be durably flushed", async () => {
+  const dependencies = createDependencies()
+  const failure = new Error("Journal flush failed before dust completion")
+  failure.code = "RECOVERY_DECISION_EVIDENCE_FLUSH_FAILED"
+  const pauses = []
+  const publishedEvents = []
+  configureDustCompletionFailureEvidence({
+    dependencies,
+    symbol: "DOGEUSDT",
+    failure,
+    pauses,
+    publishedEvents,
+  })
+  dependencies.eventPublisher.flush = async () => ({
+    ok: false,
+    errors: [failure],
+  })
+  const evaluate = createLatestTransitionEvaluator(dependencies)
+
+  const result = await evaluate({
+    symbol: "DOGEUSDT",
+    shutdownRecoveryOnly: true,
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.errors[0], failure)
+  assert.equal(dependencies.state.recoveryCompletionCalls, 0)
   assert.equal(pauses.length, 1)
   assert.equal(pauses[0].error, failure)
 })
