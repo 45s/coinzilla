@@ -293,7 +293,7 @@ function validateScenarioInput({ schema, defaults, input }) {
 
 const RUNTIME_SCENARIO_READINESS_REASONS = Object.freeze([
   "Scenario infrastructure uses a run-local simulated broker and in-memory operational store; it does not prove durable production account or STOP state.",
-  "Submission-intent, submission-outcome and STOP persistence failures plus BUY-only STOP admission are covered; broader infrastructure-failure scenarios remain incomplete.",
+  "Submission-intent, submission-outcome and combined outcome/STOP persistence failures plus BUY-only STOP admission are covered; broader infrastructure-failure scenarios remain incomplete.",
   "No trusted OS-level sandbox launcher is available; the host must continue to fail closed.",
 ])
 
@@ -323,6 +323,17 @@ export const RECOVERY_SELLER_RUNTIME_SCENARIOS = Object.freeze([
   Object.freeze({
     id: "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001",
     name: "Production Recovery Seller fails closed when broker acknowledgement outcome persistence fails",
+    layer: "APPLICATION",
+    status: "PARTIAL",
+    executionStatus: "PRELIMINARY",
+    executable: false,
+    readinessReasons: RUNTIME_SCENARIO_READINESS_REASONS,
+    inputSchema: RUNTIME_FIXTURE.inputSchema,
+    input: RUNTIME_FIXTURE.input,
+  }),
+  Object.freeze({
+    id: "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001",
+    name: "Production Recovery Seller keeps account admission blocked when SELL outcome and STOP persistence both fail",
     layer: "APPLICATION",
     status: "PARTIAL",
     executionStatus: "PRELIMINARY",
@@ -903,9 +914,11 @@ async function createRuntimeScenarioState({
   scenarioId,
 }) {
   const operationalStateStore = createRuntimeScenarioStore({
-    failStopPersistence: scenarioId === "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001",
+    failStopPersistence: scenarioId === "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001" ||
+      scenarioId === "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001",
     failSubmissionIntentPersistence: scenarioId === "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001",
-    failSubmissionOutcomePersistence: scenarioId === "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001",
+    failSubmissionOutcomePersistence: scenarioId === "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001" ||
+      scenarioId === "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001",
   })
   const marketMetadata = createRuntimeScenarioMarketMetadata({
     market,
@@ -1640,6 +1653,17 @@ function createRuntimeScenarioTerminalSellExpected({
 }
 
 function createRuntimeScenarioSubmissionPersistenceFailureExpected({ scenarioId }) {
+  if (scenarioId === "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001") {
+    return {
+      submissionOutcomePersistenceFailed: true,
+      submissionRejected: true,
+      submittedOrderCount: 0,
+      stopFactAppended: false,
+      reservationRetained: true,
+      brokerSubmissionCallCount: 1,
+      accountAdmissionBlocked: true,
+    }
+  }
   if (scenarioId === "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001") {
     return {
       submissionOutcomePersistenceFailed: true,
@@ -1999,7 +2023,7 @@ function createSubmissionOutcomePersistenceFailureAssertions({ output, expected 
       expected: false,
     }),
     createAssertion({
-      name: "unresolved acknowledged submission latches the run-local account STOP",
+      name: "account STOP persistence matches the injected submission-outcome failure scenario",
       actual: output.stopFactAppended,
       expected: expected.stopFactAppended,
     }),
@@ -2216,7 +2240,8 @@ async function executeRuntimeScenarioAdmission({ runtime, scenarioId, effectiveI
       effectiveInput,
       expectRejection: scenarioId === "RS-RUNTIME-SELL-REJECTION-001" ||
         scenarioId === "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001" ||
-        scenarioId === "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001",
+        scenarioId === "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001" ||
+        scenarioId === "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001",
     })
     return {
       execution,
