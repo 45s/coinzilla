@@ -121,9 +121,21 @@ function createWriteOnlyFlush({ flushJournalWrites, logger, reportFailure } = {}
 export function makeEventPublisher({ eventBus, flush: flushEvents, flushWrites: flushJournalWrites, logger = defaultLogger } = {}) {
   const reportFailure = createFailureReporter({ logger })
   return Object.freeze({
-    publish: createPublish({ eventBus, logger, reportFailure }),
-    flush: createGlobalFlush({ flushEvents, logger, reportFailure }),
-    flushWrites: createWriteOnlyFlush({ flushJournalWrites, logger, reportFailure }),
+    publish: createPublish({
+      eventBus,
+      logger,
+      reportFailure,
+    }),
+    flush: createGlobalFlush({
+      flushEvents,
+      logger,
+      reportFailure,
+    }),
+    flushWrites: createWriteOnlyFlush({
+      flushJournalWrites,
+      logger,
+      reportFailure,
+    }),
     reportFailure,
   })
 }
