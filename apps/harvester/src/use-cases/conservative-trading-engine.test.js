@@ -7683,10 +7683,26 @@ function createRecoveredOrderFixtures() {
 }
 
 async function createRecoveredOrderHarness({ fixtures }) {
+  let portfolio = new Portfolio()
+  let recoveryLedger = RecoveryLedger.empty({ market })
   const harness = await createHarness({
     initialBook: false,
-    baseFreeBalance: "1",
-    portfolioBaseQuantityBaseline: "1",
+    getPortfolio: () => portfolio,
+    getRecoveryLedger: () => recoveryLedger,
+    updateTradingAccounting: async ({ fill }) => {
+      portfolio = portfolio.applyFill({
+        strategyId: StrategyId.COIN_GRABBER,
+        fill,
+      }).portfolio
+      recoveryLedger = recoveryLedger.applyFill({
+        strategyId: StrategyId.COIN_GRABBER,
+        fill,
+      }).ledger
+      return {
+        ok: true,
+        data: { applied: true },
+      }
+    },
     initialState: {
       orderRegistry: new OrderRegistry({
         orders: [fixtures.buyOwnedOrder, fixtures.sellOwnedOrder],
