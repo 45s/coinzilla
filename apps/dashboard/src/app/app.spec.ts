@@ -116,6 +116,10 @@ describe('AppComponent', () => {
 
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('http://127.0.0.1:4201/api/v1/trading/operator/status')
+      .flush({ ok: true, data: createBotsSnapshot().data.status.data });
+    await fixture.whenStable();
     const botsButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button.nav-item'))
       .find((button) => button.textContent?.includes('Bots')) as HTMLButtonElement | undefined;
     expect(botsButton, 'The primary navigation must expose Bots as a separate workspace.').toBeDefined();
