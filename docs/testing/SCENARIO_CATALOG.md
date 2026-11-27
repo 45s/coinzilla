@@ -548,7 +548,6 @@ The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERV
 
 **Evidence note:** Existing test titles were inspected to create a navigation mapping. The assertions have not yet been reviewed against every listed subcase, and the tests were not executed as part of this documentation-only catalog change; do not treat this mapping as VERIFIED.
 
-
 ### CG-003 — Pre-existing BUYs continue their lifecycle without reopening BUY admission
 
 **Status:** TEST-MAPPED — application-path cases are mapped; exact-head verification is pending.
