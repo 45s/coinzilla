@@ -127,3 +127,9 @@ The supported developer workflow is to run the Dashboard client and Harvester se
 No Linux server, WSL2 environment, self-hosted runner, or purchased machine is required to perform this functional check. The Linux Bubblewrap/prlimit/cgroup workflow validates an additional OS-isolation boundary only. Keep it as optional security-hardening evidence; do not make its availability or queued status block Windows development, scenario execution, or functional acceptance.
 
 A platform-specific limitation in the current host composition that prevents this Windows workflow is an implementation defect to resolve in the runner—not a requirement to change the user's operating system or provision infrastructure. Exact replay's trusted-artifact verification remains a separate security capability and must remain fail-closed until implemented.
+
+## Windows local worker implementation — 2026-11-27
+
+Harvester now composes a dedicated Node child-process worker by default on Windows; no `HARVESTER_SCENARIO_SANDBOX` setting, WSL2, Linux tools or remote host is required for local functional simulation. The worker receives a minimal environment and installs the existing Node module, network API and filesystem mutation guards before accepting execution. The host recognizes this as a **guarded simulation boundary**, not as verified OS isolation. It is intended only for repository-owned scenario adapters and simulated ports; it is not a sandbox for arbitrary user-supplied JavaScript and does not provide OS-enforced memory/CPU/network/filesystem limits. Linux Bubblewrap/cgroup remains optional OS-hardening evidence. Scenario status remains PARTIAL, and trusted exact replay remains blocked.
+
+A Windows-specific GitHub Actions job now runs the local API composition test on `windows-latest`. Its result must be checked on the exact final PR head before claiming Windows acceptance.
