@@ -232,23 +232,38 @@ function createInvalidProcessIdentitySourceVariants(processIdentity) {
   return [
     {
       ...processIdentity,
-      source: { ...processIdentity.source, unexpected: true },
+      source: {
+        ...processIdentity.source,
+        unexpected: true,
+      },
     },
     {
       ...processIdentity,
-      source: { ...processIdentity.source, branch: 42 },
+      source: {
+        ...processIdentity.source,
+        branch: 42,
+      },
     },
     {
       ...processIdentity,
-      source: { ...processIdentity.source, commit: "A".repeat(40) },
+      source: {
+        ...processIdentity.source,
+        commit: "A".repeat(40),
+      },
     },
     {
       ...processIdentity,
-      source: { ...processIdentity.source, workingTree: "maybe" },
+      source: {
+        ...processIdentity.source,
+        workingTree: "maybe",
+      },
     },
     {
       ...processIdentity,
-      source: { ...processIdentity.source, metadataSource: "unknown" },
+      source: {
+        ...processIdentity.source,
+        metadataSource: "unknown",
+      },
     },
   ]
 }
