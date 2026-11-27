@@ -568,6 +568,7 @@ bnbLocked: "0.25" }),
   })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.recoverySellerPositionsChecked, 0)
   assert.equal(result.data.balancesChecked, 3)
 })
 
