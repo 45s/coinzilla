@@ -106,6 +106,7 @@ describe('OverviewComponent', () => {
     http = result.http;
     const request = http.expectOne(STATUS_URL);
     request.flush({ ok: true, data: createRuntimeStatus() });
+    await result.fixture.whenStable();
     result.socket.open();
     result.socket.sendMessage(createSnapshotMessage());
     result.fixture.detectChanges();
@@ -127,6 +128,7 @@ describe('OverviewComponent', () => {
     const result = await createOverviewFixture();
     http = result.http;
     http.expectOne(STATUS_URL).error(new ProgressEvent('error'));
+    await result.fixture.whenStable();
     result.socket.open();
     result.fixture.detectChanges();
 
@@ -148,6 +150,7 @@ describe('OverviewComponent', () => {
     const result = await createOverviewFixture();
     http = result.http;
     http.expectOne(STATUS_URL).flush({ ok: true, data: { runtimeState: 'RUNNING' } });
+    await result.fixture.whenStable();
     result.socket.open();
     result.socket.sendMessage({ type: 'bots.snapshot', version: 1, revision: 1 });
     result.fixture.detectChanges();
@@ -164,6 +167,7 @@ describe('OverviewComponent', () => {
     const result = await createOverviewFixture();
     http = result.http;
     http.expectOne(STATUS_URL).flush({ ok: true, data: createRuntimeStatus() });
+    await result.fixture.whenStable();
     result.fixture.destroy();
     expect(result.socket.closed, 'Destroying Overview must close its owned event-stream socket.').toBe(true);
   });
