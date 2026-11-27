@@ -4,7 +4,7 @@
 
 ## Current status — 2026-11-26
 
-The Scenario Runner foundation is merged, but production execution remains fail-closed. PR #1887 is merged with under-target fully FILLED SELL, STOP-persistence failure and BUY-only STOP admission runtime scenarios. PR #1913 adds test-first failures for durable SELL-intent persistence before broker placement, acknowledged-outcome persistence after simulated broker acknowledgement, and the combined outcome/STOP persistence failure that must preserve the in-memory account admission latch. The catalogue remains non-executable without a trusted OS sandbox and matching attestation; broader infrastructure-failure, complete replay-provenance and end-to-end acceptance coverage remain outstanding.
+The Scenario Runner foundation is merged, but production execution remains fail-closed. PR #1887 is merged with under-target fully FILLED SELL, STOP-persistence failure and BUY-only STOP admission runtime scenarios. PR #1913 adds test-first failures for durable SELL-intent persistence before broker placement, acknowledged-outcome persistence after simulated broker acknowledgement, combined outcome/STOP persistence failure that must preserve the in-memory account admission latch, and a broker transport exception classified as durable UNKNOWN with STOP/reservation retention. The catalogue remains non-executable without a trusted OS sandbox and matching attestation; broader infrastructure-failure, complete replay-provenance and end-to-end acceptance coverage remain outstanding.
 
 ## Approved branch-only refactoring and agent preflight
 

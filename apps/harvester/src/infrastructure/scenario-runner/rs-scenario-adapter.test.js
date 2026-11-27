@@ -312,6 +312,7 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
     "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001",
     "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001",
     "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001",
+    "RS-RUNTIME-SELL-BROKER-EXCEPTION-001",
     "RS-RUNTIME-SELL-REJECTION-001",
     "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
     "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001",
@@ -430,4 +431,32 @@ test("production RS runtime keeps account admission blocked when both outcome an
     "The SELL reservation must remain retained while broker outcome and STOP persistence are unresolved.")
   assert.equal(result.output.accountAdmissionBlocked, true,
     "The in-memory account admission latch must stay active despite STOP persistence failure.")
+})
+
+
+test("production RS runtime persists UNKNOWN and blocks BUY admission after broker placement throws", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-sell-broker-exception",
+    scenarioId: "RS-RUNTIME-SELL-BROKER-EXCEPTION-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.submissionRejected, true,
+    "A thrown broker transport error must remain an unresolved submission, not success.")
+  assert.equal(result.output.brokerSubmissionCallCount, 1,
+    "The simulated broker placement port must be invoked exactly once.")
+  assert.ok(result.output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_INTENT"),
+    "The durable SELL intent must precede the broker placement attempt.")
+  assert.ok(result.output.simulationFacts.some((fact) =>
+    fact.factType === "ORDER_SUBMISSION_OUTCOME" && fact.data?.outcome === "UNKNOWN"),
+    "The ambiguous broker response must be durably classified UNKNOWN.")
+  assert.equal(result.output.stopFactAppended, true,
+    "An ambiguous broker outcome must latch the account STOP.")
+  assert.notEqual(result.output.reservedSellCycle, null,
+    "The sole-SELL reservation must remain held pending reconciliation.")
+  assert.equal(result.output.accountAdmissionBlocked, true,
+    "BUY admission must remain blocked after the broker transport exception.")
 })

@@ -293,7 +293,7 @@ function validateScenarioInput({ schema, defaults, input }) {
 
 const RUNTIME_SCENARIO_READINESS_REASONS = Object.freeze([
   "Scenario infrastructure uses a run-local simulated broker and in-memory operational store; it does not prove durable production account or STOP state.",
-  "Submission-intent, submission-outcome and combined outcome/STOP persistence failures plus BUY-only STOP admission are covered; broader infrastructure-failure scenarios remain incomplete.",
+  "Submission-intent/outcome persistence failures, ambiguous broker-placement exceptions, combined outcome/STOP persistence failure and BUY-only STOP admission are covered; broader infrastructure-failure scenarios remain incomplete.",
   "No trusted OS-level sandbox launcher is available; the host must continue to fail closed.",
 ])
 
@@ -334,6 +334,17 @@ export const RECOVERY_SELLER_RUNTIME_SCENARIOS = Object.freeze([
   Object.freeze({
     id: "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001",
     name: "Production Recovery Seller keeps account admission blocked when SELL outcome and STOP persistence both fail",
+    layer: "APPLICATION",
+    status: "PARTIAL",
+    executionStatus: "PRELIMINARY",
+    executable: false,
+    readinessReasons: RUNTIME_SCENARIO_READINESS_REASONS,
+    inputSchema: RUNTIME_FIXTURE.inputSchema,
+    input: RUNTIME_FIXTURE.input,
+  }),
+  Object.freeze({
+    id: "RS-RUNTIME-SELL-BROKER-EXCEPTION-001",
+    name: "Production Recovery Seller preserves an unresolved SELL after broker placement throws",
     layer: "APPLICATION",
     status: "PARTIAL",
     executionStatus: "PRELIMINARY",
@@ -771,7 +782,7 @@ async function createRuntimeScenarioStopWorkflow({ operationalStateStore }) {
   return result.data
 }
 
-function createRuntimeScenarioBroker({ market, baseAsset, quoteAsset, runId, rejectSellSubmission = false }) {
+function createRuntimeScenarioBroker({ market, baseAsset, quoteAsset, runId, rejectSellSubmission = false, throwSellSubmission = false }) {
   let submissionCallCount = 0
   return {
     getSubmissionCallCount: () => submissionCallCount,
@@ -786,6 +797,9 @@ function createRuntimeScenarioBroker({ market, baseAsset, quoteAsset, runId, rej
             ok: false,
             errors: [new Error("Simulated exchange rejection of Recovery Seller SELL")],
           }
+        }
+        if (throwSellSubmission && order.side === "SELL") {
+          throw new Error("Simulated broker transport failure after SELL placement attempt")
         }
         const acknowledgedOrder = new CanonicalOrder({
           clientOrderId: order.clientOrderId,
@@ -971,6 +985,7 @@ async function createRuntimeScenarioExecutionPorts({
     quoteAsset,
     runId,
     rejectSellSubmission: scenarioId === "RS-RUNTIME-SELL-REJECTION-001",
+    throwSellSubmission: scenarioId === "RS-RUNTIME-SELL-BROKER-EXCEPTION-001",
   })
   const submitter = createRuntimeScenarioSubmitter({
     broker,
@@ -1664,6 +1679,17 @@ function createRuntimeScenarioSubmissionPersistenceFailureExpected({ scenarioId 
       accountAdmissionBlocked: true,
     }
   }
+  if (scenarioId === "RS-RUNTIME-SELL-BROKER-EXCEPTION-001") {
+    return {
+      submissionOutcomeUnknown: true,
+      submissionRejected: true,
+      submittedOrderCount: 0,
+      stopFactAppended: true,
+      reservationRetained: true,
+      brokerSubmissionCallCount: 1,
+      accountAdmissionBlocked: true,
+    }
+  }
   if (scenarioId === "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001") {
     return {
       submissionOutcomePersistenceFailed: true,
@@ -2040,9 +2066,55 @@ function createSubmissionOutcomePersistenceFailureAssertions({ output, expected 
   ]
 }
 
+function createBrokerPlacementExceptionAssertions({ output, expected }) {
+  return [
+    createAssertion({
+      name: "broker placement exception is classified as an unresolved submission",
+      actual: output.submissionRejected,
+      expected: expected.submissionRejected,
+    }),
+    createAssertion({
+      name: "simulated broker was called once before transport failure",
+      actual: output.brokerSubmissionCallCount,
+      expected: expected.brokerSubmissionCallCount,
+    }),
+    createAssertion({
+      name: "durable intent exists before the broker transport exception",
+      actual: output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_INTENT"),
+      expected: true,
+    }),
+    createAssertion({
+      name: "unknown broker outcome is durably classified as UNKNOWN",
+      actual: output.simulationFacts.some((fact) =>
+        fact.factType === "ORDER_SUBMISSION_OUTCOME" && fact.data?.outcome === "UNKNOWN"),
+      expected: true,
+    }),
+    createAssertion({
+      name: "account STOP is durably latched after unknown broker outcome",
+      actual: output.stopFactAppended,
+      expected: expected.stopFactAppended,
+    }),
+    createAssertion({
+      name: "sole-SELL reservation remains retained pending broker reconciliation",
+      actual: output.reservedSellCycle !== null,
+      expected: expected.reservationRetained,
+    }),
+    createAssertion({
+      name: "account BUY admission remains blocked after broker transport failure",
+      actual: output.accountAdmissionBlocked,
+      expected: expected.accountAdmissionBlocked,
+    }),
+  ]
+}
+
 function createRuntimeScenarioAssertions({ output, expected }) {
   let assertions
-  if (expected.submissionOutcomePersistenceFailed === true) {
+  if (expected.submissionOutcomeUnknown === true) {
+    assertions = createBrokerPlacementExceptionAssertions({
+      output,
+      expected,
+    })
+  } else if (expected.submissionOutcomePersistenceFailed === true) {
     assertions = createSubmissionOutcomePersistenceFailureAssertions({
       output,
       expected,
@@ -2241,7 +2313,8 @@ async function executeRuntimeScenarioAdmission({ runtime, scenarioId, effectiveI
       expectRejection: scenarioId === "RS-RUNTIME-SELL-REJECTION-001" ||
         scenarioId === "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001" ||
         scenarioId === "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001" ||
-        scenarioId === "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001",
+        scenarioId === "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001" ||
+        scenarioId === "RS-RUNTIME-SELL-BROKER-EXCEPTION-001",
     })
     return {
       execution,

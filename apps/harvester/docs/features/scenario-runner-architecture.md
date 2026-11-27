@@ -309,6 +309,10 @@ The runtime catalogue includes `RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001`
 
 The runtime catalogue includes `RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001`. It records the SELL intent, receives one simulated broker acknowledgement, then injects failures for both the submission-outcome append and the account STOP append. The scenario asserts neither failed fact is presented as durable, the sole-SELL reservation remains retained, and the in-memory account admission latch still blocks BUYs despite failed STOP persistence. This is a deterministic simulation of a double infrastructure fault; it does not prove production storage durability or live-broker safety. The scenario remains PARTIAL/non-executable.
 
+## Broker placement exception runtime scenario — implementation in PR #1913
+
+The runtime catalogue includes `RS-RUNTIME-SELL-BROKER-EXCEPTION-001`. The run-local simulated broker throws after the production submitter has durably recorded the SELL intent and invoked the broker port once. The production submission handler classifies the result as `UNKNOWN`, persists that outcome, latches account STOP and retains the sole-SELL reservation pending reconciliation. The regression asserts no successful submission is reported and account BUY admission remains blocked. This covers an ambiguous transport failure without retrying a possibly accepted order; it is simulation-only and remains PARTIAL/non-executable.
+
 ## STOP buy-only admission runtime scenario — implementation in PR #1887
 
 The runtime catalogue includes `RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001`. It latches STOP, first evaluates the market below the profitable SELL target and verifies that no new BUY is submitted, then evaluates the same accumulating cycle at an eligible SELL price and verifies that the first recovery SELL is still submitted. The STOP remains latched and account admission remains blocked for additional BUY spending. This preserves the owner-resolved RS-009 contract: STOP is not a blanket shutdown of eligible recovery SELLs or reconciliation.
