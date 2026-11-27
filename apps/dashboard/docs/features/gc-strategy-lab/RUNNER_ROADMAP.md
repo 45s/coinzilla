@@ -136,3 +136,10 @@ A Windows-specific GitHub Actions job now runs the local API composition test on
 
 
 The dedicated Linux sandbox E2E workflow is manual-dispatch only. It does not run on pull requests and is not a required functional-development gate. Use it only when deliberately validating the optional Linux OS-isolation layer; its self-hosted runner availability must not block Windows local scenario work.
+
+
+## Superseding Windows acceptance status — 2026-11-27
+
+This section supersedes earlier checklist/history statements in this file that said no RS scenario was executable without a trusted OS sandbox. The Windows composition now uses a factory-created Node child-process worker and exposes all twelve current RS production-flow scenarios as executable for local simulation through simulated broker/order and run-local dependencies. All twelve were exercised through the real local Harvester HTTP API on Windows and passed on code-identical checkpoint `14f36a075ed4320b9f6f5fadb8b302db58c7651f`. This is functional acceptance only: scenarios remain PARTIAL, the Node guards are not OS isolation, and exact replay remains blocked pending independent trusted artifact verification.
+
+Dashboard gateway tests now cover catalogue, submit, history, run detail, cancel and replay HTTP methods/routes/payloads. Framework-independent application tests cover validation, authoritative status refresh, WebSocket update handling, cancellation, replay, trace graph, history and debug-package generation. The selectable debug JSON remains the fallback when clipboard access is unavailable. Exact-head CI is pending after these final test/documentation updates.

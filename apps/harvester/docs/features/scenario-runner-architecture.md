@@ -355,3 +355,8 @@ A Windows-specific CI job runs the Harvester local API composition integration t
 
 
 The trusted Linux sandbox E2E workflow is intentionally manual-dispatch only and is not part of pull-request CI. A missing or queued self-hosted Linux runner therefore cannot block ordinary development or merge checks for the Windows local simulation path. Run it only when separately validating the optional Linux OS-isolation layer.
+
+
+## Current local functional acceptance — 2026-11-27 (supersedes older non-executable host snapshots)
+
+The Windows API composition runs the fixed RS runtime worker in a dedicated Node child process by default, with a minimal environment and the existing module/network/filesystem mutation guards. The host records this as a guarded simulation boundary and keeps `osSandboxVerified: false`; do not describe it as an OS sandbox. All twelve current RS runtime scenarios are exposed for local Windows simulation through simulated infrastructure. A Windows CI job passed the actual local Harvester HTTP test on code checkpoint `14f36a075ed4320b9f6f5fadb8b302db58c7651f`, submitting all twelve scenarios and checking completed results, assertions and traces. The Dashboard HTTP gateway now has focused tests for catalogue, submit, history, status, cancel and replay routes; Dashboard application tests cover event refresh, history, trace graph, cancellation and debug-package behavior. These tests establish local functional integration only. Production acceptance remains PARTIAL, exact replay remains fail-closed, and the optional Linux OS-hardening workflow is manual-dispatch only.

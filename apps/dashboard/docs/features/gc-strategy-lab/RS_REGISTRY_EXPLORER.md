@@ -212,3 +212,8 @@ Market prices and simulated BUY/SELL broker outcomes belong to the scenario's or
 ## Mandatory agent preflight and branch scope
 
 Every agent must read root `AGENTS.md` and all applicable nested `AGENTS.md` files before any task work; the issue, PR and Runner roadmap repeat this rule. All implementation stays in the dedicated task branch/PR; no direct `develop`/`main` commits or merges. Trading logic/services may be refactored as needed to achieve faithful production reuse, with regression coverage.
+
+
+## Current Windows runtime status — 2026-11-27 (supersedes the historical 2026-11-26 status above)
+
+The Harvester composition root selects a factory-created Node guarded-simulation launcher by default on Windows. No Linux environment variable, WSL2, Bubblewrap, cgroup controller or separate server is required. The local HTTP API exposes all twelve RS production-flow scenarios as executable for simulation; the Windows integration test submits each scenario through REST and checks terminal Completed status, passed assertions and trace. These scenarios remain PARTIAL because Node guards are not OS isolation and do not establish production durability, live-account safety or trusted build provenance. The Linux Bubblewrap E2E is manual-dispatch only and optional. Exact replay remains blocked until an independent trusted artifact verifier is available.
