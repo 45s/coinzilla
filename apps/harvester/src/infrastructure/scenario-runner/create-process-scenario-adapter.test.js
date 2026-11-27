@@ -542,7 +542,7 @@ test("Linux sandbox launcher refuses non-Linux hosts before attestation", () => 
   }), /Linux/)
 })
 
-function createSandboxChildFixture({ onClose }) {
+function createSandboxChildFixture() {
   let closeHandler
   const child = {
     pid: 4321,
@@ -552,7 +552,6 @@ function createSandboxChildFixture({ onClose }) {
       const [event, handler] = eventArguments
       if (event === "close") {
         closeHandler = handler
-        onClose(handler)
       }
       return this
     },
@@ -566,11 +565,7 @@ function createSandboxChildFixture({ onClose }) {
 function createLinuxSandboxLauncherFixture() {
   let spawned
   let cgroupCleanupCount = 0
-  const childFixture = createSandboxChildFixture({
-    onClose: (handler) => {
-      closeHandler = handler
-    },
-  })
+  const childFixture = createSandboxChildFixture()
   const child = childFixture.child
   const launcher = createLinuxBubblewrapSandboxLauncher({
     platform: "linux",
