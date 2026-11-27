@@ -1184,8 +1184,12 @@ function describeActiveOrders({ engine }) {
     .sort(compareActiveOrderDescriptions)
 }
 
-function createSeededOpenDogeBuyOrderRegistry({ market, positionId }) {
-  const pendingOrder = new CanonicalOrder({
+function createSeededOpenDogeOrdersRegistry({ market, positionId }) {
+  const ownership = {
+    strategyId: StrategyId.COIN_GRABBER,
+    positionId,
+  }
+  const pendingBuy = new CanonicalOrder({
     clientOrderId: "seeded-doge-standing-buy",
     market,
     side: "BUY",
@@ -1206,15 +1210,14 @@ function createSeededOpenDogeBuyOrderRegistry({ market, positionId }) {
     createdAt: 1,
     updatedAt: 1,
   })
-  const pendingRegistry = OrderRegistry.empty().registerPending({
-    order: pendingOrder,
+  const withPendingBuy = OrderRegistry.empty().registerPending({
+    order: pendingBuy,
     ownership: {
-      strategyId: StrategyId.COIN_GRABBER,
-      positionId,
+      ...ownership,
       purpose: "CONSERVATIVE_BUY",
     },
   }).registry
-  return pendingRegistry.applyUpdate({
+  const withOpenBuy = withPendingBuy.applyUpdate({
     order: new CanonicalOrder({
       clientOrderId: "seeded-doge-standing-buy",
       brokerOrderId: "broker-seeded-doge-standing-buy",
@@ -1239,6 +1242,59 @@ function createSeededOpenDogeBuyOrderRegistry({ market, positionId }) {
       updatedAt: 2,
     }),
   }).registry
+  const pendingSell = new CanonicalOrder({
+    clientOrderId: "seeded-doge-recovery-sell",
+    market,
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "100.01",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "0.9",
+      asset: market.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: market.baseAsset,
+    }),
+    status: "PENDING",
+    createdAt: 1,
+    updatedAt: 1,
+  })
+  const withPendingSell = withOpenBuy.registerPending({
+    order: pendingSell,
+    ownership: {
+      ...ownership,
+      purpose: "RECOVERY_SELL",
+    },
+  }).registry
+  return withPendingSell.applyUpdate({
+    order: new CanonicalOrder({
+      clientOrderId: "seeded-doge-recovery-sell",
+      brokerOrderId: "broker-seeded-doge-recovery-sell",
+      market,
+      side: "SELL",
+      type: "LIMIT_MAKER",
+      limitPrice: new Money({
+        amount: "100.01",
+        asset: quoteAsset,
+      }),
+      originalQuantity: new Quantity({
+        amount: "0.9",
+        asset: market.baseAsset,
+      }),
+      executedQuantity: new Quantity({
+        amount: "0",
+        asset: market.baseAsset,
+      }),
+      status: "OPEN",
+      createdAt: 1,
+      acknowledgedAt: 2,
+      updatedAt: 2,
+    }),
+  }).registry
 }
 
 async function createShutdownSellCancellationHarness() {
@@ -1248,7 +1304,7 @@ async function createShutdownSellCancellationHarness() {
     marketId: dogeMarket.id,
     strategyId: StrategyId.COIN_GRABBER,
   })
-  const orderRegistry = createSeededOpenDogeBuyOrderRegistry({
+  const orderRegistry = createSeededOpenDogeOrdersRegistry({
     market: dogeMarket,
     positionId: position.positionId,
   })
