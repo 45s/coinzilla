@@ -7681,6 +7681,7 @@ function createRecoveredOrderFixtures() {
 async function createRecoveredOrderHarness({ fixtures }) {
   const harness = await createHarness({
     initialBook: false,
+    baseFreeBalance: "1",
     portfolioBaseQuantityBaseline: "1",
     initialState: {
       orderRegistry: new OrderRegistry({
