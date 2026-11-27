@@ -2,6 +2,14 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { startProviderAccounts } from "./start-provider-accounts.js"
 
+function durableProcessStopResult() {
+  return {
+    ok: true,
+    status: "STOPPED",
+    data: { durableProcessStopAcknowledged: true },
+  }
+}
+
 function createProvider({
   providerInstanceId,
   providerType,
@@ -178,9 +186,7 @@ function createAccountRuntimeFixtures({
     stopMarketData: async () => ({ ok: true }),
     stop: async () => {
       starts.push(`stop:${provider.providerInstanceId}`)
-      return {
-        ok: true,
-      }
+      return durableProcessStopResult()
     },
   }))
 }
@@ -295,7 +301,7 @@ function createShutdownTrackingProviderStarter(shutdownOrder) {
       startMarketData: async () => ({ ok: true }),
       stop: async () => {
         shutdownOrder.push(`runtime:${providerInstanceId}`)
-        return { ok: true }
+        return durableProcessStopResult()
       },
       stopMarketData: async () => {
         shutdownOrder.push(`market-data:${providerInstanceId}`)
@@ -321,7 +327,7 @@ function createStopTrackingProviderStarter({ stopCalls, firstStopAttempts }) {
           }
         }
       }
-      return { ok: true }
+      return durableProcessStopResult()
     },
   })
 }
@@ -513,7 +519,7 @@ test("transfers process-wide ownership to the first successfully started optiona
         tradingEnabled: true,
         startMarketData: async () => ({ ok: true }),
         stopMarketData: async () => ({ ok: true }),
-        stop: async () => ({ ok: true }),
+        stop: async () => durableProcessStopResult(),
       }
     },
   })
@@ -669,7 +675,7 @@ test("retains a failed account lock when startup cleanup is not confirmed", asyn
         startMarketData: async () => ({ ok: true }),
         stopMarketData: async () => ({ ok: true }),
         stop: async () => ({
-          ok: true,
+          ...durableProcessStopResult(),
         }),
       }
     },
@@ -732,7 +738,7 @@ test("isolates an optional provider market-data startup failure", async () => {
         },
         stop: async () => {
           calls.push(`stop-runtime:${providerInstanceId}`)
-          return { ok: true }
+          return durableProcessStopResult()
         },
       }
     },
