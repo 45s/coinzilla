@@ -12,7 +12,7 @@ This file adds Dashboard-specific constraints. Repository-wide engineering, task
 
 ## Current implementation boundary
 
-- Overview remains a static Angular preview populated only by explicitly named demo data.
+- Overview is a live, read-only Harvester workspace. It obtains API reachability and runtime status from the existing `/api/v1/trading/operator/status` endpoint and consumes validated runtime, configured-market and Portfolio snapshots from the existing `/api/v1/trading/events` WebSocket. It must not fall back to demo data or render fabricated health, runtime, market, Portfolio, valuation or performance values. Keep API reachability, runtime status, WebSocket connectivity and valid-snapshot freshness distinct; none implies exchange readiness or trading authorization. See the [Dashboard README](README.md#current-state) for the current user-facing contract and operational setup.
 - Orders, Fills, and Commissions are read-only client pages backed by Harvester's authenticated, versioned `/api/v1` contract. They display persisted API responses only and never fall back to demo fixtures.
 - Do not present mock values as live account, exchange, service-health, or trading-runtime observations.
 - Keep the bearer token in browser `sessionStorage` only. Do not commit secrets, API credentials, production environment values, or user-specific configuration.
