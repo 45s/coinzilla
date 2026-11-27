@@ -1720,6 +1720,16 @@
           "path": "src/index.test.js",
           "name": "reports an ambiguous process-lock release after startup logger cleanup",
           "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js",
+          "name": "retains recovery-input blockers independently for all four configured markets",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-shutdown-handler.test.js",
+          "name": "retains shared services when four-market shutdown proof is blocked",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
