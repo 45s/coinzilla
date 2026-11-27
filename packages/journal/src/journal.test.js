@@ -51,6 +51,115 @@ logs,
 filePath: result.filePath }
 }
 
+test("flushWrites is durable from a pending EventBus handler without draining the bus", async () => {
+  const context = await createTestJournal()
+  let writeFlushResult
+  let eventBusFlushCalls = 0
+  const originalFlush = context.eventBus.flush.bind(context.eventBus)
+  context.eventBus.flush = async (...flushArguments) => {
+    eventBusFlushCalls += 1
+    return originalFlush(...flushArguments)
+  }
+  const subscription = context.eventBus.subscribe({
+    name: "recovery.decision",
+    handler: async () => {
+      writeFlushResult = await context.journal.flushWrites()
+    },
+  })
+
+  assert.equal(subscription.ok, true, "The test handler must subscribe before publishing the recovery decision.")
+  try {
+    const published = context.eventBus.publish({
+      name: "recovery.decision",
+      source: "test",
+      payload: {
+        symbol: "DOGEUSDT",
+      },
+    })
+    assert.equal(published.ok, true, "The recovery decision must be accepted by EventBus.")
+
+    const drained = await context.eventBus.flush()
+    assert.equal(drained.ok, true, "The outer EventBus drain must complete after the handler's write-only flush.")
+    assert.equal(writeFlushResult?.ok, true, "The handler's Journal write-only flush must succeed.")
+    assert.equal(writeFlushResult?.durable, true, "The handler must receive durable confirmation after fsync.")
+    assert.equal(eventBusFlushCalls, 1, "Journal.flushWrites must not recursively drain EventBus.")
+    const contents = await readFile(context.filePath, "utf8")
+    assert.match(contents, /recovery\\.decision/, "The recovery decision record must exist after durable flush.")
+
+    const closeResult = await context.journal.close()
+    assert.equal(closeResult.ok, true, "The Journal must close cleanly after the write-only flush.")
+    const stoppedFlush = await context.journal.flushWrites()
+    assert.equal(stoppedFlush.ok, false, "A write-only flush after close must fail closed.")
+  } finally {
+    await context.journal.close()
+    await context.eventBus.close()
+    await rm(context.directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+test("serializes concurrent write-only flushes and makes close wait for accepted flushes", async () => {
+  const context = await createTestJournal()
+  let releaseSync
+  let markSyncStarted
+  const syncGate = new Promise((resolve) => {
+    releaseSync = resolve
+  })
+  const syncStarted = new Promise((resolve) => {
+    markSyncStarted = resolve
+  })
+  const originalSync = context.journal.store.sync.bind(context.journal.store)
+  let activeSyncs = 0
+  let maximumActiveSyncs = 0
+  context.journal.store.sync = async () => {
+    activeSyncs += 1
+    maximumActiveSyncs = Math.max(maximumActiveSyncs, activeSyncs)
+    markSyncStarted()
+    try {
+      await syncGate
+      return await originalSync()
+    } finally {
+      activeSyncs -= 1
+    }
+  }
+
+  try {
+    const firstFlush = context.journal.flushWrites()
+    await syncStarted
+    const secondFlush = context.journal.flushWrites()
+    let closeSettled = false
+    const closePromise = context.journal.close().then((result) => {
+      closeSettled = true
+      return result
+    })
+    await Promise.resolve()
+    assert.equal(closeSettled, false, "Close must wait for already-accepted write-only flushes.")
+
+    releaseSync()
+    const [firstResult, secondResult, closeResult] = await Promise.all([
+      firstFlush,
+      secondFlush,
+      closePromise,
+    ])
+    assert.equal(firstResult.ok, true, "The first write-only flush must complete.")
+    assert.equal(firstResult.durable, true, "The first write-only flush must sync the session.")
+    assert.equal(secondResult.ok, true, "The queued write-only flush must complete.")
+    assert.equal(secondResult.durable, true, "The queued write-only flush must sync the session.")
+    assert.equal(closeResult.ok, true, "Close must complete after accepted write-only flushes.")
+    assert.equal(maximumActiveSyncs, 1, "Concurrent write-only flushes must serialize fsync.")
+  } finally {
+    releaseSync()
+    await context.journal.close()
+    await context.eventBus.close()
+    await rm(context.directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
 
 function createSecondProcessJournalScript() {
   return `
@@ -484,6 +593,9 @@ data: { value: "valid" } },
     const flushResult = await context.journal.flush()
     assert.equal(flushResult.ok, false, "flush() must not report durable success after a source event was omitted.")
     assert.match(flushResult.errors[0].message, /undefined/, "flush() must expose the original nested serialization failure.")
+    const writeOnlyFlushResult = await context.journal.flushWrites()
+    assert.equal(writeOnlyFlushResult.ok, false, "flushWrites() must fail after a source event could not be serialized.")
+    assert.match(writeOnlyFlushResult.errors[0].message, /undefined/, "flushWrites() must retain the original serialization failure.")
 
     assert.equal(await readFile(context.filePath, "utf8"), "", "A rejected source event must not append a lossy or partial JSONL line.")
 
@@ -930,6 +1042,9 @@ test("reports a failed disk sync instead of claiming the journal was flushed", a
 
     assert.equal(result.ok, false)
     assert.match(result.errors[0].message, /simulated disk sync failure/)
+    const writeOnlyResult = await context.journal.flushWrites()
+    assert.equal(writeOnlyResult.ok, false, "flushWrites() must not claim durability after a failed fsync.")
+    assert.match(writeOnlyResult.errors[0].message, /simulated disk sync failure/)
   } finally {
     // Restore a working sync method so cleanup can complete normally.
     delete context.journal.store.sync

@@ -39,6 +39,8 @@ export class Journal {
     this.closeInProgress = false
     this.flushPromises = new Set()
     this.flushQueue = Promise.resolve()
+    this.writeFlushQueue = Promise.resolve()
+    this.syncQueue = Promise.resolve()
     this.closing = false
     this.closed = false
     this.writeErrors = []
@@ -297,6 +299,74 @@ recordId: event.id })
    * @private
    * @returns {Promise<object>} Result; only successful file-content sync reports durable: true.
    */
+  /**
+   * Wait for already-enqueued Journal records and sync the active session file
+   * without draining EventBus. Safe to await from a pending EventBus handler.
+   *
+   * @returns {Promise<object>} Result; only successful file-content sync reports durable: true.
+   */
+  async flushWrites() {
+    if (!this.started || !this.filePath || this.closeInProgress || this.closing || this.closed) {
+      return toResult({ error: new Error("Journal must be started to flush durable writes") })
+    }
+
+    const flushPromise = this.writeFlushQueue.then(() => this.flushWritesLifecycle())
+    this.flushPromises.add(flushPromise)
+    this.writeFlushQueue = flushPromise.then(() => undefined, () => undefined)
+    try {
+      return await flushPromise
+    } finally {
+      this.flushPromises.delete(flushPromise)
+    }
+  }
+
+  /**
+   * Yield to the EventBus's already-scheduled Journal subscriber, then persist
+   * its queued write without waiting for the caller's EventBus delivery to end.
+   *
+   * @private
+   * @returns {Promise<object>} Result; only successful file-content sync reports durable: true.
+   */
+  async flushWritesLifecycle() {
+    await Promise.resolve()
+    const errors = []
+    try {
+      await this.writeQueue
+    } catch (error) {
+      errors.push(error)
+    }
+    errors.push(...this.writeErrors)
+
+    if (errors.length === 0 && this.filePath && !this.closed) {
+      try {
+        await this.syncSession()
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+
+    if (errors.length > 0) {
+      return toResult({ errors })
+    }
+    return toResult({
+      flushed: true,
+      durable: true,
+      filePath: this.filePath,
+    })
+  }
+
+  /**
+   * Serialize active-session fsync operations across global and write-only flushes.
+   *
+   * @private
+   * @returns {Promise<void>} Resolves only after the active session file is synced.
+   */
+  async syncSession() {
+    const syncPromise = this.syncQueue.then(() => this.store.sync())
+    this.syncQueue = syncPromise.then(() => undefined, () => undefined)
+    return syncPromise
+  }
+
   async flushLifecycle() {
     const errors = []
 
@@ -316,7 +386,7 @@ recordId: event.id })
     if (errors.length === 0 && this.filePath && !this.closed) {
       try {
         // record() acknowledges a completed write; flush() acknowledges an fsync.
-        await this.store.sync()
+        await this.syncSession()
       } catch (error) {
         errors.push(error)
       }
