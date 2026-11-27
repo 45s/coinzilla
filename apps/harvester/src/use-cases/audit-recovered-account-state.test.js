@@ -258,13 +258,28 @@ function createRecoverySellerBuyRecords({
       symbol: "BTCUSDT",
       side: "BUY",
       price: "100",
-      quantity: "0.1",
-      quoteQuantity: "10",
+      quantity: "0.06",
+      quoteQuantity: "6",
       liquidityRole: "MAKER",
       commissions: [],
       commissionStatus: "COMPLETE",
       ...ownership,
     }, 7))
+    records.push(record("execution.fill_applied", {
+      fillId: "binance:BTCUSDT:trade-rs-buy-2",
+      tradeId: "trade-rs-buy-2",
+      brokerOrderId,
+      clientOrderId,
+      symbol: "BTCUSDT",
+      side: "BUY",
+      price: "100",
+      quantity: "0.04",
+      quoteQuantity: "4",
+      liquidityRole: "MAKER",
+      commissions: [],
+      commissionStatus: "COMPLETE",
+      ...ownership,
+    }, 8))
   }
   return records
 }
@@ -325,7 +340,12 @@ const recoveryProjection = ({
   recoverySellerSell = false,
 } = {}) => {
   const recoverySellerActivity = recoverySellerBuy || recoverySellerSell
-  const lineOffset = recoverySellerActivity ? 4 : 0
+  let lineOffset = 0
+  if (recoverySellerBuy) {
+    lineOffset = 5
+  } else if (recoverySellerSell) {
+    lineOffset = 4
+  }
   const records = [
     ...createOpeningRecords(),
     ...(recoverySellerBuy
@@ -336,7 +356,9 @@ const recoveryProjection = ({
       : []),
     ...(recoverySellerSell ? createRecoverySellerSellRecords() : []),
     ...(thirdAssetCommission && includeCommissionBaseline
-      ? [createCommissionBaselineRecord({ lineNumber: recoverySellerActivity ? 8 : 5 })]
+      ? [createCommissionBaselineRecord({
+        lineNumber: recoverySellerBuy ? 9 : (recoverySellerSell ? 8 : 5),
+      })]
       : []),
     createBuyFillRecord({ thirdAssetCommission, lineOffset }),
     ...createSellCycleRecords({ freeQuantity, thirdAssetCommission, lineOffset }),
@@ -494,6 +516,10 @@ test("replays terminal Recovery Seller BUY fills and includes their inventory in
     strategyId: StrategyId.RECOVERY_SELLER,
   })
   assert.equal(recoverySellerPosition.totalBaseQuantity.amount, "0.1")
+  const buyExecution = restored.recoverySellerBuyExecutionByCycle.get("rs-cycle-1")
+  assert.equal(buyExecution.quantity, "0.1")
+  assert.equal(buyExecution.quoteQuantity, "10")
+  assert.equal(buyExecution.fillIds.size, 2)
 
   const result = auditRecoveredAccountState({
     projection,
