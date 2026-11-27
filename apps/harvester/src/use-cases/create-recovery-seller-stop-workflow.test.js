@@ -129,7 +129,7 @@ test("restores a persisted RS STOP and does not append a duplicate blocker", asy
   )
 })
 
-test("keeps RS BUY and SELL admission blocked after durable STOP resolution", async (t) => {
+test("clears RS STOP only after explicit operator evidence is durably recorded", async (t) => {
   const { operationalStateStore, workflow } = await createWorkflow(t)
   await workflow.latch({
     explanation: "The RS BUY acknowledgement is unresolved",
@@ -152,6 +152,20 @@ test("keeps RS BUY and SELL admission blocked after durable STOP resolution", as
   const raisedRecord = read.data.records.find((entry) => entry.factType === "SAFETY_BLOCKER_RAISED")
   assert.equal(raisedRecord.data.producer, "RECOVERY_SELLER_STOP_WORKFLOW")
 })
+ 
+test("keeps RS BUY and SELL admission blocked after durable STOP resolution", async (t) => {
+  const { workflow } = await createWorkflow(t)
+  await workflow.latch({ explanation: "The RS BUY acknowledgement is unresolved" })
+  const blockerId = workflow.getBlockerId()
+
+  const result = await workflow.resolve(validResolutionEvidence({ blockerId }))
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(workflow.isBuyAdmissionBlocked(), true)
+  assert.equal(workflow.isSellAdmissionBlocked(), true)
+  assert.equal(workflow.requiresControlledRestart(), true)
+})
+
  
 test("rejects forged OS-account identity when resolving Recovery Seller STOP", async (t) => {
   const { operationalStateStore, workflow } = await createWorkflow(t)

@@ -1745,8 +1745,6 @@
       "id": "RECOVERY_SELLER_STOP_RESOLUTION",
       "title": "Authenticated Recovery Seller STOP resolution and no-auto-resume boundary",
       "sourceModules": [
-        "src/use-cases/create-recovery-seller-stop-workflow.js",
-        "src/use-cases/resolve-recovery-seller-stop.js",
         "src/infrastructure/security/local-operator-identity.js",
         "src/use-cases/record-safety-control-facts.js"
       ],
@@ -1754,8 +1752,13 @@
       "tests": [
         {
           "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
-          "name": "keeps RS BUY and SELL admission blocked after durable STOP resolution",
+          "name": "clears RS STOP only after explicit operator evidence is durably recorded",
           "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "keeps RS BUY and SELL admission blocked after durable STOP resolution",
+          "kind": "normal"
         },
         {
           "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
