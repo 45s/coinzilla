@@ -102,6 +102,27 @@ export class Journal {
    * @private
    * @returns {Promise<object>} Startup result after success or complete rollback.
    */
+  /**
+   * Subscribe the Journal writer to source events.
+   * @private
+   * @returns {object} EventBus subscription result.
+   */
+  subscribeToEvents() {
+    return this.eventBus.subscribeAll({
+      handler: async (event) => {
+        const writeResult = await this.record({ event })
+        if (!writeResult.ok) {
+          this.reportError({
+            message: "Failed to write journal event",
+            errors: writeResult.errors,
+            eventId: event.id,
+            eventName: event.name,
+          })
+        }
+      },
+    })
+  }
+
   async startLifecycle() {
     try {
       await this.store.ensureDirectory()
@@ -121,17 +142,7 @@ export class Journal {
         this.startupCleanupErrors = await this.cleanupStoreResources(errors)
         return toResult({ errors })
       }
-      const result = this.eventBus.subscribeAll({
-        handler: async (event) => {
-          const writeResult = await this.record({ event })
-          if (!writeResult.ok) {
-            this.reportError({ message: "Failed to write journal event",
-errors: writeResult.errors,
-eventId: event.id,
-eventName: event.name })
-          }
-        },
-      })
+      const result = this.subscribeToEvents()
       if (!result.ok) {
         const errors = [...result.errors]
         this.startupCleanupErrors = await this.cleanupStoreResources(errors)

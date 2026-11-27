@@ -84,7 +84,7 @@ test("flushWrites is durable from a pending EventBus handler without draining th
     assert.equal(writeFlushResult?.durable, true, "The handler must receive durable confirmation after fsync.")
     assert.equal(eventBusFlushCalls, 1, "Journal.flushWrites must not recursively drain EventBus.")
     const contents = await readFile(context.filePath, "utf8")
-    assert.match(contents, /recovery\\.decision/, "The recovery decision record must exist after durable flush.")
+    assert.match(contents, /recovery\.decision/, "The recovery decision record must exist after durable flush.")
 
     const closeResult = await context.journal.close()
     assert.equal(closeResult.ok, true, "The Journal must close cleanly after the write-only flush.")
@@ -181,78 +181,57 @@ function createSecondProcessJournalScript() {
   `
 }
 
+function assertChildJournalResult({ result, expected, phase }) {
+  assert.equal(result.error, undefined, `${phase} process must finish without spawn or timeout error.`)
+  assert.equal(result.status, 0, `${phase} process must exit cleanly; stderr: ${result.stderr}`)
+  assert.deepEqual(JSON.parse(result.stdout), expected, `${phase} process must report the expected lock outcome.`)
+}
+
 test("prevents a second process from writing to an active journal directory", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-process-lock-"))
   const eventBus = new EventBus()
-  const journal = new Journal({ eventBus,
-directory })
+  const journal = new Journal({ eventBus, directory })
   const childScript = createSecondProcessJournalScript()
   const runChildJournal = () => spawnSync(
     process.execPath,
     ["--input-type=module", "-e", childScript, directory],
-    { encoding: "utf8",
-timeout: 5000 },
+    {
+      encoding: "utf8",
+      timeout: 5000,
+    },
   )
 
   try {
     const parentStart = await journal.start()
-    assert.equal(
-      parentStart.ok,
-      true,
-      "The first process must acquire exclusive ownership before creating its Journal session.",
-    )
-
+    assert.equal(parentStart.ok, true, "The first process must acquire exclusive Journal ownership.")
     const competingProcess = runChildJournal()
-    assert.equal(
-      competingProcess.error,
-      undefined,
-      "The competing process must finish its lock attempt without a spawn or timeout error.",
-    )
-    assert.equal(
-      competingProcess.status,
-      0,
-      `The competing process must exit cleanly after reporting lock contention; stderr: ${competingProcess.stderr}`,
-    )
-    assert.deepEqual(
-      JSON.parse(competingProcess.stdout),
-      { ok: false,
-code: "JOURNAL_DIRECTORY_LOCKED" },
-      "A separate process must fail closed while another process owns the same Journal directory.",
-    )
+    assertChildJournalResult({
+      result: competingProcess,
+      expected: {
+        ok: false,
+        code: "JOURNAL_DIRECTORY_LOCKED",
+      },
+      phase: "competing",
+    })
 
     const parentClose = await journal.close()
-    assert.equal(
-      parentClose.ok,
-      true,
-      "The owning process must finish its durable close before relinquishing directory ownership.",
-    )
-
+    assert.equal(parentClose.ok, true, "The owning process must durably close before releasing ownership.")
     const afterRelease = runChildJournal()
-    assert.equal(
-      afterRelease.error,
-      undefined,
-      "A new process must be able to attempt ownership after the previous writer closes.",
-    )
-    assert.equal(
-      afterRelease.status,
-      0,
-      `The post-close process must exit cleanly; stderr: ${afterRelease.stderr}`,
-    )
-    assert.deepEqual(
-      JSON.parse(afterRelease.stdout),
-      { ok: true,
-code: null,
-closeOk: true },
-      "A different process may acquire the directory only after the prior writer has durably closed.",
-    )
+    assertChildJournalResult({
+      result: afterRelease,
+      expected: {
+        ok: true,
+        code: null,
+        closeOk: true,
+      },
+      phase: "post-close",
+    })
   } finally {
     await journal.close()
     await eventBus.close()
-    await rm(directory, { recursive: true,
-force: true })
+    await rm(directory, { recursive: true, force: true })
   }
 })
-
 
 test("refuses to take over an existing journal directory lock", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-stale-lock-"))
@@ -695,88 +674,49 @@ function blockSessionCreation({ journal }) {
   }
 }
 
+async function assertStartupCancellationState({ startResult, closeResult, journal, directory }) {
+  assert.equal(startResult.ok, false, "Startup must report cancellation after close claims the in-flight start.")
+  assert.match(startResult.errors[0].message, /closed during startup/, "The startup error must identify close cancellation.")
+  assert.equal(closeResult.ok, true, "Close must succeed after cancelled startup releases acquired resources.")
+  assert.equal(journal.closed, true, "The Journal must reach its terminal closed state.")
+  assert.equal(journal.store.sessionHandle, null, "No session handle may remain after cancelled startup.")
+  const remainingFiles = await readdir(directory)
+  assert.equal(remainingFiles.includes(".coinzilla-journal.lock"), false, "Close must release the writer lock.")
+  const retainedSessions = remainingFiles.filter((fileName) => fileName.endsWith(".jsonl"))
+  assert.equal(retainedSessions.length, 1, "The empty session created before cancellation must remain historical.")
+  assert.equal(
+    await readFile(path.join(directory, retainedSessions[0]), "utf8"),
+    "",
+    "The retained session must remain empty because no event was accepted.",
+  )
+}
+
 test("waits for startup cancellation to release the writer lock before close resolves", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-start-close-race-"))
   const eventBus = new EventBus()
-  const journal = new Journal({ eventBus,
-directory })
-
-  const {
-    createSessionFileStarted,
-    releaseCreateSessionFile,
-  } = blockSessionCreation({ journal })
-
+  const journal = new Journal({ eventBus, directory })
+  const { createSessionFileStarted, releaseCreateSessionFile } = blockSessionCreation({ journal })
   let startPromise
   let closePromise
   try {
     startPromise = journal.start()
     await createSessionFileStarted
-
     let closeSettled = false
     closePromise = journal.close().then((result) => {
       closeSettled = true
       return result
     })
-
     await Promise.resolve()
-    assert.equal(
-      closeSettled,
-      false,
-      "Close must remain pending while startup still owns a writer lock and session creation has not completed its cancellation cleanup.",
-    )
-
+    assert.equal(closeSettled, false, "Close must wait while startup owns the writer lock.")
     releaseCreateSessionFile()
     const startResult = await startPromise
     const closeResult = await closePromise
-
-    assert.equal(
-      startResult.ok,
-      false,
-      "Startup must report cancellation when close is requested before the session has become active.",
-    )
-    assert.match(
-      startResult.errors[0].message,
-      /closed during startup/,
-      "The startup result must identify that close cancelled the in-flight startup attempt.",
-    )
-    assert.equal(
-      closeResult.ok,
-      true,
-      "Close must report success after the cancelled startup attempt has released all resources it acquired.",
-    )
-    assert.equal(
-      journal.closed,
-      true,
-      "The Journal must enter its terminal closed state after startup cancellation has settled.",
-    )
-    assert.equal(
-      journal.store.sessionHandle,
-      null,
-      "No session file handle may remain open when close reports completion after startup cancellation.",
-    )
-    const remainingFiles = await readdir(directory)
-    assert.equal(
-      remainingFiles.includes(".coinzilla-journal.lock"),
-      false,
-      "The cancelled startup must release its exclusive writer lock before close resolves.",
-    )
-    const retainedSessions = remainingFiles.filter((fileName) => fileName.endsWith(".jsonl"))
-    assert.equal(
-      retainedSessions.length,
-      1,
-      "The session file created before startup cancellation must remain as an empty historical session rather than being deleted.",
-    )
-    assert.equal(
-      await readFile(path.join(directory, retainedSessions[0]), "utf8"),
-      "",
-      "The retained session file must remain empty because startup was cancelled before any event could be accepted.",
-    )
+    await assertStartupCancellationState({ startResult, closeResult, journal, directory })
   } finally {
     releaseCreateSessionFile()
     await Promise.allSettled([startPromise, closePromise].filter(Boolean))
     await eventBus.close()
-    await rm(directory, { recursive: true,
-force: true })
+    await rm(directory, { recursive: true, force: true })
   }
 })
 
@@ -1491,6 +1431,12 @@ async function assertInjectedJournalStoreLifecycle({ fixture }) {
     "Journal close must close the injected session and release only the writer ownership acquired through that store.",
   )
 
+  await assertInjectedJournalStoreReadAndReplay({ journal })
+
+  assertInjectedStoreCallSequence({ storeCalls })
+}
+
+async function assertInjectedJournalStoreReadAndReplay({ journal }) {
   const readResult = await journal.read()
   assert.equal(
     readResult.ok,
@@ -1517,8 +1463,6 @@ async function assertInjectedJournalStoreLifecycle({ fixture }) {
     ["stored-record"],
     "The replay handler must receive the recovered record supplied by the injected store.",
   )
-
-  assertInjectedStoreCallSequence({ storeCalls })
 }
 
 function createDeferredPromise() {
@@ -1715,7 +1659,27 @@ async function createActiveFlushFixture() {
     flushPromise: null,
     closePromise: null,
   }
-  const store = {
+  const store = createActiveFlushStore({ fixture, storeCalls, firstSyncStarted, firstSyncGate })
+
+  const journal = new Journal({
+    eventBus,
+    directory: "virtual-journal",
+    [JOURNAL_STORE]: store,
+  })
+  fixture.journal = journal
+  fixture.originalFlush = eventBus.flush.bind(eventBus)
+  eventBus.flush = async () => {
+    fixture.busFlushCalls += 1
+    return {
+      ok: true,
+      errors: [],
+    }
+  }
+  return fixture
+}
+
+function createActiveFlushStore({ fixture, storeCalls, firstSyncStarted, firstSyncGate }) {
+  return {
     ensureDirectory: async () => storeCalls.push("ensureDirectory"),
     acquireWriter: async () => storeCalls.push("acquireWriter"),
     createSession: async () => {
@@ -1747,21 +1711,6 @@ async function createActiveFlushFixture() {
     },
     releaseWriter: async () => storeCalls.push("releaseWriter"),
   }
-  const journal = new Journal({
-    eventBus,
-    directory: "virtual-journal",
-    [JOURNAL_STORE]: store,
-  })
-  fixture.journal = journal
-  fixture.originalFlush = eventBus.flush.bind(eventBus)
-  eventBus.flush = async () => {
-    fixture.busFlushCalls += 1
-    return {
-      ok: true,
-      errors: [],
-    }
-  }
-  return fixture
 }
 
 async function assertCloseWaitsForActiveFlush({ fixture }) {
@@ -1775,6 +1724,14 @@ async function assertCloseWaitsForActiveFlush({ fixture }) {
   fixture.flushPromise = fixture.journal.flush()
   await fixture.firstSyncStarted.promise
   fixture.closePromise = fixture.journal.close()
+  await assertFlushRejectedDuringClose({ fixture })
+
+  fixture.firstSyncGate.resolve()
+  await assertFlushAndCloseResults({ fixture })
+
+}
+
+async function assertFlushRejectedDuringClose({ fixture }) {
   const flushDuringClose = await fixture.journal.flush()
   assert.equal(
     flushDuringClose.ok,
@@ -1796,8 +1753,9 @@ async function assertCloseWaitsForActiveFlush({ fixture }) {
     1,
     "Close must wait for the active flush before starting its own final EventBus drain.",
   )
+}
 
-  fixture.firstSyncGate.resolve()
+async function assertFlushAndCloseResults({ fixture }) {
   const flushResult = await fixture.flushPromise
   const closeResult = await fixture.closePromise
   assert.equal(
@@ -1841,6 +1799,7 @@ async function assertCloseWaitsForActiveFlush({ fixture }) {
     "The Journal must reach its terminal closed state after flush/close serialization.",
   )
 }
+
 
 async function createConcurrentFlushFixture() {
   const eventBus = new EventBus()
@@ -1988,6 +1947,14 @@ async function assertCloseDrainsPublishedEvent({ context, appendGate, appendStar
 
   await appendStarted.promise
   await Promise.resolve()
+  await assertCloseRemainsPendingForAppend({ context, closeSettled })
+  appendGate.resolve()
+  const closeResult = await closePromise
+  await assertCloseResultAndRecord({ context, closeResult, published })
+
+}
+
+async function assertCloseRemainsPendingForAppend({ context, closeSettled }) {
   assert.equal(
     closeSettled,
     false,
@@ -2001,30 +1968,17 @@ async function assertCloseDrainsPublishedEvent({ context, appendGate, appendStar
     (await readdir(context.directory)).includes(".coinzilla-journal.lock"),
     "The exclusive writer lock must remain owned while an admitted publish is still being persisted.",
   )
+}
 
-  appendGate.resolve()
-  const closeResult = await closePromise
-  assert.equal(
-    closeResult.ok,
-    true,
-    "Close must finish successfully after the admitted event append, final sync, and resource cleanup complete.",
-  )
-  assert.equal(
-    closeResult.durable,
-    true,
-    "Close may report durable completion only after the admitted event has been synchronized.",
-  )
-  assert.equal(
-    context.journal.store.sessionHandle,
-    null,
-    "The session handle must be released after the admitted event has been drained and synchronized.",
-  )
+async function assertCloseResultAndRecord({ context, closeResult, published }) {
+  assert.equal(closeResult.ok, true, "Close must finish after the admitted event append and durable sync.")
+  assert.equal(closeResult.durable, true, "Close must report durable completion only after the admitted event is synced.")
+  assert.equal(context.journal.store.sessionHandle, null, "The session handle must be released after close.")
   assert.equal(
     (await readdir(context.directory)).includes(".coinzilla-journal.lock"),
     false,
-    "The exclusive writer lock must be released only after the admitted event has been drained and durably synchronized.",
+    "The writer lock must be released after the admitted event is durably synchronized.",
   )
-
   const lines = (await readFile(context.filePath, "utf8")).trim().split("\n")
   assert.equal(
     lines.length,
@@ -2048,6 +2002,7 @@ async function assertCloseDrainsPublishedEvent({ context, appendGate, appendStar
     "The durable record must preserve the admitted event payload without mutation.",
   )
 }
+
 
 async function assertJournalRejectsLossyPayload({ invalidPayload }) {
   const context = await createTestJournal()
@@ -2087,27 +2042,7 @@ async function assertJournalRejectsLossyPayload({ invalidPayload }) {
       `Journal must retain the original ${invalidPayload.label} serialization failure for flush and close.`,
     )
 
-    const closeResult = await context.journal.close()
-    assert.equal(
-      closeResult.ok,
-      false,
-      `Journal close must remain failed after the subscriber rejects a ${invalidPayload.label} event.`,
-    )
-    assert.equal(
-      closeResult.durable,
-      false,
-      `Journal close must not claim durable closure after omitting a ${invalidPayload.label} event.`,
-    )
-    assert.equal(
-      context.journal.closeDurable,
-      false,
-      `Journal closeDurable must remain false after a ${invalidPayload.label} serialization failure.`,
-    )
-    assert.equal(
-      await readFile(context.filePath, "utf8"),
-      "",
-      `The ${invalidPayload.label} source event must be rejected before any JSONL bytes are appended.`,
-    )
+    await assertLossyPayloadCloseFailure({ context, invalidPayload })
   } finally {
     await context.journal.close()
     await context.eventBus.close()
@@ -2117,6 +2052,31 @@ async function assertJournalRejectsLossyPayload({ invalidPayload }) {
     })
   }
 }
+
+async function assertLossyPayloadCloseFailure({ context, invalidPayload }) {
+  const closeResult = await context.journal.close()
+  assert.equal(
+    closeResult.ok,
+    false,
+    `Journal close must remain failed after the subscriber rejects a ${invalidPayload.label} event.`,
+  )
+  assert.equal(
+    closeResult.durable,
+    false,
+    `Journal close must not claim durable closure after omitting a ${invalidPayload.label} event.`,
+  )
+  assert.equal(
+    context.journal.closeDurable,
+    false,
+    `Journal closeDurable must remain false after a ${invalidPayload.label} serialization failure.`,
+  )
+  assert.equal(
+    await readFile(context.filePath, "utf8"),
+    "",
+    `The ${invalidPayload.label} source event must be rejected before any JSONL bytes are appended.`,
+  )
+}
+
 
 test("waits for an active flush before closing the session and rejects flushes after close claims shutdown", async () => {
   const fixture = await createActiveFlushFixture()
