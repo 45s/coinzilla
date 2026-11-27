@@ -230,9 +230,14 @@ function createOperationalStateStoreVerifier({ store }) {
     await assertOperationalStateStoreDirectoryIsSafe({ store })
     await assertOperationalStateStoreStreamsAreSafe({ store })
     const { rawLog, rawManifest } = await readOperationalStateStoreStreams({ store })
-    return validateOperationalStateStoreStreams({ store,
+    const verified = validateOperationalStateStoreStreams({ store,
 rawLog,
 rawManifest })
+    await syncOperationalStateDirectory({
+      store,
+      directory: store.absoluteDirectory,
+    })
+    return verified
   }
 }
 
@@ -258,7 +263,52 @@ async function writeOperationalStateGenesisManifest({ store, genesisCheckpointBo
   }
 }
 
+async function collectMissingOperationalStateDirectories({ store }) {
+  const missingDirectories = []
+  let currentDirectory = store.absoluteDirectory
+  while (true) {
+    try {
+      const stat = await store.fileSystem.lstat(currentDirectory)
+      if (stat.isSymbolicLink() || !stat.isDirectory()) {
+        throw new Error("Operational State Store directory ancestors must be real directories")
+      }
+      break
+    } catch (error) {
+      if (error.code !== "ENOENT") {
+        throw error
+      }
+      missingDirectories.push(currentDirectory)
+      const parentDirectory = path.dirname(currentDirectory)
+      if (parentDirectory === currentDirectory) {
+        throw error
+      }
+      currentDirectory = parentDirectory
+    }
+  }
+  return missingDirectories
+}
+
+async function syncOperationalStateDirectory({ store, directory }) {
+  const handle = await store.fileSystem.open(directory, "r")
+  try {
+    await handle.sync()
+  } finally {
+    await handle.close()
+  }
+}
+
+async function syncCreatedOperationalStateDirectoryEntries({ store, createdDirectories }) {
+  const directories = [...createdDirectories].reverse()
+  for (const createdDirectory of directories) {
+    await syncOperationalStateDirectory({
+      store,
+      directory: path.dirname(createdDirectory),
+    })
+  }
+}
+
 async function prepareOperationalStateDirectory({ store }) {
+  const createdDirectories = await collectMissingOperationalStateDirectories({ store })
   await store.fileSystem.mkdir(store.absoluteDirectory, {
     recursive: true,
     mode: 0o700,
@@ -274,6 +324,7 @@ async function prepareOperationalStateDirectory({ store }) {
   if (supportsPosixModeBits) {
     await store.fileSystem.chmod(store.absoluteDirectory, 0o700)
   }
+  return createdDirectories
 }
 
 function createOperationalStateGenesisRecord({ store }) {
@@ -302,7 +353,7 @@ async function initializeOperationalStateStore({ store, assertStoreWritable, syn
   }
   try {
     assertStoreWritable()
-    await prepareOperationalStateDirectory({ store })
+    const createdDirectories = await prepareOperationalStateDirectory({ store })
     const genesisRecord = createOperationalStateGenesisRecord({ store })
     await writeOperationalStateGenesisFact({ store,
       genesisRecord,
@@ -316,6 +367,10 @@ async function initializeOperationalStateStore({ store, assertStoreWritable, syn
       genesisCheckpointBody,
       writeState })
     await syncStreams()
+    await syncCreatedOperationalStateDirectoryEntries({
+      store,
+      createdDirectories,
+    })
     const verified = await verifyState()
     return toResult({
       data: {
