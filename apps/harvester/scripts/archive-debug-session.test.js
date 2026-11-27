@@ -211,6 +211,36 @@ test("refuses to archive while a Harvester process lock exists", async (t) => {
   await assert.rejects(readdir(path.join(fixture.packageDirectory, "archive-output")), { code: "ENOENT" }, "A rejected active-process preflight must not create archive output")
 })
 
+test("reclaims confirmed stale same-host locks before publishing the TESTNET debug archive", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true
+  }))
+  const staleOwner = {
+    pid: 2_000_000_000,
+    hostname: os.hostname(),
+    startedAt: "2026-11-24T17:12:22.255Z",
+    token: "stale-owner-token",
+  }
+  const lockPaths = [
+    path.join(fixture.lockDirectory, ".harvester-trading-test.lock"),
+    path.join(fixture.lockDirectory, ".binance-harvester-trading-test.lock"),
+  ]
+  await Promise.all(lockPaths.map((lockPath) => writeFile(lockPath, JSON.stringify(staleOwner), "utf8")))
+
+  const result = await runHarvesterDebugArchive(archiveDependencies({ fixture }))
+
+  assert.equal(result.remoteCommit, REMOTE_COMMIT, "A stale lock must not block safe debug archive publication.")
+  for (const lockPath of lockPaths) {
+    await assert.rejects(
+      readFile(lockPath, "utf8"),
+      { code: "ENOENT" },
+      "Every confirmed stale lock namespace must be reclaimed before archive publication.",
+    )
+  }
+})
+
 test("rejects LIVE mode before creating an archive", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
