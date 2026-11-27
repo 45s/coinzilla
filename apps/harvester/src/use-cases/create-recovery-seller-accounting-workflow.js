@@ -1135,7 +1135,6 @@ function createRecoverySellerTransitionSnapshot({
     recoveryPosition,
     thirdAssetFeeQuoteValue,
   })
-  const execution = state.recoverySellerBuyExecutionByCycle.get(cycleState.cycleId)
   return Object.freeze({
     cycleState,
     recoveryPosition,
@@ -1152,7 +1151,7 @@ function createRecoverySellerTransitionSnapshot({
     ...createSellAdmissionSnapshotFlag({ sellAdmissionBlocked }),
     marketPaused,
     reconciliationComplete,
-    lastBuyPrice: calculateRecoverySellerBuyExecutionVwap({ execution }),
+    lastBuyPrice: calculateRecoverySellerBuyExecutionVwap({ execution: state.recoverySellerBuyExecutionByCycle.get(cycleState.cycleId) }),
   })
 }
 
