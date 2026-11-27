@@ -6,7 +6,7 @@
 
 The Scenario Runner foundation is merged. PR #1887 added the under-target fully FILLED SELL, STOP-persistence failure and BUY-only STOP admission runtime scenarios. PR #1913 adds six infrastructure-failure scenarios: SELL-intent persistence failure before broker placement, acknowledged-outcome persistence failure, combined outcome/STOP persistence failure, ambiguous broker placement classified as durable UNKNOWN with STOP/reservation retention, sole-SELL reservation callback failure, and terminal-reconciliation persistence failure that preserves the FILLED status/reservation while latching STOP.
 
-The Linux Bubblewrap/prlimit process adapter is now composed behind explicit `HARVESTER_SCENARIO_SANDBOX=linux-bubblewrap`. On hosts that pass trusted executable, namespace/seccomp and delegated cgroup v2 checks, the catalogue is executable for isolated simulation only. Scenario acceptance remains PARTIAL; this is not production acceptance. Remaining gates are the manual trusted-runner adversarial sandbox E2E, production operational-state persistence, trusted build-artifact provenance/exact replay, and runner-specific retry/idempotency scenario coverage beyond existing duplicate-fill and exact-replay regressions.
+The primary functional development and acceptance path is local **Windows**: start the Dashboard and Harvester, connect them through the local REST/WebSocket API, execute scenarios with simulation-only adapters, and inspect results, assertions, trace and diagnostics. No Linux server or separately purchased machine is required for this workflow. The Linux Bubblewrap/prlimit adapter (`HARVESTER_SCENARIO_SANDBOX=linux-bubblewrap`) is an optional, platform-specific OS-hardening path; its self-hosted Linux E2E is not a prerequisite for Windows scenario authoring, functional execution, or ordinary development acceptance. If the current host composition prevents the documented Windows local workflow, that is an implementation gap to fix—not a requirement for the user to provision Linux. Exact replay remains separately fail-closed until trusted artifact verification exists.
 
 ## Approved branch-only refactoring and agent preflight
 
@@ -24,7 +24,7 @@ Define framework-independent contracts for adapters, capabilities, scenarios, re
 Integrate the existing registry and executable subcases; derive fields/events/assertions from source. Preserve provenance. Initially use existing supported event/scenario inputs; defer arbitrary timeline authoring.
 
 ## Phase 3 — Simulation infrastructure/isolation
-Dedicated worker per run, separate from live trading process; fresh state and simulation-only broker/order gateway, market/event source, clock and persistence as needed. Prove no credentials, live account, production persistence or real broker fallback. Fail closed if isolation cannot be verified. Trading-service refactoring is permitted within this task branch and scope when required for faithful production reuse.
+Dedicated worker per run, separate from the live trading process; fresh state and simulation-only broker/order gateway, market/event source, clock and persistence as needed. The supported local developer workflow must run on Windows with Dashboard + Harvester and must not require Linux, WSL2, a remote host, or purchased infrastructure. Prove that scenario execution uses simulation-only dependencies and cannot fall back to real broker calls, credentials, live account state or production persistence. Linux Bubblewrap/cgroup isolation is optional additional OS hardening, not a functional-development gate. Trading-service refactoring is permitted within this task branch and scope when required for faithful production reuse.
 
 ## Phase 4 — Lifecycle + transport
 REST commands and authoritative status/results/diagnostics; WebSocket lifecycle/progress. Server-owned queued/starting/running/cancelling and terminal completed/failed/cancelled/timed-out/blocked states. Cooperative cancellation then forced termination, distinct timeout, bounded resources, cleanup and REST recovery after socket loss. Strict loopback-only unauthenticated local binding; remote access deferred pending auth.
@@ -42,7 +42,7 @@ Harvester-side retention of simulation-only run records, snapshots, lifecycle, e
 One-click complete, versioned JSON with scenario, overrides, effective config, revision, metadata, events, status, results, trace, assertions and diagnostics. Redact secrets; never silently truncate; provide complete export fallback.
 
 ## Phase 9 — Dashboard/end-to-end acceptance
-Framework-neutral client core and typed API/WS adapters; Angular presentation only. Setup, run, lifecycle, graph/trace inspection, history and copy/export. Test isolation, production-flow reuse, validation, cancellation, timeout, reconnect, report completeness and framework-swap invariance.
+Framework-neutral client core and typed API/WS adapters; Angular presentation only. Setup, run, lifecycle, graph/trace inspection, history and copy/export. Test the Windows local Dashboard + Harvester workflow, simulation-only production-flow reuse, validation, cancellation, timeout, reconnect, report completeness and framework-swap invariance. Keep Linux OS-hardening acceptance separate and optional.
 
 ## Phase 10 — Hardening/future adapters
 Security/resource/redaction/retention/race audit. Add GC Conservative/Aggressive, futures, grid or other adapters only when executable scenarios/contracts exist. Arbitrary event timeline, saving Playground changes, newer-version comparisons and remote/shared execution remain deferred.
@@ -50,7 +50,9 @@ Security/resource/redaction/retention/race audit. Add GC Conservative/Aggressive
 ## MVP gates
 
 - Production-flow reuse demonstrated with necessary refactoring documented and regression-tested.
-- Isolation verified; worker cannot reach live trading infrastructure.
+- Windows local Dashboard + Harvester workflow executes scenarios end-to-end using simulation-only adapters and produces inspectable results/assertions/trace.
+- Scenario execution cannot reach live trading infrastructure or fall back to real broker/account/persistence dependencies.
+- Linux Bubblewrap/cgroup adversarial E2E is optional platform-specific hardening; it is not a prerequisite for local Windows functional acceptance.
 - Existing RS scenarios run and produce real assertions/results/trace.
 - Temporary inputs pass production validation and cannot alter source scenario.
 - REST/WS lifecycle, cancel/timeout, bounded history and complete debug JSON tested. Current WebSocket updates refresh the selected run or background-run history, and reconnect performs REST recovery; cursor-based event replay and end-to-end outage/race acceptance remain open.
@@ -117,3 +119,12 @@ The Harvester Scenario Runner has a manual self-hosted E2E workflow that exercis
 ## Replay provenance trust boundary — 2026-11-27
 
 The runner now rejects a caller-supplied `replayProvenance.verified: true` claim even when all identity fields contain syntactically valid hashes. The runner records the supplied identity for diagnostics but forces replay provenance to remain unverified until a trusted build-artifact verifier is integrated into trusted runtime composition. Exact replay remains blocked; no claim of artifact attestation or replay acceptance is made.
+
+
+## Windows-first local scenario acceptance — 2026-11-27
+
+The supported developer workflow is to run the Dashboard client and Harvester server locally on Windows. That is the expected environment for functional scenario development and acceptance: configure a scenario, submit it through the local API, execute the production-flow simulation with simulated infrastructure, and inspect the resulting status, assertions, trace, diagnostics and report.
+
+No Linux server, WSL2 environment, self-hosted runner, or purchased machine is required to perform this functional check. The Linux Bubblewrap/prlimit/cgroup workflow validates an additional OS-isolation boundary only. Keep it as optional security-hardening evidence; do not make its availability or queued status block Windows development, scenario execution, or functional acceptance.
+
+A platform-specific limitation in the current host composition that prevents this Windows workflow is an implementation defect to resolve in the runner—not a requirement to change the user's operating system or provision infrastructure. Exact replay's trusted-artifact verification remains a separate security capability and must remain fail-closed until implemented.
