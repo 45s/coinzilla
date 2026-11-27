@@ -28,6 +28,10 @@ const testEventPublisher = Object.freeze({
     ok: true,
     durable: true,
   }),
+  flushWrites: async () => ({
+    ok: true,
+    durable: true,
+  }),
 })
 
 const appConfig = {
