@@ -446,6 +446,55 @@ force: true }))
   assert.equal(verified.data.lastCommittedSequence, "1")
 })
 
+test("recovers idempotently when the manifest is synced but the append acknowledgement is lost", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  let loseManifestAcknowledgement = false
+  const manifestPath = path.join(directory, "manifest.jsonl")
+  const fileSystem = {
+    ...fsPromises,
+    open: async (...parameters) => {
+      const [target, ...args] = parameters
+      const handle = await fsPromises.open(target, ...args)
+      if (loseManifestAcknowledgement && target === manifestPath && args[0] === "a") {
+        const sync = handle.sync.bind(handle)
+        Object.defineProperty(handle, "sync", {
+          value: async () => {
+            await sync()
+            throw new Error("simulated lost acknowledgement after successful manifest sync")
+          },
+        })
+      }
+      return handle
+    },
+  }
+  const originalStore = createStore(directory, { fileSystem })
+  const initialized = await originalStore.initialize()
+  assert.equal(initialized.ok, true, "The isolated ledger must be initialized before simulating a lost append acknowledgement.")
+  loseManifestAcknowledgement = true
+
+  const uncertainAppend = await originalStore.append(operatorPause())
+  assert.equal(uncertainAppend.ok, false, "The caller must not receive success when the manifest sync acknowledgement is lost.")
+  assert.equal(uncertainAppend.errors[0].code, "DURABLE_FACTS_COMMIT_UNCERTAIN", "A lost post-sync acknowledgement must remain classified as an uncertain commit.")
+  assert.notEqual(uncertainAppend.data?.durable, true, "An uncertain append must never claim durable success.")
+  assert.equal((await originalStore.append(operatorPause())).ok, false, "The original store instance must remain fenced after the uncertain result.")
+
+  const restartedStore = createStore(directory)
+  const verification = await restartedStore.verify()
+  assert.equal(verification.ok, true, "A fresh process instance must verify both streams after the manifest was successfully synced.")
+  assert.equal(verification.data.lastCommittedSequence, "1", "The recovered checkpoint must contain exactly one appended fact.")
+
+  const idempotentRetry = await restartedStore.append(operatorPause())
+  assert.equal(idempotentRetry.ok, true, "Retrying the same stable fact identity after verification must be safe.")
+  assert.equal(idempotentRetry.data.durable, true, "The verified existing fact must be reported durable.")
+  assert.equal(idempotentRetry.data.duplicate, true, "The retry must resolve as the existing committed fact, not append a duplicate.")
+  assert.equal(idempotentRetry.data.record.sequence, "1", "Idempotent recovery must preserve the original committed sequence.")
+  assert.equal((await restartedStore.readAll()).data.records.length, 2, "The ledger must contain genesis plus one committed control fact.")
+})
+
 test("verification flushes both committed streams before declaring the ledger valid", async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true,
