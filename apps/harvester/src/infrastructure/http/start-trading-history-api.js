@@ -159,6 +159,32 @@ function createScenarioRunnerAdapter({ env, platform }) {
 }
 
 
+function createUnavailableTradingHistoryQueries() {
+  const unavailable = () => ({
+    ok: false,
+    errors: [{
+      code: "HARVESTER_TRADING_HISTORY_PERSISTENCE_UNAVAILABLE",
+      message: "Persisted trading history is unavailable because relational history persistence is not ready.",
+    }],
+  })
+  return Object.freeze({
+    getSummary: unavailable,
+    listOrders: unavailable,
+    getOrder: unavailable,
+    listFills: unavailable,
+    getFill: unavailable,
+    listCommissions: unavailable,
+  })
+}
+
+function createQueryFacade({ database }) {
+  if (!database) {
+    return createUnavailableTradingHistoryQueries()
+  }
+  const repository = createTradingHistoryQueryRepository({ database })
+  return createTradingHistoryQueries({ repository })
+}
+
 async function openApiServer({
   startServer,
   configuration,
