@@ -412,6 +412,53 @@ function getMarketBookSubmissionBlocker({
   return null
 }
 
+const RECOVERY_SELLER_STOP_ADMISSION_REASONS = Object.freeze({
+  BUY_GATE_ACTIVE: "RECOVERY_SELLER_STOP_BUY_GATE_ACTIVE",
+  PERSISTENCE_UNVERIFIED: "RECOVERY_SELLER_STOP_PERSISTENCE_UNVERIFIED",
+  RECOVERY_SELL_ONLY: "RECOVERY_SELLER_STOP_RECOVERY_SELL_ONLY",
+})
+
+function getRecoverySellerStopSubmissionBlocker({
+  dependencies,
+  order,
+  purpose,
+  ownership,
+  symbol,
+} = {}) {
+  if (ownership?.strategyId !== StrategyId.RECOVERY_SELLER) {
+    return null
+  }
+  const sellAdmissionBlocked = dependencies.isRecoverySellerSellAdmissionBlocked?.()
+  if (sellAdmissionBlocked === true) {
+    return defer({
+      symbol,
+      reason: RECOVERY_SELLER_STOP_ADMISSION_REASONS.PERSISTENCE_UNVERIFIED,
+    })
+  }
+  if (dependencies.isRecoverySellerBuyAdmissionBlocked?.() !== true) {
+    return null
+  }
+  if (sellAdmissionBlocked !== false) {
+    return defer({
+      symbol,
+      reason: RECOVERY_SELLER_STOP_ADMISSION_REASONS.PERSISTENCE_UNVERIFIED,
+    })
+  }
+  if (order.side === "BUY") {
+    return defer({
+      symbol,
+      reason: RECOVERY_SELLER_STOP_ADMISSION_REASONS.BUY_GATE_ACTIVE,
+    })
+  }
+  if (order.side === "SELL" && purpose !== "RECOVERY_SELL") {
+    return defer({
+      symbol,
+      reason: RECOVERY_SELLER_STOP_ADMISSION_REASONS.RECOVERY_SELL_ONLY,
+    })
+  }
+  return null
+}
+
 function getAccountSafetySubmissionBlocker({ dependencies, symbol } = {}) {
   const blocker = dependencies.getAccountSafetyBlocker?.()
   if (blocker?.scope !== "ACCOUNT") {
@@ -482,6 +529,16 @@ export function createSubmissionGate(dependencies = {}) {
     })
     if (accountBlocker) {
       return accountBlocker
+    }
+    const recoverySellerStopBlocker = getRecoverySellerStopSubmissionBlocker({
+      dependencies,
+      order,
+      purpose,
+      ownership,
+      symbol,
+    })
+    if (recoverySellerStopBlocker) {
+      return recoverySellerStopBlocker
     }
     const shutdownRecoverySubmission = isShutdownRecoverySubmission({
       dependencies,

@@ -126,6 +126,7 @@ async function persistStopLatch({
   orderIdentity,
   current,
   setStopSnapshot,
+  setSellAdmissionBlocked,
 } = {}) {
   const decision = createRecoverySellerStopDecision({ explanation })
   const normalizedIdentity = normalizeOrderIdentity({ orderIdentity })
@@ -150,6 +151,7 @@ async function persistStopLatch({
     stopState,
     blockerId,
   })
+  setSellAdmissionBlocked(false)
   return toResult({
     data: {
       durable: true,
@@ -165,7 +167,8 @@ function createStopLatch({
   operationalStateStore,
   getStopSnapshot,
   setStopSnapshot,
-  setAccountAdmissionBlocked,
+  setBuyAdmissionBlocked,
+  setSellAdmissionBlocked,
 } = {}) {
   let pendingLatch = null
   return async ({ explanation, orderIdentity } = {}) => {
@@ -183,13 +186,15 @@ function createStopLatch({
     if (pendingLatch) {
       return pendingLatch
     }
-    setAccountAdmissionBlocked(true)
+    setBuyAdmissionBlocked(true)
+    setSellAdmissionBlocked(true)
     pendingLatch = persistStopLatch({
       operationalStateStore,
       explanation,
       orderIdentity,
       current,
       setStopSnapshot,
+      setSellAdmissionBlocked,
     })
     try {
       return await pendingLatch
@@ -203,7 +208,8 @@ function createStopResolver({
   operationalStateStore,
   getStopSnapshot,
   setStopSnapshot,
-  setAccountAdmissionBlocked,
+  setBuyAdmissionBlocked,
+  setSellAdmissionBlocked,
 } = {}) {
   return async (evidence = {}) => {
     const current = getStopSnapshot()
@@ -221,7 +227,8 @@ function createStopResolver({
         stopState: result.data.stopState,
         blockerId: null,
       })
-      setAccountAdmissionBlocked(false)
+      setBuyAdmissionBlocked(false)
+      setSellAdmissionBlocked(false)
     }
     return result
   }
@@ -245,13 +252,17 @@ export async function createRecoverySellerStopWorkflow({ operationalStateStore }
       stopState: createRestoredStopState({ blocker }),
       blockerId: blocker?.data?.blockerId ?? null,
     }
-    let accountAdmissionBlocked = Boolean(blocker)
+    let buyAdmissionBlocked = Boolean(blocker)
+    let sellAdmissionBlocked = false
     const getStopSnapshot = () => snapshot
     const setStopSnapshot = (next) => {
       snapshot = Object.freeze(next)
     }
-    const setAccountAdmissionBlocked = (blocked) => {
-      accountAdmissionBlocked = blocked === true
+    const setBuyAdmissionBlocked = (blocked) => {
+      buyAdmissionBlocked = blocked === true
+    }
+    const setSellAdmissionBlocked = (blocked) => {
+      sellAdmissionBlocked = blocked === true
     }
     return toResult({
       data: Object.freeze({
@@ -259,18 +270,21 @@ export async function createRecoverySellerStopWorkflow({ operationalStateStore }
           operationalStateStore,
           getStopSnapshot,
           setStopSnapshot,
-          setAccountAdmissionBlocked,
+          setBuyAdmissionBlocked,
+          setSellAdmissionBlocked,
         }),
         resolve: createStopResolver({
           operationalStateStore,
           getStopSnapshot,
           setStopSnapshot,
-          setAccountAdmissionBlocked,
+          setBuyAdmissionBlocked,
+          setSellAdmissionBlocked,
         }),
         getStopState: () => snapshot.stopState,
         getState: () => snapshot.stopState,
         getBlockerId: () => snapshot.blockerId,
-        isAccountAdmissionBlocked: () => accountAdmissionBlocked,
+        isBuyAdmissionBlocked: () => buyAdmissionBlocked,
+        isSellAdmissionBlocked: () => sellAdmissionBlocked,
       }),
     })
   } catch (error) {

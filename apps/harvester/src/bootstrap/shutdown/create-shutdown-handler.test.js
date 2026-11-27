@@ -475,6 +475,74 @@ test("a safe strategy cannot release shared services while another strategy is u
   assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
 })
 
+function assertFourMarketShutdownFailure({ error, symbols } = {}) {
+  assert.equal(error.code, "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN")
+  const [strategyBlocker] = error.shutdownDiagnostics.strategyBlockers
+  assert.equal(strategyBlocker.strategyId, "CONSERVATIVE")
+  assert.deepEqual(
+    strategyBlocker.markets.map(({ symbol }) => symbol),
+    symbols,
+    "The coordinator must preserve all market-level recovery blockers.",
+  )
+  for (const market of strategyBlocker.markets) {
+    assert.ok(
+      market.blockers.includes("RECOVERY_SELL_RECONCILIATION:SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE:MARKET_PRICE_UNAVAILABLE"),
+      `The exact recovery-input blocker must be retained for ${market.symbol}.`,
+    )
+  }
+  return true
+}
+
+test("retains shared services when four-market shutdown proof is blocked", async () => {
+  const symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT"]
+  const calls = []
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+    waitUntilSafe: async () => {
+      const error = new Error("Shutdown recovery input is unavailable for all configured markets")
+      error.code = "STRATEGY_SHUTDOWN_SAFETY_UNPROVEN"
+      error.status = "BLOCKED"
+      error.operation = "waitUntilSafe"
+      throw error
+    },
+  })
+  participant.getSafetySnapshot = () => ({
+    status: "UNSAFE",
+    markets: symbols.map((symbol) => ({
+      symbol,
+      status: "UNSAFE",
+      blockers: [
+        "RECOVERY_SELL_RECONCILIATION:SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE:MARKET_PRICE_UNAVAILABLE",
+      ],
+    })),
+  })
+  const strategyShutdownCoordinator = createStrategyShutdownCoordinator({
+    participants: [participant],
+  })
+  const fixture = createShutdown({
+    participants: [participant],
+    strategyShutdownCoordinator,
+    calls,
+  })
+
+  await assert.rejects(
+    fixture.stop({
+      beforeSharedServicesStop: async () => calls.push("operator-control-stop"),
+    }),
+    (error) => assertFourMarketShutdownFailure({
+      error,
+      symbols,
+    }),
+  )
+
+  assert.equal(calls.includes("market-intake-stop"), false)
+  assert.equal(calls.includes("user-data-stop"), false)
+  assert.equal(calls.includes("broker-disconnect"), false)
+  assert.equal(calls.includes("operator-control-stop"), false)
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
+})
+
 test("preserves the Journal flush message and cause in shutdown diagnostics", async () => {
   const cause = new Error("Underlying Journal fsync failure")
   const failure = new Error("Journal shutdown flush failed", { cause })

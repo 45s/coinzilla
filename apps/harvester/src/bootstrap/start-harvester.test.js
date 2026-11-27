@@ -10,7 +10,7 @@ const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDe
 const { mkdtemp, rm, os, path, createFileOperationalStateStore } = shared
 const test = (...args) => nodeTest(`[start-harvester.test.js] ${args[0]}`, ...args.slice(1))
 
-async function seedAccountBlockerRestartSession({ store, config } = {}) {
+async function seedAccountBlockerRestartSession({ store, config, reason = "ACCOUNTING_INTEGRITY_FAILURE" } = {}) {
   const baseline = await recordConfigurationBaseline({
     operationalStateStore: store,
     appConfig: config,
@@ -29,7 +29,7 @@ async function seedAccountBlockerRestartSession({ store, config } = {}) {
     producer: "USER_DATA_EVENT_HANDLER",
     scope: "ACCOUNT",
     symbol: null,
-    reason: "ACCOUNTING_INTEGRITY_FAILURE",
+    reason,
     evidenceDigest: "a".repeat(64),
   })
   assert.equal(raised.ok, true, raised.errors?.[0]?.message)
@@ -303,7 +303,9 @@ test("keeps startup incomplete and the user-data gate closed until deferred mark
       deferMarketDataStart: true,
       evaluateRecoverySellerTransition: async () => ({
         ok: true,
-        data: { skipped: true },
+        data: {
+            skipped: true,
+          },
       }),
       logger: { info() {},
 error() {} },
@@ -1981,12 +1983,13 @@ async function createPersistedAccountStopForRestart({ directory, store } = {}) {
   })
   assert.equal(workflowResult.ok, true, "The startup fixture must create a Recovery Seller STOP workflow.")
   const latched = await workflowResult.data.latch({
-    explanation: "Integration test: restore an unresolved account-scoped STOP before startup",
+    explanation: "Integration test: restore an unresolved RS investment STOP before startup",
   })
-  assert.equal(latched.ok, true, "The integration fixture must durably persist the account-scoped STOP.")
+  assert.equal(latched.ok, true, "The integration fixture must durably persist the RS STOP.")
+
   const stopped = await recordProcessStopped({
     operationalStateStore: store,
-    reason: "TEST_CLEAN_STOP_WITH_ACCOUNT_BLOCKER",
+    reason: "TEST_CLEAN_STOP_WITH_RS_STOP",
     clean: true,
   })
   assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
@@ -2001,14 +2004,12 @@ async function createPersistedAccountStopForRestart({ directory, store } = {}) {
     operationalStateStore: restartStore,
   })
   assert.equal(restoredWorkflow.ok, true, restoredWorkflow.errors?.[0]?.message)
-  assert.equal(
-    restoredWorkflow.data.isAccountAdmissionBlocked(),
-    true,
-    "A fresh process-session workflow must restore the unresolved ACCOUNT blocker from the durable ledger.",
-  )
+  assert.equal(restoredWorkflow.data.isBuyAdmissionBlocked(), true,
+    "A fresh process-session workflow must restore the durable RS investment BUY gate.")
+  assert.equal(restoredWorkflow.data.isSellAdmissionBlocked(), false,
+    "A restored durable RS STOP must leave the first recovery SELL gate independently available.")
   return restartStore
 }
-
 async function seedAccountBlocker({ store, config = appConfig, includeProcessHistory = false } = {}) {
   if (includeProcessHistory) {
     const baseline = await recordConfigurationBaseline({
@@ -2149,6 +2150,68 @@ test("rejects a durable unresolved account blocker in Conservative-only mode whe
   })
 })
 
+async function startHarvesterWithUserDataBlockerReasonCollision({
+  directory,
+  store,
+  broker,
+}) {
+  await seedAccountBlockerRestartSession({
+    store,
+    config: createRsOnlyStartupConfig(),
+    reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+  })
+  const restartStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "user-data-rs-stop-reason-collision",
+  })
+  return startHarvesterForTest({
+    loadConfig: async () => createRsOnlyStartupConfig(),
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    operationalStateStore: restartStore,
+    executionSymbols: ["LINEAUSDT"],
+    executionRoutes: [{
+      strategyId: "RS_recoverySeller",
+      symbol: "LINEAUSDT",
+    }],
+    marketDataSymbols: ["LINEAUSDT"],
+    evaluateRecoverySellerTransition: async () => ({
+      ok: true,
+      data: { skipped: true },
+    }),
+    logger: {
+      info() {},
+      error() {},
+    },
+  })
+}
+
+test("rejects a user-data ACCOUNT blocker with the RS STOP reason instead of treating it as an RS restart latch", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const calls = []
+  const broker = createRsOnlyStartupBroker({ calls })
+  let startedRuntime
+  try {
+    await assert.rejects(async () => {
+      startedRuntime = await startHarvesterWithUserDataBlockerReasonCollision({
+        directory,
+        store,
+        broker,
+      })
+    }, /Automatic Harvester trading-state restoration remains disabled/)
+    assert.equal(calls.length, 0,
+      "A user-data ACCOUNT blocker with the reserved RS reason must fail before broker startup.")
+  } finally {
+    if (startedRuntime) {
+      await startedRuntime.stop()
+    }
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
 test("allows only an observation-only restart after account resolution and verifies a fresh durable PREFLIGHT snapshot pair", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []
@@ -2211,44 +2274,73 @@ test("allows only an observation-only restart after account resolution and verif
   }
 })
 
-test("restores a persisted account STOP and keeps a restarted account observation-only", async () => {
+async function startHarvesterAfterPersistedRecoverySellerStop({
+  directory,
+  store,
+  broker,
+  onStrategyEvaluation,
+}) {
+  const restartStore = await createPersistedAccountStopForRestart({
+    directory,
+    store,
+  })
+  const result = await startHarvesterForTest({
+    loadConfig: async () => createRsOnlyStartupConfig(),
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    operationalStateStore: restartStore,
+    executionSymbols: ["LINEAUSDT"],
+    executionRoutes: [
+      {
+        strategyId: "RS_recoverySeller",
+        symbol: "LINEAUSDT",
+      },
+    ],
+    marketDataSymbols: ["LINEAUSDT"],
+    evaluateRecoverySellerTransition: onStrategyEvaluation,
+    logger: {
+      info() {},
+      error() {},
+    },
+  })
+  return {
+    restartStore,
+    result,
+  }
+}
+
+test("restores a persisted RS STOP and keeps a restarted runtime observation-only", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []
   const broker = createRsOnlyStartupBroker({ calls })
   let strategyEvaluationCount = 0
   try {
-    const restartStore = await createPersistedAccountStopForRestart({
+    const { restartStore, result } = await startHarvesterAfterPersistedRecoverySellerStop({
       directory,
       store,
-    })
-    const result = await startHarvesterForTest({
-      loadConfig: async () => createRsOnlyStartupConfig(),
-      env: binanceEnv,
-      brokerAdapterFactory: () => broker,
-      operationalStateStore: restartStore,
-      executionSymbols: ["LINEAUSDT"],
-      executionRoutes: [
-        {
-          strategyId: "RS_recoverySeller",
-          symbol: "LINEAUSDT",
-        },
-      ],
-      marketDataSymbols: ["LINEAUSDT"],
-      evaluateRecoverySellerTransition: async () => {
+      broker,
+      onStrategyEvaluation: async () => {
         strategyEvaluationCount += 1
         return {
           ok: true,
           data: { skipped: true },
         }
       },
-      logger: {
-        info() {},
-        error() {},
-      },
     })
-
-    assert.equal(result.tradingEnabled, false, "A restored account STOP must prevent trading from being re-enabled after restart.")
-    assert.equal(result.executionEnabled, false, "A restored account STOP must keep every execution route disabled.")
+    assert.equal(result.tradingEnabled, false,
+      "A clean restart with a durable RS STOP must remain observation-only until controlled restart acceptance.")
+    assert.equal(result.executionEnabled, false,
+      "A persisted RS STOP must not implicitly resume any execution route after process restart.")
+    const restoredWorkflow = await createRecoverySellerStopWorkflow({
+      operationalStateStore: restartStore,
+    })
+    assert.equal(restoredWorkflow.ok, true, restoredWorkflow.errors?.[0]?.message)
+    assert.equal(restoredWorkflow.data.getStopState().status, "STOPPED",
+      "Restart must not implicitly clear the durable RS STOP.")
+    assert.equal(restoredWorkflow.data.isBuyAdmissionBlocked(), true,
+      "Restart must preserve the RS investment BUY gate.")
+    assert.equal(restoredWorkflow.data.isSellAdmissionBlocked(), false,
+      "The durable STOP semantics remain investment-only; startup's separate observation-only gate prevents implicit resume.")
     await result.processMarketPrice({
       symbol: "LINEAUSDT",
       priceEvent: {
@@ -2257,8 +2349,10 @@ test("restores a persisted account STOP and keeps a restarted account observatio
         timestamp: 2,
       },
     })
-    assert.equal(strategyEvaluationCount, 0, "A restored account STOP must prevent market-data strategy evaluation.")
-    assert.equal(calls.some((call) => typeof call === "object" && call.side), false, "An observation-only restart must not submit broker orders.")
+    assert.equal(strategyEvaluationCount, 0,
+      "An observation-only restart must prevent strategy evaluation until controlled restart acceptance.")
+    assert.equal(calls.some((call) => typeof call === "object" && call.side), false,
+      "An observation-only restart must not submit broker orders.")
     await result.stop()
   } finally {
     await rm(directory, {

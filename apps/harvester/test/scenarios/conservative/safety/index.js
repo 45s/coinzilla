@@ -57,12 +57,22 @@ export const scenarios = [
       "Shutdown does not release process ownership before required reconciliation completes.",
     ],
     relatedRequirements: ["CON-SPEC-8.3", "CON-SPEC-10.1"],
+    relatedExistingTests: [
+      {
+        path: "src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js",
+        name: "retains recovery-input blockers independently for all four configured markets",
+      },
+      {
+        path: "src/bootstrap/shutdown/create-shutdown-handler.test.js",
+        name: "retains shared services when four-market shutdown proof is blocked",
+      },
+    ],
     relatedCriticalBehaviors: [
       "ACCOUNT_SAFETY_BLOCKER_ADMISSION",
       "STRATEGY_SAFETY_PAUSE_BUY_CANCELLATION",
       "SHUTDOWN_PROCESS_OWNERSHIP",
     ],
     coverageStatus: "TEST-MAPPED",
-    coverageReason: "Account-blocker, safety-pause, and shutdown ownership tests are linked; all risk-limit and failure-ordering combinations remain under review.",
+    coverageReason: "Four-market recovery-input failure and shared-service retention tests are mapped; historical incident outcomes and other failure-ordering combinations remain under review.",
   }),
 ]

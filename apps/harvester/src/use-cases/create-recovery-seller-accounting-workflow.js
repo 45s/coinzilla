@@ -1087,6 +1087,13 @@ function createRecoverySellerPositionSnapshot({ state, market, cycleState }) {
     : undefined
 }
 
+function createSellAdmissionSnapshotFlag({ sellAdmissionBlocked } = {}) {
+  if (typeof sellAdmissionBlocked !== "boolean") {
+    return {}
+  }
+  return { sellAdmissionBlocked }
+}
+
 function createRecoverySellerTransitionSnapshot({
   state,
   createCycleId,
@@ -1096,6 +1103,7 @@ function createRecoverySellerTransitionSnapshot({
   stopState,
   strategyStopped,
   buyAdmissionBlocked,
+  sellAdmissionBlocked,
   marketPaused,
   reconciliationComplete,
   thirdAssetFeeQuoteValue,
@@ -1127,7 +1135,6 @@ function createRecoverySellerTransitionSnapshot({
     recoveryPosition,
     thirdAssetFeeQuoteValue,
   })
-  const execution = state.recoverySellerBuyExecutionByCycle.get(cycleState.cycleId)
   return Object.freeze({
     cycleState,
     recoveryPosition,
@@ -1141,9 +1148,10 @@ function createRecoverySellerTransitionSnapshot({
     stopState,
     strategyStopped,
     buyAdmissionBlocked,
+    ...createSellAdmissionSnapshotFlag({ sellAdmissionBlocked }),
     marketPaused,
     reconciliationComplete,
-    lastBuyPrice: calculateRecoverySellerBuyExecutionVwap({ execution }),
+    lastBuyPrice: calculateRecoverySellerBuyExecutionVwap({ execution: state.recoverySellerBuyExecutionByCycle.get(cycleState.cycleId) }),
   })
 }
 
