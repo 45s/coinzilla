@@ -37,6 +37,18 @@ function logReceivedMarketMetadata({ logger, symbol, pairConfig, metadata } = {}
 
 function validateCanonicalMarketMetadata({ symbol, metadata } = {}) {
   const { market } = metadata
+  if (
+    !market ||
+    market.symbol !== symbol ||
+    !market.baseAsset?.code ||
+    !market.quoteAsset?.code
+  ) {
+    throw new Error([
+      "Configured pair ",
+      symbol,
+      " does not expose canonical base/quote asset metadata",
+    ].join(""))
+  }
   return market
 }
 

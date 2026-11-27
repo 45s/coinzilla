@@ -642,6 +642,8 @@ value: { amount: "0.1" } }
     reason: "QUANTITY_INCREMENT",
     quantityStepSize: "0.1",
     evaluatedQuantity: "0",
+    evaluatedPrice: "0.1",
+    evaluatedNotional: "0.005",
   })
 })
 
@@ -993,6 +995,8 @@ value: { amount: "0.101" } },
       reason: "MAX_PRICE",
       requiredPrice: "0.102",
       maximumPrice: "0.101",
+      evaluatedPrice: "0.102",
+      evaluatedNotional: "10.098",
     },
     "The decision must preserve the exact blocked recovery inventory and exchange price-filter evidence.",
   )
@@ -1293,6 +1297,7 @@ test("classifies the ADA 0.1 residual as MIN_NOTIONAL when one fee-reserved step
     minimumNotional: "5",
     evaluatedQuantity: "0.1",
     evaluatedNotional: "0.01531",
+    evaluatedPrice: "0.1531",
   })
 
   assertAdaRecoveryCompletionProfitBoundaries({
