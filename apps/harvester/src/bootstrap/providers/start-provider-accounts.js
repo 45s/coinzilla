@@ -202,12 +202,6 @@ async function stopOneStartedAccount({
       if (stopErrors.length > 0) {
         return stopErrors
       }
-      if (result?.data?.durableProcessStopAcknowledged !== true) {
-        return [new Error(
-          `Provider account ${entry.provider.providerInstanceId} did not confirm durable PROCESS_STOPPED before process-lock release`,
-        )]
-      }
-      entry.durableProcessStopAcknowledged = true
       entry.runtimeStopped = true
     } catch (error) {
       return [error]
@@ -264,21 +258,10 @@ function createMultiAccountRuntime({
         errors,
       }
     }
-    const durableProcessStopAcknowledged = startedAccounts.every((entry) =>
-      entry.durableProcessStopAcknowledged === true)
-    if (!durableProcessStopAcknowledged) {
-      return {
-        ok: false,
-        errors: [new Error("Multi-account shutdown did not confirm durable PROCESS_STOPPED for every provider account")],
-      }
-    }
     return {
       ok: true,
       status: "STOPPED",
       stopped: true,
-      data: {
-        durableProcessStopAcknowledged: true,
-      },
     }
   }
   const primary = startedAccounts[0].runtime
