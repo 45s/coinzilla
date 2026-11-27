@@ -357,7 +357,7 @@ async function createUnknownOwnedBuyHarness({ buyOrder, raisedBlockers }) {
     strategyPolicy: {
       ...conservativeStrategyPolicy,
       evaluate: () => {
-        throw failure
+        throw new Error("forced strategy evaluation failure")
       },
     },
     cancelThrow: true,

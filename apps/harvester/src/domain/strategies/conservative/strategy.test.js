@@ -1376,7 +1376,10 @@ test("rejects a negative remaining quantity on an active recovery SELL", () => {
 
 
 function createDogeIncidentResidualScenario() {
-  const incidentBaseAsset = new Asset({ id: "asset:DOGE", code: "DOGE" })
+  const incidentBaseAsset = new Asset({
+    id: "asset:DOGE",
+    code: "DOGE",
+  })
   const incidentMarket = new Market({
     venue: "binance",
     symbol: "DOGEUSDT",
@@ -1438,7 +1441,10 @@ function createZroIncidentResidualScenario({
   minQuantity = "0.01",
   minNotional = "5",
 } = {}) {
-  const incidentBaseAsset = new Asset({ id: "asset:ZRO", code: "ZRO" })
+  const incidentBaseAsset = new Asset({
+    id: "asset:ZRO",
+    code: "ZRO",
+  })
   const incidentMarket = new Market({
     venue: "binance",
     symbol: "ZROUSDT",
@@ -1496,7 +1502,7 @@ function evaluateIncidentResidual({
   orderQuantity,
   portfolio,
   recoveryLedger,
-  marketMetadata,
+  incidentMarketMetadata,
   lastBuyPrice,
 } = {}) {
   return evaluateConservativeStrategy({
@@ -1516,7 +1522,7 @@ function evaluateIncidentResidual({
     settings: {},
     portfolio,
     recoveryLedger,
-    marketMetadata,
+    marketMetadata: incidentMarketMetadata,
     lastBuyPrice,
   })
 }
