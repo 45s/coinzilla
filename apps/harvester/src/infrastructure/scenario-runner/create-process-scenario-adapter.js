@@ -237,18 +237,46 @@ async function handleWorkerMessage({
   finish(result)
 }
 
-function createExecutionState({ resolve, reject, children, runId }) {
+function confirmSandboxCleanup({ child }) {
+  if (typeof child.sandboxCleanup !== "function") {
+    if (child.sandboxCleanupError) {
+      throw new Error("Scenario sandbox cgroup cleanup could not be confirmed", {
+        cause: child.sandboxCleanupError,
+      })
+    }
+    return
+  }
+  try {
+    child.sandboxCleanup()
+    delete child.sandboxCleanupError
+  } catch (cause) {
+    child.sandboxCleanupError = cause
+    throw new Error("Scenario sandbox cgroup cleanup could not be confirmed", {
+      cause,
+    })
+  }
+}
+
+function createExecutionState({ resolve, reject, children, runId, child }) {
   let settled = false
   function finish({ error, output, preserveChild = false }) {
     if (settled) {
       return
     }
+    let finalError = error
+    let retainChild = preserveChild
+    try {
+      confirmSandboxCleanup({ child })
+    } catch (cleanupError) {
+      finalError = cleanupError
+      retainChild = true
+    }
     settled = true
-    if (!preserveChild) {
+    if (!retainChild) {
       children.delete(runId)
     }
-    if (error) {
-      reject(error)
+    if (finalError) {
+      reject(finalError)
     } else {
       resolve(output)
     }
@@ -416,6 +444,7 @@ function createExecutionPromise({
       reject,
       children,
       runId,
+      child,
     })
     const finish = createAbortAwareFinish({
       signal,
@@ -633,6 +662,7 @@ function createWorkerCanceller({ children, terminationGraceMs }) {
       graceMs: terminationGraceMs,
       cooperative: true,
     })
+    confirmSandboxCleanup({ child })
     children.delete(runId)
     return true
   }

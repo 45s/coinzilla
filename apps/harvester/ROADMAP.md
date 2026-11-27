@@ -80,4 +80,4 @@ The manual Linux sandbox E2E exercises both an adversarial OS-boundary probe and
 
 ## Scenario Runner cgroup lifecycle follow-up — 2026-11-27
 
-A test-first regression now targets cgroup leakage when sandbox worker argument construction fails before spawn. The architecture contract requires cleanup on every post-cgroup setup failure and observable cleanup failure; the implementation and exact-head CI verification remain in progress on `fix/harvester/scenario-runner-cgroup-cleanup`.
+The cgroup setup leak is fixed on `fix/harvester/scenario-runner-cgroup-cleanup`: argument construction is guarded by cleanup; cgroup removal errors are surfaced; the process adapter withholds success and retains/retries cleanup. Regression tests cover pre-spawn failure and runtime cleanup confirmation. Exact-head CI is pending. Trusted Linux sandbox E2E, production state durability, trusted artifact provenance/replay and runner-specific retry/idempotency acceptance remain separate open gates.

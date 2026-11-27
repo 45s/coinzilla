@@ -208,18 +208,31 @@ function writeAndVerifyCgroupSettings({ path, settings, writeFileSync, readFileS
 }
 
 function cleanupScenarioCgroup({ path, existsSync, writeFileSync, rmdirSync }) {
+  if (!existsSync(path)) {
+    return true
+  }
   const killPath = join(path, "cgroup.kill")
+  let killError = null
   if (existsSync(killPath)) {
     try {
       writeFileSync(killPath, "1\n", "utf8")
-    } catch {
-      // Best-effort kill; the cgroup directory removal below is still attempted.
+    } catch (error) {
+      killError = error
     }
   }
   try {
     rmdirSync(path)
-  } catch {
-    // The kernel may still be reaping a process from the cgroup.
+    return true
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return true
+    }
+    if (killError) {
+      throw new AggregateError([killError, error], `Scenario cgroup cleanup failed: ${path}`)
+    }
+    throw new Error(`Scenario cgroup cleanup could not be confirmed: ${path}`, {
+      cause: error,
+    })
   }
 }
 
@@ -235,6 +248,19 @@ function createScenarioCgroup({
 }) {
   const path = join(parentPath, `scenario-runner-${process.pid}-${randomUUID()}`)
   mkdirSync(path, { mode: 0o755 })
+  let removed = false
+  const cleanup = () => {
+    if (removed) {
+      return true
+    }
+    removed = cleanupScenarioCgroup({
+      path,
+      existsSync,
+      writeFileSync,
+      rmdirSync,
+    })
+    return removed
+  }
   try {
     writeAndVerifyCgroupSettings({
       path,
@@ -244,20 +270,14 @@ function createScenarioCgroup({
     })
     return Object.freeze({
       cgroupProcsPath: join(path, "cgroup.procs"),
-      cleanup: () => cleanupScenarioCgroup({
-        path,
-        existsSync,
-        writeFileSync,
-        rmdirSync,
-      }),
+      cleanup,
     })
   } catch (error) {
-    cleanupScenarioCgroup({
-      path,
-      existsSync,
-      writeFileSync,
-      rmdirSync,
-    })
+    try {
+      cleanup()
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], "Scenario cgroup setup and cleanup failed")
+    }
     throw error
   }
 }
@@ -639,6 +659,27 @@ function createSandboxResourceArguments({
   ]
 }
 
+function killSandboxChild({ child }) {
+  if (!child) {
+    return null
+  }
+  try {
+    child.kill("SIGKILL")
+    return null
+  } catch (error) {
+    return error
+  }
+}
+
+function cleanupSandboxCgroupAfterChildExit({ child, cgroup }) {
+  try {
+    cgroup.cleanup()
+    delete child.sandboxCleanupError
+  } catch (error) {
+    child.sandboxCleanupError = error
+  }
+}
+
 function spawnCgroupSandboxProcess({
   spawn,
   shell,
@@ -653,31 +694,53 @@ function spawnCgroupSandboxProcess({
   realpathSync,
 }) {
   const cgroup = cgroupController.create()
-  const resourceArguments = createSandboxResourceArguments({
-    bwrap,
-    workerPath,
-    repositoryRoot,
-    nodeExecutable,
-    existsSync,
-    realpathSync,
-  })
   let child
   try {
+    const resourceArguments = createSandboxResourceArguments({
+      bwrap,
+      workerPath,
+      repositoryRoot,
+      nodeExecutable,
+      existsSync,
+      realpathSync,
+    })
     child = spawn(shell.path, createCgroupExecArguments({
       cgroupProcsPath: cgroup.cgroupProcsPath,
       prlimitPath: prlimit.path,
       resourceArguments,
     }), createSandboxSpawnOptions({ stdio }))
-    child.once("close", cgroup.cleanup)
-    child.once("error", cgroup.cleanup)
+    child.sandboxCleanup = cgroup.cleanup
+    const cleanup = () => cleanupSandboxCgroupAfterChildExit({ child, cgroup })
+    child.once("close", cleanup)
+    child.once("error", cleanup)
     writeSeccompFilter({
       child,
       filter: buildScenarioSeccompFilter(),
     })
     return child
   } catch (error) {
-    child?.kill("SIGKILL")
-    cgroup.cleanup()
+    const childKillError = killSandboxChild({ child })
+    let cleanupError = null
+    try {
+      cgroup.cleanup()
+    } catch (failure) {
+      cleanupError = failure
+    }
+    if (cleanupError) {
+      const failures = [error]
+      if (childKillError) {
+        failures.push(childKillError)
+      }
+      failures.push(cleanupError)
+      throw new Error("Sandbox setup failed and cgroup cleanup could not be confirmed", {
+        cause: new AggregateError(failures, "Sandbox setup and cleanup failed"),
+      })
+    }
+    if (childKillError) {
+      throw new Error("Sandbox setup failed and child termination could not be confirmed", {
+        cause: new AggregateError([error, childKillError], "Sandbox setup and termination failed"),
+      })
+    }
     throw error
   }
 }
