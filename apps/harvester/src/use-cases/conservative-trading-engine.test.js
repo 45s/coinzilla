@@ -656,7 +656,7 @@ test("rechecks external-order ownership after the durable order intent and befor
     hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => {
+      flushWrites: async () => {
         hasExternalOrder = true
         return {
           ok: true,
@@ -687,7 +687,7 @@ test("rechecks a newly raised account blocker after durable intent and before br
     getAccountSafetyBlocker: () => accountBlocker,
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => {
+      flushWrites: async () => {
         accountBlocker = {
           scope: "ACCOUNT",
           reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
@@ -853,8 +853,8 @@ test("durably journals the submission intent before calling the broker", async (
         sequence.push(`publish:${event.name}`)
         return { ok: true }
       },
-      flush: async () => {
-        sequence.push("flush")
+      flushWrites: async () => {
+        sequence.push("flushWrites")
         return {
           ok: true,
           durable: true
@@ -875,7 +875,7 @@ test("durably journals the submission intent before calling the broker", async (
 
   assert.equal(result.ok, true)
   assert.ok(sequence.indexOf("publish:order.submission_requested") >= 0)
-  assert.ok(sequence.indexOf("flush") > sequence.indexOf("publish:order.submission_requested"))
+  assert.ok(sequence.indexOf("flushWrites") > sequence.indexOf("publish:order.submission_requested"))
   assert.ok(sequence.indexOf("broker:place") > sequence.indexOf("flush"))
 })
 
@@ -883,7 +883,7 @@ test("does not submit an order when its durable intent flush fails", async () =>
   const harness = await createHarness({
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({
+      flushWrites: async () => ({
         ok: false,
         errors: [new Error("journal sync failed")]
       }),
@@ -2136,14 +2136,7 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
         }
         return { ok: true }
       },
-      flush: async () => {
-        globalFlushCalls += 1
-        sequence.push("global-flush")
-        return {
-          ok: false,
-          errors: [new Error("optional EventBus observer failed")],
-        }
-      },
+flush: async
       flushWrites: async () => {
         writeOnlyFlushCalls += 1
         sequence.push("flushWrites")
@@ -2183,7 +2176,8 @@ test("does not cancel a recovery SELL when cancellation intent publication is st
   let resolvePendingPublication
   const pendingPublication = new Promise((resolve) => { resolvePendingPublication = resolve })
   let cancelCalls = 0
-  let flushCalls = 0
+  let writeOnlyFlushCalls = 0
+  let globalFlushCalls = 0
   const seeded = makeSeededRecoveryState()
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
@@ -2193,8 +2187,9 @@ test("does not cancel a recovery SELL when cancellation intent publication is st
     onCancelOrderStarted: () => { cancelCalls += 1 },
     eventPublisher: {
       publish: (event) => event.name === "order.cancel_requested" ? pendingPublication : ({ ok: true }),
-      flush: async () => {
-        flushCalls += 1
+flush: async
+      flushWrites: async () => {
+        writeOnlyFlushCalls += 1
         return {
           ok: true,
           durable: true,
@@ -2226,7 +2221,8 @@ test("does not cancel a recovery SELL when cancellation intent publication is st
   })
   resolvePendingPublication({ ok: true })
   assert.equal(result.ok, false, "Pending cancellation-intent publication must not be acknowledged as durable.")
-  assert.equal(flushCalls, 1, "A pending cancellation intent must not be followed by a misleading successful Journal flush.")
+  assert.equal(globalFlushCalls, 0, "Pending intent publication must not trigger a global EventBus flush.")
+  assert.equal(writeOnlyFlushCalls, 1, "Only the preceding SELL submission intent may reach the write-only Journal barrier.")
   assert.equal(cancelCalls, 0, "The broker must not receive cancellation before its durable intent is confirmed.")
   assert.ok(
     harness.pauses.includes("RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE"),
@@ -2251,7 +2247,7 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
     onCancelOrderStarted: () => { cancelCalls += 1 },
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => {
+      flushWrites: async () => {
         flushCount += 1
         return flushCount === 2
           ? {
@@ -3491,7 +3487,7 @@ function createCompleteCycleEventPublisher({ scenario, keepQuantity }) {
         ok: true,
       }
     },
-    flush: async () => ({
+    flushWrites: async () => ({
       ok: true,
       durable: true,
     }),
@@ -4719,7 +4715,7 @@ test("accepts a matching Binance NEW report after a lost order acknowledgement",
     placeOrderThrow: true,
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({
+      flushWrites: async () => ({
         ok: true,
         durable: true
       }),
@@ -11352,19 +11348,12 @@ async function createRecoverySellDeferralHarness({ failDeferralFlush = false } =
         journalEvents.push(event)
         return { ok: true }
       },
-      flush: async () => {
+      flushWrites: async () => {
         flushCount += 1
         if (flushCount === 1) {
           hasExternalOrder = true
         }
-        return {
-          ok: true,
-          durable: true,
-        }
-      },
-      flushWrites: async () => {
-        flushCount += 1
-        if (failDeferralFlush) {
+        if (failDeferralFlush && flushCount === 2) {
           return {
             ok: false,
             errors: [failure],
@@ -11439,7 +11428,7 @@ test("rechecks external-order ownership after the durable order intent and recor
         journalEvents.push(event)
         return { ok: true }
       },
-      flush: async () => {
+      flushWrites: async () => {
         flushCount += 1
         hasExternalOrder = true
         return {
@@ -11490,7 +11479,7 @@ function createFailingDeferralEventPublisher({ state, journalEvents, reportedFai
       journalEvents.push(event)
       return { ok: true }
     },
-    flush: async () => {
+    flushWrites: async () => {
       state.flushCount += 1
       state.hasExternalOrder = true
       return {
@@ -12147,7 +12136,7 @@ test("market emergency BUY pause reconciles fills that race with cancellation ex
   const harness = await createHarness({
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({
+      flushWrites: async () => ({
         ok: true,
         durable: true,
       }),
@@ -12189,7 +12178,7 @@ test("failed owned BUY cancellation leaves the emergency BUY gate active and rep
   const harness = await createHarness({
     eventPublisher: {
       publish: () => ({ ok: true }),
-      flush: async () => ({
+      flushWrites: async () => ({
         ok: true,
         durable: true,
       }),

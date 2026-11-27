@@ -572,6 +572,7 @@ The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERV
   - `keeps the recovery basis open and classifies exchange-constrained residual after a profitable SELL`
   - `reconciles recovered orders without canceling or replacing any exchange order` (also reevaluates after restart reconciliation and asserts no duplicate recovery SELL)
   - `does not cancel a recovery SELL when cancellation intent publication is still pending`
+  - `durably journals recovery SELL cancellation intent before broker cancellation` (proves optional EventBus flush failure does not block the write-only Journal barrier)
 
 **Evidence note:** Existing test titles were inspected to create a navigation mapping. The assertions have not yet been reviewed against every listed subcase, and the tests were not executed as part of this documentation-only catalog change; do not treat this mapping as VERIFIED.
 

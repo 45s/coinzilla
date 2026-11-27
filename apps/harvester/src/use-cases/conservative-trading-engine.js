@@ -253,13 +253,13 @@ function observeDurableIntentPublication({ published } = {}) {
 }
 
 async function flushDurableIntent({ eventPublisher }) {
-  if (typeof eventPublisher?.flush !== "function") {
+  if (typeof eventPublisher?.flushWrites !== "function") {
     return toResult({
-      error: new TypeError("Trading intent requires a durable Journal flush capability"),
+      error: new TypeError("Trading intent requires a durable Journal write-only flush capability"),
     })
   }
   try {
-    const flushed = await eventPublisher.flush()
+    const flushed = await eventPublisher.flushWrites()
     if (flushed?.ok !== true || flushed?.durable !== true) {
       return flushed?.ok === false
         ? flushed
