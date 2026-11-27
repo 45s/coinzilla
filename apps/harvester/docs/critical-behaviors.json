@@ -1896,7 +1896,17 @@
         },
         {
           "path": "src/use-cases/audit-recovered-account-state.test.js",
-          "name": "handles market-asset, malformed, negative, and missing-market Journal commissions",
+          "name": "ignores quote-asset commissions when reconciling third-asset account deltas",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "rejects negative third-asset commission amounts",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "fails closed on malformed or unmarketed Journal commission fills",
           "kind": "failure"
         }
       ],
