@@ -303,11 +303,13 @@ test("retains owner metadata without a valid ownership token", async (t) => {
     recursive: true,
     force: true,
   }))
-  const lockPath = await writeFile(path.join(lockDirectory, ".harvester-trading-test.lock"), JSON.stringify({
+  const lockPath = path.join(lockDirectory, ".harvester-trading-test.lock")
+  const incompleteOwner = {
     pid: 456789,
     hostname: CURRENT_HOST,
     startedAt: STARTED_AT,
-  }), "utf8").then(() => path.join(lockDirectory, ".harvester-trading-test.lock"))
+  }
+  await writeFile(lockPath, JSON.stringify(incompleteOwner), "utf8")
 
   await assert.rejects(
     assertHarvesterProcessStopped({
@@ -320,11 +322,7 @@ test("retains owner metadata without a valid ownership token", async (t) => {
   )
   assert.equal(
     await readFile(lockPath, "utf8"),
-    JSON.stringify({
-      pid: 456789,
-      hostname: CURRENT_HOST,
-      startedAt: STARTED_AT,
-    }),
+    JSON.stringify(incompleteOwner),
     "A lock without valid ownership metadata must remain unchanged.",
   )
 })
