@@ -31,13 +31,15 @@ const appConfig = {
           enableVolatilityProtection: false,
           externalOrdersPolicy: "ignore",
           investment: 200,
-          orderQuantity: 50,
+          orderQuantity: 100,
           keepQuantity: 0,
           minProfit: 0.05,
           priceStepPercent: 0.3,
           pricePrecision: 4,
           quantityPrecision: 1,
-          // Historical 2026-11-17 pair config; actual fill commissions are supplied explicitly.
+          // The two archived BUY executions below are replayed as partial fills of one pre-existing order.
+          // This preserves their execution economics without creating a new BUY during recovery.
+          // Actual fill commissions are supplied explicitly.
           makerPercent: 0.075,
           takerPercent: 0.075,
         },
@@ -63,78 +65,88 @@ async function waitForAdaOrder({ replay, side, occurrence = 1 }) {
   }
 }
 
-async function fillAdaBuy({ replay, order, price, tradeId }) {
-  await replay.publishMarketPrice(price)
-  await replay.publishFullOrderFill({
+async function fillAdaBuy({
+  replay,
+  order,
+  price,
+  tradeId,
+  fillQuantity,
+  cumulativeExecutedQuantity,
+}) {
+  const fillOccurrence = replay.receivedLifecycleEvents.filter(
+    ({ name }) => name === "execution.fill_applied",
+  ).length + 1
+  const fillApplied = replay.waitForLifecycleEvent({
+    eventName: "execution.fill_applied",
+    occurrence: fillOccurrence,
+  })
+  await replay.publishOrderFill({
     order,
     price,
     tradeId,
+    fillQuantity,
+    cumulativeExecutedQuantity,
     commissionAmount: "0.05",
     commissionAsset: "ADA",
   })
+  await fillApplied
   assert.equal(
     replay.receivedExecutionReports.at(-1)?.fill.id,
     tradeId,
-    "the replay must record the normalized BUY execution before evaluating the next order",
+    "the replay must record and apply the normalized BUY execution before evaluating the next order",
   )
 }
 
-async function submitAdaFirstBuyAndWait({ replay, firstBuy }) {
-  const firstSellSubmission = replay.waitForSubmittedOrder("SELL")
-  const secondBuySubmission = waitForAdaOrder({
+async function submitAdaFirstBuyAndWait({ replay, initialBuy }) {
+  const firstSellSubmission = waitForAdaOrder({
     replay,
-    side: "BUY",
+    side: "SELL",
+  })
+  await fillAdaBuy({
+    replay,
+    order: initialBuy,
+    price: "0.1524",
+    tradeId: "900000001",
+    fillQuantity: "50",
+    cumulativeExecutedQuantity: "50",
+  })
+  await replay.publishMarketPrice("0.1524")
+  const firstSell = await firstSellSubmission
+  assert.equal(firstSell.price, "0.1539")
+  assert.equal(firstSell.quantity, "49.9")
+  return {
+    firstSell,
+    initialBuy,
+  }
+}
+
+async function submitAdaLateBuyFillAndWait({ replay, firstSell, initialBuy }) {
+  const replacementSellSubmission = waitForAdaOrder({
+    replay,
+    side: "SELL",
     occurrence: 2,
   })
   await fillAdaBuy({
     replay,
-    order: firstBuy,
-    price: "0.1524",
-    tradeId: "900000001",
-  })
-  const [firstSell, secondBuy] = await Promise.all([
-    firstSellSubmission,
-    secondBuySubmission,
-  ])
-  assert.equal(firstSell.price, "0.1539")
-  assert.equal(firstSell.quantity, "49.9")
-  assert.equal(secondBuy.price, "0.1519")
-  assert.equal(secondBuy.quantity, "50")
-  return {
-    firstSell,
-    secondBuy,
-  }
-}
-
-async function submitAdaSecondBuyAndWait({ replay, firstSell, secondBuy }) {
-  const replacementSellSubmission = replay.waitForSubmittedOrder("SELL", 2)
-  const thirdBuySubmission = waitForAdaOrder({
-    replay,
-    side: "BUY",
-    occurrence: 3,
-  })
-  await fillAdaBuy({
-    replay,
-    order: secondBuy,
+    order: initialBuy,
     price: "0.1519",
     tradeId: "900000002",
+    fillQuantity: "50",
+    cumulativeExecutedQuantity: "100",
   })
-  const [replacementSell, thirdBuy] = await Promise.all([
-    replacementSellSubmission,
-    thirdBuySubmission,
-  ])
+  const replacementSell = await replacementSellSubmission
   assert.equal(replacementSell.price, scenarioExpectations.sellPrice)
   assert.equal(replacementSell.quantity, scenarioExpectations.expectedSellQuantity)
   assert.ok(
     replay.confirmedCanceledOrders.some((order) => order.clientOrderId === firstSell.clientOrderId),
     "the superseded recovery SELL must be authoritatively canceled before replacement",
   )
-  assert.equal(thirdBuy.price, "0.1514")
-  assert.equal(thirdBuy.quantity, "50")
-  return {
-    replacementSell,
-    thirdBuy,
-  }
+  assert.equal(
+    replay.submittedCanonicalOrders.filter((order) => order.side === "BUY").length,
+    1,
+    "The late fill must remain part of the pre-existing BUY order; no second BUY may be submitted.",
+  )
+  return replacementSell
 }
 
 async function submitAdaBuySequence(replay) {
@@ -144,14 +156,14 @@ async function submitAdaBuySequence(replay) {
   })
   await replay.publishMarketPrice(scenarioExpectations.initialPrice)
   const initialBuy = await initialBuySubmission
-  const { firstSell, secondBuy } = await submitAdaFirstBuyAndWait({
+  const { firstSell } = await submitAdaFirstBuyAndWait({
     replay,
-    firstBuy: initialBuy,
+    initialBuy,
   })
-  return submitAdaSecondBuyAndWait({
+  return submitAdaLateBuyFillAndWait({
     replay,
     firstSell,
-    secondBuy,
+    initialBuy,
   })
 }
 
@@ -242,7 +254,7 @@ function assertAdaBelowTargetOutcome({ replay, replacementSell }) {
   assert.equal(
     replay.receivedLifecycleEvents.some(({ name }) => name === "strategy.paused"),
     false,
-    "valid MIN_NOTIONAL dust with the next BUY pending must not pause the pair before shutdown",
+    "valid MIN_NOTIONAL dust must not pause the pair or release BUY admission before shutdown",
   )
   const notCompleted = replay.receivedLifecycleEvents.find(({ name }) => name === "recovery.cycle_not_completed")
   assert.ok(notCompleted, "the terminal SELL must persist an explicit non-completed recovery outcome")
@@ -296,14 +308,11 @@ function collectShutdownErrorEvidence({ error, seen = new Set() } = {}) {
   ].filter(Boolean).join(" ")
 }
 
-function assertAdaShutdownOutcome({
-    replay,
-    thirdBuy,
-    shutdownError,
-  }) {
-  assert.ok(
-    replay.confirmedCanceledOrders.some((order) => order.clientOrderId === thirdBuy.clientOrderId),
-    "shutdown must cancel the still-open next BUY without completing the below-target recovery cycle",
+function assertAdaShutdownOutcome({ replay, shutdownError }) {
+  assert.equal(
+    replay.submittedCanonicalOrders.filter((order) => order.side === "BUY").length,
+    1,
+    "The recovery cycle must not have opened a second BUY before shutdown.",
   )
   assert.ok(shutdownError instanceof Error, "shutdown must fail closed while recovery SELL coverage is unproven")
   const evidence = collectShutdownErrorEvidence({
@@ -319,7 +328,7 @@ function assertAdaShutdownOutcome({
   )
 }
 
-test("replays the 2026-11-17 ADA cycle and preserves the below-target outcome through shutdown", async (t) => {
+test("replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown", async (t) => {
   const replay = await createDogeTradingReplay({
     marketSymbol: MARKET_SYMBOL,
     appConfig,
@@ -334,10 +343,14 @@ test("replays the 2026-11-17 ADA cycle and preserves the below-target outcome th
   let stopped = false
   t.after(async () => {
     if (!stopped) {
-      await replay.runtime.stop()
+      try {
+        await replay.runtime.stop()
+      } catch {
+        // The recovery cycle is intentionally unresolved at test cleanup.
+      }
     }
   })
-  const { replacementSell, thirdBuy } = await submitAdaBuySequence(replay)
+  const replacementSell = await submitAdaBuySequence(replay)
   const timestamp = await fillAdaRecoverySell({
     replay,
     replacementSell,
@@ -363,7 +376,6 @@ test("replays the 2026-11-17 ADA cycle and preserves the below-target outcome th
   stopped = true
   assertAdaShutdownOutcome({
     replay,
-    thirdBuy,
     shutdownError,
   })
 })

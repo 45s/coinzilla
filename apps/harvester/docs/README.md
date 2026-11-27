@@ -26,6 +26,10 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Startup open-order boundary plan](plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md) — completed design and implementation record for #1157
 - [Trading First](TRADING_FIRST.md) — authoritative trading priority and exchange-safety requirements
 
+## Recent forensic evidence — 2026-11-26 TESTNET
+
+- [2026-11-26 Conservative TESTNET recovery forensic report](audits/reports/2026-11-26-testnet-recovery-forensic-audit.md) — self-contained 97-fact ledger audit, per-market order/fill chronology, residual inventory, startup-runtime mismatch, shutdown evidence boundaries and issue ownership. This report intentionally contains no private-evidence repository links.
+
 ## Reliability acceptance — issue #1639
 
 The machine-readable [critical behavior inventory](critical-behaviors.json) maps each critical Harvester behavior to authoritative domain invariants, owning production modules, named normal/failure regression tests, integration/replay evidence where required, runtime status, and measured per-module coverage floors. The required Unit Tests workflow validates the inventory and test ownership before running the complete Harvester package suite. Run the same guard locally with `pnpm --filter @coinzilla/harvester check:reliability`.

@@ -74,11 +74,6 @@
           "kind": "failure"
         },
         {
-          "path": "test/replays/doge-zro-conservative-replay.test.js",
-          "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
-          "kind": "integration"
-        },
-        {
           "path": "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.test.js",
           "name": "requires complete Position and cycle identity for an RS-owned durable SELL intent",
           "kind": "normal"
@@ -122,6 +117,16 @@
           "path": "src/use-cases/execute-strategy-decision.test.js",
           "name": "does not submit a sibling BUY when the recovery SELL intent is not durable",
           "kind": "failure"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "submits only the recovery SELL while the recovery cycle remains active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/use-cases/conservative-trading-engine.test.js",
+          "name": "a pre-existing partially filled BUY is reconciled during recovery SELL acknowledgement and replaces SELL from latest fills",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
@@ -301,18 +306,8 @@
           "kind": "integration"
         },
         {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
           "kind": "integration"
         }
       ],
@@ -355,7 +350,7 @@
         },
         {
           "path": "test/replays/doge-zro-conservative-replay.test.js",
-          "name": "accounts streamed partial BUY executions before advancing the completed-BUY lifecycle",
+          "name": "accounts streamed partial BUY executions before recovery SELL planning",
           "kind": "integration"
         },
         {
@@ -369,18 +364,8 @@
           "kind": "integration"
         },
         {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
           "kind": "integration"
         }
       ],
@@ -413,11 +398,6 @@
           "path": "src/use-cases/conservative-trading-engine.test.js",
           "name": "does not submit the next standing BUY when recovery SELL submission fails",
           "kind": "failure"
-        },
-        {
-          "path": "test/replays/doge-zro-conservative-replay.test.js",
-          "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
-          "kind": "integration"
         },
         {
           "path": "src/domain/strategies/conservative/state-predicates.test.js",
@@ -473,11 +453,172 @@
           "path": "src/use-cases/conservative-submission-durability.integration.test.js",
           "name": "keeps the active recovery SELL and pauses safely when a later strategy evaluation fails",
           "kind": "failure"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "plans only a recovery SELL while a filled Position remains active",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "blocks the next BUY while an acknowledged recovery SELL remains open",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "blocks the next BUY while the recovery SELL acknowledgement is pending or unknown",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a Conservative BUY while the Position still has active recovery inventory",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a Conservative BUY after SELL proceeds recover cost but before cycle completion resets the Position",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "allows a Conservative BUY only after recovery basis and cycle totals have been reset",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "does not apply the Conservative recovery BUY gate to Recovery Seller orders",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "does not submit a next standing BUY while the Conservative recovery cycle remains active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "submits only the recovery SELL while the recovery cycle remains active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "accounts streamed partial BUY executions before recovery SELL planning",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "completes the recovery cycle only after the SELL fill report is received and reconciled",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "a fully filled BUY keeps subsequent evaluations in recovery-only mode while its SELL remains open",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "completes the full Conservative lifecycle with the supported zero keepQuantity",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "completes the full Conservative lifecycle with the configured retained quantity",
+          "kind": "integration"
+        },
+        {
+          "path": "test/use-cases/conservative-trading-engine.test.js",
+          "name": "a pre-existing partially filled BUY is reconciled during recovery SELL acknowledgement and replaces SELL from latest fills",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a Conservative BUY while an owned recovery SELL remains active after accounting totals reset",
+          "kind": "failure"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "blocks subsequent archived ZROUSDT BUYs while the first recovery cycle is active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "blocks subsequent archived DOGEUSDT BUYs while the first recovery cycle is active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "blocks subsequent archived ADAUSDT BUYs while the first recovery cycle is active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "keeps a pre-existing BUY untouched while planning the recovery SELL for its active Position",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "reconciles multiple BUY fills racing shutdown cancellation and replaces only the owned recovery SELL",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "fails closed when shutdown recovery SELL cancellation or replacement submission is unresolved",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "does not cancel a recovery SELL when its durable cancellation intent flush fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "reconciles the recovery SELL after any partial BUY fill without completing the BUY lifecycle",
+          "kind": "integration"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "fails closed when an active Position is missing its RecoveryLedger",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "fails closed when Position.spent and RecoveryLedger buyCost diverge",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "fails closed when active recovery SELL commitments exceed sellable Position inventory",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "rejects a negative remaining quantity on an active recovery SELL",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a Conservative BUY while RecoveryLedger buyCost remains non-zero after Position reset",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "fails closed when Conservative recovery admission dependencies are unavailable",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "fails closed when Conservative recovery admission accounting contains an invalid decimal",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
       "invariants": [
-        "While recovery capital or an active Position exists, prohibit new/trailing BUY; recovery SELL must be submitted and reconciled first.",
+        "No new Conservative BUY may be submitted until full recovery-cycle reconciliation, retained-inventory allocation and Position/RecoveryLedger basis reset; SELL acknowledgement or realized proceeds alone do not release admission.",
+        "A BUY already acknowledged before the recovery cycle became active remains under its canonical lifecycle; late fills are reconciled exactly once and recovery SELL coverage is recalculated, without creating a replacement BUY.",
         "An unresolved order or failed recovery SELL path keeps the market paused and blocks subsequent BUY submission.",
         "At most one active Conservative recovery SELL may reserve a Position; PENDING, OPEN, PARTIALLY_FILLED and UNKNOWN orders hold that reservation until a canonical terminal transition."
       ]
@@ -502,7 +643,7 @@
         },
         {
           "path": "test/replays/doge-zro-conservative-replay.test.js",
-          "name": "combines four completed BUY fills into one profitable recovery SELL and retains the configured inventory",
+          "name": "completes the recovery cycle only after the SELL fill report is received and reconciled",
           "kind": "integration"
         },
         {
@@ -516,18 +657,8 @@
           "kind": "normal"
         },
         {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
           "kind": "integration"
         }
       ],
@@ -725,192 +856,6 @@
       "invariants": [
         "Verify append-only fact sequence, committed-head and digest integrity; corruption or incomplete history is a blocker.",
         "The offline candidate remains candidateOnly with restorationEnabled=false and requires exchange reconciliation; runtime restoration and Journal replay are disabled."
-      ]
-    },
-    {
-      "id": "SHUTDOWN_PROCESS_OWNERSHIP",
-      "title": "Shutdown ordering, process-lock retention and safe release",
-      "sourceModules": [
-        "src/index.js",
-        "src/bootstrap/providers/start-provider-accounts.js",
-        "src/infrastructure/process-lock/acquire-harvester-process-locks.js",
-        "src/infrastructure/process-lock/acquire-harvester-process-lock.js",
-        "src/infrastructure/process/harvester-process-shutdown.js",
-        "src/bootstrap/shutdown/create-shutdown-handler.js",
-        "src/bootstrap/shutdown/create-conservative-shutdown-participant.js",
-        "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.js",
-        "src/infrastructure/process/create-harvester-process-identity.js",
-        "src/use-cases/create-conservative-shutdown-safety.js"
-      ],
-      "tests": [
-        {
-          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
-          "name": "propagates a missing provider durable stop acknowledgement to the aggregate runtime",
-          "kind": "failure"
-        },
-        {
-          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
-          "name": "propagates durable process-stop acknowledgement from every provider runtime",
-          "kind": "normal"
-        },
-        {
-          "path": "src/index.test.js",
-          "name": "acquires the process lock before starting Journal and releases it after clean shutdown",
-          "kind": "normal"
-        },
-        {
-          "path": "src/index.test.js",
-          "name": "retains the process lock when runtime shutdown throws",
-          "kind": "failure"
-        },
-        {
-          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
-          "name": "acquires an exclusive lock and releases it idempotently",
-          "kind": "normal"
-        },
-        {
-          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
-          "name": "refuses to remove a lock whose ownership token changed",
-          "kind": "failure"
-        },
-        {
-          "path": "src/index.test.js",
-          "name": "retains Journal, EventBus, process lock and logger when strategy shutdown safety is unresolved",
-          "kind": "integration"
-        },
-        {
-          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
-          "name": "does not reclaim a malformed lock file",
-          "kind": "failure"
-        },
-        {
-          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
-          "name": "treats a missing lock file as an idempotent release",
-          "kind": "failure"
-        },
-        {
-          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
-          "name": "does not remove a replacement lock after a stale-owner race",
-          "kind": "failure"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "src/use-cases/create-conservative-shutdown-safety.test.js",
-          "name": "drains in-flight transitions before clearing deferred evaluations for shutdown",
-          "kind": "failure"
-        },
-        {
-          "path": "src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js",
-          "name": "waits for the serialized engine shutdown barrier before cancelling owned BUYs",
-          "kind": "failure"
-        },
-        {
-          "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
-          "name": "does not overlap a retry with a timed-out participant operation that ignores abort",
-          "kind": "failure"
-        },
-        {
-          "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
-          "name": "bounds repeated successful safety proofs when the marker remains invalidated",
-          "kind": "failure"
-        },
-        {
-          "path": "src/bootstrap/shutdown/create-shutdown-handler.test.js",
-          "name": "bounds a pending CLOSING audit phase and retains shared services",
-          "kind": "failure"
-        },
-        {
-          "path": "src/bootstrap/create-harvester-stop.test.js",
-          "name": "bounds pending durable PROCESS_STOPPED and prevents overlapping retries",
-          "kind": "failure"
-        },
-        {
-          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
-          "name": "retains all shared resources and the process lock when the final EventBus flush fails",
-          "kind": "failure"
-        },
-        {
-          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
-          "name": "bounds a hung EventBus flush and retains the process lock without overlapping retries",
-          "kind": "failure"
-        },
-        {
-          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
-          "name": "retains the process lock when observability cleanup exceeds its deadline",
-          "kind": "failure"
-        },
-        {
-          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
-          "name": "retains the process lock when process logger close fails",
-          "kind": "failure"
-        },
-        {
-          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
-          "name": "exits the child process only after Journal shutdown and real process-lock release",
-          "kind": "integration"
-        },
-        {
-          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
-          "name": "retains the process lock when release acknowledgement is ambiguous",
-          "kind": "failure"
-        },
-        {
-          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
-          "name": "retains an account lock when runtime stop does not confirm STOPPED status",
-          "kind": "failure"
-        },
-        {
-          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
-          "name": "defers provider lock release until outer cleanup and retries only incomplete account shutdown stages",
-          "kind": "failure"
-        },
-        {
-          "path": "src/index.trading-history-api.test.js",
-          "name": "retains persistence and process ownership when trading-history API close explicitly fails",
-          "kind": "failure"
-        },
-        {
-          "path": "src/index.test.js",
-          "name": "retains the process lock when startup logger cleanup fails",
-          "kind": "failure"
-        },
-        {
-          "path": "src/index.test.js",
-          "name": "retains the process lock when startup EventBus flush is not confirmed",
-          "kind": "failure"
-        },
-        {
-          "path": "src/index.test.js",
-          "name": "retains the process lock when startup logger returns an explicit failure",
-          "kind": "failure"
-        },
-        {
-          "path": "src/index.test.js",
-          "name": "reports an ambiguous process-lock release after startup logger cleanup",
-          "kind": "failure"
-        }
-      ],
-      "runtimeStatus": "active",
-      "integrationRequired": true,
-      "invariants": [
-        "Acquire process ownership before starting Journal/runtime; release it only after shutdown and cleanup are confirmed.",
-        "Gate BUY, cancel only current-process owned BUYs, reconcile fills/cancellations and prove recovery SELL coverage; if proof or CLOSING durability fails, retain required services and fail closed.",
-        "Bound EventBus flush, notification close, observability cleanup, logger close and lock release; retain process ownership on any failure/timeout, and retry pending operations without overlap.",
-        "Every started provider runtime must return ok:true and status:STOPPED before the aggregate runtime may report STOPPED; active account locks remain held until outer cleanup. The aggregate durable PROCESS_STOPPED acknowledgement is true only when every started provider confirms it. When the Operational State Store is absent, the outer handler must pass the enabled Journal-backed STOPPED barrier; if an enabled store's PROCESS_STOPPED append fails or times out, shutdown is incomplete. Release the final process-lock group only after all required cleanup and logger-close stages succeed."
       ]
     },
     {
@@ -1557,6 +1502,182 @@
         "User-data ACCOUNT blockers cannot be resolved by generic reconciliation or legacy operator-action facts; the verified projector enforces structured operator metadata against the original raised producer.",
         "Recovery Seller STOP uses its dedicated producer and resolver; legacy untagged facts retain that resolver by the reserved reason, while an explicit USER_DATA_EVENT_HANDLER producer always takes precedence over a colliding reason.",
         "Classify Recovery Seller STOP only by its dedicated producer provenance; a colliding reason string from user-data events must remain under the user-data account-resolution contract."
+      ]
+    },
+    {
+      "id": "SHUTDOWN_PROCESS_OWNERSHIP",
+      "title": "Shutdown ordering, process-lock retention and safe release",
+      "sourceModules": [
+        "src/index.js",
+        "src/infrastructure/process-lock/acquire-harvester-process-locks.js",
+        "src/infrastructure/process-lock/acquire-harvester-process-lock.js",
+        "src/infrastructure/process/harvester-process-shutdown.js",
+        "src/bootstrap/shutdown/create-shutdown-handler.js",
+        "src/bootstrap/shutdown/create-conservative-shutdown-participant.js",
+        "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.js",
+        "src/infrastructure/process/create-harvester-process-identity.js",
+        "src/use-cases/create-conservative-shutdown-safety.js",
+        "src/bootstrap/providers/start-provider-accounts.js"
+      ],
+      "tests": [
+        {
+          "path": "src/index.test.js",
+          "name": "acquires the process lock before starting Journal and releases it after clean shutdown",
+          "kind": "normal"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "retains the process lock when runtime shutdown throws",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
+          "name": "acquires an exclusive lock and releases it idempotently",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
+          "name": "refuses to remove a lock whose ownership token changed",
+          "kind": "failure"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "retains Journal, EventBus, process lock and logger when strategy shutdown safety is unresolved",
+          "kind": "integration"
+        },
+        {
+          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
+          "name": "does not reclaim a malformed lock file",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
+          "name": "treats a missing lock file as an idempotent release",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
+          "name": "does not remove a replacement lock after a stale-owner race",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-conservative-shutdown-safety.test.js",
+          "name": "drains in-flight transitions before clearing deferred evaluations for shutdown",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js",
+          "name": "waits for the serialized engine shutdown barrier before cancelling owned BUYs",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
+          "name": "does not overlap a retry with a timed-out participant operation that ignores abort",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
+          "name": "bounds repeated successful safety proofs when the marker remains invalidated",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-shutdown-handler.test.js",
+          "name": "bounds a pending CLOSING audit phase and retains shared services",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/create-harvester-stop.test.js",
+          "name": "bounds pending durable PROCESS_STOPPED and prevents overlapping retries",
+          "kind": "failure"
+        },
+        {
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
+          "kind": "integration"
+        },
+        {
+          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
+          "name": "propagates a missing provider durable stop acknowledgement to the aggregate runtime",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
+          "name": "propagates durable process-stop acknowledgement from every provider runtime",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "retains all shared resources and the process lock when the final EventBus flush fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "bounds a hung EventBus flush and retains the process lock without overlapping retries",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "retains the process lock when observability cleanup exceeds its deadline",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "retains the process lock when process logger close fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "exits the child process only after Journal shutdown and real process-lock release",
+          "kind": "integration"
+        },
+        {
+          "path": "src/infrastructure/process/harvester-process-shutdown.test.js",
+          "name": "retains the process lock when release acknowledgement is ambiguous",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
+          "name": "retains an account lock when runtime stop does not confirm STOPPED status",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
+          "name": "defers provider lock release until outer cleanup and retries only incomplete account shutdown stages",
+          "kind": "failure"
+        },
+        {
+          "path": "src/index.trading-history-api.test.js",
+          "name": "retains persistence and process ownership when trading-history API close explicitly fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "retains the process lock when startup logger cleanup fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "retains the process lock when startup EventBus flush is not confirmed",
+          "kind": "failure"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "retains the process lock when startup logger returns an explicit failure",
+          "kind": "failure"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "reports an ambiguous process-lock release after startup logger cleanup",
+          "kind": "failure"
+        }
+      ],
+      "runtimeStatus": "active",
+      "integrationRequired": true,
+      "invariants": [
+        "Acquire process ownership before starting Journal/runtime; release it only after shutdown and cleanup are confirmed.",
+        "Gate BUY, cancel only current-process owned BUYs, reconcile fills/cancellations and prove recovery SELL coverage; if proof or CLOSING durability fails, retain required services and fail closed.",
+        "Bound EventBus flush, notification close, observability cleanup, logger close and lock release; retain process ownership on any failure/timeout, and retry pending operations without overlap.",
+        "Every started provider runtime must return ok:true and status:STOPPED before the aggregate runtime may report STOPPED; active account locks remain held until outer cleanup. The aggregate durable PROCESS_STOPPED acknowledgement is true only when every started provider confirms it. When the Operational State Store is absent, the outer handler must pass the enabled Journal-backed STOPPED barrier; if an enabled store's PROCESS_STOPPED append fails or times out, shutdown is incomplete. Release the final process-lock group only after all required cleanup and logger-close stages succeed."
       ]
     }
   ],

@@ -1058,7 +1058,7 @@ function createOperatorPauseRecoveryPosition({ market }) {
 
 function createOperatorPauseStrategyPolicy() {
   return {
-    evaluate: ({ marketPrice }) => {
+    evaluate: ({ marketPrice, activeOrders = [] }) => {
       const buy = {
         side: "BUY",
         type: "LIMIT_MAKER",
@@ -1074,12 +1074,18 @@ function createOperatorPauseStrategyPolicy() {
         quantity: "0.9",
         reason: "TEST_RECOVERY_SELL",
       }
+      let actions = [buy]
+      if (marketPrice.symbol === "DOGEUSDT") {
+        const hasActiveRecoverySell = activeOrders.some((order) =>
+          order.market?.symbol === marketPrice.symbol && order.side === "SELL")
+        actions = hasActiveRecoverySell ? [] : [recoverySell]
+      }
       return {
         strategy: "CONSERVATIVE",
         symbol: marketPrice.symbol,
-        action: "PLACE_ORDERS",
+        action: actions.length > 0 ? "PLACE_ORDERS" : "NO_ACTION",
         reason: "TEST_OPERATOR_PAUSE",
-        actions: marketPrice.symbol === "DOGEUSDT" ? [recoverySell, buy] : [buy],
+        actions,
       }
     },
     evaluateTrailingBuyRepricing: conservativeStrategyPolicy.evaluateTrailingBuyRepricing,
@@ -1184,14 +1190,126 @@ function describeActiveOrders({ engine }) {
     .sort(compareActiveOrderDescriptions)
 }
 
+function createSeededDogeOrder({
+  market,
+  side,
+  clientOrderId,
+  price,
+  quantity,
+  status,
+  brokerOrderId,
+  acknowledgedAt,
+}) {
+  const order = {
+    clientOrderId,
+    market,
+    side,
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: price,
+      asset: market.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: quantity,
+      asset: market.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: market.baseAsset,
+    }),
+    status,
+    createdAt: 1,
+    updatedAt: acknowledgedAt ?? 1,
+  }
+  if (brokerOrderId) {
+    order.brokerOrderId = brokerOrderId
+  }
+  if (acknowledgedAt) {
+    order.acknowledgedAt = acknowledgedAt
+  }
+  return new CanonicalOrder(order)
+}
+
+function createSeededOpenDogeOrdersRegistry({ market, positionId }) {
+  const ownership = {
+    strategyId: StrategyId.COIN_GRABBER,
+    positionId,
+  }
+  const pendingBuy = createSeededDogeOrder({
+    market,
+    side: "BUY",
+    clientOrderId: "seeded-doge-standing-buy",
+    price: "99",
+    quantity: "1",
+    status: "PENDING",
+  })
+  const withPendingBuy = OrderRegistry.empty().registerPending({
+    order: pendingBuy,
+    ownership: {
+      ...ownership,
+      purpose: "CONSERVATIVE_BUY",
+    },
+  }).registry
+  const withOpenBuy = withPendingBuy.applyUpdate({
+    order: createSeededDogeOrder({
+      market,
+      side: "BUY",
+      clientOrderId: "seeded-doge-standing-buy",
+      price: "99",
+      quantity: "1",
+      status: "OPEN",
+      brokerOrderId: "broker-seeded-doge-standing-buy",
+      acknowledgedAt: 2,
+    }),
+  }).registry
+  const pendingSell = createSeededDogeOrder({
+    market,
+    side: "SELL",
+    clientOrderId: "seeded-doge-recovery-sell",
+    price: "100.01",
+    quantity: "0.9",
+    status: "PENDING",
+  })
+  const withPendingSell = withOpenBuy.registerPending({
+    order: pendingSell,
+    ownership: {
+      ...ownership,
+      purpose: "RECOVERY_SELL",
+    },
+  }).registry
+  return withPendingSell.applyUpdate({
+    order: createSeededDogeOrder({
+      market,
+      side: "SELL",
+      clientOrderId: "seeded-doge-recovery-sell",
+      price: "100.01",
+      quantity: "0.9",
+      status: "OPEN",
+      brokerOrderId: "broker-seeded-doge-recovery-sell",
+      acknowledgedAt: 2,
+    }),
+  }).registry
+}
+
 async function createShutdownSellCancellationHarness() {
   const dogeMarket = marketsBySymbol.get("DOGEUSDT")
   const { portfolio, recoveryLedger } = createOperatorPauseRecoveryPosition({ market: dogeMarket })
+  const position = portfolio.getPosition({
+    marketId: dogeMarket.id,
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  const orderRegistry = createSeededOpenDogeOrdersRegistry({
+    market: dogeMarket,
+    positionId: position.positionId,
+  })
   const strategyPolicy = createOperatorPauseStrategyPolicy()
   const { engine } = await createHarness({
     portfolio,
     strategyPolicy,
     recoveryLedgersByMarket: new Map([[dogeMarket.id, recoveryLedger]]),
+    initialState: {
+      orderRegistry,
+    },
   })
   await startBothMarkets({ engine })
   engine.beginShutdown()
