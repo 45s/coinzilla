@@ -16,74 +16,27 @@ function writeModule({ root, relativePath, lineCount }) {
 }
 
 function writeFixtureModules({ root }) {
-  writeModule({
-    root,
-    relativePath: "apps/example/src/large.js",
-    lineCount: 501,
-  })
-  writeModule({
-    root,
-    relativePath: "packages/example/src/large.js",
-    lineCount: 503,
-  })
-  writeModule({
-    root,
-    relativePath: "scripts/large.mjs",
-    lineCount: 502,
-  })
-  writeModule({
-    root,
-    relativePath: "apps/example/src/exact-threshold.js",
-    lineCount: 500,
-  })
-  writeModule({
-    root,
-    relativePath: "apps/example/src/large.test.js",
-    lineCount: 900,
-  })
-  writeModule({
-    root,
-    relativePath: "packages/example/test-support/provider-conformance.js",
-    lineCount: 999,
-  })
-  writeModule({
-    root,
-    relativePath: "packages/example/node_modules/vendor.js",
-    lineCount: 999,
-  })
-  for (const fixture of [
-    {
-      relativePath: "apps/example/src/Z-large.js",
-      lineCount: 501,
-    },
-    {
-      relativePath: "apps/example/src/a-large.js",
-      lineCount: 501,
-    },
-    {
-      relativePath: "apps/example/specs/spec-helper.js",
-      lineCount: 999,
-    },
-    {
-      relativePath: "packages/example/testdata/test-data-helper.js",
-      lineCount: 999,
-    },
-    {
-      relativePath: "scripts/example/e2e/e2e-helper.js",
-      lineCount: 999,
-    },
-    {
-      relativePath: "packages/example/__snapshots__/snapshot-helper.js",
-      lineCount: 999,
-    },
-    {
-      relativePath: "apps/example/src/large.e2e.js",
-      lineCount: 999,
-    },
-  ]) {
+  const fixtures = [
+    ["apps/example/src/large.js", 501],
+    ["packages/example/src/large.js", 503],
+    ["scripts/large.mjs", 502],
+    ["apps/example/src/exact-threshold.js", 500],
+    ["apps/example/src/large.test.js", 900],
+    ["packages/example/test-support/provider-conformance.js", 999],
+    ["packages/example/node_modules/vendor.js", 999],
+    ["apps/example/src/Z-large.js", 501],
+    ["apps/example/src/a-large.js", 501],
+    ["apps/example/specs/spec-helper.js", 999],
+    ["packages/example/testdata/test-data-helper.js", 999],
+    ["scripts/example/e2e/e2e-helper.js", 999],
+    ["packages/example/__snapshots__/snapshot-helper.js", 999],
+    ["apps/example/src/large.e2e.js", 999],
+  ]
+  for (const [relativePath, lineCount] of fixtures) {
     writeModule({
       root,
-      ...fixture,
+      relativePath,
+      lineCount,
     })
   }
 }
