@@ -123,7 +123,10 @@ test("Bitunix Futures clients with the same API key share one rate limiter", asy
   const fetchFn = async () => ({
     ok: true,
     status: 200,
-    json: async () => ({ code: 0, data: {} }),
+    json: async () => ({
+      code: 0,
+      data: {},
+    }),
   })
   const config = new BitunixFuturesConfig({
     apiKey: "same-key-shared-limiter-regression",
@@ -148,8 +151,14 @@ test("Bitunix Futures clients with the same API key share one rate limiter", asy
     },
   })
 
-  await first.request({ method: "GET", path: "/api/v1/futures/market/time" })
-  await second.request({ method: "GET", path: "/api/v1/futures/market/time" })
+  await first.request({
+    method: "GET",
+    path: "/api/v1/futures/market/time",
+  })
+  await second.request({
+    method: "GET",
+    path: "/api/v1/futures/market/time",
+  })
 
   assert.deepEqual(delays, [100], "the second client must wait on the shared limiter's schedule")
 })
@@ -162,7 +171,10 @@ test("Bitunix Futures clients with different API keys have isolated rate limiter
   const fetchFn = async () => ({
     ok: true,
     status: 200,
-    json: async () => ({ code: 0, data: {} }),
+    json: async () => ({
+      code: 0,
+      data: {},
+    }),
   })
   const first = new BitunixFuturesRestClient({
     config: new BitunixFuturesConfig({
@@ -191,8 +203,14 @@ test("Bitunix Futures clients with different API keys have isolated rate limiter
     },
   })
 
-  await first.request({ method: "GET", path: "/api/v1/futures/market/time" })
-  await second.request({ method: "GET", path: "/api/v1/futures/market/time" })
+  await first.request({
+    method: "GET",
+    path: "/api/v1/futures/market/time",
+  })
+  await second.request({
+    method: "GET",
+    path: "/api/v1/futures/market/time",
+  })
 
   assert.deepEqual(firstDelays, [], "the first key must start without waiting")
   assert.deepEqual(secondDelays, [], "a different key must not inherit the first key's schedule")
