@@ -1594,19 +1594,32 @@ function createAcknowledgedOrderLifecycleHandler({
   }
 }
 
+function getRecoverySellDeferralPublicationError({ publication } = {}) {
+  if (publication?.ok === true) {
+    return undefined
+  }
+  return publication?.errors?.[0] ?? new Error("Recovery SELL deferral evidence publication failed")
+}
+
+function getRecoverySellDeferralFlushError({ flushed } = {}) {
+  if (flushed?.ok === true && flushed?.durable === true) {
+    return undefined
+  }
+  return flushed?.errors?.[0] ?? new Error("Recovery SELL deferral evidence was not durably journaled")
+}
+
 async function persistRecoverySellDeferralEvidence({ eventPublisher, publication } = {}) {
-  if (publication?.ok !== true) {
-    return publication?.errors?.[0] ?? new Error("Recovery SELL deferral evidence publication failed")
+  const publicationError = getRecoverySellDeferralPublicationError({ publication })
+  if (publicationError) {
+    return publicationError
   }
   if (typeof eventPublisher?.flushWrites !== "function") {
     return new TypeError("Recovery SELL deferral evidence requires a write-only durable Journal flush capability")
   }
   try {
-    const flushed = await eventPublisher.flushWrites()
-    if (flushed?.ok === true && flushed?.durable === true) {
-      return undefined
-    }
-    return flushed?.errors?.[0] ?? new Error("Recovery SELL deferral evidence was not durably journaled")
+    return getRecoverySellDeferralFlushError({
+      flushed: await eventPublisher.flushWrites(),
+    })
   } catch (error) {
     return error
   }
@@ -1618,7 +1631,12 @@ function publishDeferredOrderEvidence({ eventPublisher, order, purpose, register
       eventPublisher,
       order,
       reason: reason ?? "SUBMISSION_NOT_ALLOWED",
-      ...(recoverySell ? { purpose, registered } : {}),
+      ...(recoverySell
+        ? {
+          purpose,
+          registered,
+        }
+        : {}),
     })
     return { publication }
   } catch (error) {
@@ -1653,7 +1671,11 @@ function createSubmissionDeferredHandler({ state, pause, eventPublisher } = {}) 
         recoverySell,
       })
       : {}
-    removeDeferredPendingOrder({ state, order, registered })
+    removeDeferredPendingOrder({
+      state,
+      order,
+      registered,
+    })
     state.deferredEvaluations.add(order.market.symbol)
     const persistenceError = publicationResult.publicationError ??
       (recoverySell
