@@ -78,8 +78,8 @@ test("flushWrites is durable from a pending EventBus handler without draining th
     })
     assert.equal(published.ok, true, "The recovery decision must be accepted by EventBus.")
 
-    const drained = await context.eventBus.flush()
-    assert.equal(drained.ok, true, "The outer EventBus drain must complete after the handler's write-only flush.")
+    const drained = await context.journal.flush()
+    assert.equal(drained.ok, true, "The global Journal flush must complete after the handler's write-only flush.")
     assert.equal(writeFlushResult?.ok, true, "The handler's Journal write-only flush must succeed.")
     assert.equal(writeFlushResult?.durable, true, "The handler must receive durable confirmation after fsync.")
     assert.equal(eventBusFlushCalls, 1, "Journal.flushWrites must not recursively drain EventBus.")
