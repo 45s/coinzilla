@@ -64,12 +64,29 @@ test("binds process start and clean/unclean stop facts to the durable store runt
   const operationalStateStore = await createStore(t)
   const baseline = await recordConfigurationBaseline({ operationalStateStore,
 appConfig })
+  const processIdentity = {
+    application: "harvester",
+    version: "1.0.001",
+    runtimeSessionId: "process-facts-test-session",
+    processId: 24680,
+    startedAt: "2026-11-12T00:00:00.000Z",
+    source: {
+      branch: "develop",
+      commit: "a".repeat(40),
+      shortCommit: "a".repeat(8),
+      commitMessage: "test durable process provenance",
+      commitDate: "2026-11-11T23:59:00.000Z",
+      workingTree: "dirty",
+      metadataSource: "git",
+    },
+  }
   const started = await recordProcessStarted({
     operationalStateStore,
     configurationFingerprint: baseline.data.fingerprint,
     strategyName: baseline.data.strategyName,
     markets: baseline.data.markets,
     tradingEnabled: true,
+    processIdentity,
   })
   const stopped = await recordProcessStopped({
     operationalStateStore,
@@ -86,6 +103,23 @@ appConfig })
   assert.deepEqual(processFacts.map(({ factType }) => factType), ["PROCESS_STARTED", "PROCESS_STOPPED"])
   assert.ok(processFacts.every(({ runtimeSessionId }) => runtimeSessionId === "process-facts-test-session"))
   assert.equal(processFacts[1].data.clean, true)
+  assert.deepEqual(
+    processFacts[0].data.processIdentity,
+    {
+      application: "harvester",
+      version: "1.0.001",
+      runtimeSessionId: "process-facts-test-session",
+      processId: 24680,
+      startedAt: "2026-11-12T00:00:00.000Z",
+      source: {
+        branch: "develop",
+        commit: "a".repeat(40),
+        workingTree: "dirty",
+        metadataSource: "git",
+      },
+    },
+    "The durable PROCESS_STARTED fact must preserve the allowlisted process ID, runtime ID, source revision, and worktree state.",
+  )
 })
 
 test("rejects malformed process-boundary and configuration-baseline facts", async (t) => {
