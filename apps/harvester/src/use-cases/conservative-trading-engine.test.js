@@ -10494,7 +10494,7 @@ test("invalid book updates invalidate the cached book and fail closed", async ()
 })
 
 
-test("twelve sequential immediately-filled BUYs advance from each reconciled lastBuyPrice", async () => {
+test("an immediately-filled BUY keeps subsequent evaluations in recovery-only mode", async () => {
   const observedReferences = []
   const strategyPolicy = {
     evaluate: (input) => {
@@ -10504,13 +10504,13 @@ test("twelve sequential immediately-filled BUYs advance from each reconciled las
         pairConfig: {
           ...input.pairConfig,
           orderQuantity: 0.1,
-          keepQuantity: 1
+          keepQuantity: 1,
         },
       })
     },
     evaluateTrailingBuyRepricing: () => ({
       shouldReplace: false,
-      adjustmentThreshold: "0"
+      adjustmentThreshold: "0",
     }),
   }
   const harness = await createHarness({
@@ -10519,7 +10519,7 @@ test("twelve sequential immediately-filled BUYs advance from each reconciled las
     accountingApplied: true,
     getAcknowledgedFills: ({ order }) => [makeBuyFill({
       order,
-      tradeId: `sequential-buy-${order.clientOrderId}`,
+      tradeId: `recovery-only-buy-${order.clientOrderId}`,
       price: order.limitPrice.amount,
       quantity: order.originalQuantity.amount,
       quoteQuantity: multiplyDecimal({
@@ -10535,25 +10535,21 @@ test("twelve sequential immediately-filled BUYs advance from each reconciled las
       priceEvent: {
         symbol: "DOGEUSDT",
         price: "100",
-        timestamp: index + 1
+        timestamp: index + 1,
       },
     })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
   }
 
-  assert.equal(harness.orders.length, 12)
+  assert.equal(harness.orders.filter(({ side }) => side === "BUY").length, 1)
+  assert.equal(harness.orders.filter(({ side }) => side === "SELL").length, 1)
+  assert.equal(harness.orders.length, 2)
   assert.equal(observedReferences.length, 12)
   assert.equal(observedReferences[0], null)
   assert.ok(observedReferences.slice(1).every((price) => price !== null))
-  assert.equal(new Set(harness.orders.map((order) => order.price)).size, 12)
-  for (let index = 1; index < harness.orders.length; index += 1) {
-    assert.ok(compareDecimal({
-      left: harness.orders[index].price,
-      right: harness.orders[index - 1].price,
-    }) < 0)
-  }
   assert.equal(harness.engine.getPausedMarkets().length, 0)
 })
+
 
 
 
