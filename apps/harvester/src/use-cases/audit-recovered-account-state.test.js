@@ -508,6 +508,7 @@ test("replays terminal Recovery Seller BUY fills and includes their inventory in
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.equal(result.data.balancesChecked, 2)
+  assert.equal(result.data.recoverySellerPositionsChecked, 1)
 })
 
 test("keeps Recovery Seller SELL fill replay deferred without mixed-sell allocation evidence", () => {

@@ -223,14 +223,34 @@ function createAccountBalanceContext({
     currentByAsset }
 }
 
+function addPositionAccountDeltas({ position, market, expectedDeltas }) {
+  addAmount({
+    amounts: expectedDeltas,
+    asset: market.baseAsset.code,
+    amount: requireAmount({
+      value: position.totalBaseQuantity.amount,
+      field: `${market.symbol}.totalBaseQuantity`,
+    }),
+  })
+  addAmount({
+    amounts: expectedDeltas,
+    asset: market.quoteAsset.code,
+    amount: requireAmount({
+      value: position.quoteNetCashFlow.amount,
+      field: `${market.symbol}.quoteNetCashFlow`,
+    }),
+  })
+}
+
 function createMarketContext({
-    recoveredState,
-    markets,
-    targetMarket,
-  }) {
+  recoveredState,
+  markets,
+  targetMarket,
+}) {
   const expectedDeltas = new Map()
   const marketsById = new Map()
   const marketsBySymbol = new Map()
+  let recoverySellerPositionsChecked = 0
   for (const position of recoveredState.portfolio.value.positions) {
     if (!markets.some((market) => market.id === position.market.id)) {
       throw new Error(`Canonical Market metadata is missing for restored Position ${position.market.symbol}`)
@@ -253,38 +273,34 @@ function createMarketContext({
     }
     marketsById.set(market.id, market)
     marketsBySymbol.set(market.symbol, market)
-    const position = recoveredState.portfolio.getPosition({
-      marketId: market.id,
-      strategyId: StrategyId.COIN_GRABBER,
-    })
-    if (!position) {
-      continue
+    for (const strategyId of [StrategyId.COIN_GRABBER, StrategyId.RECOVERY_SELLER]) {
+      const position = recoveredState.portfolio.getPosition({
+        marketId: market.id,
+        strategyId,
+      })
+      if (!position) {
+        continue
+      }
+      addPositionAccountDeltas({
+        position,
+        market,
+        expectedDeltas,
+      })
+      if (strategyId === StrategyId.RECOVERY_SELLER) {
+        recoverySellerPositionsChecked += 1
+      }
     }
-    addAmount({
-      amounts: expectedDeltas,
-      asset: market.baseAsset.code,
-      amount: requireAmount({
-        value: position.totalBaseQuantity.amount,
-        field: `${market.symbol}.totalBaseQuantity`,
-      }),
-    })
-    addAmount({
-      amounts: expectedDeltas,
-      asset: market.quoteAsset.code,
-      amount: requireAmount({
-        value: position.quoteNetCashFlow.amount,
-        field: `${market.symbol}.quoteNetCashFlow`,
-      }),
-    })
   }
   if (targetMarket && marketsBySymbol.get(targetMarket.symbol)?.id !== targetMarket.id) {
     throw new Error(`Canonical Market metadata is missing for target market ${targetMarket.symbol}`)
   }
-  return { expectedDeltas, 
-    marketsById, 
-    marketsBySymbol }
+  return {
+    expectedDeltas,
+    marketsById,
+    marketsBySymbol,
+    recoverySellerPositionsChecked,
+  }
 }
-
 function registerCommissionAssetIdentity({ asset, commissionAssetIdByCode, commissionAssetCodeById }) {
   const knownId = commissionAssetIdByCode.get(asset.code)
   const knownCode = commissionAssetCodeById.get(asset.id)
@@ -775,11 +791,13 @@ function createAuditResult({
   targetMarket,
   tradeHistoryAudit,
   currentAccountSnapshot,
+  recoverySellerPositionsChecked = 0,
 }) {
   return toResult({
     data: Object.freeze({
       skipped: false,
       balancesChecked: assetCodes.size,
+      recoverySellerPositionsChecked,
       openOrdersChecked: openOrders.length,
       reservationsChecked: expectedLocked.size,
       unownedOpenOrders: Object.freeze(unownedOpenOrders.sort((...orders) => {
@@ -919,6 +937,7 @@ function runRecoveredAccountAudit(options) {
       targetMarket,
       tradeHistoryAudit,
       currentAccountSnapshot,
+      recoverySellerPositionsChecked: marketContext.recoverySellerPositionsChecked,
     })
 
 }

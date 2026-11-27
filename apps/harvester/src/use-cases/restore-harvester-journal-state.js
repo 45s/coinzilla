@@ -303,18 +303,53 @@ function assertRecoverySellerJournalReplayDeferred({ data }) {
     // ambiguous. Keep them fail-closed rather than replaying them as CG.
     return ["RECOVERY_BUY", "RECOVERY_SELL"].includes(item.purpose)
   }
-  const hasRecoverySellerOrders = data.orders.some(isRecoverySellerActivity)
-  const hasRecoverySellerFills = data.fills.some(isRecoverySellerActivity)
+  const replayableBuyOrderStatuses = new Set([
+    "FILLED",
+    "CANCELED",
+    "REJECTED",
+    "EXPIRED",
+  ])
+  const isReplayableRecoverySellerBuyOrder = (item) => (
+    item.strategyId === StrategyId.RECOVERY_SELLER &&
+    item.purpose === "RECOVERY_BUY" &&
+    item.side === "BUY" &&
+    typeof item.positionId === "string" &&
+    item.positionId.trim().length > 0 &&
+    typeof item.cycleId === "string" &&
+    item.cycleId.trim().length > 0 &&
+    replayableBuyOrderStatuses.has(item.status)
+  )
+  const isReplayableRecoverySellerBuyFill = (item) => (
+    item.strategyId === StrategyId.RECOVERY_SELLER &&
+    item.purpose === "RECOVERY_BUY" &&
+    item.side === "BUY" &&
+    typeof item.positionId === "string" &&
+    item.positionId.trim().length > 0 &&
+    typeof item.cycleId === "string" &&
+    item.cycleId.trim().length > 0
+  )
+  const hasUnsupportedRecoverySellerOrders = data.orders.some((item) => (
+    isRecoverySellerActivity(item) &&
+    !isReplayableRecoverySellerBuyOrder(item)
+  ))
+  const hasUnsupportedRecoverySellerFills = data.fills.some((item) => (
+    isRecoverySellerActivity(item) &&
+    !isReplayableRecoverySellerBuyFill(item)
+  ))
   const lifecycle = data.recoverySellerLifecycle
   const hasCandidateOrders = lifecycle?.ordersByCycle?.some(({ orders }) => orders.length > 0) ?? false
   const hasCandidateFills = lifecycle?.appliedFillsByCycle?.some(({ fills }) => fills.length > 0) ?? false
-  if (hasRecoverySellerOrders || hasRecoverySellerFills || hasCandidateOrders || hasCandidateFills) {
+  if (
+    hasUnsupportedRecoverySellerOrders ||
+    hasUnsupportedRecoverySellerFills ||
+    hasCandidateOrders ||
+    hasCandidateFills
+  ) {
     throw new Error(
-      "Recovery Seller Journal replay is deferred; refusing to restore RS orders or fills through Conservative accounting.",
+      "Recovery Seller Journal replay is deferred; refusing to restore SELL, unresolved BUY, or ambiguous RS activity without canonical/mixed-sell allocation evidence.",
     )
   }
 }
-
 function createPortfolioEvents({ data }) {
   const portfolioEvents = [
     ...data.fills.map((fill) => ({ type: "fill", 
