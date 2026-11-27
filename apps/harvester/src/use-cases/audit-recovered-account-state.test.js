@@ -802,6 +802,41 @@ test("reports the target market blocked status when a canonical target market is
   assert.equal(result.data.targetMarketBlocked, false)
 })
 
+test("sorts multiple unowned open-order commitments deterministically", () => {
+  const { projection, restored } = restoreState({})
+  const recoveredState = resolveRestoredOrdersAsFilled({ recoveredState: restored })
+  const externalOrder = ({ brokerOrderId, clientOrderId }) => ({
+    brokerOrderId,
+    clientOrderId,
+    symbol: market.symbol,
+    side: "BUY",
+    type: "LIMIT",
+    status: "NEW",
+    price: "100",
+    originalQuantity: "1",
+    executedQuantity: "0",
+  })
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState,
+    currentAccountSnapshot: snapshot({
+      usdtFree: "800.25",
+      usdtLocked: "200",
+    }),
+    openOrders: [
+      externalOrder({ brokerOrderId: "9003", clientOrderId: "external-9003" }),
+      externalOrder({ brokerOrderId: "9002", clientOrderId: "external-9002" }),
+    ],
+    markets: [market],
+  })
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual(
+    result.data.unownedOpenOrders.map(({ brokerOrderId }) => brokerOrderId),
+    ["9002", "9003"],
+  )
+  assert.deepEqual(result.data.blockedMarkets, [market.symbol])
+})
+
 test("accepts balances and reservations that exactly match replayed strategy ownership", () => {
   const { projection, restored } = restoreState()
   const result = auditRecoveredAccountState({

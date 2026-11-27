@@ -1913,6 +1913,11 @@
           "path": "src/use-cases/audit-recovered-account-state.test.js",
           "name": "reports the target market blocked status when a canonical target market is supplied",
           "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "sorts multiple unowned open-order commitments deterministically",
+          "kind": "normal"
         }
       ],
       "invariants": [
