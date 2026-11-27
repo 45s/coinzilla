@@ -1677,8 +1677,14 @@ function createProcessProvenanceScenarioContext() {
     events,
     contexts,
     processIdentity,
-    eventBus: createProvenanceEventBus({ events, operations }),
-    logger: createProvenanceLogger({ contexts, operations }),
+    eventBus: createProvenanceEventBus({
+      events,
+      operations,
+    }),
+    logger: createProvenanceLogger({
+      contexts,
+      operations,
+    }),
   }
 }
 
