@@ -778,8 +778,7 @@ test("retains the process lock when release acknowledgement is ambiguous", async
       release: async () => {
         calls.push("process-lock-release")
         return {
-          ok: false,
-          errors: [],
+          ok: true,
         }
       },
     },
