@@ -77,30 +77,25 @@ function isSameLockOwner({ currentOwner, existingOwner }) {
     currentOwner?.startedAt === existingOwner.startedAt
 }
 
-function createLockRelease({ lockPath, token }) {
-  let released = false
-  return async function release() {
-    if (released) {return toResult({ released: false,
-alreadyReleased: true })}
-    try {
-      const existingOwner = JSON.parse(await readFile(lockPath, "utf8"))
-      if (existingOwner?.token !== token) {
-        const error = new Error("Harvester process lock ownership changed; refusing to remove another process lock")
-        error.code = "HARVESTER_PROCESS_LOCK_OWNERSHIP_MISMATCH"
-        error.details = { lockPath }
-        return toResult({ error })
-      }
-      await unlink(lockPath)
-      released = true
-      return toResult({ released: true })
-    } catch (error) {
-      if (error?.code === "ENOENT") {
-        released = true
-        return toResult({ released: false,
-alreadyReleased: true })
-      }
-      return toResult({ error })
-    }
+function isStaleLockOwner({ existingOwner, hostname, checkProcessAlive }) {
+  const sameHost = typeof existingOwner?.hostname === "string" &&
+    typeof hostname === "string" &&
+    existingOwner.hostname.toLowerCase() === hostname.toLowerCase()
+  const validPid = Number.isSafeInteger(existingOwner?.pid) && existingOwner.pid > 0
+  const validToken = typeof existingOwner?.token === "string" && existingOwner.token.trim() !== ""
+  const validStartTime = typeof existingOwner?.startedAt === "string" && existingOwner.startedAt.trim() !== ""
+  return sameHost && validPid && validToken && validStartTime && !checkProcessAlive(existingOwner.pid)
+}
+
+async function readCurrentLockOwner({ lockPath }) {
+  const ownerContents = await readFile(lockPath, "utf8").catch(() => null)
+  if (ownerContents === null) {
+    return null
+  }
+  try {
+    return JSON.parse(ownerContents)
+  } catch {
+    return null
   }
 }
 
@@ -111,21 +106,12 @@ export async function reclaimStaleHarvesterProcessLockIfUnchanged({
   attempt = 0,
   checkProcessAlive = isHarvesterProcessAlive,
 }) {
-  if (attempt !== 0) {
-    return false
-  }
-  const sameHost = typeof existingOwner?.hostname === "string" &&
-    existingOwner.hostname.toLowerCase() === hostname.toLowerCase()
-  const validPid = Number.isSafeInteger(existingOwner?.pid) && existingOwner.pid > 0
-  const validToken = typeof existingOwner?.token === "string" && existingOwner.token.trim() !== ""
-  const validStartTime = typeof existingOwner?.startedAt === "string" && existingOwner.startedAt.trim() !== ""
-  if (!sameHost || !validPid || !validToken || !validStartTime || checkProcessAlive(existingOwner.pid)) {
+  if (attempt !== 0 || !isStaleLockOwner({ existingOwner, hostname, checkProcessAlive })) {
     return false
   }
 
   // Re-read immediately before unlinking so a replaced lock is not removed.
-  const currentOwnerContents = await readFile(lockPath, "utf8").catch(() => "null")
-  const currentOwner = JSON.parse(currentOwnerContents)
+  const currentOwner = await readCurrentLockOwner({ lockPath })
   if (!isSameLockOwner({
     currentOwner,
     existingOwner,
