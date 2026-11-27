@@ -380,6 +380,63 @@ force: true }))
   assert.match(verification.errors[0].message, /manifest.*chain|previous.*manifest/i)
 })
 
+test("fails closed after the fact stream is synced but before its manifest checkpoint is appended", async (t) => {
+  const directory = await createDirectory()
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  let loseFactSyncAcknowledgement = false
+  const factPath = path.join(directory, "facts.jsonl")
+  const fileSystem = {
+    ...fsPromises,
+    open: async (...parameters) => {
+      const [target, ...args] = parameters
+      const handle = await fsPromises.open(target, ...args)
+      if (loseFactSyncAcknowledgement && target === factPath && args[0] === "a") {
+        const sync = handle.sync.bind(handle)
+        Object.defineProperty(handle, "sync", {
+          value: async () => {
+            await sync()
+            throw new Error("simulated lost acknowledgement after successful fact sync")
+          },
+        })
+      }
+      return handle
+    },
+  }
+  const originalStore = createStore(directory, { fileSystem })
+  const initialized = await originalStore.initialize()
+  assert.equal(initialized.ok, true, "The isolated store must be initialized before fault injection.")
+  loseFactSyncAcknowledgement = true
+
+  const uncertainAppend = await originalStore.append(operatorPause())
+  assert.equal(uncertainAppend.ok, false, "The append must not claim success after its fact-sync acknowledgement is lost.")
+  assert.equal(
+    uncertainAppend.errors[0].code,
+    "DURABLE_FACTS_COMMIT_UNCERTAIN",
+    "A fact written without a committed manifest checkpoint must remain an uncertain commit.",
+  )
+  assert.notEqual(uncertainAppend.data?.durable, true, "The uncertain append must never claim durable success.")
+  assert.equal((await originalStore.append(operatorPause())).ok, false, "The original store instance must remain fenced.")
+
+  const persistedFacts = await readLines(factPath)
+  const persistedManifest = await readManifestRecords(directory)
+  assert.equal(persistedFacts.length, 2, "The fixture must contain the synced genesis and uncheckpointed fact.")
+  assert.equal(persistedManifest.length, 1, "The manifest must remain at genesis when the fact checkpoint was not appended.")
+
+  const restartedStore = createStore(directory)
+  const verification = await restartedStore.verify()
+  assert.equal(verification.ok, false, "A fresh process must reject a fact stream that is ahead of its manifest.")
+  assert.match(
+    verification.errors[0].message,
+    /Operational State record exists beyond the committed-head manifest journal/,
+    "Restart verification must identify the exact fact-beyond-manifest inconsistency.",
+  )
+  assert.equal(
+    (await restartedStore.append(operatorPause())).ok,
+    false,
+    "An uncommitted fact must not be silently adopted by a retry after restart.",
+  )
+})
+
 test("does not acknowledge a fact when its manifest checkpoint cannot be appended", async (t) => {
   const directory = await createDirectory()
   t.after(() => rm(directory, { recursive: true,
