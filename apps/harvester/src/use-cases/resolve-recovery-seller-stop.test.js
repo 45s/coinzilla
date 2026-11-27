@@ -48,8 +48,9 @@ async function createStoppedBlocker(t) {
   const operationalStateStore = await createStore(t)
   const raised = await recordSafetyBlockerRaised({
     operationalStateStore,
-    scope: "MARKET",
-    symbol: "ZROUSDT",
+    producer: "RECOVERY_SELLER_STOP_WORKFLOW",
+    scope: "ACCOUNT",
+    symbol: null,
     reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
     evidenceDigest: "a".repeat(64),
   })
@@ -122,6 +123,9 @@ test("does not clear STOP when the Operational State Store cannot durably record
             factType: "SAFETY_BLOCKER_RAISED",
             data: {
               blockerId: fixture.blockerId,
+              scope: "MARKET",
+              symbol: "ZROUSDT",
+              reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
               evidenceDigest: "a".repeat(64),
             },
           }],

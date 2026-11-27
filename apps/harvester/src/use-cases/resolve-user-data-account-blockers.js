@@ -1,6 +1,7 @@
 import { toResult } from "@coinzilla/utils"
 import {
   createAccountResolutionEvidenceDigest,
+  getAccountResolutionTargetBlockers,
   getActiveAccountResolutionBlockers,
   readVerifiedAccountResolutionProjection,
   validateAccountResolutionAudit,
@@ -10,16 +11,21 @@ import { recordSafetyBlockerResolved } from "./record-safety-control-facts.js"
 
 async function collectAccountResolutionAudit(options) {
   const initial = await readVerifiedAccountResolutionProjection(options.operationalStateStore)
-  const blockers = getActiveAccountResolutionBlockers(initial.projection)
-  if (blockers.length === 0) {
-    throw new Error("No active ACCOUNT safety blockers exist")
-  }
-  const blockerIds = blockers.map(({ blockerId }) => blockerId).sort()
-  const result = await options.reconcileAccount({
-    scope: "ACCOUNT",
-    blockerIds,
+  const targets = getAccountResolutionTargetBlockers({
+    records: initial.records,
+    projection: initial.projection,
     operatorId: options.operatorId,
     actionId: options.actionId,
+    resolutionReason: options.resolutionReason,
+  })
+  const result = await options.reconcileAccount({
+    scope: "ACCOUNT",
+    blockerIds: targets.blockerIds,
+    actionBlockerIds: targets.blockerIds,
+    operatorId: options.operatorId,
+    operatorAuthMethod: options.operatorIdentity.authMethod,
+    actionId: options.actionId,
+    resolutionReason: options.resolutionReason,
     configuredMarkets: [...options.configuredMarkets],
   })
   if (result?.ok !== true) {
@@ -29,25 +35,34 @@ async function collectAccountResolutionAudit(options) {
   }
   validateAccountResolutionAudit({
     audit: result.data,
-    blockerIds,
+    blockerIds: targets.blockerIds,
     configuredMarkets: options.configuredMarkets,
+    operatorId: options.operatorId,
+    actionId: options.actionId,
+    resolutionReason: options.resolutionReason,
   })
   const evidenceDigest = createAccountResolutionEvidenceDigest({
     operatorId: options.operatorId,
     actionId: options.actionId,
+    resolutionReason: options.resolutionReason,
+    operatorIdentity: options.operatorIdentity,
     audit: result.data,
   })
-  if (blockers.some(({ evidenceDigest: trigger }) => trigger === evidenceDigest)) {
+  if (targets.priorEvidenceDigest && targets.priorEvidenceDigest !== evidenceDigest) {
+    throw new Error("Operator action ID was replayed with different authoritative evidence")
+  }
+  if (targets.blockers.some(({ evidenceDigest: trigger }) => trigger === evidenceDigest)) {
     throw new Error("Resolution evidence must be independent from blocker-triggering evidence")
   }
   return {
-    blockers,
-    blockerIds,
+    blockersToResolve: targets.blockersToResolve,
+    blockerIds: targets.blockerIds,
     evidenceDigest,
+    idempotentReplay: targets.idempotentReplay,
   }
 }
 
-async function appendAccountBlockerResolutions({ options, blockers, evidenceDigest }) {
+async function appendAccountBlockerResolutions({ options, blockers, blockerIds, evidenceDigest }) {
   for (const blocker of blockers) {
     const result = await recordSafetyBlockerResolved({
       operationalStateStore: options.operationalStateStore,
@@ -55,6 +70,11 @@ async function appendAccountBlockerResolutions({ options, blockers, evidenceDige
       resolvedBy: `operator:${options.operatorId}:${options.actionId}`,
       resolution: "OPERATOR_ACTION",
       evidenceDigest,
+      operatorIdentity: options.operatorIdentity,
+      operatorId: options.operatorId,
+      actionId: options.actionId,
+      resolutionReason: options.resolutionReason,
+      actionBlockerIds: blockerIds,
     })
     if (result?.ok !== true || result.data?.durable !== true) {
       return result?.ok === false
@@ -67,11 +87,48 @@ async function appendAccountBlockerResolutions({ options, blockers, evidenceDige
   return undefined
 }
 
-async function verifyAccountResolutionReadback(store) {
-  const readback = await readVerifiedAccountResolutionProjection(store)
+async function verifyAccountResolutionReadback({
+  operationalStateStore,
+  blockerIds,
+  operatorId,
+  actionId,
+  resolutionReason,
+  evidenceDigest,
+}) {
+  const readback = await readVerifiedAccountResolutionProjection(operationalStateStore)
   const remaining = getActiveAccountResolutionBlockers(readback.projection)
   if (remaining.length > 0) {
     return toResult({ error: new Error("Durable readback still contains unresolved ACCOUNT safety blockers") })
+  }
+  const actionBlockerIds = [...blockerIds].sort()
+  const actionFacts = readback.records.filter((record) =>
+    record.factType === "SAFETY_BLOCKER_RESOLVED" &&
+    record.data?.actionId === actionId
+  )
+  for (const blockerId of actionBlockerIds) {
+    const fact = actionFacts.find((record) => record.data?.blockerId === blockerId)
+    if (!fact ||
+        fact.data.operatorId !== operatorId ||
+        fact.data.operatorAuthMethod !== "OS_ACCOUNT" ||
+        fact.data.resolutionReason !== resolutionReason ||
+        fact.data.resolvedBy !== `operator:${operatorId}:${actionId}` ||
+        fact.data.evidenceDigest !== evidenceDigest ||
+        !Array.isArray(fact.data.actionBlockerIds) ||
+        fact.data.actionBlockerIds.join("|") !== actionBlockerIds.join("|")) {
+      return toResult({
+        error: new Error(`Durable readback did not confirm exact resolution metadata for blocker ${blockerId}`),
+      })
+    }
+  }
+  const conflictingResolution = readback.records.find((record) =>
+    record.factType === "SAFETY_BLOCKER_RESOLVED" &&
+    actionBlockerIds.includes(record.data?.blockerId) &&
+    record.data?.actionId !== actionId
+  )
+  if (conflictingResolution) {
+    return toResult({
+      error: new Error("Durable readback found a target blocker resolved by a different action"),
+    })
   }
   return undefined
 }
@@ -90,13 +147,21 @@ export async function resolveUserDataAccountBlockers(options = {}) {
     }
     const appendResult = await appendAccountBlockerResolutions({
       options,
-      blockers: audit.blockers,
+      blockers: audit.blockersToResolve,
+      blockerIds: audit.blockerIds,
       evidenceDigest: audit.evidenceDigest,
     })
     if (appendResult) {
       return appendResult
     }
-    const readbackResult = await verifyAccountResolutionReadback(options.operationalStateStore)
+    const readbackResult = await verifyAccountResolutionReadback({
+      operationalStateStore: options.operationalStateStore,
+      blockerIds: audit.blockerIds,
+      operatorId: options.operatorId,
+      actionId: options.actionId,
+      resolutionReason: options.resolutionReason,
+      evidenceDigest: audit.evidenceDigest,
+    })
     if (readbackResult) {
       return readbackResult
     }
@@ -104,6 +169,7 @@ export async function resolveUserDataAccountBlockers(options = {}) {
       data: Object.freeze({
         resolvedBlockerIds: Object.freeze(audit.blockerIds),
         evidenceDigest: audit.evidenceDigest,
+        idempotentReplay: audit.idempotentReplay,
         durableReadbackVerified: true,
         readiness: "BLOCKED",
         requiresControlledRestart: true,

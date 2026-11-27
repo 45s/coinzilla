@@ -39,6 +39,7 @@ function resolveActiveRecoverySellerBlocker({ records } = {}) {
     .map((record) => record.data?.blockerId))
   const activeBlockers = records.filter((record) =>
     record.factType === "SAFETY_BLOCKER_RAISED" &&
+    (record.data?.producer === "RECOVERY_SELLER_STOP_WORKFLOW" || record.data?.producer === undefined) &&
     record.data?.scope === "ACCOUNT" &&
     record.data?.reason === RECOVERY_SELLER_STOP_REASON &&
     !resolvedBlockerIds.has(record.data?.blockerId)
@@ -112,6 +113,7 @@ async function persistRecoverySellerBlocker({
   })
   return recordSafetyBlockerRaised({
     operationalStateStore,
+    producer: "RECOVERY_SELLER_STOP_WORKFLOW",
     scope: "ACCOUNT",
     reason: RECOVERY_SELLER_STOP_REASON,
     evidenceDigest,

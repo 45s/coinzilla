@@ -875,6 +875,7 @@ async function publishOpenOrdersSnapshot({ context, options }) {
     classification: snapshot.classification,
   })
   const auditSummary = Object.freeze({
+    completed: true,
     phase: options.phase,
     observedAt: snapshot.dataResult.data.observedAt,
     orderCount: orders.length,

@@ -86,6 +86,7 @@
       "src/bootstrap/account/create-account-snapshot-manager.test.js",
       "src/use-cases/create-recovery-seller-accounting-workflow.test.js",
       "src/use-cases/resolve-user-data-account-blockers.test.js",
+      "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
       "src/use-cases/record-user-data-blocker-producer.test.js",
       "src/use-cases/resolve-recovery-seller-stop.test.js",
       "src/use-cases/execute-strategy-decision.test.js",
@@ -212,6 +213,7 @@
     "operational-state:reset:dev": "node --env-file=.env.development scripts/reset-operational-state.js",
     "archive:push": "node --env-file=.env.development scripts/archive-testnet-session.js",
     "archive:debug": "node --env-file=.env.development scripts/archive-debug-session.js",
-    "scenarios:conservative": "node scripts/run-conservative-scenarios.js"
+    "scenarios:conservative": "node scripts/run-conservative-scenarios.js",
+    "recovery:account-blockers": "node scripts/recovery-account-blockers.js"
   }
 }

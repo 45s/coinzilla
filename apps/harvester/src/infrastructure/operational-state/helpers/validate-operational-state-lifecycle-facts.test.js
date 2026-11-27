@@ -100,7 +100,7 @@ factId: "wrong-id",
     factType: "SAFETY_BLOCKER_RESOLVED",
 canonicalData: {
       blockerId,
-resolvedBy: "operator",
+resolvedBy: "operator:manual",
 resolution: "OPERATOR_ACTION",
 evidenceDigest: DIGEST,
     },
@@ -147,4 +147,14 @@ clean: true,
 factId: "process-stopped:session-1",
 runtimeSessionId: "session-1",
   }))
+  assert.throws(() => validateProcessStoppedFact({
+    factType: "PROCESS_STOPPED",
+    canonicalData: {
+      reason: "NORMAL_SHUTDOWN",
+      clean: true,
+      unexpected: true,
+    },
+    factId: "process-stopped:session-1",
+    runtimeSessionId: "session-1",
+  }), /unsupported fields/)
 })
