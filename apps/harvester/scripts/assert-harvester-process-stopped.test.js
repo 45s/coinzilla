@@ -5,6 +5,7 @@ import os from "node:os"
 import path from "node:path"
 import test from "node:test"
 import { assertHarvesterProcessStopped } from "./assert-harvester-process-stopped.js"
+import { isHarvesterProcessAlive } from "../src/infrastructure/process-lock/acquire-harvester-process-lock.js"
 
 const CURRENT_HOST = os.hostname()
 const STARTED_AT = "2026-11-24T17:12:22.255Z"
@@ -23,8 +24,10 @@ function createOwner({ pid = 456789, hostname = CURRENT_HOST, token = "owner-tok
   return { pid, hostname, startedAt: STARTED_AT, token }
 }
 
-test("passes when the process-lock directory does not exist", async () => {
-  const lockDirectory = path.join(os.tmpdir(), "missing-harvester-process-lock-directory")
+test("passes when the process-lock directory does not exist", async (t) => {
+  const parentDirectory = await createLockDirectory()
+  t.after(() => rm(parentDirectory, { recursive: true, force: true }))
+  const lockDirectory = path.join(parentDirectory, "missing-locks")
   await assert.doesNotReject(
     assertHarvesterProcessStopped({ lockDirectory }),
     "Archive preflight must pass when no Harvester process-lock directory exists.",
@@ -228,5 +231,18 @@ test("evaluates every lock file and reclaims only the confirmed stale owners", a
     (await readdir(lockDirectory)).filter((filename) => filename.endsWith(".lock")).length,
     1,
     "Only the live lock should remain after the preflight evaluates all lock files.",
+  )
+})
+
+test("uses the operating-system process probe without treating inspection errors as dead owners", () => {
+  assert.equal(
+    isHarvesterProcessAlive(process.pid),
+    true,
+    "The current process must be classified as alive by the platform process probe.",
+  )
+  assert.equal(
+    isHarvesterProcessAlive(Number.MAX_SAFE_INTEGER),
+    false,
+    "An impossible process ID must be classified as absent when the OS returns ESRCH.",
   )
 })
