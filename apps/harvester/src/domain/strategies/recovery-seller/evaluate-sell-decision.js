@@ -236,12 +236,6 @@ function createCycleNotReadyResult({ stopState }) {
 }
 
 function resolveSellPolicyContext({ pairConfig, marketMetadata, cycleState, stopState }) {
-  if (stopState.status === "STOPPED") {
-    return Object.freeze({
-      stopState,
-      decision: stopState.decision,
-    })
-  }
   try {
     validateSellPolicyContext({
       pairConfig,

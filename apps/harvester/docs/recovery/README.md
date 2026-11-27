@@ -159,3 +159,42 @@ This fixture represents a trading-enabled Journal session with a complete PREFLI
 PR #1047 delivered the read-only orchestration and guarded confirmation use cases. PR #1053 adds the offline JSON context adapter, explicit audit-only/confirmation CLI modes, canonical entity construction, and end-to-end tests using the production account audit and filesystem Operational State Store. No exchange write, broker connection, startup replay, Telegram command or runtime readiness wiring is introduced.
 
 Steps 8 and 9 remain separate gates: candidate-state restoration behind closed readiness, then crash/restart and restart-twice verification. Unattended restart readiness remains disabled.
+
+## Offline user-data ACCOUNT blocker resolution
+
+This is the explicit operator workflow for a user-data ACCOUNT safety blocker. It is separate from one-market coverage confirmation and is only available after the Harvester process has been cleanly stopped.
+
+Producer provenance determines resolver ownership. `RECOVERY_SELLER_STOP_WORKFLOW` facts remain exclusively owned by the existing Recovery Seller resolver; legacy untagged Recovery Seller facts retain that resolver through the reserved reason code. If a fact explicitly identifies `USER_DATA_EVENT_HANDLER` but uses the reserved Recovery Seller STOP reason, projection fails closed and neither resolver may clear it.
+
+After durable user-data ACCOUNT resolution, the next restart is observation-only. It must record and verify a fresh durable account PREFLIGHT snapshot matching the current account snapshot and a clean account-wide open-order PREFLIGHT audit (no block reasons or unowned symbols) in the same runtime session. This verification does not set trading readiness, enable execution, or reopen strategy admission; the separate ADR-0001 restart acceptance gate remains in force.
+
+From `apps/harvester`, run:
+
+```sh
+OPERATIONAL_STATE_DIRECTORY=/absolute/path/to/existing/operational-state \\
+  pnpm run recovery:account-blockers -- \\
+    --context ./recovery-evidence/account-wide.json \\
+    --operator-id <current-os-user> \\
+    --action-id account-resolution-2026-11-26-001 \\
+    --resolution-reason "Reviewed complete account evidence and confirmed the underlying cause is fixed." \\
+    --cause-fixed
+```
+
+Replace `<current-os-user>` with the exact username returned by the operating system for the account running the command. The utility also supports `--version` to print its build identity. The command requires an existing, durable Operational State Store and the `runtimeSessionId` of the latest process session. The latest matching `PROCESS_STOPPED` fact must be clean; a later unclean stop invalidates an earlier clean-stop fact. The supplied `--operator-id` must exactly match the authenticated operating-system account running the command; a caller-supplied name alone is not trusted. The required `--resolution-reason` is persisted with every per-blocker resolution fact alongside the operator ID, `OS_ACCOUNT` authentication method, unique action ID, full original blocker set, and canonical evidence digest.
+
+The action ID is globally unique across operator-resolution facts. An exact retry using the same authenticated operator, action ID, reason, original blocker set, and evidence digest is idempotent. If a multi-blocker append partially commits, retry the same command with the same action ID and unchanged evidence bundle: the workflow verifies the previously committed facts and appends only the remaining blockers. A completed exact duplicate returns an idempotent success without appending new facts. Reusing the action ID with a different operator, reason, blocker set, or evidence is rejected. Legacy operator-resolution facts without structured action metadata cannot be safely replayed; choose a new action ID for a new operation.
+
+The offline adapter also rejects missing configured-market evidence, session/configuration mismatches, non-user-data ACCOUNT provenance, incomplete history, unresolved fills/orders, blocked markets, stale account snapshots, and incomplete balance/order coverage before any resolution append. The offline regression suite exercises append failure, partial multi-blocker append/retry, exact duplicate replay, conflicting action-ID reuse, non-durable append, and failed readback; successful resolution must still report BLOCKED readiness. It derives the configured market universe from that session's durable configuration baseline; the evidence bundle cannot narrow the market list. It refuses legacy/unknown-producer ACCOUNT blockers and Recovery Seller STOP. Recovery Seller STOP is raised with the dedicated RECOVERY_SELLER_STOP_WORKFLOW producer; the verified projector accepts only its dedicated legacy operator-action resolution, while user-data ACCOUNT blockers require structured OS-authenticated operator metadata. Mixed active ACCOUNT blocker sets remain fail-closed.
+
+The local OS-account authentication binds the CLI action to the process account; it is not enterprise SSO or cryptographic proof of the human at the keyboard. The supplied offline evidence bundle remains operator-reviewed evidence: the CLI cannot independently prove that an exchange export came from Binance or that its provenance is genuine.
+
+The account-wide evidence bundle reuses the one-market contract above, with these root fields:
+
+- `configuredMarkets`: exact configured symbols from the durable configuration baseline.
+- `journalRecords`, `markets`, `assets`: one shared canonical Journal/account/market identity set.
+- `exchange.currentAccountSnapshot`, `exchange.openOrders`, `exchange.ownedOrderHistory`: one shared account snapshot and complete account-wide order evidence.
+- `marketsEvidence`: an object keyed by every configured symbol. Each entry contains its own reviewed `coverage` and `tradeHistory` bundle; the trade-history scope must be exactly that market.
+
+The command runs the existing production `reconcileRecoveredMarketState()` / `auditRecoveredAccountState()` audit for every configured market against the same account snapshot and order evidence. It appends resolution facts only when every market is READY, every configured market's history is complete from its reviewed coverage boundary, and the account-wide balance/order/reservation audit has no unresolved owned or external orders, fills, or discrepancies. Any missing market, incomplete history, unknown ownership, inconsistent accounting, or non-durable store leaves all blockers active.
+
+This command is offline: it does not connect to an exchange, place/cancel/replace orders, restart Harvester, clear live process flags, or enable trading. A successful result means only that durable resolution facts were committed and read back. **Trading remains blocked until a controlled restart and a fresh authoritative account snapshot pass startup admission.** Recovery Seller STOP is never cleared by this path. A mixed active ACCOUNT blocker set that includes Recovery Seller provenance is rejected without appending any resolution facts. The regression suite also verifies that a balance mismatch against the Journal blocks resolution before append. The balance test keeps the Journal baseline at USDT 100 while the supplied authoritative snapshot reports USDT 99; the mixed-producer test verifies that a Recovery Seller ACCOUNT blocker prevents any user-data resolution append.

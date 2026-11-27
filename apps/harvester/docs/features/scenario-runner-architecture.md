@@ -20,12 +20,12 @@ The Runner is strategy-neutral application orchestration. Strategy adapters bind
 **Current state — 2026-11-26; this checkpoint supersedes older status notes below.**
 
 - `RS-004-011` remains a preliminary helper-only mapping. PR #1852 remains a test-coverage registry, not the production registry.
-- The production RS registry is in `src/infrastructure/scenario-runner/rs-scenario-adapter.js` and exposes three PARTIAL runtime scenarios: authorized SELL submission, rejected SELL with the production STOP workflow, and profitable partial CANCELED SELL reconciliation through the production order-event and accounting workflows.
+- The production RS registry is in `src/infrastructure/scenario-runner/rs-scenario-adapter.js` and exposes six PARTIAL runtime scenarios: authorized SELL submission, rejected SELL with STOP handling, profitable partial CANCELED SELL reconciliation, under-target fully FILLED SELL reconciliation, STOP-persistence failure, and STOP buy-only admission. The last three were added in PR #1887; all use simulated infrastructure.
 - These scenarios reuse production runtime evaluation, authorization, order submission, STOP workflow and accounting. They use a run-local simulated broker and in-memory operational store; they do not prove durable production state and remain non-executable.
 - The trading-history API registers an explicit unavailable RS adapter. It exposes the registry but blocks execution until a trusted OS-level sandbox launcher is supplied. A simulated test attestation is not an OS sandbox.
 - Exact replay now checks declared and checked-out commit identity, clean source tree, dependency lock, scenario registry, original input digest and runtime identity. A trusted build-artifact attestation is unavailable, so exact replay is refused with explicit missing-provenance diagnostics.
-- Terminal accounting now publishes the canonical cycle state. Profitable partial CANCELED/EXPIRED SELL outcomes remain `UNRESOLVED`; an under-target FILLED SELL latches the durable account-wide STOP in the order-event workflow. Canonical orders prohibit non-zero execution on REJECTED orders; zero-fill REJECTED accounting remains fail-closed.
-- Remaining: full user-data event transition dispatch, a runtime under-target FILLED STOP scenario, general infrastructure-failure scenarios, durable operational-state integration, and a real platform-specific OS sandbox launcher. The worker acceptance test verifies the production worker protocol only, using a test-only simulated attestation.
+- Terminal accounting publishes the canonical cycle state. Profitable partial CANCELED/EXPIRED and adverse under-target FILLED SELL outcomes remain `UNRESOLVED`; the FILLED scenario stages canonical fill evidence exactly once, commits mixed-SELL accounting, and then exercises the account STOP workflow. STOP persistence is verified only against the run-local in-memory operational store, not production durability. Canonical orders prohibit non-zero execution on REJECTED orders; zero-fill REJECTED accounting remains fail-closed.
+- Remaining: general infrastructure-failure scenarios, production operational-state persistence, full production RS adapter/catalogue composition, trusted platform-specific OS sandbox launcher/build attestation, and complete source/build/runtime/input replay provenance. The worker acceptance test verifies the production worker protocol only, using a test-only simulated attestation.
 
 ## Cancellation completion invariant
 
@@ -268,3 +268,35 @@ partial RS runtime scenario non-executable. This makes the production registry v
 through the real API composition boundary without silently falling back to an in-process
 or worker-only sandbox. A test-only launcher may exercise the worker protocol, but it
 does not change production readiness.
+
+## Under-target FILLED SELL runtime scenario — implementation in PR #1887
+
+The following flow describes the simulated application-level acceptance path only. Canonical accounting must commit before terminal reservation release; STOP persistence failure must never be reported as durable success.
+
+```mermaid
+flowchart TD
+  A[Terminal fully FILLED SELL] --> B[Stage canonical fill evidence exactly once]
+  B --> C[Reconcile terminal fills and mixed SELL accounting]
+  C --> D[Commit UNRESOLVED cycle state]
+  D --> E[Release reservation after accounting commit]
+  D --> F[Append account STOP to run-local simulated store]
+  F --> G{STOP append succeeds?}
+  G -->|Yes| H[Record simulated STOP fact]
+  G -->|No| I[Do not claim STOP was persisted]
+  I --> J[Keep in-memory BUY-admission gate blocked]
+  H --> K[Pause affected market]
+  J --> K
+  K --> L[Fail terminal event closed]
+```
+
+The runtime catalogue now includes `RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001`. It submits through the production RS dispatch/authorizer/submitter, then drives a fully FILLED canonical SELL through `processUserDataEventTransition`, terminal-fill reconciliation and mixed-SELL accounting. The deterministic run-local fixture supplies a synthetic adversarial quote-asset commission derived from the seeded recovery and legacy cost basis; it is not an exchange fee schedule. The expected outcome is a completely reconciled canonical fill staged exactly once, an UNRESOLVED cycle retaining the failed profitability result, a run-local simulated account-wide STOP fact, an affected-market pause with reason `RS_TERMINAL_SELL_PROFITABILITY_STOP`, a failed terminal event and a released terminal-order reservation. STOP append success/failure is tested only against the in-memory simulation store and does not establish production durability. Because the terminal event fails closed, it is not marked as a successfully completed event transition; the committed cycle state remains the authority for the completed accounting boundary.
+
+This proves the adverse FILLED runtime path only against simulated broker and in-memory operational-state ports. It does not prove durable production STOP persistence, live exchange behavior or OS isolation. The scenario remains PARTIAL/non-executable until trusted OS-level isolation and attestation are verified; general infrastructure-failure scenarios remain outstanding.
+
+## STOP persistence failure runtime scenario — implementation in PR #1887
+
+The runtime catalogue now includes `RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001`. It reuses the under-target fully FILLED SELL path and injects failure only when the run-local operational-state store receives the account STOP fact. The production order-event workflow surfaces that durable STOP could not be confirmed, pauses the affected market and fails the terminal event closed. The canonical mixed-SELL accounting boundary remains committed, so the UNRESOLVED cycle is terminally reconciled and its reservation is released. The STOP workflow's in-memory account-admission gate remains active, and a follow-up production runtime dispatch submits no new order. The scenario explicitly reports that no account STOP fact was persisted; it never presents a failed persistence attempt as durable success. This is a simulated adapter-failure test, not proof of a production storage adapter.
+
+## STOP buy-only admission runtime scenario — implementation in PR #1887
+
+The runtime catalogue includes `RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001`. It latches STOP, first evaluates the market below the profitable SELL target and verifies that no new BUY is submitted, then evaluates the same accumulating cycle at an eligible SELL price and verifies that the first recovery SELL is still submitted. The STOP remains latched and account admission remains blocked for additional BUY spending. This preserves the owner-resolved RS-009 contract: STOP is not a blanket shutdown of eligible recovery SELLs or reconciliation.

@@ -119,7 +119,75 @@ async function readVerifiedOperationalStateHistory({ operationalStateStore } = {
   }
 }
 
-function assertOperationalStateCanStart({ projection, records } = {}) {
+function getUserDataAccountBlockerIds(records) {
+  return new Set(records
+    .filter((record) =>
+      record.factType === "SAFETY_BLOCKER_RAISED" &&
+      record.data?.scope === "ACCOUNT" &&
+      record.data?.producer === "USER_DATA_EVENT_HANDLER" &&
+      record.data?.reason !== "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+    )
+    .map((record) => record.data.blockerId))
+}
+
+function isStructuredUserDataAccountResolution({ record, accountBlockerIds }) {
+  const { data } = record
+  return record.factType === "SAFETY_BLOCKER_RESOLVED" &&
+    accountBlockerIds.has(data?.blockerId) &&
+    data?.resolution === "OPERATOR_ACTION" &&
+    data?.operatorAuthMethod === "OS_ACCOUNT" &&
+    typeof data?.operatorId === "string" &&
+    typeof data?.actionId === "string" &&
+    data?.actionBlockerIds?.includes(data.blockerId)
+}
+
+function getLatestResolvedUserDataAccountBlockerIndex(records) {
+  const accountBlockerIds = getUserDataAccountBlockerIds(records)
+  let latestResolutionIndex = -1
+  for (const [index, record] of records.entries()) {
+    if (isStructuredUserDataAccountResolution({
+      record,
+      accountBlockerIds,
+    })) {
+      latestResolutionIndex = index
+    }
+  }
+  return latestResolutionIndex
+}
+
+function hasCleanAccountRecoveryPreflight({ records, resolutionIndex } = {}) {
+  const laterRecords = records.slice(resolutionIndex + 1)
+  const accountSnapshot = laterRecords.findLast((record) =>
+    record.factType === "ACCOUNT_SNAPSHOT_CAPTURED" &&
+    record.data?.phase === "PREFLIGHT" &&
+    record.data?.auditStatus === "COMPLETE" &&
+    record.data?.auditReasons?.length === 0
+  )
+  const openOrdersSnapshot = laterRecords.findLast((record) =>
+    record.factType === "ACCOUNT_OPEN_ORDERS_CAPTURED" &&
+    record.data?.phase === "PREFLIGHT" &&
+    ["READY", "RECONCILED"].includes(record.data?.readiness) &&
+    record.data?.blockReasons?.length === 0 &&
+    record.data?.unownedSymbols?.length === 0
+  )
+  return accountSnapshot !== undefined &&
+    openOrdersSnapshot !== undefined &&
+    accountSnapshot.runtimeSessionId === openOrdersSnapshot.runtimeSessionId
+}
+
+function requiresAccountRecoverySnapshot(records) {
+  const resolutionIndex = getLatestResolvedUserDataAccountBlockerIndex(records)
+  return resolutionIndex >= 0 && !hasCleanAccountRecoveryPreflight({
+    records,
+    resolutionIndex,
+  })
+}
+
+function assertOperationalStateCanStart({
+  projection,
+  records,
+  accountRecoverySnapshotRequired = false,
+} = {}) {
   const processStarts = records.filter((record) => record.factType === "PROCESS_STARTED")
   if (processStarts.length === 0) {
     return false
@@ -135,16 +203,18 @@ function assertOperationalStateCanStart({ projection, records } = {}) {
   const singleRecoverySellerStop = stickySafetyBlockers.length === 1 &&
     stickySafetyBlockers[0].scope === "ACCOUNT" &&
     stickySafetyBlockers[0].reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+  const accountBlockerResolutionRestart = accountRecoverySnapshotRequired === true &&
+    stickySafetyBlockers.every((blocker) => blocker.scope !== "ACCOUNT")
   if (
     projection.data.candidateOnly === true &&
     projection.data.restorationEnabled === false &&
     allSessionsStopped &&
-    (observationOnlyRestart || singleRecoverySellerStop)
+    (observationOnlyRestart || singleRecoverySellerStop || accountBlockerResolutionRestart)
   ) {
     return true
   }
   throw new Error(
-    "Automatic Harvester trading-state restoration remains disabled until ADR-0001 Step 9 crash/restart proof and exchange reconciliation are accepted; only a clean prior session with an RS STOP latch or an observation-only session may restart, and trading remains disabled.",
+    "Automatic Harvester trading-state restoration remains disabled until ADR-0001 Step 9 crash/restart proof and exchange reconciliation are accepted; only a clean prior session with an RS STOP latch, an observation-only session, or a durably resolved user-data ACCOUNT blocker awaiting fresh PREFLIGHT reconciliation may restart; trading remains disabled.",
   )
 }
 
@@ -157,16 +227,22 @@ async function verifyOperationalStateStore({ operationalStateStore,
   await verifyOperationalStateStoreDurability({ operationalStateStore })
   if (recoveryEnabled === true) {
     const history = await readVerifiedOperationalStateHistory({ operationalStateStore })
+    const accountRecoverySnapshotRequired = requiresAccountRecoverySnapshot(history.records)
     const previousProcessStarted = assertOperationalStateCanStart({
       projection: history.projection,
       records: history.records,
+      accountRecoverySnapshotRequired,
     })
-    return { previousProcessStarted }
+    return {
+      previousProcessStarted,
+      accountRecoverySnapshotRequired,
+    }
   }
   const history = await readVerifiedOperationalStateHistory({ operationalStateStore })
   assertNoUnresolvedAccountSafetyBlockers({ projection: history.projection })
   return {
     previousProcessStarted: history.records.some((record) => record.factType === "PROCESS_STARTED"),
+    accountRecoverySnapshotRequired: requiresAccountRecoverySnapshot(history.records),
   }
 }
 
@@ -328,6 +404,7 @@ tradingEnabled })
       previousProcessStarted: operationalStateStore
         ? operationalState.previousProcessStarted === true
         : null,
+      accountRecoverySnapshotRequired: operationalState.accountRecoverySnapshotRequired === true,
       restorationEnabled: false,
     }),
   }
@@ -895,6 +972,7 @@ resources }),
     publishOpenOrdersSnapshot,
     publishClosingOpenOrdersSnapshot,
     publishAccountSnapshot,
+    getAccountReadinessSnapshot: () => startup.accountSnapshotManagerRef.current.getReadinessSnapshot(),
     resumeDeferredStrategyEvaluations,
     cancelOwnedBuysAfterAccountingFailure,
   }
@@ -1124,6 +1202,7 @@ async function startHarvesterUserDataServices({
     onSubscriptionEstablished: (subscription) => { resources.userDataSubscription = subscription },
     publishAccountSnapshot: accountSnapshots.publishAccountSnapshot,
     publishOpenOrdersSnapshot: accountSnapshots.publishOpenOrdersSnapshot,
+    getAccountReadinessSnapshot: accountSnapshots.getAccountReadinessSnapshot,
     getAccountSnapshot: portfolio.getAccountSnapshot,
     getAccountSafetyBlocker: () => getHarvesterAccountSafetyBlocker({
       userDataState: resources.userDataState,
@@ -2084,6 +2163,10 @@ resources })
 
 async function createHarvesterRuntimeComponents({ startup, portfolio }) {
   const resources = createHarvesterRuntimeResources()
+  resources.userDataState.accountRecoverySnapshotRequired =
+    startup.processContinuity?.accountRecoverySnapshotRequired === true
+  resources.userDataState.accountRecoverySnapshotWasRequired =
+    resources.userDataState.accountRecoverySnapshotRequired
   const failureSnapshotReader = createHarvesterStartupFailureSnapshotReader({
     startup,
     portfolio,

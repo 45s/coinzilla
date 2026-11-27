@@ -103,12 +103,23 @@ async function waitForUserDataEventQueue({ state }) {
 }
 
 class HarvesterUserDataStartupUnsafeError extends SystemCustomError {
-  constructor({ tradingModeLabel, code, message, status } = {}) {
+  constructor({
+    tradingModeLabel,
+    code,
+    message,
+    status,
+    accountPreflightReady,
+    openOrdersPreflightReady,
+    openOrdersReadiness,
+  } = {}) {
     super(message, {
       code,
       context: {
         tradingModeLabel,
         status: status ?? "UNKNOWN",
+        ...(accountPreflightReady === undefined ? {} : { accountPreflightReady }),
+        ...(openOrdersPreflightReady === undefined ? {} : { openOrdersPreflightReady }),
+        ...(openOrdersReadiness === undefined ? {} : { openOrdersReadiness }),
       },
       retryable: false,
     })
@@ -133,6 +144,15 @@ class HarvesterAccountSafetyBlockerActiveError extends SystemCustomError {
 }
 
 function assertTradingStartupSafety({ state, tradingModeLabel, getAccountSafetyBlocker }) {
+  if (state.accountRecoverySnapshotWasRequired === true &&
+      state.accountRecoverySnapshotVerified !== true) {
+    throw new HarvesterUserDataStartupUnsafeError({
+      tradingModeLabel,
+      code: "ACCOUNT_RECOVERY_FRESH_PREFLIGHT_REQUIRED",
+      message: "Trading admission remains blocked until the post-resolution account PREFLIGHT snapshot is verified",
+      status: state.status,
+    })
+  }
   if (state.accountingFailed || UNSAFE_USER_DATA_STARTUP_STATUSES.has(state.status)) {
     throw new HarvesterUserDataStartupUnsafeError({
       tradingModeLabel,
@@ -209,9 +229,67 @@ function logUserDataSubscriptionEstablished(logger) {
   })
 }
 
-async function completeReadOnlyUserDataPreflight({ state, publishOpenOrdersSnapshot } = {}) {
+function hasDurableAccountPreflight(readiness) {
+  const { preflight, currentAccount } = readiness ?? {}
+  return preflight?.completed === true &&
+    preflight.durable === true &&
+    Number.isSafeInteger(preflight.sourceTime) &&
+    Number.isSafeInteger(currentAccount?.sourceTime) &&
+    preflight.sourceTime === currentAccount.sourceTime &&
+    Number.isSafeInteger(preflight.balanceCount) &&
+    Number.isSafeInteger(currentAccount?.balanceCount) &&
+    preflight.balanceCount === currentAccount.balanceCount
+}
+
+function hasCleanOpenOrdersPreflight(readiness) {
+  const openOrders = readiness?.openOrders?.preflight
+  return openOrders?.completed === true &&
+    openOrders.durable === true &&
+    openOrders.phase === "PREFLIGHT" &&
+    ["READY", "RECONCILED"].includes(openOrders.readiness) &&
+    openOrders.blockReasons?.length === 0 &&
+    openOrders.unownedSymbols?.length === 0
+}
+
+function assertAccountRecoveryPreflight({
+  state,
+  tradingModeLabel,
+  getAccountReadinessSnapshot,
+} = {}) {
+  if (state.accountRecoverySnapshotRequired !== true) {
+    return
+  }
+  const readiness = getAccountReadinessSnapshot?.()
+  const accountPreflightReady = hasDurableAccountPreflight(readiness)
+  const openOrdersPreflightReady = hasCleanOpenOrdersPreflight(readiness)
+  if (!accountPreflightReady || !openOrdersPreflightReady) {
+    throw new HarvesterUserDataStartupUnsafeError({
+      tradingModeLabel,
+      code: "ACCOUNT_RECOVERY_FRESH_PREFLIGHT_REQUIRED",
+      message: "Post-resolution restart requires a fresh durable account snapshot and a clean account-wide open-order PREFLIGHT audit",
+      accountPreflightReady,
+      openOrdersPreflightReady,
+      openOrdersReadiness: readiness?.openOrders?.preflight?.readiness ?? null,
+      status: state.status,
+    })
+  }
+  state.accountRecoverySnapshotRequired = false
+  state.accountRecoverySnapshotVerified = true
+}
+
+async function completeReadOnlyUserDataPreflight({
+  state,
+  publishOpenOrdersSnapshot,
+  getAccountReadinessSnapshot,
+  tradingModeLabel,
+} = {}) {
   await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
   await waitForUserDataEventQueue({ state })
+  assertAccountRecoveryPreflight({
+    state,
+    tradingModeLabel,
+    getAccountReadinessSnapshot,
+  })
   state.preflightComplete = true
 }
 
@@ -220,6 +298,7 @@ async function completeTradingUserDataPreflight({
   publishOpenOrdersSnapshot,
   tradingModeLabel,
   getAccountSafetyBlocker,
+  getAccountReadinessSnapshot,
 } = {}) {
   if (state.accountingFailed) {
     throw new HarvesterUserDataStartupUnsafeError({
@@ -231,12 +310,25 @@ async function completeTradingUserDataPreflight({
   }
   await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })
   await waitForUserDataEventQueue({ state })
+  assertAccountRecoveryPreflight({
+    state,
+    tradingModeLabel,
+    getAccountReadinessSnapshot,
+  })
   assertTradingStartupSafety({
     state,
     tradingModeLabel,
     getAccountSafetyBlocker,
   })
   state.preflightComplete = true
+}
+
+async function completeUserDataPreflight(options) {
+  if (options.tradingEnabled) {
+    await completeTradingUserDataPreflight(options)
+    return
+  }
+  await completeReadOnlyUserDataPreflight(options)
 }
 
 function createDeferredTradingActivation({
@@ -285,22 +377,20 @@ alreadyActivated: false })
   })
 }
 
-/**
- * Subscribe to broker user-data delivery and complete the authoritative account audit gate.
- * The caller owns failure cleanup; this module owns subscription evidence and
- * the PREFLIGHT account/open-order checks that must precede trading readiness.
- */
-export async function subscribeToUserData({
-  broker, brokerName, eventPublisher, logger, state,
-  tradingMode, tradingEnabled, enabledSymbols, trackedOrders = [],
-  onEvent, onObservation, onStatus, onSubscriptionEstablished,
-  publishAccountSnapshot, publishOpenOrdersSnapshot, getAccountSnapshot,
-  getAccountSafetyBlocker,
-  resumeDeferredStrategyEvaluations,
-  deferTradingActivation = false,
+async function createAndInitializeUserDataSubscription({
+  broker,
+  brokerName,
+  eventPublisher,
+  logger,
+  state,
+  enabledSymbols,
+  trackedOrders,
+  onEvent,
+  onObservation,
+  onStatus,
+  onSubscriptionEstablished,
+  publishAccountSnapshot,
 } = {}) {
-  const tradingModeLabel = tradingMode === "live" ? "LIVE" : "TESTNET"
-  state.tradingActivationDeferred = deferTradingActivation === true
   logUserDataSubscriptionStarting(logger)
   const userDataSubscription = await createUserDataSubscription({
     broker,
@@ -315,19 +405,55 @@ export async function subscribeToUserData({
   onSubscriptionEstablished?.(userDataSubscription)
   logUserDataSubscriptionEstablished(logger)
   markUserDataReconciliationRequired(state)
-  await publishInitialAccountSnapshot({ state,
-publishAccountSnapshot })
-  if (!tradingEnabled) {
-    await completeReadOnlyUserDataPreflight({ state,
-publishOpenOrdersSnapshot })
-    return userDataSubscription
-  }
-  await completeTradingUserDataPreflight({
+  await publishInitialAccountSnapshot({
     state,
+    publishAccountSnapshot,
+  })
+  return userDataSubscription
+}
+
+/**
+ * Subscribe to broker user-data delivery and complete the authoritative account audit gate.
+ * The caller owns failure cleanup; this module owns subscription evidence and
+ * the PREFLIGHT account/open-order checks that must precede trading readiness.
+ */
+export async function subscribeToUserData({
+  broker, brokerName, eventPublisher, logger, state,
+  tradingMode, tradingEnabled, enabledSymbols, trackedOrders = [],
+  onEvent, onObservation, onStatus, onSubscriptionEstablished,
+  publishAccountSnapshot, publishOpenOrdersSnapshot, getAccountSnapshot,
+  getAccountSafetyBlocker,
+  getAccountReadinessSnapshot,
+  resumeDeferredStrategyEvaluations,
+  deferTradingActivation = false,
+} = {}) {
+  const tradingModeLabel = tradingMode === "live" ? "LIVE" : "TESTNET"
+  state.tradingActivationDeferred = deferTradingActivation === true
+  const userDataSubscription = await createAndInitializeUserDataSubscription({
+    broker,
+    brokerName,
+    eventPublisher,
+    logger,
+    state,
+    enabledSymbols,
+    trackedOrders,
+    onEvent,
+    onObservation,
+    onStatus,
+    onSubscriptionEstablished,
+    publishAccountSnapshot,
+  })
+  await completeUserDataPreflight({
+    state,
+    tradingEnabled,
     publishOpenOrdersSnapshot,
+    getAccountReadinessSnapshot,
     tradingModeLabel,
     getAccountSafetyBlocker,
   })
+  if (!tradingEnabled) {
+    return userDataSubscription
+  }
   if (deferTradingActivation) {
     return createDeferredTradingActivation({
       userDataSubscription,

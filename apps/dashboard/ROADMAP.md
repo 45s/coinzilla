@@ -16,6 +16,7 @@
 ## Canonical sources
 
 - Dashboard behavior and setup: [README](./README.md)
+- **Scenario Runner implementation progress:** PR #1887 adds under-target FILLED SELL reconciliation, STOP-persistence failure handling, and BUY-only STOP admission coverage. The full production RS adapter and trusted OS-level sandbox launcher remain incomplete; execution stays fail-closed.
 - Feature-specific Scenario Runner implementation and decisions: [Scenario Runner roadmap](./docs/features/gc-strategy-lab/RUNNER_ROADMAP.md)
 - Current task state: linked GitHub issues and PRs
 

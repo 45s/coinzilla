@@ -139,6 +139,23 @@ The catalog is a navigation and traceability layer. Domain specifications, accep
 - [RS-009 — Investment-only STOP and continued recovery](#rs-009--stop-blocks-additional-buy-spending-only)
 - [RS-010 — Deferred restart and fee valuation](#rs-010--unsupported-restart-and-fee-valuation-capabilities-remain-blocked)
 
+### Scenario Runner application-level integration scenarios (#1836)
+
+These APPLICATION-layer cases exercise the production Recovery Seller runtime/use-case path with deterministic simulated broker and run-local operational-state ports. They are tracked separately from the domain scenario matrix above.
+
+| Scenario ID | Claim | Status |
+| --- | --- | --- |
+| `RS-RUNTIME-SELL-SUBMISSION-001` | Normal production-flow SELL submission and reservation | PARTIAL / non-executable |
+| `RS-RUNTIME-SELL-REJECTION-001` | Broker rejection is surfaced and STOP is latched | PARTIAL / non-executable |
+| `RS-RUNTIME-SELL-PARTIAL-CANCEL-001` | Partial terminal SELL is reconciled before STOP | PARTIAL / non-executable |
+| `RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001` | Fully FILLED under-target SELL reconciles accounting, pauses the market and latches STOP | PARTIAL / non-executable |
+| `RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001` | Failed account STOP persistence is surfaced and new BUY admission fails closed | PARTIAL / non-executable |
+| `RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001` | STOP blocks new BUY spending while an eligible first recovery SELL remains allowed | PARTIAL / non-executable |
+
+**Automated test:** `apps/harvester/src/infrastructure/scenario-runner/rs-scenario-adapter.test.js`.
+
+**Coverage boundary:** these runtime integration scenarios do not count as domain scenario-suite coverage under issue #1780 and do not mark RS-009 VERIFIED. The broker and operational-state store are simulated/run-local; these tests do not prove production durability, trusted OS isolation, build attestation or live-account safety. Keep the runtime catalogue PARTIAL and non-executable until the Scenario Runner production-adapter and sandbox gates are met.
+
 ### Shared packages
 
 - [BRK-001 — Unknown broker mutation outcome](#brk-001--unknown-broker-mutation-outcome-is-not-treated-as-failure)
@@ -1452,6 +1469,18 @@ The package entries below make the repository-wide scope visible, but their exac
 **Scope controls:** market-scoped blockers affect only their symbol. ADR-0008's Recovery Seller SELL exception applies only to its market-level strategy pause and is subordinate to any account-scoped blocker. An audit `readiness: BLOCKED` classification is not itself a global stop.
 
 **Coverage:** `create-recovery-seller-stop-workflow.test.js`, `create-submission-gate.test.js`, `subscribe-to-user-data.test.js`, and `start-harvester.test.js` (including `rejects an unprojectable account-blocker ledger before broker connection for every recovery configuration` and `rejects a durable unresolved account blocker in Conservative-only mode when CG recovery is disabled`), plus `conservative-trading-engine.test.js` (`rechecks a newly raised account blocker after durable intent and before broker submission`) and `create-submission-gate.test.js` (`market-scoped strategy safety pause blocks only its symbol and preserves the recovery SELL exception`).
+
+## HARVESTER-ACC-004 — Offline authenticated resolution of user-data ACCOUNT blockers
+
+**Given:** a durable, verified Operational State Store; the matching Harvester process is cleanly stopped; its durable configuration baseline defines the complete market universe; and the operator has prepared one reviewed account-wide evidence bundle containing shared account/order observations and complete per-market history, order, fill, balance, and accounting evidence.
+
+**When:** the operator runs `recovery:account-blockers` with the current OS account identity, a unique action ID, an explicit resolution reason, and `--cause-fixed`.
+
+**Then:** the workflow audits every configured market against the shared account/order evidence, durably records one structured resolution fact per eligible user-data ACCOUNT blocker, verifies exact action metadata and projected-state readback, and reports success only after durable confirmation. The first restart is observation-only and must record/verify a fresh durable account PREFLIGHT snapshot plus a clean account-wide open-order PREFLIGHT audit in the same runtime session. Readiness remains BLOCKED; this verification does not enable execution or reopen strategy admission, and separate ADR-0001 restart acceptance remains required.
+
+**Failure and ownership controls:** reject an unclean stop, mismatched session/configuration baseline, missing market evidence, incomplete or contradictory account/order/fill/balance/accounting evidence, unverified producer provenance, forged OS identity, conflicting action-ID reuse, partial/non-durable append, and failed readback. Exact retries may resume a partially committed action only with the same operator, action ID, reason, blocker set, and evidence. Recovery Seller STOP remains exclusively owned by its dedicated resolver; legacy untagged Recovery Seller facts retain compatibility, while an explicit user-data producer with the reserved Recovery Seller reason remains blocking. The workflow never clears Recovery Seller STOP, resets runtime state, reopens admission, calls an exchange, or mutates orders/balances.
+
+**Coverage:** `resolve-offline-user-data-account-blockers.test.js` (including `authenticates the operator against the current OS account before reading evidence`, `durably resolves after clean stop and leaves readiness blocked for restart`, `fails closed for incomplete or contradictory market audit evidence`, `retries a partially appended multi-blocker action and accepts exact duplicate replay`, and `requires the production offline market audit adapter to be injected`); `resolve-user-data-account-blockers.test.js`; `reconcile-terminal-order-fills.test.js` (including terminal REST/stream identity, duplicate, quantity-parity, and reconciliation-acknowledgement failure cases); `record-safety-control-facts.test.js`; `project-harvester-operational-state.test.js`; `create-recovery-seller-stop-workflow.test.js`; `start-harvester.test.js` (`allows only an observation-only restart after account resolution and verifies a fresh durable PREFLIGHT snapshot pair`); and `subscribe-to-user-data.test.js` (`post-resolution restart accepts only a fresh durable account and clean open-order PREFLIGHT pair`, `post-resolution restart accepts a reconciled owned open-orders PREFLIGHT audit`, `post-resolution restart remains blocked when the account PREFLIGHT snapshot is stale`, `post-resolution restart remains blocked when PREFLIGHT finds an unowned external order`). Tracking and remaining operational acceptance: [issue #1828](https://github.com/45s/coinzilla/issues/1828), [PR #1886](https://github.com/45s/coinzilla/pull/1886).
 
 ### Conservative executable scenario matrix
 

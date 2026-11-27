@@ -65,7 +65,6 @@ function hasRecoveryInventory({ recoveryPosition }) {
 function canEvaluateSell({ snapshot }) {
   return snapshot.activeOrders.length === 0 &&
     snapshot.cycleState?.status === "ACCUMULATING" &&
-    snapshot.stopState?.status !== "STOPPED" &&
     snapshot.strategyStopped === false &&
     snapshot.marketPaused === false &&
     snapshot.reconciliationComplete === true &&
@@ -155,6 +154,7 @@ function createBuyAction({ buyDecision }) {
 function evaluateBuy({ evaluateBuyDecision, snapshot, input }) {
   return evaluateBuyDecision({
     ...snapshot,
+    strategyStopped: snapshot.strategyStopped === true || snapshot.buyAdmissionBlocked === true,
     marketPrice: input.marketPrice,
     marketMetadata: input.marketMetadata,
     pairConfig: input.pairConfig,
@@ -231,8 +231,7 @@ async function evaluateRecoverySellerSellTransition({
     snapshot,
     input,
   })
-  if (sellDecision.stopState?.status === "STOPPED" ||
-      sellDecision.decision?.outcome !== "SUBMIT") {
+  if (sellDecision.decision?.outcome !== "SUBMIT") {
     return sellDecision
   }
   const action = createSellAction({

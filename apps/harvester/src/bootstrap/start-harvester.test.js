@@ -3,11 +3,85 @@ import assert from "node:assert/strict"
 import * as shared from "../../test/bootstrap/start-harvester-test-support.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createHarvesterStartupContext } from "./start-harvester.js"
-import { recordSafetyBlockerRaised } from "../use-cases/record-safety-control-facts.js"
+import { recordSafetyBlockerRaised, recordSafetyBlockerResolved } from "../use-cases/record-safety-control-facts.js"
+import { authenticateLocalOperator } from "../infrastructure/security/local-operator-identity.js"
 
 const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, waitForTestSignal, appConfig, createMarketMetadata, createOpenOrderSnapshot, createBinanceCapabilities, createBroker, createRecoverySellerStopWorkflow, recordConfigurationBaseline, recordProcessStarted, recordProcessStopped, makeVolatilityReadyBroker, createTwoMarketStartupConfig, binanceEnv, startHarvesterForTest, createFill } = shared
 const { mkdtemp, rm, os, path, createFileOperationalStateStore } = shared
 const test = (...args) => nodeTest(`[start-harvester.test.js] ${args[0]}`, ...args.slice(1))
+
+async function seedAccountBlockerRestartSession({ store, config } = {}) {
+  const baseline = await recordConfigurationBaseline({
+    operationalStateStore: store,
+    appConfig: config,
+  })
+  assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
+  const started = await recordProcessStarted({
+    operationalStateStore: store,
+    configurationFingerprint: baseline.data.fingerprint,
+    strategyName: baseline.data.strategyName,
+    markets: baseline.data.markets,
+    tradingEnabled: true,
+  })
+  assert.equal(started.ok, true, started.errors?.[0]?.message)
+  const raised = await recordSafetyBlockerRaised({
+    operationalStateStore: store,
+    producer: "USER_DATA_EVENT_HANDLER",
+    scope: "ACCOUNT",
+    symbol: null,
+    reason: "ACCOUNTING_INTEGRITY_FAILURE",
+    evidenceDigest: "a".repeat(64),
+  })
+  assert.equal(raised.ok, true, raised.errors?.[0]?.message)
+  const { blockerId } = raised.data.record.data
+  const stopped = await recordProcessStopped({
+    operationalStateStore: store,
+    reason: "TEST_CLEAN_STOP_AFTER_ACCOUNT_BLOCKER",
+    clean: true,
+  })
+  assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
+  return blockerId
+}
+
+async function resolveAccountBlockerOffline({ store, blockerId } = {}) {
+  const operatorId = "operator-7"
+  const actionId = "account-recovery-action-001"
+  const operatorIdentity = authenticateLocalOperator({
+    operatorId,
+    getUserInfo: () => ({ username: operatorId }),
+  })
+  const resolved = await recordSafetyBlockerResolved({
+    operationalStateStore: store,
+    blockerId,
+    resolvedBy: `operator:${operatorId}:${actionId}`,
+    resolution: "OPERATOR_ACTION",
+    evidenceDigest: "b".repeat(64),
+    operatorIdentity,
+    operatorId,
+    actionId,
+    resolutionReason: "Verified root cause correction and complete account-wide reconciliation.",
+    actionBlockerIds: [blockerId],
+  })
+  assert.equal(resolved.ok, true, resolved.errors?.[0]?.message)
+}
+
+async function createResolvedAccountBlockerRestartStore({ directory, store, config } = {}) {
+  const blockerId = await seedAccountBlockerRestartSession({
+    store,
+    config,
+  })
+  await resolveAccountBlockerOffline({
+    store,
+    blockerId,
+  })
+  return {
+    restartStore: createFileOperationalStateStore({
+      directory,
+      runtimeSessionId: "account-blocker-restart-session",
+    }),
+    blockerId,
+  }
+}
 
 async function createRsOnlyOperationalStateStore() {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-rs-only-startup-"))
@@ -2126,6 +2200,68 @@ test("rejects a durable unresolved account blocker in Conservative-only mode whe
     },
     store: restartStore,
   })
+})
+
+test("allows only an observation-only restart after account resolution and verifies a fresh durable PREFLIGHT snapshot pair", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const calls = []
+  const broker = createRsOnlyStartupBroker({ calls })
+  try {
+    const config = createRsOnlyStartupConfig()
+    const { restartStore, blockerId } = await createResolvedAccountBlockerRestartStore({
+      directory,
+      store,
+      config,
+    })
+    const result = await startHarvesterForTest({
+      loadConfig: async () => config,
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      operationalStateStore: restartStore,
+      executionSymbols: ["LINEAUSDT"],
+      executionRoutes: [{
+        strategyId: "RS_recoverySeller",
+        symbol: "LINEAUSDT",
+      }],
+      marketDataSymbols: ["LINEAUSDT"],
+      evaluateRecoverySellerTransition: async () => ({
+        ok: true,
+        data: { skipped: true },
+      }),
+      logger: {
+        info() {},
+        error() {},
+      },
+    })
+
+    assert.equal(result.tradingEnabled, false, "Account recovery restart must remain observation-only.")
+    assert.equal(result.executionEnabled, false, "Account recovery restart must not reopen execution.")
+    assert.equal(result.userDataReady, false, "A fresh snapshot does not silently restore trading readiness.")
+    const read = await restartStore.readAll()
+    assert.equal(read.ok, true, read.errors?.[0]?.message)
+    const { records } = read.data
+    const resolutionIndex = records.findIndex((record) =>
+      record.factType === "SAFETY_BLOCKER_RESOLVED" && record.data.blockerId === blockerId
+    )
+    const accountSnapshot = records.findLast((record) =>
+      record.factType === "ACCOUNT_SNAPSHOT_CAPTURED" && record.data.phase === "PREFLIGHT"
+    )
+    const openOrdersSnapshot = records.findLast((record) =>
+      record.factType === "ACCOUNT_OPEN_ORDERS_CAPTURED" && record.data.phase === "PREFLIGHT"
+    )
+    assert.ok(resolutionIndex >= 0)
+    assert.ok(records.indexOf(accountSnapshot) > resolutionIndex)
+    assert.ok(records.indexOf(openOrdersSnapshot) > resolutionIndex)
+    assert.equal(accountSnapshot.runtimeSessionId, openOrdersSnapshot.runtimeSessionId)
+    assert.equal(accountSnapshot.data.auditStatus, "COMPLETE")
+    assert.equal(openOrdersSnapshot.data.readiness, "READY")
+    await result.stop()
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
 })
 
 test("restores a persisted account STOP and keeps a restarted account observation-only", async () => {
