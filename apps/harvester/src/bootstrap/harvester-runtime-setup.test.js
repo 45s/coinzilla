@@ -117,7 +117,9 @@ test("forwards original strategy pause failure to the durable operational-state 
   let recorded
   const failure = new Error("residual completion failed")
   const callbacks = createOperationalStateCallbacks({
-    operationalStateStore: { runtimeSessionId: "runtime-evidence-test" },
+    operationalStateStore: {
+      runtimeSessionId: "runtime-evidence-test",
+    },
     recordStrategyMarketControl: async (input) => {
       recorded = input
       return { ok: true, data: { durable: true } }

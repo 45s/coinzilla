@@ -27,44 +27,45 @@ const appendDurably = async ({ operationalStateStore, fact, operation }) => {
 }
 
 /** Persist a strategy pause/resume transition with a caller-owned unique transition ID. */
-export async function recordStrategyMarketControl({
-  operationalStateStore,
+function createStrategyMarketControlFact({
   action,
   transitionId,
   symbol,
   reason,
   error,
 } = {}) {
+  if (action !== "PAUSE" && action !== "RESUME") {
+    throw new TypeError("Strategy market-control action must be PAUSE or RESUME")
+  }
+  if (typeof transitionId !== "string" || !transitionId.trim() || transitionId !== transitionId.trim() ||
+      typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol) ||
+      typeof reason !== "string" || !reason.trim() || reason !== reason.trim()) {
+    throw new TypeError("Strategy market control requires a unique transition ID, canonical symbol, and reason")
+  }
+  if (error !== undefined && (action !== "PAUSE" || !(error instanceof Error))) {
+    throw new TypeError("Strategy market-control error evidence is allowed only as an Error on PAUSE")
+  }
+  const pauseData = action === "PAUSE"
+    ? mapStrategyPausedData({ symbol, reason, error }).data
+    : undefined
+  const prefix = action === "PAUSE" ? "strategy-market-paused:" : "strategy-market-resumed:"
+  return {
+    factId: prefix + transitionId,
+    factType: action === "PAUSE" ? "STRATEGY_MARKET_PAUSED" : "STRATEGY_MARKET_RESUMED",
+    data: pauseData ?? { symbol, reason },
+  }
+}
+
+export async function recordStrategyMarketControl(input = {}) {
   try {
+    const { operationalStateStore } = input
     requireStore({ operationalStateStore,
-operation: "recordStrategyMarketControl" })
-    if (action !== "PAUSE" && action !== "RESUME") {
-      throw new TypeError("Strategy market-control action must be PAUSE or RESUME")
-    }
-    if (typeof transitionId !== "string" || !transitionId.trim() || transitionId !== transitionId.trim() ||
-        typeof symbol !== "string" || !/^[A-Z0-9]{3,30}$/.test(symbol) ||
-        typeof reason !== "string" || !reason.trim() || reason !== reason.trim()) {
-      throw new TypeError("Strategy market control requires a unique transition ID, canonical symbol, and reason")
-    }
-    if (error !== undefined && (action !== "PAUSE" || !(error instanceof Error))) {
-      throw new TypeError("Strategy market-control error evidence is allowed only as an Error on PAUSE")
-    }
-    const pauseData = action === "PAUSE"
-      ? mapStrategyPausedData({ symbol, reason, error })
-      : undefined
-    if (pauseData?.ok === false) {
-      return pauseData
-    }
-    const prefix = action === "PAUSE" ? "strategy-market-paused:" : "strategy-market-resumed:"
+      operation: "recordStrategyMarketControl" })
+    const fact = createStrategyMarketControlFact(input)
     return await appendDurably({
       operationalStateStore,
       operation: "Strategy market-control",
-      fact: {
-        factId: prefix + transitionId,
-        factType: action === "PAUSE" ? "STRATEGY_MARKET_PAUSED" : "STRATEGY_MARKET_RESUMED",
-        data: pauseData?.data ?? { symbol,
-reason },
-      },
+      fact,
     })
   } catch (error) {
     return toResult({ error })

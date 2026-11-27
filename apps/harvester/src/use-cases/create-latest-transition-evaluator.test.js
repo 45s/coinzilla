@@ -286,9 +286,18 @@ test("forwards the original dust-completion failure while retaining the fail-clo
   failure.code = "RECOVERY_COMPLETION_WRITE_FAILED"
   const pauses = []
   dependencies.state.completedRecoverySellSymbols = new Set([symbol])
-  dependencies.state.completedRecoverySellOrdersBySymbol = new Map([[symbol, { clientOrderId: "completed-sell", brokerOrderId: "completed-broker-sell" }]])
+  dependencies.state.completedRecoverySellOrdersBySymbol = new Map([
+    [symbol, {
+      clientOrderId: "completed-sell",
+      brokerOrderId: "completed-broker-sell",
+    }],
+  ])
   dependencies.state.trailingBuy = new Map()
-  dependencies.pairs[symbol] = { enabled: true, keepQuantity: 1, minProfit: 0.01 }
+  dependencies.pairs[symbol] = {
+    enabled: true,
+    keepQuantity: 1,
+    minProfit: 0.01,
+  }
   dependencies.pause = async (input) => { pauses.push(input) }
   dependencies.completeRecoveryCycle = async () => ({ ok: false, errors: [failure] })
   dependencies.strategyPolicy.evaluate = () => ({
@@ -305,7 +314,10 @@ test("forwards the original dust-completion failure while retaining the fail-clo
   })
   const evaluate = createLatestTransitionEvaluator(dependencies)
 
-  const result = await evaluate({ symbol, shutdownRecoveryOnly: true })
+  const result = await evaluate({
+    symbol,
+    shutdownRecoveryOnly: true,
+  })
 
   assert.equal(result.ok, false, "A failed durable completion must remain fail-closed.")
   assert.equal(result.errors[0], failure, "The evaluator must preserve the original completion failure identity.")

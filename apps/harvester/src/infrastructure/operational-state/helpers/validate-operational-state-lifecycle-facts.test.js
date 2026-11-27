@@ -166,7 +166,11 @@ test("accepts bounded sanitized error evidence only on strategy pause facts", ()
     canonicalData: {
       symbol: "DOGEUSDT",
       reason: "RECOVERY_CYCLE_COMPLETION_FAILED",
-      error: { name: "RecoveryCompletionError", message: "completion journal failed", code: "RECOVERY_COMPLETION_WRITE_FAILED" },
+      error: {
+        name: "RecoveryCompletionError",
+        message: "completion journal failed",
+        code: "RECOVERY_COMPLETION_WRITE_FAILED",
+      },
     },
     factId: "strategy-market-paused:transition-with-error",
   }
@@ -178,6 +182,12 @@ test("accepts bounded sanitized error evidence only on strategy pause facts", ()
   }), /sanitized name\/message\/code/, "A resume fact must not carry pause failure evidence.")
   assert.throws(() => validateStrategyMarketControlFact({
     ...pause,
-    canonicalData: { ...pause.canonicalData, error: { ...pause.canonicalData.error, stack: "raw stack" } },
+    canonicalData: {
+      ...pause.canonicalData,
+      error: {
+        ...pause.canonicalData.error,
+        stack: "raw stack",
+      },
+    },
   }), /sanitized name\/message\/code/, "Unallowlisted stack data must be rejected.")
 })

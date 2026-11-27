@@ -438,10 +438,10 @@ async function persistStrategySafetyPauseFact({ callback, symbol, reason, error 
       persisted,
       errors: persisted ? [] : result?.errors ?? [new Error("Strategy safety pause fact was not durably committed")],
     }
-  } catch (error) {
+  } catch (pauseError) {
     return {
       persisted: false,
-      errors: [error],
+      errors: [pauseError],
     }
   }
 }
