@@ -16,12 +16,6 @@ export interface DemoPosition {
   readonly change: string;
 }
 
-export interface ServiceStatus {
-  readonly name: string;
-  readonly description: string;
-  readonly state: 'not-connected' | 'idle';
-}
-
 export const demoMetrics: readonly DashboardMetric[] = [
   {
     label: 'Portfolio value',
@@ -92,20 +86,3 @@ export const demoPositions: readonly DemoPosition[] = [
   },
 ];
 
-export const demoServices: readonly ServiceStatus[] = [
-  {
-    name: 'Harvester API',
-    description: 'No backend endpoint configured',
-    state: 'not-connected',
-  },
-  {
-    name: 'Trading runtime',
-    description: 'Runtime status unavailable',
-    state: 'not-connected',
-  },
-  {
-    name: 'Market data stream',
-    description: 'No event connection configured',
-    state: 'idle',
-  },
-];
