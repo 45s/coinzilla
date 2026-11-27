@@ -142,15 +142,16 @@ function createMarketDataBrokerResolver({
 function collectRuntimeStopErrors({
   result,
   providerInstanceId,
+  operation,
 }) {
-  if (result?.ok === true && result?.status === "STOPPED") {
+  if (result?.ok === true) {
     return []
   }
   if (Array.isArray(result?.errors) && result.errors.length > 0) {
     return result.errors
   }
   return [new Error(
-    `Provider account ${providerInstanceId} did not confirm STOPPED status`,
+    `Provider account ${providerInstanceId} ${operation} did not complete successfully`,
   )]
 }
 
@@ -158,7 +159,11 @@ function collectProcessLockReleaseErrors({
   result,
   providerInstanceId,
 }) {
-  if (result?.ok === true) {
+  if (
+    result?.ok === true &&
+    (result?.released === true ||
+      (result?.released === false && result?.alreadyReleased === true))
+  ) {
     return []
   }
   if (Array.isArray(result?.errors) && result.errors.length > 0) {
@@ -200,9 +205,15 @@ async function stopOneStartedAccount({
       const stopErrors = collectRuntimeStopErrors({
         result,
         providerInstanceId: entry.provider.providerInstanceId,
+        operation: "runtime stop",
       })
       if (stopErrors.length > 0) {
         return stopErrors
+      }
+      if (result.status !== "STOPPED") {
+        return [new Error(
+          `Provider account ${entry.provider.providerInstanceId} did not confirm STOPPED status`,
+        )]
       }
       entry.durableProcessStopAcknowledged =
         result?.data?.durableProcessStopAcknowledged === true
@@ -211,16 +222,21 @@ async function stopOneStartedAccount({
       return [error]
     }
   }
-  if (typeof entry.runtime.stopMarketData === "function") {
+  if (
+    !entry.marketDataStopped &&
+    typeof entry.runtime.stopMarketData === "function"
+  ) {
     try {
       const result = await entry.runtime.stopMarketData()
       const stopErrors = collectRuntimeStopErrors({
         result,
         providerInstanceId: entry.provider.providerInstanceId,
+        operation: "market-data stop",
       })
       if (stopErrors.length > 0) {
         return stopErrors
       }
+      entry.marketDataStopped = true
     } catch (error) {
       return [error]
     }
@@ -614,6 +630,7 @@ function recordProviderAccountStartResult({
       runtime: result.runtime,
       executionEnabled: true,
       runtimeStopped: false,
+      marketDataStopped: false,
       lockReleased: false,
     })
     return

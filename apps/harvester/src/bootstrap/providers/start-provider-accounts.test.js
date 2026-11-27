@@ -772,6 +772,7 @@ test("fails startup when no configured account can start", async () => {
       },
       releaseProviderLock: async () => ({
         ok: true,
+        released: true,
       }),
       appConfig: appConfigForProviderSubset([
         createProvider({ providerInstanceId: "first",
@@ -812,7 +813,10 @@ test("releases only accounts whose runtime shutdown is confirmed", async () => {
     }),
     releaseProviderLock: async (providerInstanceId) => {
       releasedLocks.push(providerInstanceId)
-      return { ok: true }
+      return {
+        ok: true,
+        released: true,
+      }
     },
     appConfig: appConfigForProviderSubset(providers),
     env: { TRADING_MODE: "testnet" },

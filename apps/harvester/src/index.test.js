@@ -1451,7 +1451,15 @@ test("closes diagnostic log transports after runtime, Journal, and EventBus shut
       close: async () => { operations.push("eventBus.close"); return { ok: true } },
     }),
     createJournalService: () => ({
-      close: async () => { operations.push("journal.close"); return { ok: true } },
+      status: { enabled: true },
+      close: async () => {
+        operations.push("journal.close")
+        return {
+          ok: true,
+          closed: true,
+          durable: true,
+        }
+      },
     }),
     start: async () => ({
       connected: false,

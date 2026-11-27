@@ -93,6 +93,13 @@ function getCleanupErrors({ result, fallbackError } = {}) {
     : [fallbackError]
 }
 
+function isProcessLockReleaseConfirmed(result) {
+  return result?.ok === true && (
+    result?.released === true ||
+    (result?.released === false && result?.alreadyReleased === true)
+  )
+}
+
 async function closeJournalService({ journalService } = {}) {
   const errors = []
   let journalClosed = !journalService
@@ -198,7 +205,7 @@ async function releaseProcessLock({
   }
   try {
     const result = await processLock.release()
-    if (result?.ok === true) {
+    if (isProcessLockReleaseConfirmed(result)) {
       return []
     }
     return getCleanupErrors({
@@ -233,7 +240,13 @@ async function closeTradingHistoryApi({ service, logger } = {}) {
     return [new Error("Trading-history API close capability is unavailable; process lock must be retained")]
   }
   try {
-    await service.close()
+    const result = await service.close()
+    if (result === false || result?.ok === false) {
+      return getCleanupErrors({
+        result,
+        fallbackError: new Error("Trading-history API close did not complete successfully"),
+      })
+    }
     return []
   } catch (error) {
     try {
@@ -434,7 +447,7 @@ async function releaseProviderProcessLocks({ locks }) {
   for (const lock of [...locks].reverse()) {
     try {
       const result = await lock.release()
-      if (result?.ok !== true) {
+      if (!isProcessLockReleaseConfirmed(result)) {
         errors.push(...getCleanupErrors({
           result,
           fallbackError: new Error("Provider account process-lock release failed"),
@@ -497,6 +510,7 @@ async function releaseProviderProcessLock({
   if (entry.released) {
     return {
       ok: true,
+      released: false,
       alreadyReleased: true,
     }
   }
@@ -509,7 +523,7 @@ async function releaseProviderProcessLock({
   }
   try {
     const result = await entry.lock.release()
-    if (result?.ok === true) {
+    if (isProcessLockReleaseConfirmed(result)) {
       entry.released = true
       entry.retained = false
     }
@@ -538,7 +552,7 @@ async function releaseAllProviderProcessLocks({
       providerInstanceId: entry.providerInstanceId,
       force: true,
     })
-    if (result?.ok !== true) {
+    if (!isProcessLockReleaseConfirmed(result)) {
       errors.push(...getCleanupErrors({
         result,
         fallbackError: new Error(`Provider account ${entry.providerInstanceId} process-lock release failed`),
