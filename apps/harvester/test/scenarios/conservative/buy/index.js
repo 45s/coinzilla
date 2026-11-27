@@ -101,7 +101,7 @@ export const scenarios = [
       "The next standing BUY is admitted only after complete fill/commission reconciliation, retained-inventory disposition, and Position/RecoveryLedger basis reset.",
     ],
     relatedRequirements: ["CON-SPEC-3.1", "CON-SPEC-3.3", "CON-SPEC-3.4", "CON-SPEC-3.5", "CON-SPEC-3.6", "CON-SPEC-3.8"],
-    relatedCriticalBehaviors: ["STRATEGY_BUY_SELL_SAFETY_GATES", "ORDER_SUBMISSION_UNKNOWN", "ORDER_IDENTITY_TRANSITIONS"],
+    relatedCriticalBehaviors: ["STRATEGY_BUY_SELL_SAFETY_GATES", "ORDER_SUBMISSION_UNKNOWN", "ORDER_IDENTITY_TRANSITIONS", "PORTFOLIO_RECOVERY_LEDGER_ALIGNMENT", "RECOVERY_SELL_ECONOMICS"],
     coverageStatus: "TEST-MAPPED",
     coverageReason: "Strategy, final submission-gate, engine, replay, and recovery-completion tests are mapped; exact-head verification is pending.",
   }),
