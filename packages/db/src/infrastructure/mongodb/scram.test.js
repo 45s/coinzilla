@@ -37,12 +37,12 @@ function createScramServer({
   serverFirst = null,
 }) {
   const vector = FIXED_SCRAM_VECTORS[`${mechanism}|${username}|${password}`]
-  assert.ok(vector, "the SCRAM test server requires an independently generated protocol vector")
   const conversationId = 7
 
   return {
     async command({ body }) {
       if (body.saslStart === 1) {
+        assert.ok(vector, "the SCRAM test server requires an independently generated protocol vector")
         return {
           ok: 1,
           conversationId,
