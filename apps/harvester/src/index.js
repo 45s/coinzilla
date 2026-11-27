@@ -228,7 +228,11 @@ function reportObservabilityCleanupErrors({ errors, logger } = {}) {
       errors,
     })
   } catch {
-    // Cleanup diagnostics must not interrupt remaining shutdown work.
+    try {
+      process.stderr.write(`Harvester observability shutdown incomplete (${errors.length} cleanup errors).\n`)
+    } catch {
+      // Cleanup diagnostics must not interrupt remaining shutdown work.
+    }
   }
 }
 
@@ -1041,33 +1045,75 @@ async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } =
 }
 
 async function flushStartupEventBus({ eventBus, logger } = {}) {
-  if (typeof eventBus?.flush !== "function") {
-    return
+  if (!eventBus) {
+    return []
+  }
+  if (typeof eventBus.flush !== "function") {
+    return [new Error("EventBus flush capability is unavailable during startup cleanup")]
   }
   try {
-    await eventBus.flush()
-  } catch (error) {
-    logger.error?.({
-      message: "EventBus flush failed during startup cleanup.",
-      error,
+    const result = await eventBus.flush()
+    if (result?.ok === true) {
+      return []
+    }
+    const errors = getCleanupErrors({
+      result,
+      fallbackError: new Error("EventBus flush did not complete successfully during startup cleanup"),
     })
+    try {
+      logger?.error?.({
+        message: "EventBus flush failed during startup cleanup.",
+        errors,
+      })
+    } catch {
+      // Startup cleanup diagnostics must not interrupt resource closure.
+    }
+    return errors
+  } catch (error) {
+    try {
+      logger?.error?.({
+        message: "EventBus flush failed during startup cleanup.",
+        error,
+      })
+    } catch {
+      // Startup cleanup diagnostics must not interrupt resource closure.
+    }
+    return [error]
   }
 }
 
 async function closeStartupTelegramNotifications({ notifications, logger } = {}) {
   if (!notifications) {
-    return
+    return []
   }
+  if (typeof notifications.close !== "function") {
+    return [new Error("Telegram notification close capability is unavailable during startup cleanup")]
+  }
+  let errors = []
   try {
-    await notifications.close()
+    const result = await notifications.close()
+    if (result === false || result?.ok === false) {
+      errors = getCleanupErrors({
+        result,
+        fallbackError: new Error("Telegram notification close did not complete successfully during startup cleanup"),
+      })
+    }
   } catch (error) {
-    logger.error?.({
-      message: "Telegram notification cleanup failed during startup failure.",
-      error,
-    })
+    errors = [error]
+  }
+  if (errors.length > 0) {
+    try {
+      logger?.error?.({
+        message: "Telegram notification cleanup failed during startup failure.",
+        errors,
+      })
+    } catch {
+      // Startup cleanup diagnostics must not interrupt resource closure.
+    }
   }
   logTelegramNotificationSummary({ notifications,
     logger })
+  return errors
 }
 
 function logStartupFailure({ error, logger } = {}) {
@@ -1090,6 +1136,7 @@ function logStartupFailure({ error, logger } = {}) {
 async function closeStartupLogger({ closeLogger, logger } = {}) {
   try {
     await closeLogger()
+    return true
   } catch (error) {
     process.exitCode = 1
     try {
@@ -1098,8 +1145,13 @@ async function closeStartupLogger({ closeLogger, logger } = {}) {
         error,
       })
     } catch {
-      // Logging cleanup failure must not hide the original startup failure.
+      try {
+        process.stderr.write("Harvester startup logger shutdown failed.\n")
+      } catch {
+        // Logging cleanup failure must not hide the original startup failure.
+      }
     }
+    return false
   }
 }
 
@@ -1111,28 +1163,57 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
     dataResult: mapHarvesterStartupFailedData({ stage: "process-startup",
       error }),
   })
-  await flushStartupEventBus({ eventBus: resources.eventBus,
-    logger })
-  await closeStartupTelegramNotifications({
+  const startupFlushErrors = await flushStartupEventBus({
+    eventBus: resources.eventBus,
+    logger,
+  })
+  const startupTelegramErrors = await closeStartupTelegramNotifications({
     notifications: resources.telegramNotifications,
     logger,
   })
-  const cleanupErrors = await closeObservability({
+  const observabilityErrors = await closeObservability({
     journalService: resources.journalService,
     eventBus: resources.eventBus,
     processLock: resources.processLock,
     orderHistoryPersistence: resources.orderHistoryPersistence,
     tradingHistoryApi: resources.tradingHistoryApi,
-    allowProcessLockRelease: !resources.runtimeStartAttempted,
+    allowProcessLockRelease: false,
+    deferProcessLockRelease: true,
     logger,
   })
+  const cleanupErrors = [
+    ...startupFlushErrors,
+    ...startupTelegramErrors,
+    ...observabilityErrors,
+  ]
   if (cleanupErrors.length > 0) {
     process.exitCode = 1
   }
   logStartupFailure({ error,
     logger })
-  await closeStartupLogger({ closeLogger,
+  const loggerClosed = await closeStartupLogger({ closeLogger,
     logger })
+  if (
+    cleanupErrors.length === 0 &&
+    !resources.runtimeStartAttempted &&
+    loggerClosed
+  ) {
+    const processLockErrors = await releaseProcessLock({
+      processLock: resources.processLock,
+      allowProcessLockRelease: true,
+      journalClosed: true,
+      eventBusClosed: true,
+      tradingHistoryApiClosed: true,
+      databaseClosed: true,
+    })
+    if (processLockErrors.length > 0) {
+      process.exitCode = 1
+      reportObservabilityCleanupErrors({
+        errors: processLockErrors,
+        logger,
+      })
+    }
+  }
   process.exitCode = 1
 }
 

@@ -85,6 +85,59 @@ const createTestAppConfig = ({ operatorControlEnabled = false, allowedUserIds = 
   return config
 }
 
+function createStartupFailureCleanupOptions({
+  calls,
+  releaseResult,
+  closeLogger,
+  logger,
+  eventBusFlushResult = { ok: true },
+}) {
+  return {
+    acquireProcessLock: async () => ({
+      ok: true,
+      release: async () => {
+        calls.push("lock-release")
+        return releaseResult
+      },
+    }),
+    createEventBus: () => ({
+      publish: () => ({ ok: true }),
+      flush: async () => eventBusFlushResult,
+      close: async () => {
+        calls.push("eventBus.close")
+        return {
+          ok: true,
+          closed: true,
+        }
+      },
+    }),
+    createJournalService: () => ({
+      status: { enabled: false },
+      ready: Promise.resolve({
+        ok: false,
+        errors: [new Error("Journal readiness failed")],
+      }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+      close: async () => {
+        calls.push("journal.close")
+        return {
+          ok: true,
+          closed: true,
+          disabled: true,
+        }
+      },
+    }),
+    start: async () => {
+      throw new Error("Runtime must not start before Journal readiness succeeds.")
+    },
+    closeLogger,
+    logger,
+  }
+}
+
 test("constructs and injects durable operational state for enabled RS while CG restart recovery is disabled", async () => {
   let storeCreated = false
   let startupInput
@@ -850,47 +903,9 @@ test("reports an ambiguous process-lock release after startup logger cleanup", a
   const previousExitCode = process.exitCode
   process.exitCode = 0
   try {
-    await main({
-      acquireProcessLock: async () => ({
-        ok: true,
-        release: async () => {
-          calls.push("lock-release")
-          return { ok: true }
-        },
-      }),
-      createEventBus: () => ({
-        publish: () => ({ ok: true }),
-        flush: async () => ({ ok: true }),
-        close: async () => {
-          calls.push("eventBus.close")
-          return {
-            ok: true,
-            closed: true,
-          }
-        },
-      }),
-      createJournalService: () => ({
-        status: { enabled: false },
-        ready: Promise.resolve({
-          ok: false,
-          errors: [new Error("Journal readiness failed")],
-        }),
-        flush: async () => ({
-          ok: true,
-          durable: true,
-        }),
-        close: async () => {
-          calls.push("journal.close")
-          return {
-            ok: true,
-            closed: true,
-            disabled: true,
-          }
-        },
-      }),
-      start: async () => {
-        throw new Error("Runtime must not start before Journal readiness succeeds.")
-      },
+    await main(createStartupFailureCleanupOptions({
+      calls,
+      releaseResult: { ok: true },
       closeLogger: async () => {
         calls.push("logger.close")
       },
@@ -899,7 +914,7 @@ test("reports an ambiguous process-lock release after startup logger cleanup", a
         debug() {},
         error: ({ message }) => diagnostics.push(message),
       },
-    })
+    }))
     assert.equal(process.exitCode, 1)
     assert.deepEqual(calls, [
       "journal.close",
@@ -977,6 +992,73 @@ test("retains the process lock when startup logger cleanup fails", async () => {
   }
 })
 
+
+test("retains the process lock when startup logger cleanup fails", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main(createStartupFailureCleanupOptions({
+      calls,
+      releaseResult: {
+        ok: true,
+        released: true,
+      },
+      closeLogger: async () => {
+        calls.push("logger.close")
+        throw new Error("Logger close failed")
+      },
+      logger: {
+        info() {},
+        debug() {},
+        error() {},
+      },
+    }))
+    assert.deepEqual(calls, [
+      "journal.close",
+      "eventBus.close",
+      "logger.close",
+    ], "The process lock must remain held when logger shutdown is not confirmed.")
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("retains the process lock when startup EventBus flush is not confirmed", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main(createStartupFailureCleanupOptions({
+      calls,
+      releaseResult: {
+        ok: true,
+        released: true,
+      },
+      eventBusFlushResult: {
+        ok: false,
+        errors: [new Error("EventBus flush failed")],
+      },
+      closeLogger: async () => {
+        calls.push("logger.close")
+      },
+      logger: {
+        info() {},
+        debug() {},
+        error() {},
+      },
+    }))
+    assert.deepEqual(calls, [
+      "journal.close",
+      "eventBus.close",
+      "logger.close",
+    ], "The process lock must remain held when startup EventBus flush is not confirmed.")
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
 
 test("writes and durably closes a JSONL session in the injected Journal directory", async () => {
   const previousExitCode = process.exitCode
