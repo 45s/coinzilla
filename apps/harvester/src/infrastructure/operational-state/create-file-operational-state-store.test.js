@@ -8,6 +8,33 @@ import test from "node:test"
 import { createFileOperationalStateStore } from "./create-file-store.js"
 
 const createDirectory = () => mkdtemp(path.join(os.tmpdir(), "harvester-Operational State Store records-"))
+function createFactSyncAcknowledgementFault({ factPath } = {}) {
+  let active = false
+  const fileSystem = {
+    ...fsPromises,
+    open: async (...parameters) => {
+      const [target, ...args] = parameters
+      const handle = await fsPromises.open(target, ...args)
+      if (active && target === factPath && args[0] === "a") {
+        const sync = handle.sync.bind(handle)
+        Object.defineProperty(handle, "sync", {
+          value: async () => {
+            await sync()
+            throw new Error("simulated lost acknowledgement after successful fact sync")
+          },
+        })
+      }
+      return handle
+    },
+  }
+  return {
+    fileSystem,
+    enable: () => {
+      active = true
+    },
+  }
+}
+
 const createStore = (...parameters) => {
   const [directory, options = {}] = parameters
   return createFileOperationalStateStore({
@@ -386,29 +413,12 @@ test("fails closed after the fact stream is synced but before its manifest check
     recursive: true,
     force: true,
   }))
-  let loseFactSyncAcknowledgement = false
   const factPath = path.join(directory, "facts.jsonl")
-  const fileSystem = {
-    ...fsPromises,
-    open: async (...parameters) => {
-      const [target, ...args] = parameters
-      const handle = await fsPromises.open(target, ...args)
-      if (loseFactSyncAcknowledgement && target === factPath && args[0] === "a") {
-        const sync = handle.sync.bind(handle)
-        Object.defineProperty(handle, "sync", {
-          value: async () => {
-            await sync()
-            throw new Error("simulated lost acknowledgement after successful fact sync")
-          },
-        })
-      }
-      return handle
-    },
-  }
-  const originalStore = createStore(directory, { fileSystem })
+  const fault = createFactSyncAcknowledgementFault({ factPath })
+  const originalStore = createStore(directory, { fileSystem: fault.fileSystem })
   const initialized = await originalStore.initialize()
   assert.equal(initialized.ok, true, "The isolated store must be initialized before fault injection.")
-  loseFactSyncAcknowledgement = true
+  fault.enable()
 
   const uncertainAppend = await originalStore.append(operatorPause())
   assert.equal(uncertainAppend.ok, false, "The append must not claim success after its fact-sync acknowledgement is lost.")
