@@ -314,6 +314,7 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
     "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001",
     "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001",
     "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001",
+    "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001",
   ], "The production catalog must preserve all expected RS scenario IDs and their stable order.")
   const runtimeScenario = catalog.find((scenario) => scenario.id === "RS-RUNTIME-SELL-SUBMISSION-001")
   assert.equal(runtimeScenario.executable, false,
@@ -348,4 +349,29 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
     "The helper-only domain mapping must not be executable in the production runtime catalogue.")
   assert.equal(catalog[0].executionStatus, "PRELIMINARY",
     "The helper-only domain mapping must retain preliminary execution status.")
+})
+
+
+test("production RS runtime fails closed before broker submission when SELL intent persistence fails", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-sell-intent-persistence-failure",
+    scenarioId: "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.submissionRejected, true,
+    "The production submitter must fail the SELL when its durable intent cannot be recorded.")
+  assert.equal(result.output.submittedOrders.length, 0,
+    "The simulated broker must not acknowledge an order whose intent was not durably recorded.")
+  assert.equal(result.output.brokerSubmissionCallCount, 0,
+    "The broker port must not be called before durable submission intent succeeds.")
+  assert.equal(result.output.stopFactAppended, true,
+    "An unresolved SELL submission must latch the run-local account STOP.")
+  assert.equal(result.output.reservedSellCycle, null,
+    "A SELL cycle must not be reserved before durable submission intent succeeds.")
+  assert.equal(result.output.accountAdmissionBlocked, true,
+    "Failed intent persistence must keep account BUY admission blocked.")
 })
