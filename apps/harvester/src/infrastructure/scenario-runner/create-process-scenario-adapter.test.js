@@ -632,6 +632,16 @@ function assertTrustedNodeRuntimeBind({ spawned }) {
     "Worker must execute the verified host Node binary from the read-only bind")
 }
 
+function filterContainsSyscallCheck({ filter, syscallNumber }) {
+  for (let offset = 0; offset < filter.length; offset += 8) {
+    if (filter.readUInt16LE(offset) === 0x15 &&
+        filter.readUInt32LE(offset + 4) === syscallNumber) {
+      return true
+    }
+  }
+  return false
+}
+
 test("Linux sandbox launcher attests the OS profile and applies cgroup, seccomp and IPC", async () => {
   const fixture = createLinuxSandboxLauncherFixture()
   const returned = fixture.launcher({
@@ -664,6 +674,35 @@ test("Linux sandbox launcher attests the OS profile and applies cgroup, seccomp 
   await new Promise((resolve) => setImmediate(resolve))
   fixture.close()
   assert.equal(fixture.cleanupCount(), 1)
+})
+
+test("sandbox seccomp permits Bubblewrap's initial execve and denies child-process creation", () => {
+  const x64Filter = buildScenarioSeccompFilter({ arch: "x64" })
+  const arm64Filter = buildScenarioSeccompFilter({ arch: "arm64" })
+  assert.equal(filterContainsSyscallCheck({
+    filter: x64Filter,
+    syscallNumber: 59,
+  }), false, "x64 seccomp must allow Bubblewrap's initial execve of the worker")
+  assert.equal(filterContainsSyscallCheck({
+    filter: arm64Filter,
+    syscallNumber: 221,
+  }), false, "arm64 seccomp must allow Bubblewrap's initial execve of the worker")
+  assert.equal(filterContainsSyscallCheck({
+    filter: x64Filter,
+    syscallNumber: 57,
+  }), true, "x64 seccomp must deny fork")
+  assert.equal(filterContainsSyscallCheck({
+    filter: x64Filter,
+    syscallNumber: 58,
+  }), true, "x64 seccomp must deny vfork")
+  assert.equal(filterContainsSyscallCheck({
+    filter: x64Filter,
+    syscallNumber: 322,
+  }), true, "x64 seccomp must deny execveat")
+  assert.equal(filterContainsSyscallCheck({
+    filter: arm64Filter,
+    syscallNumber: 281,
+  }), true, "arm64 seccomp must deny execveat")
 })
 
 test("Linux sandbox launcher rejects a mismatched isolation profile before spawning", () => {
