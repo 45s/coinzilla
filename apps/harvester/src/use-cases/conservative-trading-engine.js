@@ -2581,7 +2581,6 @@ function createConservativeEnginePublishingContext({ context } = {}) {
   } = context.dependencies
   context.publishDurableIntent = createDurableIntentPublisher({
     eventPublisher,
-    logger,
   })
   context.publishRecoveryCycleNotCompleted = createRecoveryCycleNotCompletedPublisher({
     eventPublisher,
