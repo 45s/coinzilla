@@ -1,7 +1,7 @@
 # Harvester roadmap
 
 **Scope:** current Harvester priorities only. Issue threads own task details and status; domain specifications and ADRs own behavior.
-**Last reviewed:** 2026-11-26
+**Last reviewed:** 2026-11-27
 
 > Historical delivery notes and the pre-cleanup roadmap are preserved in [the consolidated roadmap archive](../../docs/archive/roadmap-history-2026-11-26.md#harvester-roadmap). Earlier extracted history remains in [the audit roadmap history](docs/audits/ROADMAP_HISTORY.md).
 
@@ -9,6 +9,7 @@
 
 | Priority / area | Canonical issue | Current status |
 | --- | --- | --- |
+| Conservative no-new-BUY-until-cycle-complete admission | [#1895](https://github.com/45s/coinzilla/issues/1895) | Active contract migration: strategy policy and final application submission gate must block new BUYs until fully reconciled recovery completion and Position/RecoveryLedger basis reset. |
 | Conservative ownership and shutdown incident | [#1856](https://github.com/45s/coinzilla/issues/1856) | Fix merged in [PR #1858](https://github.com/45s/coinzilla/pull/1858). Issue remains open for historical exchange-identity and original-runtime evidence; do not claim the old run's final STOP/process/lock outcome without its evidence. |
 | Conservative exhaustive scenario coverage | [#1763](https://github.com/45s/coinzilla/issues/1763) | Active source-mapped scenario matrix and exact-head evidence. |
 | Recovery Seller terminal SELL acceptance | [#1842](https://github.com/45s/coinzilla/issues/1842) | Non-FILLED terminal SELL STOP fix merged in [PR #1875](https://github.com/45s/coinzilla/pull/1875). Its merge-commit coverage run exposed an uncovered missing-broker-ID guard in terminal fill reconciliation; this test-only follow-up covers absent and whitespace-only IDs without changing runtime behavior. |

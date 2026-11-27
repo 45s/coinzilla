@@ -29,6 +29,10 @@ function createDependencies({ recoverySubmissionAllowed = false } = {}) {
     hasBlockingOpenOrdersForSymbol: () => false,
     canTrade: () => false,
     getAccountSafetyBlocker: () => null,
+    getPortfolio: () => ({
+      getPosition: () => undefined,
+    }),
+    getRecoveryLedger: () => undefined,
     isMarketPriceFresh: () => true,
     getVolatilityData: () => ({ ok: false }),
     isVolatilityProtectionEnabledForSymbol: () => false,
@@ -164,6 +168,170 @@ test("blocks an ordinary SELL while Conservative shutdown permits recovery SELL 
   assert.equal(result.reason, "CONSERVATIVE_SHUTDOWN_RECOVERY_SELL_ONLY", "Expected result.reason to equal \"CONSERVATIVE_SHUTDOWN_RECOVERY_SELL_ONLY\" in \"blocks an ordinary SELL while Conservative shutdown permits recovery SELL only\".")
 })
 
+
+
+test("blocks a Conservative BUY while the Position still has active recovery inventory", () => {
+  const dependencies = createDependencies()
+  dependencies.state.shutdownBuyGate = false
+  dependencies.canTrade = () => true
+  dependencies.isStopping = () => false
+  dependencies.getPortfolio = () => ({
+    getPosition: () => ({
+      positionId: "doge-conservative-position",
+      quantity: { amount: "99" },
+      spent: { amount: "10" },
+    }),
+  })
+  dependencies.getRecoveryLedger = () => ({
+    buyCost: "10",
+    netSellProceeds: "0",
+  })
+
+  const result = createSubmissionGate(dependencies)({
+    order: createOrder({ side: "BUY" }),
+    purpose: "STANDING_BUY",
+  })
+
+  assert.deepEqual(result, {
+    allowed: false,
+    reason: "CONSERVATIVE_RECOVERY_CYCLE_ACTIVE",
+    details: {
+      symbol: "DOGEUSDT",
+      positionId: "doge-conservative-position",
+      activeQuantity: "99",
+      positionSpent: "10",
+      netSellProceeds: "0",
+    },
+  }, "The final application gate must block stale BUY intents while recovery inventory remains active.")
+})
+
+test("blocks a Conservative BUY after SELL proceeds recover cost but before cycle completion resets the Position", () => {
+  const dependencies = createDependencies()
+  dependencies.state.shutdownBuyGate = false
+  dependencies.canTrade = () => true
+  dependencies.isStopping = () => false
+  dependencies.getPortfolio = () => ({
+    getPosition: () => ({
+      positionId: "doge-conservative-position",
+      quantity: { amount: "0" },
+      spent: { amount: "10" },
+    }),
+  })
+  dependencies.getRecoveryLedger = () => ({
+    buyCost: "10",
+    netSellProceeds: "10.02",
+  })
+
+  const result = createSubmissionGate(dependencies)({
+    order: createOrder({ side: "BUY" }),
+    purpose: "STANDING_BUY",
+  })
+
+  assert.equal(result.allowed, false, "Profit realization alone must not release BUY admission before cycle completion.")
+  assert.equal(result.reason, "CONSERVATIVE_RECOVERY_CYCLE_ACTIVE")
+})
+
+test("allows a Conservative BUY only after recovery basis and cycle totals have been reset", () => {
+  const dependencies = createDependencies()
+  dependencies.state.shutdownBuyGate = false
+  dependencies.canTrade = () => true
+  dependencies.isStopping = () => false
+  dependencies.getPortfolio = () => ({
+    getPosition: () => ({
+      positionId: "doge-conservative-position",
+      quantity: { amount: "0" },
+      spent: { amount: "0" },
+    }),
+  })
+  dependencies.getRecoveryLedger = () => ({
+    buyCost: "0",
+    netSellProceeds: "0",
+  })
+
+  const result = createSubmissionGate(dependencies)({
+    order: createOrder({ side: "BUY" }),
+    purpose: "STANDING_BUY",
+  })
+
+  assert.deepEqual(result, { allowed: true }, "A fully reset Position and RecoveryLedger make the next cycle eligible.")
+})
+
+
+test("blocks a Conservative BUY while an owned recovery SELL remains active after accounting totals reset", () => {
+  const dependencies = createDependencies()
+  dependencies.state.shutdownBuyGate = false
+  dependencies.canTrade = () => true
+  dependencies.isStopping = () => false
+  dependencies.state.registry = {
+    getActiveOrders: () => [{
+      clientOrderId: "doge-recovery-sell",
+      brokerOrderId: "broker-doge-recovery-sell",
+      market: { id: "binance:DOGEUSDT" },
+      side: "SELL",
+      status: "OPEN",
+    }],
+    getOwnership: () => ({
+      strategyId: StrategyId.COIN_GRABBER,
+      purpose: "RECOVERY_SELL",
+    }),
+  }
+  dependencies.getPortfolio = () => ({
+    getPosition: () => ({
+      quantity: { amount: "0" },
+      spent: { amount: "0" },
+    }),
+  })
+  dependencies.getRecoveryLedger = () => ({
+    buyCost: "0",
+    netSellProceeds: "0",
+  })
+
+  const result = createSubmissionGate(dependencies)({
+    order: {
+      ...createOrder({ side: "BUY" }),
+      market: {
+        id: "binance:DOGEUSDT",
+        symbol: "DOGEUSDT",
+      },
+    },
+    purpose: "STANDING_BUY",
+  })
+
+  assert.deepEqual(result, {
+    allowed: false,
+    reason: "CONSERVATIVE_RECOVERY_CYCLE_ACTIVE",
+    details: {
+      symbol: "DOGEUSDT",
+      activeRecoverySellClientOrderId: "doge-recovery-sell",
+      activeRecoverySellStatus: "OPEN",
+    },
+  }, "An unresolved owned recovery SELL must keep BUY admission closed even if an inconsistent accounting snapshot looks reset.")
+})
+
+test("does not apply the Conservative recovery BUY gate to Recovery Seller orders", () => {
+  const dependencies = createDependencies()
+  dependencies.state.shutdownBuyGate = false
+  dependencies.canTrade = () => true
+  dependencies.isStopping = () => false
+  dependencies.getPortfolio = () => ({
+    getPosition: () => ({
+      quantity: { amount: "99" },
+      spent: { amount: "10" },
+    }),
+  })
+  dependencies.getRecoveryLedger = () => ({
+    buyCost: "10",
+    netSellProceeds: "0",
+  })
+
+  const result = createSubmissionGate(dependencies)({
+    order: createOrder({ side: "BUY" }),
+    purpose: "RECOVERY_BUY",
+    ownership: { strategyId: StrategyId.RECOVERY_SELLER },
+  })
+
+  assert.deepEqual(result, { allowed: true }, "The Conservative Position gate must not block the independent Recovery Seller strategy.")
+})
 
 const CONSERVATIVE_MARKET_ID = "binance:spot:DOGEUSDT"
 const ACTIVE_RECOVERY_SELL_STATUSES = new Set(["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"])

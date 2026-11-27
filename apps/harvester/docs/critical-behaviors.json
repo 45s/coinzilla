@@ -72,11 +72,6 @@
           "kind": "failure"
         },
         {
-          "path": "test/replays/doge-zro-conservative-replay.test.js",
-          "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
-          "kind": "integration"
-        },
-        {
           "path": "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.test.js",
           "name": "requires complete Position and cycle identity for an RS-owned durable SELL intent",
           "kind": "normal"
@@ -120,6 +115,16 @@
           "path": "src/use-cases/execute-strategy-decision.test.js",
           "name": "does not submit a sibling BUY when the recovery SELL intent is not durable",
           "kind": "failure"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "submits only the recovery SELL while the recovery cycle remains active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/use-cases/conservative-trading-engine.test.js",
+          "name": "a pre-existing partially filled BUY is reconciled during recovery SELL acknowledgement and replaces SELL from latest fills",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
@@ -299,18 +304,8 @@
           "kind": "integration"
         },
         {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
           "kind": "integration"
         }
       ],
@@ -353,7 +348,7 @@
         },
         {
           "path": "test/replays/doge-zro-conservative-replay.test.js",
-          "name": "accounts streamed partial BUY executions before advancing the completed-BUY lifecycle",
+          "name": "accounts streamed partial BUY executions before recovery SELL planning",
           "kind": "integration"
         },
         {
@@ -367,18 +362,8 @@
           "kind": "integration"
         },
         {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
           "kind": "integration"
         }
       ],
@@ -411,11 +396,6 @@
           "path": "src/use-cases/conservative-trading-engine.test.js",
           "name": "does not submit the next standing BUY when recovery SELL submission fails",
           "kind": "failure"
-        },
-        {
-          "path": "test/replays/doge-zro-conservative-replay.test.js",
-          "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
-          "kind": "integration"
         },
         {
           "path": "src/domain/strategies/conservative/state-predicates.test.js",
@@ -471,11 +451,112 @@
           "path": "src/use-cases/conservative-submission-durability.integration.test.js",
           "name": "keeps the active recovery SELL and pauses safely when a later strategy evaluation fails",
           "kind": "failure"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "plans only a recovery SELL while a filled Position remains active",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "blocks the next BUY while an acknowledged recovery SELL remains open",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "blocks the next BUY while the recovery SELL acknowledgement is pending or unknown",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a Conservative BUY while the Position still has active recovery inventory",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a Conservative BUY after SELL proceeds recover cost but before cycle completion resets the Position",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "allows a Conservative BUY only after recovery basis and cycle totals have been reset",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "does not apply the Conservative recovery BUY gate to Recovery Seller orders",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "does not submit a next standing BUY while the Conservative recovery cycle remains active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "submits only the recovery SELL while the recovery cycle remains active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "accounts streamed partial BUY executions before recovery SELL planning",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "completes the recovery cycle only after the SELL fill report is received and reconciled",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "a fully filled BUY keeps subsequent evaluations in recovery-only mode while its SELL remains open",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "completes the full Conservative lifecycle with the supported zero keepQuantity",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "completes the full Conservative lifecycle with the configured retained quantity",
+          "kind": "integration"
+        },
+        {
+          "path": "test/use-cases/conservative-trading-engine.test.js",
+          "name": "a pre-existing partially filled BUY is reconciled during recovery SELL acknowledgement and replaces SELL from latest fills",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a Conservative BUY while an owned recovery SELL remains active after accounting totals reset",
+          "kind": "failure"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "blocks subsequent archived ZROUSDT BUYs while the first recovery cycle is active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "blocks subsequent archived DOGEUSDT BUYs while the first recovery cycle is active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
+          "name": "blocks subsequent archived ADAUSDT BUYs while the first recovery cycle is active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
       "invariants": [
-        "While recovery capital or an active Position exists, prohibit new/trailing BUY; recovery SELL must be submitted and reconciled first.",
+        "No new Conservative BUY may be submitted until full recovery-cycle reconciliation, retained-inventory allocation and Position/RecoveryLedger basis reset; SELL acknowledgement or realized proceeds alone do not release admission.",
+        "A BUY already acknowledged before the recovery cycle became active remains under its canonical lifecycle; late fills are reconciled exactly once and recovery SELL coverage is recalculated, without creating a replacement BUY.",
         "An unresolved order or failed recovery SELL path keeps the market paused and blocks subsequent BUY submission.",
         "At most one active Conservative recovery SELL may reserve a Position; PENDING, OPEN, PARTIALLY_FILLED and UNKNOWN orders hold that reservation until a canonical terminal transition."
       ]
@@ -500,7 +581,7 @@
         },
         {
           "path": "test/replays/doge-zro-conservative-replay.test.js",
-          "name": "combines four completed BUY fills into one profitable recovery SELL and retains the configured inventory",
+          "name": "completes the recovery cycle only after the SELL fill report is received and reconciled",
           "kind": "integration"
         },
         {
@@ -514,18 +595,8 @@
           "kind": "normal"
         },
         {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
           "kind": "integration"
         }
       ],
@@ -781,21 +852,6 @@
           "kind": "failure"
         },
         {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ZROUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived DOGEUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
-          "path": "test/replays/2026-11-22-conservative-recovery-runtime-replay.test.js",
-          "name": "replays archived ADAUSDT fills and completes profitable exchange-constrained residual inventory",
-          "kind": "integration"
-        },
-        {
           "path": "src/use-cases/create-conservative-shutdown-safety.test.js",
           "name": "drains in-flight transitions before clearing deferred evaluations for shutdown",
           "kind": "failure"
@@ -824,6 +880,11 @@
           "path": "src/bootstrap/create-harvester-stop.test.js",
           "name": "bounds pending durable PROCESS_STOPPED and prevents overlapping retries",
           "kind": "failure"
+        },
+        {
+          "path": "test/replays/ada-conservative-recovery-replay.test.js",
+          "name": "replays ADA below-target accounting from a late fill on one pre-existing BUY and preserves fail-closed shutdown",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
