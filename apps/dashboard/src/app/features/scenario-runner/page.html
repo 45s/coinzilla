@@ -1,7 +1,7 @@
 <section class="runner">
   <header>
     <h1>Strategy Scenario Runner</h1>
-    <p>Scenario execution is simulation-only. Exact replay requires a known matching source revision; run history is currently in-memory. Production OS sandbox verification remains a separate safety gate.</p>
+    <p>Scenarios run in a separate Harvester worker with simulated broker/order dependencies. Windows uses Node API guards, not OS-level isolation. Exact replay remains blocked until trusted build-artifact verification is available.</p>
   </header>
   @if (error()) {
     <p class="error" role="alert">{{ error() }}</p>
