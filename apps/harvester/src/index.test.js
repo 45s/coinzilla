@@ -839,24 +839,34 @@ test("closes observability after publishing startup failure", async () => {
 
 test("reports an ambiguous process-lock release during startup cleanup", async () => {
   const diagnostics = []
+  const calls = []
   const previousExitCode = process.exitCode
   process.exitCode = 0
   try {
     await main({
       acquireProcessLock: async () => ({
         ok: true,
-        release: async () => ({ ok: true }),
+        release: async () => {
+          calls.push("lock-release")
+          return { ok: true }
+        },
       }),
       createEventBus: () => ({
         publish: () => ({ ok: true }),
-        close: async () => ({
-          ok: true,
-          closed: true,
-        }),
+        flush: async () => ({ ok: true }),
+        close: async () => ({ ok: true, closed: true }),
       }),
-      createJournalService: disabledJournalService,
+      createJournalService: () => ({
+        status: { enabled: false },
+        ready: Promise.resolve({
+          ok: false,
+          errors: [new Error("Journal readiness failed")],
+        }),
+        flush: async () => ({ ok: true, durable: true }),
+        close: async () => ({ ok: true, closed: true, disabled: true }),
+      }),
       start: async () => {
-        throw new Error("startup failed")
+        throw new Error("Runtime must not start before Journal readiness succeeds.")
       },
       logger: {
         info() {},
@@ -865,6 +875,7 @@ test("reports an ambiguous process-lock release during startup cleanup", async (
       },
     })
     assert.equal(process.exitCode, 1)
+    assert.deepEqual(calls, ["lock-release"])
     assert.ok(
       diagnostics.includes("observability shutdown incomplete"),
       "An ambiguous lock-release result must be reported as incomplete cleanup.",
@@ -873,6 +884,7 @@ test("reports an ambiguous process-lock release during startup cleanup", async (
     process.exitCode = previousExitCode
   }
 })
+
 
 test("writes and durably closes a JSONL session in the injected Journal directory", async () => {
   const previousExitCode = process.exitCode
