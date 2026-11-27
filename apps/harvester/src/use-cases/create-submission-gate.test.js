@@ -734,6 +734,7 @@ test("Recovery Seller STOP does not block Conservative orders", () => {
   const dependencies = createVolatilityProtectedDependencies()
   dependencies.isRecoverySellerBuyAdmissionBlocked = () => true
   dependencies.isRecoverySellerSellAdmissionBlocked = () => false
+  dependencies.isVolatilityProtectionEnabledForSymbol = () => false
   const result = createSubmissionGate(dependencies)({
     order: createOrder({ side: "BUY" }),
     purpose: "STANDING_BUY",

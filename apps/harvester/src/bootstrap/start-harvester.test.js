@@ -1976,14 +1976,8 @@ async function createPersistedAccountStopForRestart({ directory, store } = {}) {
   })
   assert.equal(processStarted.ok, true, processStarted.errors?.[0]?.message)
 
-  const workflowResult = await createRecoverySellerStopWorkflow({
-    operationalStateStore: store,
-  })
-  assert.equal(workflowResult.ok, true, "The startup fixture must create a Recovery Seller STOP workflow.")
-  const latched = await workflowResult.data.latch({
-    explanation: "Integration test: restore an unresolved account-scoped STOP before startup",
-  })
-  assert.equal(latched.ok, true, "The integration fixture must durably persist the account-scoped STOP.")
+  await seedAccountBlocker({ store })
+
   const stopped = await recordProcessStopped({
     operationalStateStore: store,
     reason: "TEST_CLEAN_STOP_WITH_ACCOUNT_BLOCKER",
@@ -1997,15 +1991,21 @@ async function createPersistedAccountStopForRestart({ directory, store } = {}) {
   })
   const restartRead = await restartStore.readAll()
   assert.equal(restartRead.ok, true, "The simulated restart must verify the same ledger under a new process session.")
+  const persistedAccountBlocker = restartRead.data.records.find((record) =>
+    record.factType === "SAFETY_BLOCKER_RAISED" &&
+    record.data?.scope === "ACCOUNT" &&
+    record.data?.reason === "ACCOUNT_RECONCILIATION_REQUIRED"
+  )
+  assert.ok(persistedAccountBlocker,
+    "The restart fixture must contain a durable generic ACCOUNT blocker.")
   const restoredWorkflow = await createRecoverySellerStopWorkflow({
     operationalStateStore: restartStore,
   })
   assert.equal(restoredWorkflow.ok, true, restoredWorkflow.errors?.[0]?.message)
-  assert.equal(
-    restoredWorkflow.data.isAccountAdmissionBlocked(),
-    true,
-    "A fresh process-session workflow must restore the unresolved ACCOUNT blocker from the durable ledger.",
-  )
+  assert.equal(restoredWorkflow.data.isBuyAdmissionBlocked(), false,
+    "A generic ACCOUNT blocker must not be restored as an RS investment STOP.")
+  assert.equal(restoredWorkflow.data.isSellAdmissionBlocked(), false,
+    "A generic ACCOUNT blocker must not be converted into the RS persistence-pending gate.")
   return restartStore
 }
 
