@@ -35,3 +35,7 @@ The command stamps the authenticated OS-account identity and action metadata, ap
 Successful durable resolution clears the durable STOP state but keeps both in-process BUY and SELL admission gates closed. The command reports `readiness: BLOCKED` and `requiresControlledRestart: true`. It does not resume trading.
 
 A separate controlled restart must perform fresh authoritative reconciliation and PREFLIGHT before execution. The Telegram operator facade remains read-only for STOP status.
+
+## Verification
+
+The implementation branch is synchronized with the latest `develop` before exact-head CI. This is an offline resolution workflow only; no LIVE/TESTNET or operational restart acceptance is implied.
