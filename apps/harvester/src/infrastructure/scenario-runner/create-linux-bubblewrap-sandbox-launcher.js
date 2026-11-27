@@ -152,7 +152,7 @@ function resolveDelegatedCgroupParent({ readFileSync, realpathSync, accessSync }
     throw new Error("Invalid current cgroup path")
   }
   const parentPath = realpathSync(resolve(CGROUP_ROOT, relativePath))
-  if (parentPath !== CGROUP_ROOT && !parentPath.startsWith(CGROUP_ROOT + "/")) {
+  if (parentPath !== CGROUP_ROOT && !parentPath.startsWith(`${CGROUP_ROOT}/`)) {
     throw new Error("Current cgroup path escapes the cgroup v2 root")
   }
   const controllers = readFileSync(join(parentPath, "cgroup.controllers"), "utf8")
@@ -164,7 +164,7 @@ function resolveDelegatedCgroupParent({ readFileSync, realpathSync, accessSync }
     .map((controller) => controller.replace(/^\+/, ""))
   for (const controller of ["memory", "cpu", "pids"]) {
     if (!controllers.includes(controller) || !enabled.includes(controller)) {
-      throw new Error("Scenario cgroup controller is not delegated and enabled: " + controller)
+      throw new Error(`Scenario cgroup controller is not delegated and enabled: ${controller}`)
     }
   }
   accessSync(parentPath, fsConstants.W_OK)
@@ -175,7 +175,7 @@ function createCgroupSettings({ memoryLimitBytes }) {
   return [
     ["memory.max", String(memoryLimitBytes)],
     ["memory.swap.max", "0"],
-    ["cpu.max", CPU_QUOTA_MICROSECONDS + " " + CPU_PERIOD_MICROSECONDS],
+    ["cpu.max", `${CPU_QUOTA_MICROSECONDS} ${CPU_PERIOD_MICROSECONDS}`],
     ["pids.max", String(SANDBOX_PROCESS_LIMIT)],
     ["memory.oom.group", "1"],
   ]
@@ -184,10 +184,10 @@ function createCgroupSettings({ memoryLimitBytes }) {
 function writeAndVerifyCgroupSettings({ path, settings, writeFileSync, readFileSync }) {
   for (const [name, value] of settings) {
     const filePath = join(path, name)
-    writeFileSync(filePath, value + "\n", "utf8")
+    writeFileSync(filePath, `${value}\n`, "utf8")
     const actual = readFileSync(filePath, "utf8").trim()
     if (actual !== value) {
-      throw new Error("Scenario cgroup did not apply required setting: " + name)
+      throw new Error(`Scenario cgroup did not apply required setting: ${name}`)
     }
   }
 }
@@ -197,11 +197,15 @@ function cleanupScenarioCgroup({ path, existsSync, writeFileSync, rmdirSync }) {
   if (existsSync(killPath)) {
     try {
       writeFileSync(killPath, "1\n", "utf8")
-    } catch {}
+    } catch {
+      // Best-effort kill; the cgroup directory removal below is still attempted.
+    }
   }
   try {
     rmdirSync(path)
-  } catch {}
+  } catch {
+    // The kernel may still be reaping a process from the cgroup.
+  }
 }
 
 function createScenarioCgroup({
@@ -214,7 +218,7 @@ function createScenarioCgroup({
   rmdirSync,
   randomUUID,
 }) {
-  const path = join(parentPath, "scenario-runner-" + process.pid + "-" + randomUUID())
+  const path = join(parentPath, `scenario-runner-${process.pid}-${randomUUID()}`)
   mkdirSync(path, { mode: 0o755 })
   try {
     writeAndVerifyCgroupSettings({
@@ -320,7 +324,7 @@ function verifySandboxCapabilities({
   execFileSync,
 }) {
   execFileSync(prlimit.path, [
-    "--as=8589934592:8589934592",
+    String.raw`--as=${MEMORY_ADDRESS_SPACE_LIMIT_BYTES}:${MEMORY_ADDRESS_SPACE_LIMIT_BYTES}`,
     "--cpu=30:30",
     "--",
     bwrap.path,
@@ -568,6 +572,73 @@ function createCgroupExecArguments({ cgroupProcsPath, prlimitPath, resourceArgum
   ]
 }
 
+function createSandboxResourceArguments({
+  bwrap,
+  workerPath,
+  repositoryRoot,
+  nodeExecutable,
+  existsSync,
+  realpathSync,
+}) {
+  const addressSpaceArgument = \`--as=\${MEMORY_ADDRESS_SPACE_LIMIT_BYTES}:\${MEMORY_ADDRESS_SPACE_LIMIT_BYTES}\`
+  return [
+    addressSpaceArgument,
+    "--cpu=30:30",
+    "--",
+    bwrap.path,
+    ...createBubblewrapArguments({
+      workerPath,
+      repositoryRoot,
+      nodeExecutable,
+      existsSync,
+      realpathSync,
+    }),
+  ]
+}
+
+function spawnCgroupSandboxProcess({
+  spawn,
+  shell,
+  prlimit,
+  cgroupController,
+  workerPath,
+  stdio,
+  bwrap,
+  repositoryRoot,
+  nodeExecutable,
+  existsSync,
+  realpathSync,
+}) {
+  const cgroup = cgroupController.create()
+  const resourceArguments = createSandboxResourceArguments({
+    bwrap,
+    workerPath,
+    repositoryRoot,
+    nodeExecutable,
+    existsSync,
+    realpathSync,
+  })
+  let child
+  try {
+    child = spawn(shell.path, createCgroupExecArguments({
+      cgroupProcsPath: cgroup.cgroupProcsPath,
+      prlimitPath: prlimit.path,
+      resourceArguments,
+    }), createSandboxSpawnOptions({ stdio }))
+    child.once("close", cgroup.cleanup)
+    child.once("error", cgroup.cleanup)
+    writeSeccompFilter({
+      child,
+      filter: buildScenarioSeccompFilter(),
+    })
+    return child
+  } catch (error) {
+    child?.kill("SIGKILL")
+    cgroup.cleanup()
+    throw error
+  }
+}
+
 function createLinuxLauncher({
   bwrap,
   prlimit,
@@ -586,39 +657,19 @@ function createLinuxLauncher({
       profile: sandboxProfile,
       maxOutputBytes,
     })
-    const cgroup = cgroupController.create()
-    const resourceArguments = [
-      "--as=8589934592:8589934592",
-      "--cpu=30:30",
-      "--",
-      bwrap.path,
-      ...createBubblewrapArguments({
-        workerPath,
-        repositoryRoot,
-        nodeExecutable,
-        existsSync,
-        realpathSync,
-      }),
-    ]
-    let child
-    try {
-      child = spawn(shell.path, createCgroupExecArguments({
-        cgroupProcsPath: cgroup.cgroupProcsPath,
-        prlimitPath: prlimit.path,
-        resourceArguments,
-      }), createSandboxSpawnOptions({ stdio }))
-      child.once("close", cgroup.cleanup)
-      child.once("error", cgroup.cleanup)
-      writeSeccompFilter({
-        child,
-        filter: buildScenarioSeccompFilter(),
-      })
-      return child
-    } catch (error) {
-      child?.kill("SIGKILL")
-      cgroup.cleanup()
-      throw error
-    }
+    return spawnCgroupSandboxProcess({
+      spawn,
+      shell,
+      prlimit,
+      cgroupController,
+      workerPath,
+      stdio,
+      bwrap,
+      repositoryRoot,
+      nodeExecutable,
+      existsSync,
+      realpathSync,
+    })
   }
   launcher.isolationAttestation = Object.freeze({
     level: "os",
@@ -704,6 +755,31 @@ function verifyLinuxSandboxRuntime({ bwrap, prlimit, execFileSync, arch, cgroupC
   syscallNumbers({ arch })
 }
 
+function createVerifiedCgroupController({
+  cgroupController,
+  readFileSync,
+  realpathSync,
+  accessSync,
+  mkdirSync,
+  writeFileSync,
+  existsSync,
+  rmdirSync,
+  randomUUID,
+}) {
+  const controller = cgroupController ?? createLinuxCgroupController({
+    readFileSync,
+    realpathSync,
+    accessSync,
+    mkdirSync,
+    writeFileSync,
+    existsSync,
+    rmdirSync,
+    randomUUID,
+  })
+  controller.verify()
+  return controller
+}
+
 function createLinuxBubblewrapSandboxLauncherInternal({
   platform,
   arch,
@@ -744,7 +820,8 @@ function createLinuxBubblewrapSandboxLauncherInternal({
     existsSync,
     verifyExecutable: verify,
   })
-  const resolvedCgroupController = cgroupController ?? createLinuxCgroupController({
+  const verifiedCgroupController = createVerifiedCgroupController({
+    cgroupController,
     readFileSync,
     realpathSync,
     accessSync,
@@ -759,7 +836,7 @@ function createLinuxBubblewrapSandboxLauncherInternal({
     prlimit,
     execFileSync,
     arch,
-    cgroupController: resolvedCgroupController,
+    cgroupController: verifiedCgroupController,
   })
   const resolvedRepositoryRoot = realpathSync(resolve(repositoryRoot))
   const nodeRuntime = resolveTrustedNodeRuntime({
@@ -771,7 +848,7 @@ function createLinuxBubblewrapSandboxLauncherInternal({
     bwrap,
     prlimit,
     shell,
-    cgroupController: resolvedCgroupController,
+    cgroupController: verifiedCgroupController,
     repositoryRoot: resolvedRepositoryRoot,
     nodeExecutable: nodeRuntime.path,
     nodeRuntimeSha256: nodeRuntime.sha256,
