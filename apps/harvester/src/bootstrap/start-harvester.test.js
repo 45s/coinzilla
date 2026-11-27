@@ -303,7 +303,9 @@ test("keeps startup incomplete and the user-data gate closed until deferred mark
       deferMarketDataStart: true,
       evaluateRecoverySellerTransition: async () => ({
         ok: true,
-        data: { skipped: true },
+        data: {
+            skipped: true,
+          },
       }),
       logger: { info() {},
 error() {} },
@@ -2239,7 +2241,10 @@ async function startHarvesterAfterPersistedRecoverySellerStop({
       error() {},
     },
   })
-  return { restartStore, result }
+  return {
+    restartStore,
+    result,
+  }
 }
 
 test("restores a persisted RS STOP and keeps a restarted runtime observation-only", async () => {
@@ -2276,7 +2281,11 @@ test("restores a persisted RS STOP and keeps a restarted runtime observation-onl
       "The durable STOP semantics remain investment-only; startup's separate observation-only gate prevents implicit resume.")
     await result.processMarketPrice({
       symbol: "LINEAUSDT",
-      priceEvent: { symbol: "LINEAUSDT", price: "100", timestamp: 2 },
+      priceEvent: {
+        symbol: "LINEAUSDT",
+        price: "100",
+        timestamp: 2,
+      },
     })
     assert.equal(strategyEvaluationCount, 0,
       "An observation-only restart must prevent strategy evaluation until controlled restart acceptance.")
@@ -2284,6 +2293,9 @@ test("restores a persisted RS STOP and keeps a restarted runtime observation-onl
       "An observation-only restart must not submit broker orders.")
     await result.stop()
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
