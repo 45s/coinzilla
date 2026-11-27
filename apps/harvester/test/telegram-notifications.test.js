@@ -289,6 +289,7 @@ test("sends allowlisted Harvester lifecycle, pause, fill, and recovery notificat
         stop: async () => ({
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }),
       };
     },
@@ -342,6 +343,7 @@ test("keeps Harvester running when optional Telegram setup fails", async () => {
         stop: async () => ({
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }),
       }
     },
@@ -410,6 +412,7 @@ test("Telegram delivery failure is logged but does not fail runtime shutdown", a
         stop: async () => ({
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }),
       }),
       registerSignalHandler: (...signalHandlerArguments) => {
@@ -471,6 +474,7 @@ test("applies custom Telegram event overrides and market filters while preservin
         stop: async () => ({
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }),
       };
     },
@@ -583,6 +587,7 @@ TELEGRAM_CHAT_ID: "test-chat" },
         stop: async () => ({
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }),
       };
     },
@@ -628,6 +633,7 @@ TELEGRAM_CHAT_ID: "test-chat" },
         stop: async () => ({
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }),
       };
     },
@@ -717,6 +723,7 @@ async function runTelegramProfileScenario({ scenario }) {
         stop: async () => ({
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }),
       }
     },

@@ -469,6 +469,7 @@ test("publishes process started and stopped events for Binance trading startup",
       stop: async () => ({
         ok: true,
         status: "STOPPED",
+        data: { durableProcessStopAcknowledged: true },
       }),
     }),
     registerSignalHandler: (...signalHandlerArguments) => {
@@ -606,6 +607,7 @@ test("publishes stopped before closing Journal, then closes EventBus", async () 
         return {
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }
       },
     }),
@@ -664,6 +666,7 @@ test("continues EventBus cleanup when Journal close fails", async () => {
         return {
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }
       },
       }),
@@ -720,6 +723,7 @@ test("reports EventBus timeout and preserves Journal close result", async () => 
         return {
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }
       },
       }),
@@ -767,6 +771,7 @@ test("coalesces repeated shutdown signals into one cleanup operation", async () 
         return {
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }
       },
     }),
@@ -843,6 +848,7 @@ test("writes and durably closes a JSONL session in the injected Journal director
         stop: async () => ({
         ok: true,
         status: "STOPPED",
+        data: { durableProcessStopAcknowledged: true },
       }),
       }),
       registerSignalHandler: (...signalHandlerArguments) => {
@@ -1118,6 +1124,7 @@ test("releases the trading process lock only after runtime and Journal shutdown"
           return {
             ok: true,
             status: "STOPPED",
+            data: { durableProcessStopAcknowledged: true },
           }
         },
       }),
@@ -1372,6 +1379,7 @@ test("closes diagnostic log transports after runtime, Journal, and EventBus shut
         return {
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }
       },
     }),
@@ -1456,6 +1464,7 @@ const captureProcessProvenanceScenario = async () => {
         stop: async () => ({
         ok: true,
         status: "STOPPED",
+        data: { durableProcessStopAcknowledged: true },
       }),
       }
     },
@@ -1533,6 +1542,7 @@ test("preserves terminal Journal write-failure classification at the Harvester c
         stop: async () => ({
         ok: true,
         status: "STOPPED",
+        data: { durableProcessStopAcknowledged: true },
       }),
       }
     },
@@ -1656,6 +1666,7 @@ test("requires Journal readiness and publishes process provenance before trading
         stop: async () => ({
         ok: true,
         status: "STOPPED",
+        data: { durableProcessStopAcknowledged: true },
       }),
       }
     },

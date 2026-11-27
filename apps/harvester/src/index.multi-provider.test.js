@@ -133,6 +133,7 @@ function createMainProviderAccountStarter({
         return {
           ok: true,
           status: "STOPPED",
+          data: { durableProcessStopAcknowledged: true },
         }
       },
     }
