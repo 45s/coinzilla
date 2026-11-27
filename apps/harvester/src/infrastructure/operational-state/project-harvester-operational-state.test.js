@@ -206,6 +206,160 @@ test("retains an unresolved account-scoped blocker as global evidence", () => {
   assert.equal(result.data.stickySafetyBlockers[0].symbol, null)
 })
 
+test("requires structured operator action for user-data ACCOUNT blocker resolution", () => {
+  const raisedBlocker = {
+    blockerId,
+    producer: "USER_DATA_EVENT_HANDLER",
+    scope: "ACCOUNT",
+    symbol: null,
+    reason: "ACCOUNTING_INTEGRITY_FAILURE",
+    evidenceDigest: blockerDigest,
+  }
+  const resolutions = [
+    {
+      blockerId,
+      resolvedBy: "reconciliation:legacy-account-audit",
+      resolution: "AUTHORITATIVE_RECONCILIATION",
+      evidenceDigest: "c".repeat(64),
+    },
+    {
+      blockerId,
+      resolvedBy: "operator:legacy-account-action",
+      resolution: "OPERATOR_ACTION",
+      evidenceDigest: "c".repeat(64),
+    },
+  ]
+  for (const resolution of resolutions) {
+    const result = projectHarvesterOperationalState({
+      records: [
+        record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+        baseline(),
+        started(),
+        ...preflightFacts(),
+        record(5, "SAFETY_BLOCKER_RAISED", raisedBlocker, `safety-blocker-raised:${blockerId}`),
+        record(6, "SAFETY_BLOCKER_RESOLVED", resolution, `safety-blocker-resolved:${blockerId}`),
+      ],
+    })
+    assert.equal(result.ok, false, "An account blocker cannot be cleared through generic or legacy resolution facts.")
+  }
+})
+
+test("keeps Recovery Seller STOP exclusive to its dedicated legacy operator action", () => {
+  const raisedBlocker = {
+    blockerId,
+    producer: "RECOVERY_SELLER_STOP_WORKFLOW",
+    scope: "ACCOUNT",
+    symbol: null,
+    reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    evidenceDigest: blockerDigest,
+  }
+  const legacyResolution = {
+    blockerId,
+    resolvedBy: "operator:operator-7:rs-stop-action-001",
+    resolution: "OPERATOR_ACTION",
+    evidenceDigest: "c".repeat(64),
+  }
+  const structuredResolution = {
+    ...legacyResolution,
+    operatorId: "operator-7",
+    operatorAuthMethod: "OS_ACCOUNT",
+    actionId: "rs-stop-action-001",
+    resolutionReason: "Attempted account-wide user-data resolution",
+    actionBlockerIds: [blockerId],
+  }
+  const recordsFor = (resolution) => [
+    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+    baseline(),
+    started(),
+    ...preflightFacts(),
+    record(5, "SAFETY_BLOCKER_RAISED", raisedBlocker, `safety-blocker-raised:${blockerId}`),
+    record(6, "SAFETY_BLOCKER_RESOLVED", resolution, `safety-blocker-resolved:${blockerId}`),
+  ]
+  const legacy = projectHarvesterOperationalState({ records: recordsFor(legacyResolution) })
+  const structured = projectHarvesterOperationalState({ records: recordsFor(structuredResolution) })
+
+  const legacyUnattributedRecords = recordsFor(legacyResolution).map((entry) =>
+    entry.factType === "SAFETY_BLOCKER_RAISED"
+      ? {
+        ...entry,
+        data: {
+          ...entry.data,
+          producer: undefined,
+        },
+      }
+      : entry
+  )
+  const legacyUnattributed = projectHarvesterOperationalState({ records: legacyUnattributedRecords })
+
+  assert.equal(legacy.ok, true, legacy.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual(legacy.data.stickySafetyBlockers, [])
+  assert.equal(structured.ok, false, "The account-wide user-data resolver must not clear Recovery Seller STOP.")
+  assert.equal(legacyUnattributed.ok, true, "Legacy untagged Recovery Seller STOP facts retain their dedicated resolver")
+  assert.deepEqual(legacyUnattributed.data.stickySafetyBlockers, [])
+})
+
+test("rejects structured user-data resolution when the Recovery Seller STOP reason has conflicting provenance", () => {
+  const userDataBlocker = {
+    blockerId,
+    producer: "USER_DATA_EVENT_HANDLER",
+    scope: "ACCOUNT",
+    symbol: null,
+    reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    evidenceDigest: blockerDigest,
+  }
+  const structuredResolution = {
+    blockerId,
+    resolvedBy: "operator:operator-7:reason-collision-001",
+    resolution: "OPERATOR_ACTION",
+    evidenceDigest: "c".repeat(64),
+    operatorId: "operator-7",
+    operatorAuthMethod: "OS_ACCOUNT",
+    actionId: "reason-collision-001",
+    resolutionReason: "Reviewed the user-data blocker evidence and confirmed its cause is fixed.",
+    actionBlockerIds: [blockerId],
+  }
+  const result = projectHarvesterOperationalState({
+    records: [
+      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+      baseline(),
+      started(),
+      ...preflightFacts(),
+      record(5, "SAFETY_BLOCKER_RAISED", userDataBlocker, `safety-blocker-raised:${blockerId}`),
+      record(6, "SAFETY_BLOCKER_RESOLVED", structuredResolution, `safety-blocker-resolved:${blockerId}`),
+    ],
+  })
+
+  assert.equal(result.ok, false, "A reserved Recovery Seller reason with user-data provenance must remain blocking")
+})
+
+test("keeps Recovery Seller STOP reason with user-data provenance unresolved", () => {
+  const raisedBlocker = {
+    blockerId,
+    producer: "USER_DATA_EVENT_HANDLER",
+    scope: "ACCOUNT",
+    symbol: null,
+    reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    evidenceDigest: blockerDigest,
+  }
+  const result = projectHarvesterOperationalState({
+    records: [
+      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+      baseline(),
+      started(),
+      ...preflightFacts(),
+      record(5, "SAFETY_BLOCKER_RAISED", raisedBlocker, `safety-blocker-raised:${blockerId}`),
+      record(6, "SAFETY_BLOCKER_RESOLVED", {
+        blockerId,
+        resolvedBy: "operator:legacy-account-action",
+        resolution: "OPERATOR_ACTION",
+        evidenceDigest: "c".repeat(64),
+      }, `safety-blocker-resolved:${blockerId}`),
+    ],
+  })
+
+  assert.equal(result.ok, false, "An ambiguous Recovery Seller reason must not be resolved by either workflow.")
+})
+
 test("fails closed for missing configuration baseline, orphan facts, or resolution without a raised blocker", () => {
   const noBaseline = projectHarvesterOperationalState({ records: [started()] })
   const orphan = projectHarvesterOperationalState({

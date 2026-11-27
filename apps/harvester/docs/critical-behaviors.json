@@ -1,30 +1,33 @@
 {
   "schemaVersion": 1,
   "criticalPathPrefixes": [
+    "src/bootstrap/account/",
+    "src/bootstrap/shutdown/",
+    "src/bootstrap/start-harvester.js",
+    "src/domain/fills/",
     "src/domain/orders/",
     "src/domain/portfolio/",
     "src/domain/strategies/conservative/",
-    "src/use-cases/conservative-trading-engine.js",
-    "src/use-cases/create-submission-gate.js",
-    "src/use-cases/restore-harvester-operational-state.js",
-    "src/bootstrap/account/",
-    "src/bootstrap/start-harvester.js",
-    "src/infrastructure/operational-state/",
-    "src/index.js",
-    "src/infrastructure/process-lock/",
-    "src/domain/fills/",
-    "src/bootstrap/shutdown/",
-    "src/infrastructure/process/",
-    "src/infrastructure/brokers/",
-    "src/use-cases/collect-owned-order-snapshots.js",
-    "src/use-cases/reconcile-terminal-order-fills.js",
-    "src/use-cases/fetch-account-trade-history.js",
-    "src/use-cases/create-user-data-event-transition.js",
     "src/domain/strategies/strategy-ids.js",
+    "src/index.js",
+    "src/infrastructure/brokers/",
+    "src/infrastructure/operational-state/",
+    "src/infrastructure/operational-state/project-harvester.js",
+    "src/infrastructure/process-lock/",
+    "src/infrastructure/process/",
+    "src/infrastructure/security/local-operator-identity.js",
+    "src/use-cases/collect-owned-order-snapshots.js",
+    "src/use-cases/conservative-trading-engine.js",
     "src/use-cases/create-conservative-shutdown-safety.js",
+    "src/use-cases/create-submission-gate.js",
+    "src/use-cases/create-user-data-event-transition.js",
+    "src/use-cases/fetch-account-trade-history.js",
+    "src/use-cases/reconcile-terminal-order-fills.js",
     "src/use-cases/record-safety-control-facts.js",
+    "src/use-cases/resolve-offline-user-data-account-blockers.js",
+    "src/use-cases/resolve-user-data-account-blockers.helpers.js",
     "src/use-cases/resolve-user-data-account-blockers.js",
-    "src/use-cases/resolve-user-data-account-blockers.helpers.js"
+    "src/use-cases/restore-harvester-operational-state.js"
   ],
   "behaviors": [
     {
@@ -1151,6 +1154,36 @@
           "path": "src/use-cases/create-submission-gate.test.js",
           "name": "market-scoped strategy safety pause blocks only its symbol and preserves the recovery SELL exception",
           "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "does not restore Recovery Seller STOP from a user-data blocker with the same reason",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "allows only an observation-only restart after account resolution and verifies a fresh durable PREFLIGHT snapshot pair",
+          "kind": "integration"
+        },
+        {
+          "path": "src/bootstrap/user-data/subscribe-to-user-data.test.js",
+          "name": "post-resolution restart accepts only a fresh durable account and clean open-order PREFLIGHT pair",
+          "kind": "normal"
+        },
+        {
+          "path": "src/bootstrap/user-data/subscribe-to-user-data.test.js",
+          "name": "post-resolution restart remains blocked when PREFLIGHT finds an unowned external order",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/user-data/subscribe-to-user-data.test.js",
+          "name": "post-resolution restart remains blocked when the account PREFLIGHT snapshot is stale",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/user-data/subscribe-to-user-data.test.js",
+          "name": "post-resolution restart accepts a reconciled owned open-orders PREFLIGHT audit",
+          "kind": "normal"
         }
       ],
       "runtimeStatus": "active",
@@ -1159,7 +1192,8 @@
         "The final admission gate reads current blocker state on every check; a runtime STOP closes admission before its durable append is awaited and remains closed on persistence failure.",
         "A restored account blocker prevents trading readiness/activation; explicit durable resolution is required before admission can reopen.",
         "Market-scoped ownership and strategy pauses remain scoped to the affected symbol; ADR-0008's Recovery Seller SELL exception never bypasses an account blocker.",
-        "External open orders are never adopted or cancelled by this gate; IGNORE and BLOCK retain their ADR-0004 per-market semantics."
+        "External open orders are never adopted or cancelled by this gate; IGNORE and BLOCK retain their ADR-0004 per-market semantics.",
+        "After user-data ACCOUNT resolution, restart remains observation-only and requires a fresh durable account PREFLIGHT snapshot plus a clean account-wide open-order PREFLIGHT audit; this verification never reopens trading or clears Recovery Seller STOP."
       ]
     },
     {
@@ -1167,16 +1201,119 @@
       "title": "User-data ACCOUNT blocker provenance and fail-closed operator resolution",
       "sourceModules": [
         "src/infrastructure/operational-state/helpers/validate-operational-state-lifecycle-facts.js",
+        "src/infrastructure/operational-state/project-harvester.js",
+        "src/infrastructure/security/local-operator-identity.js",
         "src/use-cases/record-safety-control-facts.js",
-        "src/use-cases/resolve-user-data-account-blockers.js",
-        "src/use-cases/resolve-user-data-account-blockers.helpers.js"
+        "src/use-cases/resolve-offline-user-data-account-blockers.js",
+        "src/use-cases/resolve-user-data-account-blockers.helpers.js",
+        "src/use-cases/resolve-user-data-account-blockers.js"
       ],
       "integrationRequired": false,
       "tests": [
         {
+          "path": "src/use-cases/record-safety-control-facts.test.js",
+          "name": "persists authenticated operator metadata and accepts an exact action replay",
+          "kind": "normal"
+        },
+        {
           "path": "src/use-cases/record-user-data-blocker-producer.test.js",
           "name": "records the user-data producer on newly raised sticky blockers",
           "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "authenticates the operator against the current OS account before reading evidence",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "CLI reports durable resolution while explicitly keeping trading blocked",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "CLI returns nonzero when durable resolution is not confirmed",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "durably resolves after clean stop and leaves readiness blocked for restart",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "fails closed for incomplete or contradictory market audit evidence",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "fails closed if any configured market is not fully reconciled",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "fails closed on account balance discrepancies before resolution",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "parses explicit offline account blocker resolution confirmation",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "prints application identity for --version without reading recovery evidence",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "rejects a caller-forged operator identity object",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "rejects a legacy action ID without replay-safe metadata",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "rejects ACCOUNT blockers without verified user-data producer provenance",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "rejects an unclean process stop before running market audits",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "rejects mismatched runtime session and configured-market baseline",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "rejects missing configured-market evidence before running any market audit",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "requires clean process stop before offline resolution",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "runs the production offline account/order/fill audit for every configured market",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "allows durable blocker resolution after a clean process stop",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "does not resolve Recovery Seller STOP when a user-data ACCOUNT blocker is present",
+          "kind": "failure"
         },
         {
           "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
@@ -1190,7 +1327,27 @@
         },
         {
           "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
-          "name": "requires exact user-data blocker origin and full blocker set",
+          "name": "fails closed when append does not confirm durable commitment",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "fails closed when durable resolution append fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "fails closed when durable resolution readback fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "refuses to resolve account blockers without durable producer provenance",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "rejects reuse of an action ID with a different resolution reason",
           "kind": "failure"
         },
         {
@@ -1200,16 +1357,126 @@
         },
         {
           "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
-          "name": "refuses to resolve account blockers without durable producer provenance",
+          "name": "requires exact user-data blocker origin and full blocker set",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-user-data-account-blockers.test.js",
+          "name": "retries a partially appended multi-blocker action and accepts exact duplicate replay",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/security/local-operator-identity.test.js",
+          "name": "authenticates only the exact current operating-system account",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/security/local-operator-identity.test.js",
+          "name": "rejects invalid identities, OS lookup failures, and account mismatches",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/security/local-operator-identity.test.js",
+          "name": "does not trust copied, caller-created, or primitive identity values",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/security/local-operator-identity.test.js",
+          "name": "detects C0 and DEL control characters without rejecting printable text",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
+          "name": "requires structured operator action for user-data ACCOUNT blocker resolution",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
+          "name": "keeps Recovery Seller STOP exclusive to its dedicated legacy operator action",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/record-safety-control-facts.test.js",
+          "name": "requires structured operator action before resolving user-data ACCOUNT blockers",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "clears RS STOP only after explicit operator evidence is durably recorded",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
+          "name": "rejects structured user-data resolution when the Recovery Seller STOP reason has conflicting provenance",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/record-safety-control-facts.test.js",
+          "name": "rejects user-data resolution when its reason is reserved for Recovery Seller STOP",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
+          "name": "keeps Recovery Seller STOP reason with user-data provenance unresolved",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/resolve-offline-user-data-account-blockers.test.js",
+          "name": "requires the production offline market audit adapter to be injected",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "pauses when broker fill history omits an explicit success flag",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "pauses when broker fill history contains malformed execution records",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "rejects a stream fill that does not belong to the terminal canonical order",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "rejects conflicting duplicate stream facts for the same fill ID",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "rejects mismatched REST fill identity when no canonical stream fill exists",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "rejects conflicting duplicate REST fill facts for the same fill ID",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "rejects FILLED status when executed quantity is less than original quantity",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/reconcile-terminal-order-fills.test.js",
+          "name": "propagates a failed terminal-order reconciliation acknowledgement",
           "kind": "failure"
         }
       ],
       "runtimeStatus": "offline-only",
-      "limitation": "The use-case is not yet wired to a production operator command or authoritative account-wide audit adapter; it never reopens trading.",
+      "limitation": "Offline CLI uses local OS-account authentication, not enterprise SSO, and requires operator-prepared evidence; it cannot independently prove exchange-export provenance. Controlled restart plus fresh-snapshot admission remains a separate acceptance gate.",
       "invariants": [
         "Persist producer provenance for user-data blockers; do not resolve legacy or unknown-origin ACCOUNT blockers.",
         "Resolve only the exact active user-data ACCOUNT blocker set after an authoritative audit of every configured market, all orders/fills/balances and consistent accounting with zero discrepancies.",
-        "Commit resolution facts durably and verify projection/readback; remain BLOCKED until controlled restart and fresh authoritative account snapshot. Never reset Recovery Seller STOP through this path."
+        "Commit resolution facts durably and verify projection/readback; remain BLOCKED until controlled restart and fresh authoritative account snapshot. Never reset Recovery Seller STOP through this path.",
+        "Authenticate the operator against the executing OS account and persist operator ID, authentication method, action ID, reason, exact target blocker set, and evidence digest in every OPERATOR_ACTION fact.",
+        "Allow retries only for the exact same operator/action/reason/blocker-set/evidence tuple; resume partial multi-blocker appends and verify exact per-blocker durable readback.",
+        "User-data ACCOUNT blockers cannot be resolved by generic reconciliation or legacy operator-action facts; the verified projector enforces structured operator metadata against the original raised producer.",
+        "Recovery Seller STOP uses its dedicated producer and resolver; legacy untagged facts retain that resolver by the reserved reason, while an explicit USER_DATA_EVENT_HANDLER producer always takes precedence over a colliding reason.",
+        "Classify Recovery Seller STOP only by its dedicated producer provenance; a colliding reason string from user-data events must remain under the user-data account-resolution contract."
       ]
     }
   ],
@@ -1878,6 +2145,24 @@
       }
     },
     {
+      "path": "src/infrastructure/security/local-operator-identity.js",
+      "baseline": {
+        "lines": 85.37,
+        "branches": 50,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 50,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 85.37,
+        "branches": 50,
+        "functions": 100
+      }
+    },
+    {
       "path": "src/use-cases/collect-owned-order-snapshots.js",
       "baseline": {
         "lines": 83.9,
@@ -2019,6 +2304,24 @@
         "lines": 86.6,
         "branches": 72.92,
         "functions": 100
+      }
+    },
+    {
+      "path": "src/use-cases/resolve-offline-user-data-account-blockers.js",
+      "baseline": {
+        "lines": 95.24,
+        "branches": 80.88,
+        "functions": 97.06
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 80,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 95.24,
+        "branches": 80.88,
+        "functions": 97.06
       }
     },
     {

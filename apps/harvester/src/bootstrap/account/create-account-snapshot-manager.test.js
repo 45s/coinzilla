@@ -507,6 +507,8 @@ test("records unowned open orders as blocked without adopting them", async () =>
   const readiness = fixture.manager.getReadinessSnapshot()
   assert.equal(readiness.openOrders.completed, true, "The report source must expose the completed open-order audit.")
   assert.equal(readiness.openOrders.durable, true, "The report source must expose the existing durability acknowledgement.")
+  assert.equal(readiness.openOrders.preflight.completed, true, "The nested PREFLIGHT audit must expose completion explicitly.")
+  assert.equal(readiness.openOrders.preflight.durable, true, "The nested PREFLIGHT audit must expose its durability acknowledgement.")
   assert.equal(readiness.openOrders.orderCount, 1, "The report source must expose a count, not raw order records.")
   assert.deepEqual(readiness.openOrders.unownedSymbols, ["BTCUSDT"], "The report source must expose only affected symbols.")
   assert.equal(JSON.stringify(readiness.openOrders).includes("manual-order-1"), false, "The report source must not expose external order identifiers.")

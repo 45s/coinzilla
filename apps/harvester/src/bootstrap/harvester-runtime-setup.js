@@ -8,6 +8,9 @@ export function createHarvesterUserDataState() {
     preflightComplete: false,
     tradingActivationDeferred: false,
     initialAccountSnapshotReady: false,
+    accountRecoverySnapshotRequired: false,
+    accountRecoverySnapshotWasRequired: false,
+    accountRecoverySnapshotVerified: false,
     requiresReconciliation: false,
     streamUnsafe: false,
     accountingFailed: false,
@@ -53,6 +56,8 @@ export function getHarvesterOperatorRuntimeSnapshot({
     stopping: userDataState.stopped,
     userData: Object.freeze({
       ready: userDataState.ready,
+      accountRecoverySnapshotRequired: userDataState.accountRecoverySnapshotRequired === true,
+      accountRecoverySnapshotVerified: userDataState.accountRecoverySnapshotVerified === true,
       status: userDataState.status,
       lastEventAt,
       ageMs: lastEventAt === null ? null : Math.max(0, observedAt - lastEventAt),

@@ -805,8 +805,13 @@ test("prints strategy markers with one separator and omits the decorative SYS ma
   )
   assert.match(
     written,
-    /Binance market-data stream connected; active market subscriptions: 4\. Conservative TESTNET trading is enabled/,
-    "The console must name the Binance market-data stream and the active subscription count explicitly.",
+    /Binance market-data stream connected; subscriptions: 4\./,
+    "The connected market-data summary must report the compact subscription count without stale readiness details.",
+  )
+  assert.doesNotMatch(
+    written,
+    /active market subscriptions|Conservative TESTNET trading is enabled|user-data readiness/,
+    "The compact connection summary must omit redundant market and trading-readiness prose.",
   )
   assert.doesNotMatch(
     written,
@@ -909,6 +914,73 @@ test("renders recovery SELL cancellation requests in the requested compact conso
     written.trim(),
     "04:30:15 🟡 CG recovery SELL cancellation requested: DOGEUSDT, reason BUY_FILLED_RECALCULATE_RECOVERY_SELL",
     "the recovery SELL cancellation console line must match the requested concise operator format",
+  )
+  output.destroy()
+})
+
+test("compacts rejected lifecycle lines and retains the rejection reason", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+  transport.write({
+    timestamp: "2026-11-26T21:45:17",
+    level: "info",
+    method: "info",
+    data: {
+      message: "Order lifecycle",
+      orderLifecycle: true,
+      strategyId: "CG_coinGrabber",
+      lifecycleStatus: "REJECTED",
+      brokerOrderId: "3215105",
+      symbol: "LINKUSDT",
+      side: "BUY",
+      quantity: "2",
+      price: "9.244",
+      detail: "Insufficient quote balance",
+    },
+  })
+  assert.match(
+    written,
+    /🟡 CG REJECTED LINKUSDT BUY 2 @ 9\.244 \| Insufficient quote balance/,
+    "A rejection summary must retain the strategy, market, exact order facts, and actionable rejection reason.",
+  )
+  assert.doesNotMatch(
+    written,
+    /#3215105/,
+    "A compact rejection line must omit the broker order ID to prioritize the rejection context.",
+  )
+  output.destroy()
+})
+
+test("abbreviates Operational State Store wording in the terminal", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => { written += chunk.toString() })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+  transport.write({
+    timestamp: "2026-11-26T21:45:18",
+    level: "info",
+    method: "info",
+    data: {
+      message: "Operational State Store verified",
+    },
+  })
+  assert.match(
+    written,
+    /OSS verified/,
+    "Operator-facing console summaries must abbreviate the long Operational State Store name.",
+  )
+  assert.doesNotMatch(
+    written,
+    /Operational State Store/,
+    "The full store name must not consume terminal space in operator-facing summaries.",
   )
   output.destroy()
 })
