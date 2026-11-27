@@ -281,8 +281,14 @@ error: new Error("test volatility snapshot unavailable") })
 
 const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
-  flush: async () => ({ ok: true, durable: true }),
-  flushWrites: async () => ({ ok: true, durable: true }),
+  flush: async () => ({
+    ok: true,
+    durable: true,
+  }),
+  flushWrites: async () => ({
+    ok: true,
+    durable: true,
+  }),
 })
 
 function createHarnessEngine({
