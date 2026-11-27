@@ -71,6 +71,27 @@ function createTransactionOperation({ provider, lifecycle, readOnly = false }) {
   }
 }
 
+function createProviderOperation({ provider, lifecycle }) {
+  return function execute(input) {
+    if (lifecycle.state !== "connected") {
+      throw new Error(`Database must be connected to execute operations (state: ${lifecycle.state})`)
+    }
+
+    let operation
+    try {
+      operation = Promise.resolve(provider.execute(input))
+    } catch (error) {
+      operation = Promise.reject(error)
+    }
+    lifecycle.activeTransactions.add(operation)
+    operation.then(
+      () => lifecycle.activeTransactions.delete(operation),
+      () => lifecycle.activeTransactions.delete(operation),
+    )
+    return operation
+  }
+}
+
 function createCloseOperation({ provider, lifecycle }) {
   return async function close() {
     if (lifecycle.state === "closed") {
@@ -116,10 +137,10 @@ function createCloseOperation({ provider, lifecycle }) {
 
 /**
  * Database is the lifecycle aggregate for a provider-backed database resource.
- * It owns the lifecycle state and guarantees that shutdown drains transactions.
+ * It owns lifecycle state and drains in-flight CRUD operations and transactions before shutdown.
  *
  * @param {{connect: () => Promise<void>|void, close: () => Promise<void>|void, withTransaction: (work: (transaction: unknown) => unknown) => Promise<unknown>|unknown, withReadTransaction?: (work: (transaction: unknown) => unknown) => Promise<unknown>|unknown}} provider
- * @returns {{connect: () => Promise<void>, transaction: (work: (transaction: unknown) => unknown) => Promise<unknown>, readTransaction: (work: (transaction: unknown) => unknown) => Promise<unknown>, close: () => Promise<void>, readonly state: string}}
+ * @returns {{connect: () => Promise<void>, transaction: (work: (transaction: unknown) => unknown) => Promise<unknown>, readTransaction: (work: (transaction: unknown) => unknown) => Promise<unknown>, execute: (input: {operation: string, input: object}) => Promise<unknown>, close: () => Promise<void>, readonly state: string}}
  */
 export function createDatabaseEntity({ provider } = {}) {
   if (!provider || typeof provider !== "object") {
@@ -152,6 +173,8 @@ export function createDatabaseEntity({ provider } = {}) {
       provider,
       lifecycle,
     }),
+    execute: createProviderOperation({ provider,
+lifecycle }),
     readTransaction: createTransactionOperation({
       provider,
       lifecycle,

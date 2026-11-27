@@ -1,0 +1,575 @@
+import assert from "node:assert/strict"
+import test from "node:test"
+
+import {
+  parseMongoConnectionString,
+  performMongoHandshake,
+} from "./handshake.js"
+
+test("MongoDB URI parser rejects malformed schemes, fragments, duplicate options, and invalid option values", () => {
+  const invalidUris = [
+    { value: null,
+expected: /non-empty string/ },
+    { value: "",
+expected: /non-empty string/ },
+    { value: "http://localhost/app",
+expected: /mongodb:\/\// },
+    { value: "mongodb://",
+expected: /invalid|host/i },
+    { value: "mongodb://localhost/app#fragment",
+expected: /fragments/ },
+    { value: "mongodb://localhost/app?tls=maybe",
+expected: /tls must be true or false/ },
+    { value: "mongodb://localhost/app?loadBalanced=maybe",
+expected: /loadBalanced must be true or false/ },
+    { value: "mongodb://localhost/app?connectTimeoutMS=0",
+expected: /positive safe integer/ },
+    { value: "mongodb://localhost/app?socketTimeoutMS=abc",
+expected: /positive safe integer/ },
+    { value: "mongodb://localhost/app?authSource=admin&authSource=other",
+expected: /must not be repeated/ },
+    { value: "mongodb://localhost/bad%24name",
+expected: /unsupported character/ },
+  ]
+  for (const invalidUri of invalidUris) {
+    assert.throws(
+      () => parseMongoConnectionString(invalidUri.value),
+      invalidUri.expected,
+    )
+  }
+})
+
+test("MongoDB handshake validates transport, database, server response, and configured credentials", async () => {
+  await assert.rejects(
+    performMongoHandshake({ transport: null }),
+    /requires a connected command transport/,
+  )
+  await assert.rejects(
+    performMongoHandshake({
+      transport: { async command() { return { ok: 1 } } },
+      databaseName: "",
+    }),
+    /database name must be a non-empty string/,
+  )
+  await assert.rejects(
+    performMongoHandshake({
+      transport: { async command() { return { ok: 0,
+errmsg: "hello failed" } } },
+    }),
+    /hello failed/,
+  )
+  await assert.rejects(
+    performMongoHandshake({
+      transport: {
+        async command() {
+          return {
+            ok: 1,
+            minWireVersion: 13,
+            maxWireVersion: 25,
+            isWritablePrimary: true,
+          }
+        },
+      },
+      username: "alice",
+    }),
+    /password must be a string/,
+  )
+})
+
+test("MongoDB URI parser rejects incomplete credentials and accepts explicit false TLS", () => {
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://:secret@localhost/app"),
+    /password requires a username/,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://alice@localhost/app"),
+    /username requires a password/,
+  )
+  assert.equal(
+    parseMongoConnectionString("mongodb://localhost/app?tls=false").tls,
+    false,
+  )
+})
+
+test("MongoDB handshake rejects unsupported requested and server mechanisms", async () => {
+  const baseHello = {
+    ok: 1,
+    minWireVersion: 13,
+    maxWireVersion: 25,
+    isWritablePrimary: true,
+  }
+  const unsupportedRequested = {
+    async command() {
+      return baseHello
+    },
+  }
+  await assert.rejects(
+    performMongoHandshake({
+      transport: unsupportedRequested,
+      username: "alice",
+      password: "secret",
+      authMechanism: "PLAIN",
+    }),
+    /Unsupported MongoDB authentication mechanism/,
+  )
+
+  const unsupportedByServer = {
+    async command() {
+      return {
+        ...baseHello,
+        saslSupportedMechs: ["SCRAM-SHA-1"],
+      }
+    },
+  }
+  await assert.rejects(
+    performMongoHandshake({
+      transport: unsupportedByServer,
+      username: "alice",
+      password: "secret",
+      authMechanism: "SCRAM-SHA-256",
+    }),
+    /does not support SCRAM-SHA-256/,
+  )
+})
+
+test("MongoDB handshake selects a server-supported SCRAM mechanism", async () => {
+  const baseHello = {
+    ok: 1,
+    minWireVersion: 13,
+    maxWireVersion: 25,
+    isWritablePrimary: true,
+  }
+  for (const supported of [["SCRAM-SHA-1"], []]) {
+    const commands = []
+    const transport = {
+      async command({ body }) {
+        commands.push(body)
+        if (body.hello) {
+          return {
+            ...baseHello,
+            saslSupportedMechs: supported,
+          }
+        }
+        return {
+          ok: 0,
+          errmsg: "authentication failed",
+        }
+      },
+    }
+    await assert.rejects(
+      performMongoHandshake({
+        transport,
+        username: "alice",
+        password: "secret",
+      }),
+      /authentication failed/,
+    )
+    assert.equal(
+      commands[1].mechanism,
+      supported.length === 0 ? "SCRAM-SHA-256" : "SCRAM-SHA-1",
+    )
+  }
+})
+
+
+test("MongoDB URI parser reads credentials, database, authentication source, and timeouts", () => {
+  assert.deepEqual(
+    parseMongoConnectionString("mongodb://alice:p%40ss@db.example:27018/app?authSource=admin&tls=true&connectTimeoutMS=4000"),
+    {
+      host: "db.example",
+      port: 27018,
+      username: "alice",
+      password: "p@ss",
+      databaseName: "app",
+      authSource: "admin",
+      authMechanism: undefined,
+      tls: true,
+      replicaSet: undefined,
+      directConnection: false,
+      connectTimeoutMS: 4000,
+      socketTimeoutMS: 30000,
+    },
+  )
+})
+
+test("MongoDB URI parser rejects unsupported SRV and multi-host discovery instead of silently degrading", () => {
+  assert.throws(
+    () => parseMongoConnectionString("mongodb+srv://cluster.example/app"),
+    /mongodb\+srv/i,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://one:27017,two:27017/app"),
+    /single seed host/i,
+  )
+})
+
+
+test("MongoDB URI parser supports IPv6 seeds and rejects unknown or unsafe options", () => {
+  assert.equal(
+    parseMongoConnectionString("mongodb://[::1]:27017/app?directConnection=true").host,
+    "::1",
+  )
+  assert.equal(
+    parseMongoConnectionString("mongodb://localhost/app?directConnection=true").directConnection,
+    true,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?serverSelectionTimeoutMS=5000"),
+    /option serverSelectionTimeoutMS is not supported/i,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?retryWrites=true"),
+    /retryable writes are not supported/i,
+  )
+})
+
+
+test("MongoDB URI parser validates credential pairs, host lists, and unsupported topology options", () => {
+  const credentials = parseMongoConnectionString(
+    "mongodb://alice:p%40ss@db.example:27018/app?authSource=admin&tls=true",
+  )
+  assert.equal(credentials.username, "alice")
+  assert.equal(credentials.password, "p@ss")
+  assert.equal(credentials.authSource, "admin")
+  assert.equal(credentials.port, 27018)
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://alice@localhost/app"),
+    /username requires a password/,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost,other/app"),
+    /single seed host/,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?tls=true&ssl=false"),
+    /cannot specify both tls and ssl/,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?loadBalanced=true"),
+    /load-balanced topology/,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?compressors=zlib"),
+    /wire compression/,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?readPreference=secondary"),
+    /primary read preference/,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?directConnection=maybe"),
+    /directConnection must be true or false/,
+  )
+})
+
+
+test("MongoDB handshake advertises credentials and negotiates the server-supported SCRAM mechanism", async () => {
+  const calls = []
+  const transport = {
+    async command({ body }) {
+      calls.push(body)
+      if (body.hello === 1) {
+        return {
+          ok: 1,
+          minWireVersion: 13,
+          maxWireVersion: 25,
+          isWritablePrimary: true,
+          saslSupportedMechs: ["SCRAM-SHA-1"],
+        }
+      }
+      return {
+        ok: 0,
+        errmsg: "intentional authentication stop",
+        code: 18,
+      }
+    },
+  }
+
+  await assert.rejects(
+    performMongoHandshake({
+      transport,
+      databaseName: "app",
+      username: "alice",
+      password: "secret",
+      authSource: "admin",
+    }),
+    /intentional authentication stop/,
+  )
+  assert.equal(calls[0].saslSupportedMechs, "admin.alice")
+  assert.equal(calls[1].mechanism, "SCRAM-SHA-1")
+  assert.equal(calls[1].$db, "admin")
+})
+
+test("MongoDB handshake rejects a requested mechanism not advertised by the server", async () => {
+  const transport = {
+    async command({ body }) {
+      if (body.hello === 1) {
+        return {
+          ok: 1,
+          minWireVersion: 13,
+          maxWireVersion: 25,
+          isWritablePrimary: true,
+          saslSupportedMechs: ["SCRAM-SHA-1"],
+        }
+      }
+      throw new Error("Authentication must not start")
+    },
+  }
+
+  await assert.rejects(
+    performMongoHandshake({
+      transport,
+      username: "alice",
+      password: "secret",
+      authMechanism: "SCRAM-SHA-256",
+    }),
+    /does not support SCRAM-SHA-256/,
+  )
+})
+
+test("MongoDB handshake rejects replica-set mismatches and secondaries without a primary address", async () => {
+  await assert.rejects(
+    performMongoHandshake({
+      transport: {
+        async command() {
+          return {
+            ok: 1,
+            minWireVersion: 13,
+            maxWireVersion: 25,
+            isWritablePrimary: true,
+            setName: "actual",
+          }
+        },
+      },
+      replicaSet: "expected",
+    }),
+    /does not match requested replica set/,
+  )
+
+  await assert.rejects(
+    performMongoHandshake({
+      transport: {
+        async command() {
+          return {
+            ok: 1,
+            minWireVersion: 13,
+            maxWireVersion: 25,
+            isWritablePrimary: false,
+            setName: "replica",
+          }
+        },
+      },
+    }),
+    /did not advertise a writable primary/,
+  )
+})
+
+test("MongoDB handshake exposes only standalone and replica-set support", async () => {
+  for (const [hello, topology, transactionSupported] of [
+    [{ isWritablePrimary: true,
+minWireVersion: 13,
+maxWireVersion: 17 }, "standalone", false],
+    [{ isWritablePrimary: true,
+setName: "rs0",
+minWireVersion: 13,
+maxWireVersion: 21,
+logicalSessionTimeoutMinutes: 30 }, "replicaSet", true],
+  ]) {
+    const commands = []
+    const result = await performMongoHandshake({
+      transport: {
+        async command(input) {
+          commands.push(input.body)
+          return { ok: 1,
+...hello }
+        },
+      },
+      databaseName: "app",
+    })
+
+    assert.equal(result.topology, topology)
+    assert.equal(result.transactionSupported, transactionSupported)
+    assert.equal(commands[0].hello, 1)
+    assert.equal(commands[0].$db, "admin")
+  }
+})
+
+
+test("MongoDB handshake rejects servers outside the documented wire-version range", async () => {
+  for (const hello of [
+    { minWireVersion: 0,
+maxWireVersion: 12,
+isWritablePrimary: true },
+    { minWireVersion: 26,
+maxWireVersion: 30,
+isWritablePrimary: true },
+  ]) {
+    await assert.rejects(
+      performMongoHandshake({
+        transport: {
+          async command() {
+            return { ok: 1,
+...hello }
+          },
+        },
+      }),
+      /wire protocol version range/i,
+    )
+  }
+})
+
+
+test("MongoDB handshake accepts compatible wire-version overlap even when the server maximum is newer", async () => {
+  const result = await performMongoHandshake({
+    transport: {
+      async command() {
+        return {
+          ok: 1,
+          minWireVersion: 25,
+          maxWireVersion: 26,
+          isWritablePrimary: true,
+        }
+      },
+    },
+  })
+
+  assert.equal(result.maxWireVersion, 26)
+})
+
+test("MongoDB handshake rejects unsupported wire versions and a missing writable primary", async () => {
+  await assert.rejects(
+    performMongoHandshake({
+      transport: {
+        async command() {
+          return { ok: 1,
+minWireVersion: 30,
+maxWireVersion: 31,
+isWritablePrimary: true }
+        },
+      },
+    }),
+    /wire protocol version/i,
+  )
+
+  await assert.rejects(
+    performMongoHandshake({
+      transport: {
+        async command() {
+          return {
+            ok: 1,
+            minWireVersion: 13,
+            maxWireVersion: 17,
+            setName: "rs0",
+            isWritablePrimary: false,
+          }
+        },
+      },
+    }),
+    /primary/i,
+  )
+})
+
+
+test("MongoDB URI parser rejects unsupported options instead of silently ignoring them", () => {
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?readPreference=secondary"),
+    /primary read preference only/i,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?tls=true&tls=false"),
+    /must not be repeated/i,
+  )
+})
+
+test("MongoDB URI parser normalizes IPv6 hosts and rejects credentials without a username", () => {
+  assert.equal(
+    parseMongoConnectionString("mongodb://[::1]:27018/app").host,
+    "::1",
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://:password@localhost/app"),
+    /username/i,
+  )
+})
+
+
+test("MongoDB URI parser rejects a password without a username", () => {
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://:password@localhost/app"),
+    /password requires a username/i,
+  )
+})
+
+
+test("MongoDB handshake rejects server wire versions newer than the implemented protocol ceiling", async () => {
+  await assert.rejects(
+    performMongoHandshake({
+      transport: {
+        async command() {
+          return {
+            ok: 1,
+            minWireVersion: 26,
+            maxWireVersion: 27,
+            isWritablePrimary: true,
+          }
+        },
+      },
+      databaseName: "app",
+    }),
+    /wire protocol version range 26-27 is not supported/i,
+  )
+})
+
+
+test("MongoDB handshake rejects load-balanced servers even without a URI flag", async () => {
+  await assert.rejects(
+    performMongoHandshake({
+      transport: {
+        async command() {
+          return {
+            ok: 1,
+            minWireVersion: 13,
+            maxWireVersion: 25,
+            isWritablePrimary: true,
+            serviceId: "load-balanced-service",
+          }
+        },
+      },
+      databaseName: "app",
+    }),
+    /load-balanced topology is not supported/i,
+  )
+})
+
+
+test("MongoDB URI parser rejects conflicting TLS aliases and empty read preference", () => {
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?tls=true&ssl=false"),
+    /cannot specify both tls and ssl/i,
+  )
+  assert.throws(
+    () => parseMongoConnectionString("mongodb://localhost/app?readPreference="),
+    /primary read preference only/i,
+  )
+})
+
+test("MongoDB handshake rejects sharded/mongos topology outside the supported contract", async () => {
+  await assert.rejects(
+    performMongoHandshake({
+      transport: {
+        async command() {
+          return {
+            ok: 1,
+            minWireVersion: 13,
+            maxWireVersion: 25,
+            isWritablePrimary: true,
+            msg: "isdbgrid",
+            logicalSessionTimeoutMinutes: 30,
+          }
+        },
+      },
+      databaseName: "app",
+    }),
+    /sharded topology is not supported/i,
+  )
+})

@@ -21,6 +21,7 @@ const SQLITE_CAPABILITIES = Object.freeze({
   transactions: Object.freeze({
     callbackMode: "synchronous",
     nestedTransactions: false,
+    multiDocument: true,
   }),
   queries: Object.freeze({
     equalityFilters: true,
@@ -74,8 +75,10 @@ function createReadManyStatement({ transaction, query, collection }) {
     order.push(
       `CASE COALESCE(json_type(record, ?), 'null') WHEN 'null' THEN 0 WHEN 'false' THEN 1 WHEN 'true' THEN 2 WHEN 'integer' THEN 3 WHEN 'real' THEN 3 WHEN 'text' THEN 4 ELSE 5 END ${sqlDirection}`,
     )
-    order.push(`json_extract(record, ?) ${sqlDirection}`)
-    parameters.push(jsonPath, jsonPath)
+    order.push(
+      `CASE WHEN json_type(record, ?) IN ('array', 'object') THEN NULL ELSE json_extract(record, ?) END ${  sqlDirection}`,
+    )
+    parameters.push(jsonPath, jsonPath, jsonPath)
   }
   order.push("id ASC")
 
@@ -346,6 +349,11 @@ function createProviderDatabase({ filename, timeout }) {
       state,
       work,
       intent: "read",
+    }),
+    execute: ({ operation, input }) => runProviderTransaction({
+      state,
+      work: (transaction) => transaction[operation](input),
+      intent: operation === "readOne" || operation === "readMany" ? "read" : "write",
     }),
   }
 }
