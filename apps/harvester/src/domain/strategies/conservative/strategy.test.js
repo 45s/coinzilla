@@ -642,6 +642,8 @@ value: { amount: "0.1" } }
     reason: "QUANTITY_INCREMENT",
     quantityStepSize: "0.1",
     evaluatedQuantity: "0",
+    evaluatedPrice: "0.1",
+    evaluatedNotional: "0.005",
   })
 })
 
@@ -993,6 +995,8 @@ value: { amount: "0.101" } },
       reason: "MAX_PRICE",
       requiredPrice: "0.102",
       maximumPrice: "0.101",
+      evaluatedPrice: "0.102",
+      evaluatedNotional: "10.098",
     },
     "The decision must preserve the exact blocked recovery inventory and exchange price-filter evidence.",
   )
@@ -1293,6 +1297,7 @@ test("classifies the ADA 0.1 residual as MIN_NOTIONAL when one fee-reserved step
     minimumNotional: "5",
     evaluatedQuantity: "0.1",
     evaluatedNotional: "0.01531",
+    evaluatedPrice: "0.1531",
   })
 
   assertAdaRecoveryCompletionProfitBoundaries({
@@ -1372,4 +1377,299 @@ test("rejects a negative remaining quantity on an active recovery SELL", () => {
       },
     }],
   }), /remainingQuantity cannot be negative/)
+})
+
+
+function createDogeIncidentResidualScenario() {
+  const incidentBaseAsset = new Asset({
+    id: "asset:DOGE",
+    code: "DOGE",
+  })
+  const incidentMarket = new Market({
+    venue: "binance",
+    symbol: "DOGEUSDT",
+    baseAsset: incidentBaseAsset,
+    quoteAsset,
+  })
+  const metadata = createDustMarketMetadata({
+    market: incidentMarket,
+    priceIncrement: "0.00001",
+    quantityIncrement: "1",
+    minQuantity: "1",
+    minNotional: "5",
+  })
+  let state = {
+    portfolio: new Portfolio(),
+    recoveryLedger: RecoveryLedger.empty({ market: incidentMarket }),
+  }
+  for (const [tradeId, price, quote] of [
+    ["incident-doge-buy-1", "0.05696", "22.784"],
+    ["incident-doge-buy-2", "0.05693", "22.772"],
+    ["incident-doge-buy-3", "0.0569", "22.76"],
+  ]) {
+    state = applyDustFill({
+      state,
+      market: incidentMarket,
+      baseAsset: incidentBaseAsset,
+      side: "BUY",
+      tradeId,
+      brokerOrderId: tradeId,
+      price,
+      quantity: "400",
+      quoteQuantity: quote,
+      commissionAmount: "0.4",
+      commissionAsset: incidentBaseAsset,
+    })
+  }
+  state = applyDustFill({
+    state,
+    market: incidentMarket,
+    baseAsset: incidentBaseAsset,
+    side: "SELL",
+    tradeId: "incident-doge-sell",
+    brokerOrderId: "incident-doge-sell-order",
+    price: "0.05719",
+    quantity: "1196",
+    quoteQuantity: "68.39924",
+    commissionAmount: "0.06839924",
+    commissionAsset: quoteAsset,
+  })
+  return {
+    ...state,
+    metadata,
+    market: incidentMarket,
+  }
+}
+
+function createZroIncidentResidualScenario({
+  quantityIncrement = "0.01",
+  minQuantity = "0.01",
+  minNotional = "5",
+} = {}) {
+  const incidentBaseAsset = new Asset({
+    id: "asset:ZRO",
+    code: "ZRO",
+  })
+  const incidentMarket = new Market({
+    venue: "binance",
+    symbol: "ZROUSDT",
+    baseAsset: incidentBaseAsset,
+    quoteAsset,
+  })
+  const metadata = createDustMarketMetadata({
+    market: incidentMarket,
+    priceIncrement: "0.001",
+    quantityIncrement,
+    minQuantity,
+    minNotional,
+  })
+  let state = {
+    portfolio: new Portfolio(),
+    recoveryLedger: RecoveryLedger.empty({ market: incidentMarket }),
+  }
+  state = applyDustFill({
+    state,
+    market: incidentMarket,
+    baseAsset: incidentBaseAsset,
+    side: "BUY",
+    tradeId: "incident-zro-buy",
+    brokerOrderId: "incident-zro-buy-order",
+    price: "1.084",
+    quantity: "5",
+    quoteQuantity: "5.42",
+    commissionAmount: "0.005",
+    commissionAsset: incidentBaseAsset,
+  })
+  state = applyDustFill({
+    state,
+    market: incidentMarket,
+    baseAsset: incidentBaseAsset,
+    side: "SELL",
+    tradeId: "incident-zro-sell",
+    brokerOrderId: "incident-zro-sell-order",
+    price: "1.092",
+    quantity: "4.98",
+    quoteQuantity: "5.43816",
+    commissionAmount: "0.00543816",
+    commissionAsset: quoteAsset,
+  })
+  return {
+    ...state,
+    metadata,
+    market: incidentMarket,
+  }
+}
+
+function evaluateIncidentResidual({
+  symbol,
+  price,
+  keepQuantity,
+  orderQuantity,
+  portfolio,
+  recoveryLedger,
+  incidentMarketMetadata,
+  lastBuyPrice,
+} = {}) {
+  return evaluateConservativeStrategy({
+    marketPrice: {
+      symbol,
+      price,
+      timestamp: 100,
+    },
+    pairConfig: {
+      priceStepPercent: 0.05,
+      orderQuantity,
+      keepQuantity,
+      minProfit: 0.01,
+      makerPercent: 0.1,
+      takerPercent: 0.1,
+    },
+    settings: {},
+    portfolio,
+    recoveryLedger,
+    marketMetadata: incidentMarketMetadata,
+    lastBuyPrice,
+  })
+}
+
+test("sells the fee-reserved 1.7 DOGE quantity from the incident 2.8 DOGE residual under explicit sellable test filters", () => {
+  const { portfolio, recoveryLedger, metadata } = createDogeIncidentResidualScenario()
+  const position = portfolio.getPosition({ symbol: "DOGEUSDT" })
+  assert.equal(position.quantity.amount, "2.8")
+  assert.equal(recoveryLedger.realizedNetProfit, "0.01484076")
+  const sellableMetadata = {
+    ...metadata,
+    tradingRules: {
+      constraints: metadata.tradingRules.constraints.map((rule) =>
+        withExchangeRuleOverrides({
+          rule,
+          quantityIncrement: "0.1",
+          minimumNotional: "0.05",
+        })
+      ),
+    },
+  }
+  const decision = evaluateIncidentResidual({
+    symbol: "DOGEUSDT",
+    price: "0.05719",
+    keepQuantity: 1,
+    orderQuantity: 400,
+    portfolio,
+    recoveryLedger,
+    incidentMarketMetadata: sellableMetadata,
+    lastBuyPrice: "0.0569",
+  })
+  const sell = decision.actions.find((action) => action.side === "SELL")
+  assert.equal(sell?.quantity, "1.7")
+  assert.equal(sell?.reason, "SELL_RESIDUAL_INVENTORY_ABOVE_KEEP_QUANTITY")
+  assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
+  const completion = evaluateRecoveryCompletion({
+    sellOrderFullyFilled: true,
+    spent: position.spent.amount,
+    netSellProceeds: recoveryLedger.netSellProceeds,
+    activeQuantity: position.quantity.amount,
+    keepQuantity: "1",
+    minProfit: "0.01",
+  })
+  assert.equal(completion.eligible, false)
+  assert.equal(completion.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH")
+  assert.equal(completion.freeQuantity, "0")
+})
+
+test("classifies the incident 2.8 DOGE residual as dust only with explicit minimum-notional test filters", () => {
+  const { portfolio, recoveryLedger, metadata } = createDogeIncidentResidualScenario()
+  const position = portfolio.getPosition({ symbol: "DOGEUSDT" })
+  const decision = evaluateIncidentResidual({
+    symbol: "DOGEUSDT",
+    price: "0.05719",
+    keepQuantity: 1,
+    orderQuantity: 400,
+    portfolio,
+    recoveryLedger,
+    incidentMarketMetadata: metadata,
+    lastBuyPrice: "0.0569",
+  })
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
+  assert.equal(decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST")
+  assert.equal(decision.inventoryDisposition.quantity, "1.8")
+  assert.equal(decision.inventoryDisposition.reason, "MIN_NOTIONAL")
+  const completion = evaluateRecoveryCompletion({
+    sellOrderFullyFilled: true,
+    spent: position.spent.amount,
+    netSellProceeds: recoveryLedger.netSellProceeds,
+    activeQuantity: position.quantity.amount,
+    keepQuantity: "1",
+    minProfit: "0.01",
+    inventoryDisposition: decision.inventoryDisposition,
+  })
+  assert.equal(completion.eligible, true, "Validated fixture dust may complete without a residual SELL.")
+  assert.equal(completion.dust.quantity, "1.8")
+  assert.equal(completion.freeQuantity, "2.8")
+})
+
+test("sells the fee-reserved 0.004 ZRO quantity from the incident 0.015 ZRO residual under explicit sellable test filters", () => {
+  const { portfolio, recoveryLedger, metadata } = createZroIncidentResidualScenario({
+    quantityIncrement: "0.001",
+    minQuantity: "0.001",
+    minNotional: "0.001",
+  })
+  const position = portfolio.getPosition({ symbol: "ZROUSDT" })
+  assert.equal(position.quantity.amount, "0.015")
+  assert.equal(recoveryLedger.realizedNetProfit, "0.01272184")
+  const decision = evaluateIncidentResidual({
+    symbol: "ZROUSDT",
+    price: "1.092",
+    keepQuantity: 0.01,
+    orderQuantity: 5,
+    portfolio,
+    recoveryLedger,
+    incidentMarketMetadata: metadata,
+    lastBuyPrice: "1.084",
+  })
+  const sell = decision.actions.find((action) => action.side === "SELL")
+  assert.equal(sell?.quantity, "0.004")
+  assert.equal(sell?.reason, "SELL_RESIDUAL_INVENTORY_ABOVE_KEEP_QUANTITY")
+  assert.equal(decision.actions.some((action) => action.side === "BUY"), false)
+  const completion = evaluateRecoveryCompletion({
+    sellOrderFullyFilled: true,
+    spent: position.spent.amount,
+    netSellProceeds: recoveryLedger.netSellProceeds,
+    activeQuantity: position.quantity.amount,
+    keepQuantity: "0.01",
+    minProfit: "0.01",
+  })
+  assert.equal(completion.eligible, false)
+  assert.equal(completion.reason, "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH")
+  assert.equal(completion.freeQuantity, "0")
+})
+
+test("classifies the incident 0.015 ZRO residual as quantity-step dust with explicit filter test fixtures", () => {
+  const { portfolio, recoveryLedger, metadata } = createZroIncidentResidualScenario()
+  const position = portfolio.getPosition({ symbol: "ZROUSDT" })
+  const decision = evaluateIncidentResidual({
+    symbol: "ZROUSDT",
+    price: "1.092",
+    keepQuantity: 0.01,
+    orderQuantity: 5,
+    portfolio,
+    recoveryLedger,
+    incidentMarketMetadata: metadata,
+    lastBuyPrice: "1.084",
+  })
+  assert.equal(decision.actions.some((action) => action.side === "SELL"), false)
+  assert.equal(decision.inventoryDisposition.status, "EXCHANGE_CONSTRAINED_DUST")
+  assert.equal(decision.inventoryDisposition.quantity, "0.005")
+  assert.equal(decision.inventoryDisposition.reason, "QUANTITY_INCREMENT")
+  const completion = evaluateRecoveryCompletion({
+    sellOrderFullyFilled: true,
+    spent: position.spent.amount,
+    netSellProceeds: recoveryLedger.netSellProceeds,
+    activeQuantity: position.quantity.amount,
+    keepQuantity: "0.01",
+    minProfit: "0.01",
+    inventoryDisposition: decision.inventoryDisposition,
+  })
+  assert.equal(completion.eligible, true, "Validated fixture dust may complete without a residual SELL.")
+  assert.equal(completion.dust.quantity, "0.005")
+  assert.equal(completion.freeQuantity, "0.015")
 })

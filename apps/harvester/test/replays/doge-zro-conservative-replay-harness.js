@@ -581,6 +581,8 @@ async function startDogeReplayRuntime({ state, appConfig, brokerFactory }) {
       },
       flush: async () => ({ ok: true,
 durable: true }),
+      flushWrites: async () => ({ ok: true,
+durable: true }),
     },
     logger: {
       info() {},

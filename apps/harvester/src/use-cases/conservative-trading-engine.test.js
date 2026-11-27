@@ -129,12 +129,22 @@ function createHarnessEventPublisher({ eventPublisher } = {}) {
   if (!eventPublisher) {
     return undefined
   }
+  const flush = typeof eventPublisher.flush === "function"
+    ? eventPublisher.flush
+    : async () => ({
+      ok: true,
+      durable: true,
+    })
+  const flushWrites = typeof eventPublisher.flushWrites === "function"
+    ? eventPublisher.flushWrites
+    : async () => ({
+      ok: true,
+      durable: true,
+    })
   return {
     ...eventPublisher,
-    flush: typeof eventPublisher.flush === "function"
-      ? eventPublisher.flush
-      : async () => ({ ok: true,
-durable: true }),
+    flush,
+    flushWrites,
   }
 }
 
@@ -11196,6 +11206,114 @@ function assertExternalOrderLocalDeferral({ result, harness, flushCount, journal
   assert.equal(journalEvents.some((event) => event.name === "order.submission_failed"), false,
     "A local deferral must not be misclassified as a broker rejection or ambiguous outcome.")
 }
+
+function createRecoverySellDeferralStrategyPolicy() {
+  return {
+    evaluate: ({ marketPrice }) => ({
+      strategy: "CONSERVATIVE",
+      symbol: marketPrice.symbol,
+      action: "SUBMIT",
+      reason: "RECOVERY_SELL_THROUGH",
+      actions: [{
+        side: "SELL",
+        purpose: "RECOVERY_SELL",
+        strategyId: StrategyId.COIN_GRABBER,
+        positionId: "position:cg:dogeusdt",
+        type: "LIMIT_MAKER",
+        price: "100",
+        quantity: "1",
+        reason: "RECOVERY_SELL_THROUGH",
+      }],
+    }),
+    evaluateTrailingBuyRepricing: () => ({
+      shouldReplace: false,
+      adjustmentThreshold: "0",
+    }),
+  }
+}
+
+async function createRecoverySellDeferralHarness({ failDeferralFlush = false } = {}) {
+  let hasExternalOrder = false
+  let flushCount = 0
+  const journalEvents = []
+  const failure = new Error("Journal flush failed for recovery SELL deferral")
+  failure.code = "RECOVERY_SELL_DEFERRAL_EVIDENCE_NOT_DURABLE"
+  const harness = await createHarness({
+    appConfig: withExternalOrdersPolicy("block"),
+    hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
+    strategyPolicy: createRecoverySellDeferralStrategyPolicy(),
+    eventPublisher: {
+      publish: (event) => {
+        journalEvents.push(event)
+        return { ok: true }
+      },
+      flush: async () => {
+        flushCount += 1
+        if (flushCount === 1) {
+          hasExternalOrder = true
+        }
+        if (failDeferralFlush && flushCount === 2) {
+          return {
+            ok: false,
+            errors: [failure],
+          }
+        }
+        return {
+          ok: true,
+          durable: true,
+        }
+      },
+    },
+  })
+  return {
+    harness,
+    journalEvents,
+    failure,
+    getFlushCount: () => flushCount,
+  }
+}
+
+test("durably records a blocked recovery SELL with its purpose and registration state", async () => {
+  const scenario = await createRecoverySellDeferralHarness()
+  const result = await scenario.harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(scenario.getFlushCount(), 2)
+  assert.deepEqual(scenario.harness.orders, [])
+  assert.equal(scenario.harness.engine.getOrders().length, 0)
+  assert.deepEqual(scenario.harness.engine.getRecoveryIntents().deferredEvaluations, ["DOGEUSDT"])
+  const deferred = scenario.journalEvents.find((event) => event.name === "order.submission_deferred")
+  assert.ok(deferred)
+  assert.equal(deferred.data.purpose, "RECOVERY_SELL")
+  assert.equal(deferred.data.registered, true)
+  assert.equal(deferred.data.reason, "UNOWNED_OPEN_ORDERS_PRESENT")
+})
+
+test("pauses a blocked recovery SELL when its deferral evidence cannot be durably flushed", async () => {
+  const scenario = await createRecoverySellDeferralHarness({ failDeferralFlush: true })
+  const result = await scenario.harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.errors[0], scenario.failure)
+  assert.equal(scenario.getFlushCount(), 2)
+  assert.deepEqual(scenario.harness.orders, [])
+  assert.equal(scenario.harness.engine.getOrders().length, 0)
+  assert.ok(scenario.harness.pauses.includes("ORDER_INTENT_NOT_DURABLE"))
+})
 
 test("rechecks external-order ownership after the durable order intent and records a terminal local deferral", async () => {
   let hasExternalOrder = false

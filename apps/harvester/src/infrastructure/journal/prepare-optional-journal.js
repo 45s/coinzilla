@@ -74,6 +74,7 @@ function createDisabledJournal() {
       })
     },
     flush: async () => toResult({ error: new Error("Durable account audit requires an enabled Journal") }),
+    flushWrites: async () => toResult({ error: new Error("Durable recovery evidence requires an enabled Journal") }),
     close: async () => toResult({ closed: true,
 disabled: true }),
   })
@@ -177,6 +178,29 @@ function createJournalLifecycle({ journal, ready, state, reportFailure }) {
     }
   }
 
+  const flushWrites = async () => {
+    const startResult = await ready
+    if (!startResult.ok || !journal) {return startResult}
+    if (typeof journal.flushWrites !== "function") {
+      return toResult({
+        error: new TypeError("Journal implementation must provide flushWrites() for durable write-only evidence"),
+      })
+    }
+    try {
+      const result = await journal.flushWrites()
+      if (result?.ok === true && result?.durable === true) {return result}
+      state.current = "degraded"
+      if (result?.ok === false) {return result}
+      return toResult({
+        error: new TypeError("Journal flushWrites must return a durable success acknowledgement"),
+      })
+    } catch (error) {
+      state.current = "degraded"
+      reportFailure({ error })
+      return toResult({ error })
+    }
+  }
+
   const close = async () => {
     const startResult = await ready
     if (!journal) {
@@ -207,6 +231,7 @@ function createJournalLifecycle({ journal, ready, state, reportFailure }) {
       return getStatus()
     },
     flush,
+    flushWrites,
     close,
   })
 }
