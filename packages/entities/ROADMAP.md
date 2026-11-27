@@ -11,7 +11,11 @@
 - Extend contracts only when a real consumer requires a documented field or behavior. Add consumer-facing regression tests for contract changes.
 - Continue package maintenance and lint/test compliance; defer speculative entities and broad refactors.
 
-## Active task\n\n- [ ] Migrate Coin and Order normalization to the accurately named `trimAndUppercase` utility; preserve existing uppercase normalization and whitespace handling. Tracked by [issue #1598](https://github.com/45s/coinzilla/issues/1598).\n\n## Canonical sources
+## Active task
+
+- [ ] Migrate Coin and Order normalization to the accurately named `trimAndUppercase` utility; preserve existing uppercase normalization and whitespace handling. Tracked by [issue #1598](https://github.com/45s/coinzilla/issues/1598).
+
+## Canonical sources
 
 - Contract and package usage: [README](./README.md)
 - Current interfaces, schemas, and tests: package source
