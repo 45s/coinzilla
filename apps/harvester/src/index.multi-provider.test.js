@@ -4,6 +4,7 @@ import { main as startMain } from "./index.js"
 import { appConfig as defaultAppConfig } from "../config/index.js"
 
 const disabledJournalService = () => ({
+  status: { enabled: false },
   ready: Promise.resolve({
     ok: true,
     disabled: true,

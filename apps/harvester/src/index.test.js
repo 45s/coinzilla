@@ -15,7 +15,10 @@ import { StrategyId } from "./domain/strategies/strategy-ids.js"
 const disabledJournalService = () => ({
   ready: Promise.resolve({ ok: true,
     disabled: true }),
-  status: { state: "disabled" },
+  status: {
+    state: "disabled",
+    enabled: false,
+  },
   flush: async () => ({ ok: true,
     durable: true }),
   close: async () => ({ ok: true,
