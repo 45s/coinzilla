@@ -236,11 +236,19 @@ right: order.originalQuantity.amount }) !== 0) {
   }
 }
 
-function observeDurableIntentPublication({ published } = {}) {
+function observeDurableIntentPublication({ published, eventName, dataResult } = {}) {
   if (published?.pending === true ||
       (published && typeof published.then === "function")) {
+    // A custom asynchronous EventBus observer is optional for an initial BUY:
+    // do not await it or turn an otherwise durable operational submission into
+    // a failure. Recovery SELL and cancellation intents remain fail-closed,
+    // because their Journal evidence must exist before changing exchange state.
+    if (eventName === HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_REQUESTED &&
+        dataResult?.data?.side === "BUY") {
+      return toResult({ data: { skipped: true } })
+    }
     return toResult({
-      error: new TypeError("Durable lifecycle intent publication must complete synchronously before Journal flush"),
+      error: new TypeError("Durable recovery lifecycle intent publication must complete synchronously before Journal flush"),
     })
   }
   if (published?.ok === false) {
@@ -278,7 +286,11 @@ function createDurableIntentPublisher({ eventPublisher } = {}) {
       eventName,
       dataResult,
     })
-    const publicationResult = observeDurableIntentPublication({ published })
+    const publicationResult = observeDurableIntentPublication({
+      published,
+      eventName,
+      dataResult,
+    })
     if (publicationResult) {
       return publicationResult
     }
