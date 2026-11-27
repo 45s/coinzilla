@@ -68,12 +68,10 @@ function createShutdownChildSource({ lockModuleUrl, shutdownModuleUrl } = {}) {
   `
 }
 
-function createDurableJournalShutdownChildSource({ eventBusModuleUrl, journalModuleUrl, lockModuleUrl, shutdownModuleUrl } = {}) {
+function createDurableJournalChildSetupSource({ eventBusModuleUrl, journalModuleUrl } = {}) {
   return `
     import { EventBus } from ${JSON.stringify(eventBusModuleUrl)}
     import { Journal } from ${JSON.stringify(journalModuleUrl)}
-    import { acquireHarvesterProcessLock } from ${JSON.stringify(lockModuleUrl)}
-    import { createRuntimeShutdownHandler } from ${JSON.stringify(shutdownModuleUrl)}
 
     const logger = {
       system: () => {},
@@ -99,6 +97,12 @@ function createDurableJournalShutdownChildSource({ eventBusModuleUrl, journalMod
     if (accepted.ok !== true) {
       throw accepted.errors?.[0] ?? new Error("The pre-shutdown Journal event was not accepted.")
     }
+  `
+}
+
+function createDurableJournalChildLockSource({ lockModuleUrl } = {}) {
+  return `
+    import { acquireHarvesterProcessLock } from ${JSON.stringify(lockModuleUrl)}
 
     const lock = await acquireHarvesterProcessLock({
       directory: process.env.HARVESTER_TEST_LOCK_DIRECTORY,
@@ -107,7 +111,6 @@ function createDurableJournalShutdownChildSource({ eventBusModuleUrl, journalMod
     if (lock.ok !== true) {
       throw lock.errors?.[0] ?? new Error("Child process could not acquire its process lock.")
     }
-
     let runtimeStopCalls = 0
     let journalCloseCalls = 0
     let lockReleaseCalls = 0
@@ -118,6 +121,13 @@ function createDurableJournalShutdownChildSource({ eventBusModuleUrl, journalMod
         return journal.close()
       },
     }
+  `
+}
+
+function createDurableJournalChildHandlerSource({ shutdownModuleUrl } = {}) {
+  return `
+    import { createRuntimeShutdownHandler } from ${JSON.stringify(shutdownModuleUrl)}
+
     const handler = createRuntimeShutdownHandler({
       runtime: {
         stop: async () => {
@@ -157,13 +167,22 @@ function createDurableJournalShutdownChildSource({ eventBusModuleUrl, journalMod
       },
       logTelegramNotificationSummary: () => {},
     })
-
-    await handler("SIGTERM")
-    await handler("SIGINT")
-    process.stdout.write("JOURNAL_FILE=" + journal.filePath + "\\n")
-    process.stdout.write("COUNTS=" + [runtimeStopCalls, journalCloseCalls, lockReleaseCalls].join(",") + "\\n")
-    process.stdout.write("SHUTDOWN_COMPLETE\\n")
   `
+}
+
+function createDurableJournalShutdownChildSource(options = {}) {
+  return [
+    createDurableJournalChildSetupSource(options),
+    createDurableJournalChildLockSource(options),
+    createDurableJournalChildHandlerSource(options),
+    `
+      await handler("SIGTERM")
+      await handler("SIGINT")
+      process.stdout.write("JOURNAL_FILE=" + journal.filePath + "\\n")
+      process.stdout.write("COUNTS=" + [runtimeStopCalls, journalCloseCalls, lockReleaseCalls].join(",") + "\\n")
+      process.stdout.write("SHUTDOWN_COMPLETE\\n")
+    `,
+  ].join("\\n")
 }
 
 function startShutdownChild({ directory, source, journalDirectory } = {}) {
