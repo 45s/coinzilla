@@ -110,8 +110,8 @@ test("explicit initialization writes a genesis fact and committed-head manifest 
 force: true }))
   const store = createStore(directory)
   const initialized = await store.initialize()
-  assert.equal(initialized.ok, true)
-  assert.equal(initialized.data.durable, true)
+  assert.equal(initialized.ok, true, "Genesis initialization must succeed when every required directory fsync succeeds.")
+  assert.equal(initialized.data.durable, true, "Genesis may be acknowledged durable only after stream and directory-entry fsync barriers succeed.")
   const records = await store.readAll()
   assert.equal(records.ok, true)
   assert.equal(records.data.records.length, 1)
@@ -1063,7 +1063,7 @@ test("directory fsync failure prevents durable genesis acknowledgement", async (
 
   assert.equal(initialized.ok, false,
     "Genesis must not be acknowledged when the newly created ledger path is not durable")
-  assert.equal(initialized.errors[0].code, "DURABLE_FACTS_COMMIT_UNCERTAIN")
+  assert.equal(initialized.errors[0].code, "DURABLE_FACTS_COMMIT_UNCERTAIN", "A parent-directory fsync failure after genesis writes must be classified as an uncertain commit.")
   assert.equal(syncedDirectories[0], root,
     "The failed fsync must be the parent directory that owns the new ledger entry")
   assert.equal((await store.verify()).ok, false,
