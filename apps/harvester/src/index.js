@@ -1182,7 +1182,10 @@ async function releaseStartupProcessLockAfterLogger({
   })
   if (errors.length > 0) {
     process.exitCode = 1
-    reportObservabilityCleanupErrors({ errors, logger })
+    reportObservabilityCleanupErrors({
+      errors,
+      logger,
+    })
   }
   return errors
 }

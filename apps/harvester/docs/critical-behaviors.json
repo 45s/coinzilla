@@ -894,6 +894,11 @@
           "path": "src/index.test.js",
           "name": "retains the process lock when startup logger returns an explicit failure",
           "kind": "failure"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "reports an ambiguous process-lock release after startup logger cleanup",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",

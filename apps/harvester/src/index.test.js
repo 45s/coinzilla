@@ -955,66 +955,7 @@ test("reports an ambiguous process-lock release after startup logger cleanup", a
   }
 })
 
-test("retains the process lock when startup logger cleanup fails", async () => {
-  const calls = []
-  const previousExitCode = process.exitCode
-  process.exitCode = 0
-  try {
-    await main({
-      acquireProcessLock: async () => ({
-        ok: true,
-        release: async () => {
-          calls.push("lock-release")
-          return {
-            ok: true,
-            released: true,
-          }
-        },
-      }),
-      createEventBus: () => ({
-        publish: () => ({ ok: true }),
-        flush: async () => ({ ok: true }),
-        close: async () => ({
-          ok: true,
-          closed: true,
-        }),
-      }),
-      createJournalService: () => ({
-        status: { enabled: false },
-        ready: Promise.resolve({
-          ok: false,
-          errors: [new Error("Journal readiness failed")],
-        }),
-        flush: async () => ({
-          ok: true,
-          durable: true,
-        }),
-        close: async () => ({
-          ok: true,
-          closed: true,
-          disabled: true,
-        }),
-      }),
-      start: async () => {
-        throw new Error("Runtime must not start before Journal readiness succeeds.")
-      },
-      closeLogger: async () => {
-        calls.push("logger.close")
-        throw new Error("Logger close failed")
-      },
-      logger: {
-        info() {},
-        debug() {},
-        error() {},
-      },
-    })
-    assert.deepEqual(calls, ["logger.close"],
-      "The process lock must remain held when logger shutdown is not confirmed.")
-    assert.equal(process.exitCode, 1)
-  } finally {
-    process.exitCode = previousExitCode
-  }
-})
+
 
 
 test("retains the process lock when startup logger cleanup fails", async () => {
