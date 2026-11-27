@@ -3382,31 +3382,6 @@ async function createCompleteCycleHarness({ scenario, keepQuantity }) {
   return harness
 }
 
-async function supplyRecoverySellCommissionFacts({ scenario }) {
-  const originalGetFills = scenario.harness.broker.getFills.bind(scenario.harness.broker)
-  scenario.harness.broker.getFills = async ({ orderId }) => {
-    const result = await originalGetFills({
-      orderId,
-    })
-    if (!result.ok || !Array.isArray(result.data) || result.data.length === 0) {
-      return result
-    }
-    const canceledSell = scenario.harness.engine.getOrders().find((order) =>
-      order.brokerOrderId === orderId)
-    assert.ok(canceledSell)
-    return {
-      ok: true,
-      data: result.data.map((fill) => makeCommissionedCycleFill({
-        order: canceledSell,
-        tradeId: fill.tradeId,
-        quantity: fill.quantity.amount,
-        commissionAsset: "BASE",
-        executedAt: 12,
-      })),
-    }
-  }
-}
-
 async function runFirstCycleBuy({ scenario }) {
   const started = await scenario.harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
