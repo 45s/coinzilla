@@ -271,7 +271,7 @@ async function flushDurableIntent({ eventPublisher }) {
   }
 }
 
-function createDurableIntentPublisher({ eventPublisher, logger } = {}) {
+function createDurableIntentPublisher({ eventPublisher } = {}) {
   return async ({ eventName, dataResult } = {}) => {
     const published = publishLifecycleEvent({
       eventPublisher,
