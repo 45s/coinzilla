@@ -56,6 +56,17 @@ import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, c
 
 // RS-4/RS-5 offline acceptance is complete. RS is enabled by default; pair-level tradingEnvironment controls eligibility.
 const RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = true
+const RECOVERY_SELLER_STOP_PRODUCER = "RECOVERY_SELLER_STOP_WORKFLOW"
+const RECOVERY_SELLER_STOP_REASON = "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+
+function isRecoverySellerStopRestartBlocker(blocker) {
+  return blocker?.scope === "ACCOUNT" &&
+    blocker?.reason === RECOVERY_SELLER_STOP_REASON &&
+    (
+      blocker?.producer === RECOVERY_SELLER_STOP_PRODUCER ||
+      blocker?.producer === undefined
+    )
+}
 
 
 function assertOperationalStateStoreInterface({ operationalStateStore } = {}) {
@@ -201,12 +212,7 @@ function assertOperationalStateCanStart({
   const observationOnlyRestart = latestProcessStart.data.tradingEnabled === false &&
     stickySafetyBlockers.length === 0
   const singleRecoverySellerStop = stickySafetyBlockers.length === 1 &&
-    stickySafetyBlockers[0].scope === "ACCOUNT" &&
-    stickySafetyBlockers[0].reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION" &&
-    (
-      stickySafetyBlockers[0].producer === "RECOVERY_SELLER_STOP_WORKFLOW" ||
-      stickySafetyBlockers[0].producer === undefined
-    )
+    isRecoverySellerStopRestartBlocker(stickySafetyBlockers[0])
   const accountBlockerResolutionRestart = accountRecoverySnapshotRequired === true &&
     stickySafetyBlockers.every((blocker) => blocker.scope !== "ACCOUNT")
   if (
