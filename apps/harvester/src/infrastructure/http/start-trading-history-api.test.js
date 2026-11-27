@@ -321,7 +321,7 @@ async function waitForScenarioRun({ apiBase, runId }) {
     if (["Completed", "Failed", "Cancelled", "Timed out", "Blocked"].includes(envelope.data.status)) {
       return envelope.data
     }
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await new Promise((complete) => setTimeout(complete, 20))
   }
   return null
 }
@@ -345,6 +345,20 @@ async function executeScenarioThroughApi({ apiBase, scenario }) {
     apiBase,
     runId: envelope.data.runId,
   })
+}
+
+function assertScenarioRunSucceeded({ scenario, result }) {
+  assert.ok(result, `Scenario ${scenario.id} must reach a terminal state.`)
+  assert.equal(result.status, "Completed",
+    `Scenario ${scenario.id} must complete its production-flow simulation.`)
+  assert.equal(result.output.passed, true,
+    `Scenario ${scenario.id} must satisfy its expected assertions.`)
+  assert.ok(result.output.assertions.length > 0,
+    `Scenario ${scenario.id} must return its assertion evidence.`)
+  assert.ok(result.output.trace.length > 0,
+    `Scenario ${scenario.id} must return its execution trace.`)
+  assert.equal(result.replayProvenance.verified, false,
+    "Local simulation must not imply trusted exact-replay provenance.")
 }
 
 test("executes every executable RS production-flow scenario through the local Harvester HTTP API on Windows", { skip: process.platform !== "win32" }, async () => {
@@ -376,17 +390,7 @@ test("executes every executable RS production-flow scenario through the local Ha
         apiBase,
         scenario,
       })
-      assert.ok(result, `Scenario ${scenario.id} must reach a terminal state.`)
-      assert.equal(result.status, "Completed",
-        `Scenario ${scenario.id} must complete its production-flow simulation.`)
-      assert.equal(result.output.passed, true,
-        `Scenario ${scenario.id} must satisfy its expected assertions.`)
-      assert.ok(result.output.assertions.length > 0,
-        `Scenario ${scenario.id} must return its assertion evidence.`)
-      assert.ok(result.output.trace.length > 0,
-        `Scenario ${scenario.id} must return its execution trace.`)
-      assert.equal(result.replayProvenance.verified, false,
-        "Local simulation must not imply trusted exact-replay provenance.")
+      assertScenarioRunSucceeded({ scenario, result })
     }
   } finally {
     await service.close()
