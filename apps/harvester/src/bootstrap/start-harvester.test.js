@@ -2005,7 +2005,7 @@ async function createPersistedAccountStopForRestart({ directory, store } = {}) {
   assert.equal(restoredWorkflow.data.isBuyAdmissionBlocked(), true,
     "A fresh process-session workflow must restore the durable RS investment BUY gate.")
   assert.equal(restoredWorkflow.data.isSellAdmissionBlocked(), false,
-    "A restored durable RS STOP must leave the first eligible recovery SELL gate available.")
+    "A restored durable RS STOP must leave the first recovery SELL gate independently available.")
   return restartStore
 }
 async function seedAccountBlocker({ store, config = appConfig, includeProcessHistory = false } = {}) {
@@ -2210,7 +2210,7 @@ test("allows only an observation-only restart after account resolution and verif
   }
 })
 
-test("restores a persisted RS investment STOP and keeps BUY admission blocked after restart", async () => {
+test("restores a persisted RS STOP and keeps a restarted runtime observation-only", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []
   const broker = createRsOnlyStartupBroker({ calls })
@@ -2246,10 +2246,10 @@ test("restores a persisted RS investment STOP and keeps BUY admission blocked af
       },
     })
 
-    assert.equal(result.tradingEnabled, true,
-      "A strategy-scoped RS STOP must not turn the entire account into an observation-only runtime.")
-    assert.equal(result.executionEnabled, true,
-      "The RS runtime must remain available for reconciliation and its independently gated first recovery SELL.")
+    assert.equal(result.tradingEnabled, false,
+      "A clean restart with a durable RS STOP must remain observation-only until controlled restart acceptance.")
+    assert.equal(result.executionEnabled, false,
+      "A persisted RS STOP must not implicitly resume any execution route after process restart.")
     const restoredWorkflow = await createRecoverySellerStopWorkflow({
       operationalStateStore: restartStore,
     })
@@ -2259,7 +2259,7 @@ test("restores a persisted RS investment STOP and keeps BUY admission blocked af
     assert.equal(restoredWorkflow.data.isBuyAdmissionBlocked(), true,
       "Restart must preserve the RS investment BUY gate.")
     assert.equal(restoredWorkflow.data.isSellAdmissionBlocked(), false,
-      "After durable restore, the first recovery SELL remains independently eligible.")
+      "The durable STOP semantics remain investment-only; startup's separate observation-only gate prevents implicit resume.")
 
     await result.processMarketPrice({
       symbol: "LINEAUSDT",
@@ -2269,10 +2269,10 @@ test("restores a persisted RS investment STOP and keeps BUY admission blocked af
         timestamp: 2,
       },
     })
-    assert.equal(strategyEvaluationCount, 1,
-      "The RS runtime may continue evaluating existing inventory while the STOP remains latched.")
+    assert.equal(strategyEvaluationCount, 0,
+      "An observation-only restart must prevent strategy evaluation until controlled restart acceptance.")
     assert.equal(calls.some((call) => typeof call === "object" && call.side), false,
-      "The test transition is WAIT-only; the durable STOP must not cause an automatic order.")
+      "An observation-only restart must not submit broker orders.")
     await result.stop()
   } finally {
     await rm(directory, {
