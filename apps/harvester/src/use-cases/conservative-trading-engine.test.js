@@ -2215,8 +2215,15 @@ test("does not cancel a recovery SELL when cancellation intent publication is st
   assert.equal(result.ok, false, "Pending cancellation-intent publication must not be acknowledged as durable.")
   assert.equal(flushCalls, 1, "A pending cancellation intent must not be followed by a misleading successful Journal flush.")
   assert.equal(cancelCalls, 0, "The broker must not receive cancellation before its durable intent is confirmed.")
-  assert.ok(harness.pauses.includes("RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE"))
-  assert.equal(harness.engine.getOrders().find((order) => order.side === "SELL").status, "OPEN")
+  assert.ok(
+    harness.pauses.includes("RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE"),
+    "The market must remain paused when the recovery SELL cancellation intent is not durable.",
+  )
+  assert.equal(
+    harness.engine.getOrders().find((order) => order.side === "SELL").status,
+    "OPEN",
+    "The existing recovery SELL must remain OPEN when cancellation intent publication is pending.",
+  )
 })
 
 test("does not cancel a recovery SELL when its durable cancellation intent flush fails", async () => {
