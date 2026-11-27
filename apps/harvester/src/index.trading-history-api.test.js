@@ -216,3 +216,20 @@ test("keeps Harvester trading startup successful when the optional API cannot bi
   assert.ok(calls.includes("runtime-stop"), "Harvester must remain available for normal shutdown.")
   assert.ok(calls.includes("database"), "Normal persistence cleanup must continue after optional API startup failure.")
 })
+
+test("starts runtime monitoring when relational trading-history persistence is unavailable", async () => {
+  const calls = []
+  const handlers = {}
+  const result = await main(createMainOptions({
+    database: null,
+    calls,
+    handlers,
+  }))
+
+  assert.ok(result?.runtime, "Relational history unavailability must not prevent Harvester runtime startup.")
+  assert.ok(calls.includes("api-start"),
+    "Harvester must still start its local runtime API so Dashboard monitoring remains available.")
+  await handlers.SIGTERM()
+  assert.ok(calls.includes("runtime-stop"), "Harvester must retain its normal runtime shutdown.")
+  assert.ok(calls.includes("api-close"), "The local runtime API must participate in normal shutdown.")
+})
