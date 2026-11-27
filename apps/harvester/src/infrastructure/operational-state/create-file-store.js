@@ -38,8 +38,10 @@ function createError(...parameters) {
  *
  * The fact log is fsynced before an append-only committed-head checkpoint is
  * fsynced. A partial checkpoint or a fact record without its matching checkpoint
- * is unresolved and fails closed. Genesis creation is explicit; normal startup
- * must verify/read an existing ledger and must never create one implicitly.
+ * is unresolved and fails closed. The explicit initialize() operation creates
+ * genesis on operator request; initializeIfEmpty() is the separate first-start
+ * boundary used by process startup and creates genesis only for a missing or
+ * empty directory. Existing or partial data is never repaired or replaced.
  *
  * @param {object} options
  * @param {string} options.directory - Stable per-installation Operational State Store record directory.
