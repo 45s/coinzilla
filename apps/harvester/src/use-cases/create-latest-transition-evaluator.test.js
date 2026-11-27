@@ -279,12 +279,13 @@ test("stops Conservative evaluation when recovery filter refresh fails", async (
 })
 
 
-test("forwards the original dust-completion failure while retaining the fail-closed pause", async () => {
+test("forwards the original dust-completion failure and publishes exact filter evidence before pausing", async () => {
   const dependencies = createDependencies()
   const symbol = "DOGEUSDT"
   const failure = new Error("recovery completion fact append failed")
   failure.code = "RECOVERY_COMPLETION_WRITE_FAILED"
   const pauses = []
+  const publishedEvents = []
   dependencies.state.completedRecoverySellSymbols = new Set([symbol])
   dependencies.state.completedRecoverySellOrdersBySymbol = new Map([
     [symbol, {
@@ -295,26 +296,72 @@ test("forwards the original dust-completion failure while retaining the fail-clo
   dependencies.state.trailingBuy = new Map()
   dependencies.pairs[symbol] = {
     enabled: true,
+    orderQuantity: 400,
+    investment: 100,
     keepQuantity: 1,
+    priceStepPercent: 0.05,
+    makerPercent: 0.1,
+    takerPercent: 0.1,
     minProfit: 0.01,
+  }
+  dependencies.getCurrentMarketMetadata = () => ({
+    market: {
+      id: symbol,
+      baseAsset: { id: "asset:DOGE" },
+      quoteAsset: { id: "asset:USDT" },
+    },
+    tradingRules: {
+      constraints: [
+        {
+          type: "MIN_QUANTITY",
+          status: "SUPPORTED",
+          value: { amount: "1", asset: { code: "DOGE" } },
+        },
+        {
+          type: "QUANTITY_INCREMENT",
+          status: "SUPPORTED",
+          value: { amount: "1", asset: { code: "DOGE" } },
+        },
+        {
+          type: "MIN_NOTIONAL",
+          status: "SUPPORTED",
+          value: { amount: "5", asset: { code: "USDT" } },
+        },
+      ],
+    },
+    metadataCapturedAt: 1234,
+    metadataVersion: null,
+  })
+  dependencies.eventPublisher = {
+    publish: (event) => {
+      publishedEvents.push(event)
+      return { ok: true }
+    },
   }
   dependencies.pause = async (input) => {
     pauses.push(input)
   }
-  dependencies.completeRecoveryCycle = async () => ({
-    ok: false,
-    errors: [failure],
-  })
+  dependencies.completeRecoveryCycle = async () => {
+    assert.equal(publishedEvents.length, 1, "The recovery decision must be published before completion is attempted.")
+    return {
+      ok: false,
+      errors: [failure],
+    }
+  }
   dependencies.strategyPolicy.evaluate = () => ({
+    strategy: "CONSERVATIVE",
     actions: [],
     reason: "RESIDUAL_DUST",
     inventoryDisposition: {
       status: "EXCHANGE_CONSTRAINED_DUST",
       reason: "MIN_NOTIONAL",
       quantity: "1.8",
+      minimumQuantity: "1",
       minimumNotional: "5",
-      evaluatedQuantity: "1.8",
-      evaluatedNotional: "0.18",
+      quantityStepSize: "1",
+      evaluatedQuantity: "1",
+      evaluatedNotional: "0.05719",
+      evaluatedPrice: "0.05719",
     },
   })
   const evaluate = createLatestTransitionEvaluator(dependencies)
@@ -329,6 +376,16 @@ test("forwards the original dust-completion failure while retaining the fail-clo
   assert.equal(pauses.length, 1, "The completion failure must produce exactly one market pause.")
   assert.equal(pauses[0].reason, "RECOVERY_CYCLE_COMPLETION_FAILED", "The existing stable pause reason must remain compatible.")
   assert.equal(pauses[0].error, failure, "The original failure must reach the durable pause callback, not only a generic reason.")
+  const decisionEvent = publishedEvents.find((event) => event.name === HARVESTER_EVENT_NAMES.STRATEGY_DECISION)
+  assert.ok(decisionEvent, "The no-action recovery disposition must be durably published.")
+  assert.equal(decisionEvent.data.actions.length, 0)
+  assert.equal(decisionEvent.data.recoveryEvidence.residualQuantity, "1.8")
+  assert.equal(decisionEvent.data.recoveryEvidence.candidateQuantity, "1")
+  assert.equal(decisionEvent.data.recoveryEvidence.sellableQuantity, "0")
+  assert.equal(decisionEvent.data.recoveryEvidence.residualNotional, "0.102942")
+  assert.equal(decisionEvent.data.recoveryEvidence.filterSnapshot.capturedAt, 1234)
+  assert.equal(decisionEvent.data.recoveryEvidence.filterSnapshot.version, null)
+  assert.equal(decisionEvent.data.recoveryEvidence.filterSnapshot.constraints[2].value, "5")
 })
 
 

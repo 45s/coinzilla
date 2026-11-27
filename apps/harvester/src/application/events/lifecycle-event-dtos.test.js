@@ -1460,6 +1460,8 @@ test("maps the exact validated exchange trading rules as a bounded plain DTO", (
         quoteAsset: { code: "USDT" },
       },
       orderType: "LIMIT_MAKER",
+      metadataCapturedAt: 1234,
+      metadataVersion: "binance-exchange-info-v1",
       supportedOrderTypes: ["LIMIT", "LIMIT_MAKER", "MARKET"],
       tradingRules: { constraints: [
         { type: "PRICE_INCREMENT",
@@ -1472,6 +1474,8 @@ test("maps the exact validated exchange trading rules as a bounded plain DTO", (
     },
   })
   assert.equal(result.ok, true)
+  assert.equal(result.data.metadataCapturedAt, 1234)
+  assert.equal(result.data.metadataVersion, "binance-exchange-info-v1")
   assert.equal(result.data.constraints[0].amount, "0.00001")
   assert.equal(result.data.constraints[1].status, "UNSUPPORTED")
 })
@@ -1934,4 +1938,81 @@ test("rejects malformed provider identity tokens in lifecycle DTOs", () => {
       `malformed provider identity token ${JSON.stringify(invalidIdentifier)} must be rejected`,
     )
   }
+})
+
+
+test("maps no-action recovery disposition and filter evidence into a durable strategy decision", () => {
+  const result = mapStrategyDecisionData({
+    strategy: "CONSERVATIVE",
+    symbol: "DOGEUSDT",
+    referencePrice: "0.05719",
+    reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+    inputs: {
+      activeBaseQuantity: "2.8",
+      keepQuantity: "1",
+      activeOrderCount: 0,
+      activeBuyCount: 0,
+      activeSellCount: 0,
+    },
+    actions: [],
+    recoveryEvidence: {
+      status: "EXCHANGE_CONSTRAINED_DUST",
+      reason: "MIN_NOTIONAL",
+      activeQuantity: "2.8",
+      keepQuantity: "1",
+      residualQuantity: "1.8",
+      candidateQuantity: "1",
+      sellableQuantity: "0",
+      evaluatedPrice: "0.05719",
+      residualNotional: "0.102942",
+      candidateNotional: "0.05719",
+      sellableNotional: "0",
+      inventoryDisposition: {
+        status: "EXCHANGE_CONSTRAINED_DUST",
+        reason: "MIN_NOTIONAL",
+        quantity: "1.8",
+        minimumQuantity: "1",
+        minimumNotional: "5",
+        quantityStepSize: "1",
+        evaluatedQuantity: "1",
+        evaluatedNotional: "0.05719",
+        evaluatedPrice: "0.05719",
+      },
+      plannedSell: null,
+      filterSnapshot: {
+        capturedAt: 1234,
+        version: null,
+        evaluationTimestamp: 1000,
+        captureSource: "LOCAL_METADATA_CACHE",
+        available: true,
+        constraints: [
+          {
+            type: "MIN_QUANTITY",
+            status: "SUPPORTED",
+            value: "1",
+            assetCode: "DOGE",
+          },
+          {
+            type: "QUANTITY_INCREMENT",
+            status: "SUPPORTED",
+            value: "1",
+            assetCode: "DOGE",
+          },
+          {
+            type: "MIN_NOTIONAL",
+            status: "SUPPORTED",
+            value: "5",
+            assetCode: "USDT",
+          },
+        ],
+      },
+    },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.actions.length, 0)
+  assert.equal(result.data.recoveryEvidence.residualQuantity, "1.8")
+  assert.equal(result.data.recoveryEvidence.inventoryDisposition.evaluatedPrice, "0.05719")
+  assert.equal(result.data.recoveryEvidence.filterSnapshot.capturedAt, 1234)
+  assert.equal(result.data.recoveryEvidence.filterSnapshot.constraints[2].value, "5")
 })

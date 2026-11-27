@@ -378,3 +378,18 @@ The implementation and deterministic regression tests are tracked by [issue #118
 ### Recovery completion failure evidence
 
 When a Conservative strategy pause is caused by a failed recovery completion or residual-dust evaluation, the immutable `STRATEGY_MARKET_PAUSED` Operational State fact must include the sanitized original error identity (`name`, bounded `message`, and optional stable `code`) alongside the stable pause reason. Do not persist stacks or raw broker payloads. The generic pause reason remains a safety classification; it is not a substitute for the original failure. This evidence improves diagnosis without changing the fail-closed completion or BUY-admission rules. The evaluator regression also verifies that an already-active residual SELL prevents a duplicate submission on the next evaluation.
+
+### Durable recovery sell-through evaluation evidence
+
+Every residual sell-through plan and exchange-constrained dust disposition is published as a strategy.decision Journal event, including no-action decisions. A no-action dust decision is published before recovery completion is attempted, so a failed completion cannot erase the filter decision that preceded the pause.
+
+The allowlisted recoveryEvidence records:
+
+- Active inventory, keepQuantity, residual quantity, candidate quantity, actually sellable quantity, and any planned SELL.
+- Evaluated price and residual, candidate, and sellable notionals.
+- The exact inventory disposition and its minimum quantity/notional, quantity increment, evaluated quantity/notional/price, and filter reason.
+- The validated market-filter inputs, local metadata capture timestamp, provider metadata version when available, and market-price evaluation timestamp.
+
+metadataCapturedAt is the local time at which the validated filter snapshot was loaded/refreshed; it is not an exchange-generated version. metadataVersion is null when the provider does not expose a version. Missing filter snapshots remain explicitly unavailable and must never be inferred from current filters.
+
+The existing order lifecycle facts remain authoritative for submission and broker outcomes (PLANNED, SUBMITTED, ACKNOWLEDGED, REJECTED, UNKNOWN, or BLOCKED). The Operational State pause fact separately retains the sanitized original completion error. Recovery remains unresolved until full reconciliation and Position/RecoveryLedger basis reset; no new Conservative BUY is permitted before that reset.

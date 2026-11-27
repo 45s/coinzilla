@@ -71,13 +71,18 @@ enableVolatilityProtection: true },
     marketMetadata,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
     logger: {},
+    now: () => 1234,
   })
 
   assert.deepEqual(calls, ["BTCUSDT", "ETHUSDT"], "Exchange metadata must be loaded for enabled and disabled configured markets.")
   assert.equal(marketMetadata.get("BTCUSDT").orderType, "LIMIT_MAKER", "Enabled market metadata must be validated for the configured order policy.")
-  assert.equal(marketMetadata.get("ETHUSDT"), disabledMetadata, "Disabled markets must retain canonical asset metadata without trading-policy validation.")
+  assert.equal(marketMetadata.get("BTCUSDT").metadataCapturedAt, 1234)
+  assert.equal(marketMetadata.get("BTCUSDT").metadataVersion, null)
+  assert.equal(marketMetadata.get("ETHUSDT").market, disabledMetadata.market, "Disabled markets must retain canonical asset metadata without trading-policy validation.")
+  assert.equal(marketMetadata.get("ETHUSDT").metadataCapturedAt, 1234)
   assert.equal(events.length, 1, "Only enabled markets must publish trading-rule capture events.")
   assert.equal(events[0].name, HARVESTER_EVENT_NAMES.MARKET_TRADING_RULES_CAPTURED, "The enabled-market event must use the stable lifecycle event name.")
+  assert.equal(events[0].data.metadataCapturedAt, 1234)
 })
 
 test("fails startup when exchange metadata cannot be loaded for a configured market", async () => {
