@@ -9,7 +9,7 @@
 
 | Priority / area | Canonical issue | Current status |
 | --- | --- | --- |
-| Conservative no-new-BUY-until-cycle-complete admission | [#1895](https://github.com/45s/coinzilla/issues/1895) | Active contract migration: strategy policy and final application submission gate must block new BUYs until fully reconciled recovery completion and Position/RecoveryLedger basis reset. |
+| Conservative no-new-BUY-until-cycle-complete admission | [#1895](https://github.com/45s/coinzilla/issues/1895) | Implementation in [PR #1899](https://github.com/45s/coinzilla/pull/1899): strategy policy and final application gate block new BUYs until fully reconciled recovery completion and Position/RecoveryLedger basis reset; exact-head regression/CI verification pending. |
 | Conservative ownership and shutdown incident | [#1856](https://github.com/45s/coinzilla/issues/1856) | Fix merged in [PR #1858](https://github.com/45s/coinzilla/pull/1858). Issue remains open for historical exchange-identity and original-runtime evidence; do not claim the old run's final STOP/process/lock outcome without its evidence. |
 | Conservative exhaustive scenario coverage | [#1763](https://github.com/45s/coinzilla/issues/1763) | Active source-mapped scenario matrix and exact-head evidence. |
 | Recovery Seller terminal SELL acceptance | [#1842](https://github.com/45s/coinzilla/issues/1842) | Non-FILLED terminal SELL STOP fix merged in [PR #1875](https://github.com/45s/coinzilla/pull/1875). Its merge-commit coverage run exposed an uncovered missing-broker-ID guard in terminal fill reconciliation; this test-only follow-up covers absent and whitespace-only IDs without changing runtime behavior. |

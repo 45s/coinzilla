@@ -230,7 +230,8 @@ flowchart TD
     A[Market-price event] --> B{Active BUY and trailing enabled?}
     B -- No --> Z[Run normal Conservative evaluation]
     B -- Yes --> C{Active strategy position quantity above zero?}
-    C -- Yes --> Z2[Do not reprice the BUY]
+    C -- Yes --> Z2[Skip trailing-BUY replacement]
+    Z2 --> Z[Run normal Conservative evaluation]
     C -- No --> D{Trailing trigger reached and engine not stopping?}
     D -- No --> Z
     D -- Yes --> E[Fetch current Binance exchange filters]
@@ -273,7 +274,7 @@ flowchart TD
 
 ### Why preflight happens before cancellation
 
-The engine runs this work inside its serialized market-price transition. It first requires an acknowledged active BUY, trailing enabled, no active strategy position, a reached repricing trigger, and a process that is not stopping. It then fetches current Binance symbol filters and validates that the refreshed market metadata is complete and still identifies the active symbol and market. The Conservative policy is evaluated using the current market price as the replacement reference. Commitment allocation excludes only the existing BUY that would be canceled, modeling the quote commitment that cancellation will release; it does **not** cancel the order or remove it from the live registry.
+The engine runs this work inside its serialized market-price transition. It first requires an acknowledged active BUY, trailing enabled, no active strategy position, a reached repricing trigger, and a process that is not stopping. If an active strategy Position exists, only trailing-BUY replacement is skipped: the engine must continue normal Conservative evaluation so required recovery SELL coverage can be established or maintained. This is not an early return from strategy evaluation. The no-new-BUY rule in §3 and the final application submission gate remain authoritative throughout that evaluation. When trailing replacement is eligible, the engine then fetches current Binance symbol filters and validates that the refreshed market metadata is complete and still identifies the active symbol and market. The Conservative policy is evaluated using the current market price as the replacement reference. Commitment allocation excludes only the existing BUY that would be canceled, modeling the quote commitment that cancellation will release; it does **not** cancel the order or remove it from the live registry.
 
 The executable replacement candidate is converted into canonical preflight order(s) and checked against the refreshed exchange rules, including quantity and price increments and minimum notional. The same submission-readiness gate checks current market-price freshness and, for `LIMIT_MAKER`, a fresh same-symbol book and a price that does not cross the opposite best quote. A validation error pauses the pair; unavailable readiness or the absence of an executable replacement BUY defers/skips the replacement. In every preflight failure or deferral case, the existing BUY remains open and untouched. This is essential: canceling first would remove the existing standing order even though the replacement might be rejected by exchange filters or could not safely be submitted, leaving the pair without its intended BUY.
 
