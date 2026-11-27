@@ -276,6 +276,8 @@ async function createPlannerScenario({
     accountSnapshot: createAccountSnapshot({ spotTotalQuantity }),
     stopState,
     strategyStopped: false,
+    buyAdmissionBlocked: false,
+    sellAdmissionBlocked: false,
     marketPaused: false,
     reconciliationComplete: true,
   })
@@ -784,6 +786,7 @@ function createWorkflowStopSnapshot({ baseScenario }) {
     stopState: stoppedState,
     strategyStopped: false,
     buyAdmissionBlocked: true,
+    sellAdmissionBlocked: false,
   })
 }
 

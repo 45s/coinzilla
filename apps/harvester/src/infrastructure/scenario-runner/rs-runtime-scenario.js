@@ -1291,9 +1291,10 @@ function createRuntimeScenarioTerminalSellResult({
       fact.factType === "SAFETY_BLOCKER_RAISED" && fact.data?.scope === "ACCOUNT"),
     stopPersistenceFailed: pauses.some((pause) =>
       pause.error?.message?.includes("global STOP could not be confirmed")),
-    accountAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
-    buyAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
-    postFailureAdmissionBlocked: false,
+    buyAdmissionBlocked: runtime.stopWorkflow.isBuyAdmissionBlocked(),
+    sellAdmissionBlocked: runtime.stopWorkflow.isSellAdmissionBlocked(),
+    postFailureBuyAdmissionBlocked: false,
+    postFailureSellAdmissionBlocked: false,
     postFailureSubmittedOrderCount: 0,
     postFailureActionSubmitted: false,
     eventFillStaged: stagedSellFills.length === 1,
@@ -1683,7 +1684,8 @@ function createRuntimeScenarioOutput({
     submissionRejected,
     stopFactAppended: runtime.operationalStateStore.getRecords().some((fact) =>
       fact.factType === "SAFETY_BLOCKER_RAISED"),
-    accountAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
+    buyAdmissionBlocked: runtime.stopWorkflow.isBuyAdmissionBlocked(),
+    sellAdmissionBlocked: runtime.stopWorkflow.isSellAdmissionBlocked(),
     brokerSubmissionCallCount: runtime.getSubmissionCallCount(),
     terminalSell,
     stopAdmissionChecks,
@@ -1731,13 +1733,14 @@ function createRuntimeScenarioTerminalSellExpected({
     stopFactAppended,
     eventWorkflowFailedClosed: true,
     marketPaused: true,
-    accountAdmissionBlocked: true,
     buyAdmissionBlocked: true,
+    sellAdmissionBlocked: stopPersistenceFailure,
   }
   if (stopPersistenceFailure) {
     Object.assign(expected, {
       stopPersistenceFailed: true,
-      postFailureAdmissionBlocked: true,
+      postFailureBuyAdmissionBlocked: true,
+      postFailureSellAdmissionBlocked: true,
       postFailureSubmittedOrderCount: 0,
       postFailureActionSubmitted: false,
     })
@@ -1754,7 +1757,8 @@ function createRuntimeScenarioSubmissionPersistenceFailureExpected({ scenarioId 
       stopFactAppended: false,
       reservationRetained: true,
       brokerSubmissionCallCount: 1,
-      accountAdmissionBlocked: true,
+      buyAdmissionBlocked: true,
+      sellAdmissionBlocked: true,
     }
   }
   if (scenarioId === "RS-RUNTIME-SELL-RESERVATION-FAILURE-001") {
@@ -1765,7 +1769,8 @@ function createRuntimeScenarioSubmissionPersistenceFailureExpected({ scenarioId 
       stopFactAppended: true,
       reservationRetained: false,
       brokerSubmissionCallCount: 0,
-      accountAdmissionBlocked: true,
+      buyAdmissionBlocked: true,
+      sellAdmissionBlocked: false,
     }
   }
   if (scenarioId === "RS-RUNTIME-SELL-BROKER-EXCEPTION-001") {
@@ -1776,7 +1781,8 @@ function createRuntimeScenarioSubmissionPersistenceFailureExpected({ scenarioId 
       stopFactAppended: true,
       reservationRetained: true,
       brokerSubmissionCallCount: 1,
-      accountAdmissionBlocked: true,
+      buyAdmissionBlocked: true,
+      sellAdmissionBlocked: false,
     }
   }
   if (scenarioId === "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001") {
@@ -1787,7 +1793,8 @@ function createRuntimeScenarioSubmissionPersistenceFailureExpected({ scenarioId 
       stopFactAppended: true,
       reservationRetained: true,
       brokerSubmissionCallCount: 1,
-      accountAdmissionBlocked: true,
+      buyAdmissionBlocked: true,
+      sellAdmissionBlocked: false,
     }
   }
   if (scenarioId === "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001") {
@@ -1798,7 +1805,8 @@ function createRuntimeScenarioSubmissionPersistenceFailureExpected({ scenarioId 
       stopFactAppended: true,
       reservationRetained: false,
       brokerSubmissionCallCount: 0,
-      accountAdmissionBlocked: true,
+      buyAdmissionBlocked: true,
+      sellAdmissionBlocked: false,
     }
   }
   return null
@@ -1817,8 +1825,8 @@ function createRuntimeScenarioStopAdmissionExpected({ seed, pairConfig }) {
     stopAdmissionChecks: {
       sellActionSide: "SELL",
       stopStateStatus: "STOPPED",
-      accountAdmissionBlocked: true,
       buyAdmissionBlocked: true,
+      sellAdmissionBlocked: false,
     },
   }
 }
@@ -1835,8 +1843,8 @@ function createTerminalReconciliationPersistenceFailureExpected({ seed, pairConf
     eventWorkflowFailedClosed: true,
     stopFactAppended: true,
     marketPaused: true,
-    accountAdmissionBlocked: true,
     buyAdmissionBlocked: true,
+    sellAdmissionBlocked: false,
     reservationRetained: true,
     stagedSellFillCount: 1,
   }
@@ -1974,9 +1982,14 @@ function createPartialSellSafetyAssertions({ output, expected }) {
       expected: expected.marketPaused,
     }),
     createAssertion({
-      name: "account admission remains blocked after terminal SELL STOP",
-      actual: output.terminalSell?.accountAdmissionBlocked,
-      expected: expected.accountAdmissionBlocked,
+      name: "RS BUY admission remains blocked after terminal SELL STOP",
+      actual: output.terminalSell?.buyAdmissionBlocked,
+      expected: expected.buyAdmissionBlocked,
+    }),
+    createAssertion({
+      name: "RS SELL admission remains closed only while STOP persistence is unverified",
+      actual: output.terminalSell?.sellAdmissionBlocked,
+      expected: expected.sellAdmissionBlocked,
     }),
     createAssertion({
       name: "the BUY admission gate remains blocked after terminal SELL STOP",
@@ -2103,9 +2116,14 @@ function createTerminalReconciliationPersistenceFailureAssertions({ output, expe
       expected: expected.marketPaused,
     }),
     createAssertion({
-      name: "account admission remains blocked after terminal reconciliation persistence fails",
-      actual: output.terminalSell?.accountAdmissionBlocked,
-      expected: expected.accountAdmissionBlocked,
+      name: "RS BUY admission remains blocked after terminal reconciliation persistence fails",
+      actual: output.terminalSell?.buyAdmissionBlocked,
+      expected: expected.buyAdmissionBlocked,
+    }),
+    createAssertion({
+      name: "durable RS STOP leaves the first recovery SELL gate available",
+      actual: output.terminalSell?.sellAdmissionBlocked,
+      expected: expected.sellAdmissionBlocked,
     }),
     createAssertion({
       name: "BUY admission remains blocked after terminal reconciliation persistence fails",
@@ -2206,9 +2224,9 @@ function createStopAdmissionAssertions({ output, expected }) {
       expected: expected.stopAdmissionChecks.stopStateStatus,
     }),
     createAssertion({
-      name: "account admission remains blocked for additional BUY spending",
-      actual: output.stopAdmissionChecks?.accountAdmissionBlocked,
-      expected: expected.stopAdmissionChecks.accountAdmissionBlocked,
+      name: "durable RS STOP leaves SELL admission available",
+      actual: output.stopAdmissionChecks?.sellAdmissionBlocked,
+      expected: expected.stopAdmissionChecks.sellAdmissionBlocked,
     }),
     createAssertion({
       name: "the BUY policy remains gated while eligible SELLs are allowed",
@@ -2246,9 +2264,14 @@ function createSubmissionIntentPersistenceFailureAssertions({ output, expected }
       expected: expected.reservationRetained,
     }),
     createAssertion({
-      name: "account BUY admission remains blocked after intent persistence failure",
-      actual: output.accountAdmissionBlocked,
-      expected: expected.accountAdmissionBlocked,
+      name: "RS BUY admission remains blocked after intent persistence failure",
+      actual: output.buyAdmissionBlocked,
+      expected: expected.buyAdmissionBlocked,
+    }),
+    createAssertion({
+      name: "durable RS STOP leaves the first recovery SELL gate available after intent failure",
+      actual: output.sellAdmissionBlocked,
+      expected: expected.sellAdmissionBlocked,
     }),
   ]
 }
@@ -2286,9 +2309,14 @@ function createSubmissionOutcomePersistenceFailureAssertions({ output, expected 
       expected: expected.reservationRetained,
     }),
     createAssertion({
-      name: "account BUY admission remains blocked after outcome persistence failure",
-      actual: output.accountAdmissionBlocked,
-      expected: expected.accountAdmissionBlocked,
+      name: "RS BUY admission remains blocked after outcome persistence failure",
+      actual: output.buyAdmissionBlocked,
+      expected: expected.buyAdmissionBlocked,
+    }),
+    createAssertion({
+      name: "durable RS STOP leaves the first recovery SELL gate available after outcome failure",
+      actual: output.sellAdmissionBlocked,
+      expected: expected.sellAdmissionBlocked,
     }),
   ]
 }
@@ -2327,9 +2355,14 @@ function createBrokerPlacementExceptionAssertions({ output, expected }) {
       expected: expected.reservationRetained,
     }),
     createAssertion({
-      name: "account BUY admission remains blocked after broker transport failure",
-      actual: output.accountAdmissionBlocked,
-      expected: expected.accountAdmissionBlocked,
+      name: "RS BUY admission remains blocked after broker transport failure",
+      actual: output.buyAdmissionBlocked,
+      expected: expected.buyAdmissionBlocked,
+    }),
+    createAssertion({
+      name: "durable RS STOP leaves the first recovery SELL gate available after broker transport failure",
+      actual: output.sellAdmissionBlocked,
+      expected: expected.sellAdmissionBlocked,
     }),
   ]
 }
@@ -2362,9 +2395,14 @@ function createSubmissionReservationFailureAssertions({ output, expected }) {
       expected: expected.stopFactAppended,
     }),
     createAssertion({
-      name: "BUY admission remains blocked after reservation failure",
-      actual: output.accountAdmissionBlocked,
-      expected: expected.accountAdmissionBlocked,
+      name: "RS BUY admission remains blocked after reservation failure",
+      actual: output.buyAdmissionBlocked,
+      expected: expected.buyAdmissionBlocked,
+    }),
+    createAssertion({
+      name: "durable RS STOP leaves the first recovery SELL gate available after reservation failure",
+      actual: output.sellAdmissionBlocked,
+      expected: expected.sellAdmissionBlocked,
     }),
   ]
 }
@@ -2488,7 +2526,8 @@ function createRuntimeScenarioTerminalTraceStep({ output }) {
       eventFillStaged: output.terminalSell.eventFillStaged,
       eventWorkflowFailedClosed: output.terminalSell.eventWorkflowFailedClosed,
       stopPersistenceFailed: output.terminalSell.stopPersistenceFailed,
-      accountAdmissionBlocked: output.terminalSell.accountAdmissionBlocked,
+      buyAdmissionBlocked: output.terminalSell.buyAdmissionBlocked,
+      sellAdmissionBlocked: output.terminalSell.sellAdmissionBlocked,
       marketPaused: output.terminalSell.marketPaused,
       pauseReasons: output.terminalSell.pauseReasons,
     },
@@ -2610,8 +2649,8 @@ async function executeRuntimeScenarioAdmission({ runtime, scenarioId, effectiveI
   const stopAdmissionChecks = {
     sellActionSide: execution.submittedAction?.side ?? null,
     stopStateStatus: (await runtime.stopWorkflow.getState()).status,
-    accountAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
-    buyAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
+    buyAdmissionBlocked: runtime.stopWorkflow.isBuyAdmissionBlocked(),
+    sellAdmissionBlocked: runtime.stopWorkflow.isSellAdmissionBlocked(),
   }
   return {
     execution,
@@ -2657,7 +2696,8 @@ async function executeRuntimeScenarioTerminalSell({ runtime, scenarioId, effecti
   })
   return {
     ...terminalSell,
-    postFailureAdmissionBlocked: runtime.stopWorkflow.isAccountAdmissionBlocked(),
+    postFailureBuyAdmissionBlocked: runtime.stopWorkflow.isBuyAdmissionBlocked(),
+    postFailureSellAdmissionBlocked: runtime.stopWorkflow.isSellAdmissionBlocked(),
     postFailureSubmittedOrderCount: followUp.data.submittedOrders?.length ?? 0,
     postFailureActionSubmitted: Boolean(followUp.submittedAction),
   }
