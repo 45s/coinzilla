@@ -337,11 +337,10 @@ Added `linux-sandbox-e2e.test.js` and a manual `Harvester Scenario Runner Linux 
 
 The opt-in Linux sandbox acceptance test also constructs the production `createProcessScenarioAdapter`, requires its OS attestation, and executes `RS-RUNTIME-SELL-SUBMISSION-001` through the registered RS worker adapter. It asserts the production runtime evaluator passes, the process adapter remains `simulation-only`, exactly one simulated broker submission occurs, and run-local SELL intent/outcome facts are produced. No exchange client, credentials, live account state or production persistence are provided to this worker.
 
-
 ## Cgroup setup failure cleanup — implemented follow-up
 
 The Linux launcher now constructs all resource arguments inside the guarded cgroup lifecycle. Any setup failure after cgroup creation—including worker-path validation, argument construction, spawn, or seccomp IPC setup—attempts child termination and cgroup cleanup. If cleanup cannot be confirmed, an aggregate error retains the original setup failure and the cleanup failure; the cleanup failure is the cause, and the setup failure remains in the aggregate errors list.
 
 Per-run cgroup cleanup is idempotent after confirmed removal. A failed `cgroup.kill` or directory removal is no longer silently discarded: removal failure propagates with diagnostic context. The launcher attaches a cleanup function to its child; the process adapter verifies cleanup before resolving a scenario. A cleanup failure rejects the run and retains the child/run slot, and cancellation retries cleanup until removal is confirmed.
 
-The regressions in `create-linux-bubblewrap-sandbox-launcher.test.js` and `create-process-scenario-adapter.test.js` cover setup cleanup, cleanup failure propagation, result rejection, and retained-slot retry. Exact-head CI is pending; this is implementation evidence, not trusted OS-boundary acceptance.
+The regressions in `create-linux-bubblewrap-sandbox-launcher.test.js` and `create-process-scenario-adapter.test.js` cover setup cleanup, cleanup failure propagation, result rejection, and retained-slot retry. The implementation at code commit `2101fd1e23739b744823364df6d8533640b12132` passed Harvester Targeted Tests, Workspace Unit Tests, Test Coverage, Dependency Audit, and External Documentation Links. Repository Quality identified repeated blank lines in this section, corrected in the following documentation commit; fresh exact-head quality verification is pending. This is implementation evidence, not trusted OS-boundary acceptance.

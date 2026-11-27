@@ -77,7 +77,6 @@ A manual self-hosted workflow `.github/workflows/harvester-scenario-sandbox-e2e.
 
 The manual Linux sandbox E2E exercises both an adversarial OS-boundary probe and the actual production RS process adapter/runtime evaluator inside the sandbox. It verifies a passing simulation-only SELL scenario with one simulated broker call and run-local intent/outcome facts. This is not production trading acceptance or RS domain-matrix verification; it remains pending a successful run on the trusted delegated Linux runner and trusted build provenance.
 
-
 ## Scenario Runner cgroup lifecycle follow-up — 2026-11-27
 
 The cgroup setup leak is fixed on `fix/harvester/scenario-runner-cgroup-cleanup`: argument construction is guarded by cleanup; cgroup removal errors are surfaced; the process adapter withholds success and retains/retries cleanup. Regression tests cover pre-spawn failure and runtime cleanup confirmation. Exact-head CI is pending. Trusted Linux sandbox E2E, production state durability, trusted artifact provenance/replay and runner-specific retry/idempotency acceptance remain separate open gates.
