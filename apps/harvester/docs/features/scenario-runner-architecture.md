@@ -336,3 +336,8 @@ Added `linux-sandbox-e2e.test.js` and a manual `Harvester Scenario Runner Linux 
 ## Production RS process-adapter E2E — 2026-11-27
 
 The opt-in Linux sandbox acceptance test also constructs the production `createProcessScenarioAdapter`, requires its OS attestation, and executes `RS-RUNTIME-SELL-SUBMISSION-001` through the registered RS worker adapter. It asserts the production runtime evaluator passes, the process adapter remains `simulation-only`, exactly one simulated broker submission occurs, and run-local SELL intent/outcome facts are produced. No exchange client, credentials, live account state or production persistence are provided to this worker.
+
+
+## Cgroup setup failure cleanup — follow-up regression
+
+The Linux launcher must release a per-run cgroup when any setup step after cgroup creation fails, including worker-path validation and Bubblewrap argument construction before the child process is spawned. This failure path is covered by `create-linux-bubblewrap-sandbox-launcher.test.js`: an invalid worker path must fail closed, must not spawn a child, and must invoke cgroup cleanup exactly once. The test-first regression is on the Scenario Runner cleanup follow-up branch; implementation and exact-head CI evidence are pending. Cleanup failures must remain observable and must not be reported as successful cleanup.
