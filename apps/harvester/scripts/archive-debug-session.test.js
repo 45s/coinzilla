@@ -101,6 +101,53 @@ async function createFixture() {
   }
 }
 
+async function assertPublishedArchive({ directory, remote, expectedIdentityStatus } = {}) {
+  assert.equal(remote, ARCHIVE_REMOTE, "Archive publication must target the configured private archive repository")
+  const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
+  assert.deepEqual(manifest.includedDirectories, ["logs", "recovery-facts"], "Debug archives must contain only logs and recovery facts")
+  assert.deepEqual(manifest.excludedPaths, [
+    "data/** (all databases and backups)",
+    "logs/cumulative/**",
+  ], "Debug archives must declare databases and cumulative logs excluded")
+  assert.equal(manifest.logRuntimeSessionId, RUNTIME_SESSION_ID, "Selected log evidence must identify the completed TESTNET runtime session")
+  assert.equal(
+    manifest.runtimeIdentity.status,
+    expectedIdentityStatus,
+    "Archive manifest must explicitly state whether the log and recovery evidence share a runtime identity",
+  )
+  assert.equal(
+    manifest.runtimeIdentity.correlation,
+    expectedIdentityStatus === "matched"
+      ? "same-runtime-session"
+      : "independent-evidence-do-not-correlate",
+    "Mismatched evidence must never be represented as one correlated runtime session",
+  )
+  assert.equal(manifest.recoveryRuntimeSessionId, expectedIdentityStatus === "matched" ? RUNTIME_SESSION_ID : OTHER_SESSION_ID)
+  assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "Archive manifest must preserve the latest committed recovery checkpoint digest")
+  assert.deepEqual(manifest.logSelection, {
+    cumulative: "excluded",
+    sessions: "newest-completed-TESTNET-session-only; gzip-compressed",
+  }, "Debug archive manifest must mark cumulative logs excluded and selected session logs gzip-compressed")
+  assert.equal(
+    await readFile(path.join(directory, "data_commit_hash"), "utf8"),
+    `${DATA_COMMIT_HASH}\\n`,
+    "Published checkpoint identity file must match the recovery-facts manifest",
+  )
+  assert.equal(
+    gunzipSync(await readFile(path.join(directory, "logs/sessions/2026-11-24_testnet/terminal.log.gz"))).toString("utf8"),
+    "selected TESTNET session evidence",
+    "Selected completed TESTNET log must be preserved in gzip form",
+  )
+  await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-20_old")), { code: "ENOENT" }, "Older sessions must not be copied into the debug archive")
+  await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-25_live")), { code: "ENOENT" }, "LIVE session evidence must never enter a TESTNET debug archive")
+  await assert.rejects(readdir(path.join(directory, "logs/cumulative")), { code: "ENOENT" }, "Cumulative logs must be excluded from the debug archive")
+  await assert.rejects(readdir(path.join(directory, "data")), { code: "ENOENT" }, "Database and backup data must be excluded from the debug archive")
+  return {
+    commit: REMOTE_COMMIT,
+    fileCount: manifest.files.length + 1,
+  }
+}
+
 function archiveDependencies({ fixture, overrides = {}, expectedIdentityStatus = "matched" } = {}) {
   return {
     packageDirectory: fixture.packageDirectory,
@@ -114,55 +161,11 @@ function archiveDependencies({ fixture, overrides = {}, expectedIdentityStatus =
     args: [],
     now: () => new Date(CREATED_AT),
     createArchiveId: () => ARCHIVE_ID,
-    publishArchiveFn: async ({
+    publishArchiveFn: ({ directory, remote }) => assertPublishedArchive({
       directory,
-      remote
-    }) => {
-      assert.equal(remote, ARCHIVE_REMOTE, "Archive publication must target the configured private archive repository")
-      const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
-      assert.deepEqual(manifest.includedDirectories, ["logs", "recovery-facts"], "Debug archives must contain only logs and recovery facts")
-      assert.deepEqual(manifest.excludedPaths, [
-        "data/** (all databases and backups)",
-        "logs/cumulative/**",
-      ], "Debug archives must declare databases and cumulative logs excluded")
-      assert.equal(manifest.logRuntimeSessionId, RUNTIME_SESSION_ID, "Selected log evidence must identify the completed TESTNET runtime session")
-      assert.equal(
-        manifest.runtimeIdentity.status,
-        expectedIdentityStatus,
-        "Archive manifest must explicitly state whether the log and recovery evidence share a runtime identity",
-      )
-      assert.equal(
-        manifest.runtimeIdentity.correlation,
-        expectedIdentityStatus === "matched"
-          ? "same-runtime-session"
-          : "independent-evidence-do-not-correlate",
-        "Mismatched evidence must never be represented as one correlated runtime session",
-      )
-      assert.equal(manifest.recoveryRuntimeSessionId, expectedIdentityStatus === "matched" ? RUNTIME_SESSION_ID : OTHER_SESSION_ID)
-      assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "Archive manifest must preserve the latest committed recovery checkpoint digest")
-      assert.deepEqual(manifest.logSelection, {
-        cumulative: "excluded",
-        sessions: "newest-completed-TESTNET-session-only; gzip-compressed",
-      }, "Debug archive manifest must mark cumulative logs excluded and selected session logs gzip-compressed")
-      assert.equal(
-        await readFile(path.join(directory, "data_commit_hash"), "utf8"),
-        `${DATA_COMMIT_HASH}\n`,
-        "Published checkpoint identity file must match the recovery-facts manifest",
-      )
-      assert.equal(
-        gunzipSync(await readFile(path.join(directory, "logs/sessions/2026-11-24_testnet/terminal.log.gz"))).toString("utf8"),
-        "selected TESTNET session evidence",
-        "Selected completed TESTNET log must be preserved in gzip form",
-      )
-      await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-20_old")), { code: "ENOENT" }, "Older sessions must not be copied into the debug archive")
-      await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-25_live")), { code: "ENOENT" }, "LIVE session evidence must never enter a TESTNET debug archive")
-      await assert.rejects(readdir(path.join(directory, "logs/cumulative")), { code: "ENOENT" }, "Cumulative logs must be excluded from the debug archive")
-      await assert.rejects(readdir(path.join(directory, "data")), { code: "ENOENT" }, "Database and backup data must be excluded from the debug archive")
-      return {
-        commit: REMOTE_COMMIT,
-        fileCount: manifest.files.length + 1
-      }
-    },
+      remote,
+      expectedIdentityStatus,
+    }),
   }
 }
 
