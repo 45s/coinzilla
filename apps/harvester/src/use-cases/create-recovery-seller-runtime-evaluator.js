@@ -14,6 +14,8 @@ function assertRuntimeDependencies({
   const dependencies = [
     [recoverySellerWorkflow?.getTransitionSnapshot, "recoverySellerWorkflow.getTransitionSnapshot"],
     [recoverySellerStopWorkflow?.getState, "recoverySellerStopWorkflow.getState"],
+    [recoverySellerStopWorkflow?.isBuyAdmissionBlocked, "recoverySellerStopWorkflow.isBuyAdmissionBlocked"],
+    [recoverySellerStopWorkflow?.isSellAdmissionBlocked, "recoverySellerStopWorkflow.isSellAdmissionBlocked"],
     [getRecoverySellerMarketMetadata, "getRecoverySellerMarketMetadata"],
     [getAccountSnapshot, "getAccountSnapshot"],
     [isMarketPriceFresh, "isMarketPriceFresh"],
@@ -48,8 +50,9 @@ async function getRecoverySellerRuntimeSnapshot({
     getAccountSnapshot({ symbol }),
     recoverySellerStopWorkflow.getState(),
   ])
-  const accountAdmissionBlocked = recoverySellerStopWorkflow.isAccountAdmissionBlocked?.() === true
-  const buyAdmissionBlocked = stopState?.status === "STOPPED" || accountAdmissionBlocked
+  const buyAdmissionBlocked = stopState?.status === "STOPPED" ||
+    recoverySellerStopWorkflow.isBuyAdmissionBlocked() === true
+  const sellAdmissionBlocked = recoverySellerStopWorkflow.isSellAdmissionBlocked() === true
   const strategyStopped = isStopping() === true
   const marketPaused = isMarketPaused({
     state,
@@ -68,6 +71,7 @@ async function getRecoverySellerRuntimeSnapshot({
     stopState,
     strategyStopped,
     buyAdmissionBlocked,
+    sellAdmissionBlocked,
     marketPaused,
     reconciliationComplete,
     thirdAssetFeeQuoteValue: pairConfig.thirdAssetFeeQuoteValue,

@@ -487,7 +487,11 @@ function createRuntimeLifecycleEvaluator({ workflow, market, baseAsset, quoteAss
   const accountSnapshotForRuntime = createRuntimeLifecycleAccountSnapshot({ baseAsset })
   return createRecoverySellerRuntimeEvaluator({
     recoverySellerWorkflow: workflow,
-    recoverySellerStopWorkflow: { getState: () => stopState },
+    recoverySellerStopWorkflow: {
+      getState: () => stopState,
+      isBuyAdmissionBlocked: () => false,
+      isSellAdmissionBlocked: () => false,
+    },
     recoverySellerPairs: {
       [symbol]: {
         sellQuantity: "0.01",
