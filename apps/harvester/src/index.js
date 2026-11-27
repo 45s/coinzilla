@@ -1258,6 +1258,18 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
   process.exitCode = 1
 }
 
+function resolveTradingHistoryApiStarter({ start, override } = {}) {
+  if (override) {
+    return override
+  }
+  if (start === startHarvester) {
+    return startTradingHistoryApiDefault
+  }
+  // An injected runtime adapter is a test/embedding boundary, not a request to
+  // bind the production HTTP listener as an unrelated process side effect.
+  return async () => null
+}
+
 function resolveOrderHistoryPersistencePreparer({
   start,
   override,
@@ -1315,7 +1327,10 @@ function createMainDependencies({ options }) {
       override: prepareOverride,
       logger,
     }),
-    startTradingHistoryApi: startApiOverride ?? startTradingHistoryApiDefault,
+    startTradingHistoryApi: resolveTradingHistoryApiStarter({
+      start,
+      override: startApiOverride,
+    }),
     providerAdapterFactories: {
       binance: createBinanceBrokerAdapter,
       ...(options.providerAdapterFactories ?? {}),
