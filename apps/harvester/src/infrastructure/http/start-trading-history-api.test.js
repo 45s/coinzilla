@@ -385,6 +385,7 @@ test("executes every executable RS production-flow scenario through the local Ha
       .scenarios.filter((scenario) => scenario.executable === true)
     assert.equal(scenarios.length, 12,
       "All twelve current RS production-flow scenarios must be executable in local Windows simulation.")
+    const completedRuns = []
     for (const scenario of scenarios) {
       const result = await executeScenarioThroughApi({
         apiBase,
@@ -394,7 +395,19 @@ test("executes every executable RS production-flow scenario through the local Ha
         scenario,
         result,
       })
+      completedRuns.push(result)
     }
+    const historyResponse = await fetch(`${apiBase}/runs`)
+    assert.equal(historyResponse.status, 200,
+      "The Dashboard history endpoint must return completed Windows simulation runs.")
+    const historyEnvelope = await historyResponse.json()
+    assert.equal(historyEnvelope.data.length, scenarios.length,
+      "Every completed Windows scenario must appear in authoritative run history.")
+    assert.deepEqual(
+      historyEnvelope.data.map((run) => run.runId).sort(),
+      completedRuns.map((run) => run.runId).sort(),
+      "Run history must contain the exact completed scenario run identities.",
+    )
   } finally {
     await service.close()
     await eventBus.close()
