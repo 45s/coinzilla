@@ -588,6 +588,19 @@ test("reports missing durable process identity, source revision, and session ide
   const missingIdentityDirectory = path.join(fixture.packageDirectory, "logs/sessions/2026-11-26-missing-identity")
   await mkdir(missingIdentityDirectory, { recursive: true })
   await writeFile(path.join(missingIdentityDirectory, "terminal.log"), "unclassified source evidence", "utf8")
+  const incompleteMetadataDirectory = path.join(fixture.packageDirectory, "logs/sessions/2026-11-26-incomplete-metadata")
+  await mkdir(incompleteMetadataDirectory, { recursive: true })
+  await writeFile(path.join(incompleteMetadataDirectory, "process-identity.json"), JSON.stringify({
+    application: "harvester",
+    formatVersion: 1,
+    environment: "testnet",
+    runtimeSessionId: "123e4567-e89b-12d3-a456-426614174000",
+    source: {
+      commit: null,
+      workingTree: "unknown",
+    },
+  }), "utf8")
+  await writeFile(path.join(incompleteMetadataDirectory, "terminal.log"), "incomplete metadata source evidence", "utf8")
 
   await runHarvesterDebugArchive(archiveWithoutPublishing({
     fixture,
@@ -608,6 +621,11 @@ test("reports missing durable process identity, source revision, and session ide
         unknownSession.missingFieldWarnings.includes("PROCESS_IDENTITY_MISSING"),
         "A session without identity must carry a specific missing-field warning.",
       )
+      const incompleteMetadataSession = manifest.sessionInventory.find(({ sessionName }) => sessionName === "2026-11-26-incomplete-metadata")
+      assert.equal(incompleteMetadataSession.completionStatus, "incomplete")
+      for (const warning of ["PROCESS_ID_MISSING", "START_TIMESTAMP_MISSING", "SOURCE_REVISION_MISSING", "COMPLETION_RECORD_MISSING"]) {
+        assert.ok(incompleteMetadataSession.missingFieldWarnings.includes(warning), `Missing session metadata must report ${warning}.`)
+      }
     },
   }))
 })
