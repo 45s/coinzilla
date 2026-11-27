@@ -1639,7 +1639,7 @@ function createRuntimeScenarioTerminalSellExpected({
   return expected
 }
 
-function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
+function createRuntimeScenarioSubmissionPersistenceFailureExpected({ scenarioId }) {
   if (scenarioId === "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001") {
     return {
       submissionOutcomePersistenceFailed: true,
@@ -1662,23 +1662,40 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
       accountAdmissionBlocked: true,
     }
   }
+  return null
+}
+
+function createRuntimeScenarioStopAdmissionExpected({ seed, pairConfig }) {
+  return {
+    decisionOutcome: "SUBMIT",
+    actionSide: "SELL",
+    actionQuantity: addDecimal({
+      left: seed.buyQuantity,
+      right: String(pairConfig.sellQuantity),
+    }),
+    submittedOrderCount: 1,
+    reservationMatchesSubmittedOrder: true,
+    stopAdmissionChecks: {
+      sellActionSide: "SELL",
+      stopStateStatus: "STOPPED",
+      accountAdmissionBlocked: true,
+      buyAdmissionBlocked: true,
+    },
+  }
+}
+
+function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
+  const submissionPersistenceExpected = createRuntimeScenarioSubmissionPersistenceFailureExpected({
+    scenarioId,
+  })
+  if (submissionPersistenceExpected) {
+    return submissionPersistenceExpected
+  }
   if (scenarioId === "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001") {
-    return {
-      decisionOutcome: "SUBMIT",
-      actionSide: "SELL",
-      actionQuantity: addDecimal({
-        left: seed.buyQuantity,
-        right: String(pairConfig.sellQuantity),
-      }),
-      submittedOrderCount: 1,
-      reservationMatchesSubmittedOrder: true,
-      stopAdmissionChecks: {
-        sellActionSide: "SELL",
-        stopStateStatus: "STOPPED",
-        accountAdmissionBlocked: true,
-        buyAdmissionBlocked: true,
-      },
-    }
+    return createRuntimeScenarioStopAdmissionExpected({
+      seed,
+      pairConfig,
+    })
   }
   if (scenarioId === "RS-RUNTIME-SELL-REJECTION-001") {
     return {
