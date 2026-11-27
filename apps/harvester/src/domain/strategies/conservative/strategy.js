@@ -392,7 +392,7 @@ right: minNotional }) >= 0
   }
 }
 
-function createSellDustDisposition({ context, accounting, quantityLimits }) {
+function createSellDustDisposition({ context, accounting, quantityLimits, residualPrice }) {
   return Object.freeze({
     status: "EXCHANGE_CONSTRAINED_DUST",
     quantity: subtractDecimal({
@@ -405,6 +405,7 @@ function createSellDustDisposition({ context, accounting, quantityLimits }) {
     minimumNotional: context.minNotional,
     evaluatedQuantity: quantityLimits.sellQuantity,
     evaluatedNotional: quantityLimits.sellNotional,
+    evaluatedPrice: residualPrice,
     ...(context.maxQuantity ? { maximumQuantity: context.maxQuantity } : {}),
     ...(context.maxNotional ? { maximumNotional: context.maxNotional } : {}),
   })
@@ -445,27 +446,31 @@ function createRecoverySellPlanForPosition({ context, accounting }) {
   })
 }
 
-function createQuantityIncrementDustDisposition({ context, quantity }) {
+function createQuantityIncrementDustDisposition({ context, quantity, evaluatedPrice, evaluatedNotional }) {
   return Object.freeze({
     status: "EXCHANGE_CONSTRAINED_DUST",
     quantity,
     reason: "QUANTITY_INCREMENT",
     quantityStepSize: context.quantityStepSize,
     evaluatedQuantity: "0",
+    evaluatedPrice,
+    evaluatedNotional,
   })
 }
 
-function createMinimumQuantityDustDisposition({ context, quantity }) {
+function createMinimumQuantityDustDisposition({ context, quantity, evaluatedPrice, evaluatedNotional }) {
   return Object.freeze({
     status: "EXCHANGE_CONSTRAINED_DUST",
     quantity,
     reason: "MIN_QUANTITY",
     minimumQuantity: context.minQuantity,
     evaluatedQuantity: quantity,
+    evaluatedPrice,
+    evaluatedNotional,
   })
 }
 
-function createMinimumNotionalDustDisposition({ context, quantity, evaluatedNotional }) {
+function createMinimumNotionalDustDisposition({ context, quantity, evaluatedNotional, evaluatedPrice }) {
   return Object.freeze({
     status: "EXCHANGE_CONSTRAINED_DUST",
     quantity,
@@ -474,6 +479,7 @@ function createMinimumNotionalDustDisposition({ context, quantity, evaluatedNoti
     minimumNotional: context.minNotional,
     evaluatedQuantity: quantity,
     evaluatedNotional,
+    evaluatedPrice,
   })
 }
 
@@ -523,6 +529,8 @@ function createUnfillableSellDisposition({
     return createQuantityIncrementDustDisposition({
       context,
       quantity,
+      evaluatedPrice,
+      evaluatedNotional,
     })
   }
   if (compareDecimal({
@@ -532,6 +540,8 @@ function createUnfillableSellDisposition({
     return createMinimumQuantityDustDisposition({
       context,
       quantity,
+      evaluatedPrice,
+      evaluatedNotional,
     })
   }
   if (compareDecimal({
@@ -542,24 +552,33 @@ function createUnfillableSellDisposition({
       context,
       quantity,
       evaluatedNotional,
+      evaluatedPrice,
     })
   }
   return createQuantityIncrementDustDisposition({
     context,
     quantity,
+    evaluatedPrice,
+    evaluatedNotional,
   })
 }
 
 function createPriceFilterBlockedDisposition({ context, accounting, residualPrice }) {
+  const quantity = subtractDecimal({
+    left: accounting.activeQuantity,
+    right: accounting.keepQuantity,
+  })
   return Object.freeze({
     status: "PRICE_FILTER_BLOCKED",
-    quantity: subtractDecimal({
-      left: accounting.activeQuantity,
-      right: accounting.keepQuantity,
-    }),
+    quantity,
     reason: "MAX_PRICE",
     requiredPrice: residualPrice,
     maximumPrice: context.maxPrice,
+    evaluatedPrice: residualPrice,
+    evaluatedNotional: multiplyDecimal({
+      left: residualPrice,
+      right: quantity,
+    }),
   })
 }
 
@@ -611,6 +630,7 @@ function createRecoverySellDecisionFromPlan({
       context,
       accounting,
       quantityLimits,
+      residualPrice,
     }),
   }
 }

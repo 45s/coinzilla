@@ -305,6 +305,18 @@ fill };
   };
 }
 
+const fixtureEventPublisher = Object.freeze({
+  publish: () => ({ ok: true }),
+  flush: async () => ({
+    ok: true,
+    durable: true,
+  }),
+  flushWrites: async () => ({
+    ok: true,
+    durable: true,
+  }),
+})
+
 function createFixtureEngine({
   broker,
   appConfig,
@@ -325,6 +337,7 @@ function createFixtureEngine({
     broker,
     strategyPolicy: conservativeStrategyPolicy,
     appConfig,
+    eventPublisher: fixtureEventPublisher,
     getPortfolio,
     getRecoveryLedger,
     getMarketMetadata: () => marketMetadata,

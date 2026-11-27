@@ -52,7 +52,11 @@ const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
   flush: async () => ({
     ok: true,
-    durable: true
+    durable: true,
+  }),
+  flushWrites: async () => ({
+    ok: true,
+    durable: true,
   }),
 })
 
@@ -73,18 +77,16 @@ const createTestCandle = ({
   isClosed,
 })
 const startHarvesterForTest = (input = {}) => {
-  let {eventPublisher} = input
-  if (!eventPublisher) {
-    eventPublisher = testEventPublisher
-  } else if (input.env?.NODE_ENV === "development" && typeof eventPublisher.flush !== "function") {
-    eventPublisher = {
-      ...eventPublisher,
-      flush: testEventPublisher.flush
+  const eventPublisher = input.eventPublisher
+    ? {
+      ...input.eventPublisher,
+      flush: input.eventPublisher.flush ?? testEventPublisher.flush,
+      flushWrites: input.eventPublisher.flushWrites ?? testEventPublisher.flushWrites,
     }
-  }
+    : testEventPublisher
   return startHarvester({
     ...input,
-    eventPublisher
+    eventPublisher,
   })
 }
 

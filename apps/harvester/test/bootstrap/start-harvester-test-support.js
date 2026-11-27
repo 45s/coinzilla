@@ -24,7 +24,11 @@ export const testEventPublisher = Object.freeze({
   publish: () => ({ ok: true }),
   flush: async () => ({
     ok: true,
-    durable: true
+    durable: true,
+  }),
+  flushWrites: async () => ({
+    ok: true,
+    durable: true,
   }),
 })
 
@@ -119,9 +123,16 @@ export const binanceEnv = {
 }
 
 export const startHarvesterForTest = (input = {}) => {
+  // Preserve the caller's publisher identity. Add test durability capabilities
+  // in place so the runtime receives the exact injected application publisher.
   const eventPublisher = input.eventPublisher ?? testEventPublisher
-  if (eventPublisher !== testEventPublisher && typeof eventPublisher.flush !== "function") {
-    eventPublisher.flush = testEventPublisher.flush
+  if (input.eventPublisher) {
+    if (typeof eventPublisher.flush !== "function") {
+      eventPublisher.flush = testEventPublisher.flush
+    }
+    if (typeof eventPublisher.flushWrites !== "function") {
+      eventPublisher.flushWrites = testEventPublisher.flushWrites
+    }
   }
   return startHarvester({
     ...input,

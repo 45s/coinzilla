@@ -93,3 +93,54 @@ test("exposes structured failure reporting for lifecycle DTO mapping errors", ()
   assert.equal(logs[0].eventName, "order.updated", "The diagnostic must identify the lifecycle event that could not be mapped.")
   assert.equal(logs[0].error, error, "The diagnostic must retain the original mapper error.")
 })
+
+test("normalizes a rejected write-only flush and reports the original failure", async () => {
+  const failure = new Error("Journal write-only flush rejected")
+  const reported = []
+  const publisher = makeEventPublisher({
+    eventBus: { publish: () => ({ ok: true }) },
+    flushWrites: async () => { throw failure },
+    logger: { error: (entry) => reported.push(entry) },
+  })
+
+  const result = await publisher.flushWrites()
+  assert.equal(result.ok, false, "A rejected Journal write-only flush must not escape as success.")
+  assert.equal(result.errors[0], failure, "The publisher must preserve the original Journal failure.")
+  assert.equal(reported.length, 1, "The publisher must report the write-only durability failure.")
+  assert.equal(reported[0].eventName, "journal.flush_writes", "The diagnostic must identify the write-only flush operation.")
+  assert.equal(reported[0].error, failure, "The diagnostic must retain the original Journal failure.")
+})
+
+test("delegates write-only flush and requires a durable acknowledgement", async () => {
+  let calls = 0
+  const eventBus = {
+    publish: () => ({ ok: true }),
+  }
+  const publisher = makeEventPublisher({
+    eventBus,
+    flushWrites: async () => {
+      calls += 1
+      return {
+        ok: true,
+        durable: true,
+      }
+    },
+  })
+  const result = await publisher.flushWrites()
+  assert.equal(result.ok, true, "The write-only flush should succeed when Journal confirms durability.")
+  assert.equal(result.durable, true, "The publisher must preserve the durable acknowledgement.")
+  assert.equal(calls, 1, "The write-only Journal callback should run once.")
+
+  const nonDurablePublisher = makeEventPublisher({
+    eventBus,
+    flushWrites: async () => ({
+      ok: true,
+      durable: false,
+    }),
+  })
+  const nonDurableResult = await nonDurablePublisher.flushWrites()
+  assert.equal(nonDurableResult.ok, false, "An acknowledgement without durable sync must fail closed.")
+
+  const unavailableResult = await makeEventPublisher({ eventBus }).flushWrites()
+  assert.equal(unavailableResult.ok, false, "A missing write-only flush capability must fail closed.")
+})
