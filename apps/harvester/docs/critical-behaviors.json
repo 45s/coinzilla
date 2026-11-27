@@ -694,13 +694,16 @@
     },
     {
       "id": "STARTUP_ACCOUNT_RECONCILIATION",
-      "title": "Startup PREFLIGHT balances, account-wide open orders and ownership gates",
+      "title": "Provider bootstrap, startup account reconciliation and ownership gates",
       "sourceModules": [
         "src/bootstrap/account/create-account-snapshot-manager.js",
         "src/bootstrap/start-harvester.js",
         "src/use-cases/collect-owned-order-snapshots.js",
         "src/use-cases/fetch-account-trade-history.js",
-        "src/infrastructure/brokers/binance-broker-adapter.js"
+        "src/infrastructure/brokers/binance-broker-adapter.js",
+        "src/bootstrap/providers/create-exchange-account-readers.js",
+        "src/bootstrap/providers/resolve-execution-symbols-by-provider.js",
+        "src/bootstrap/providers/resolve-market-data-symbols-by-provider.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -723,13 +726,45 @@
           "path": "test/bootstrap/account-snapshot-history.test.js",
           "name": "account snapshots include every configured pair asset, including disabled pairs, and exclude unrelated wallet assets",
           "kind": "integration"
+        },
+        {
+          "path": "src/bootstrap/providers/resolve-execution-symbols-by-provider.test.js",
+          "name": "resolves every enabled strategy-market route to exactly one configured provider instance",
+          "kind": "normal"
+        },
+        {
+          "path": "src/bootstrap/providers/resolve-execution-symbols-by-provider.test.js",
+          "name": "rejects multi-provider configuration without an explicit execution route table",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/providers/resolve-market-data-symbols-by-provider.test.js",
+          "name": "assigns each market only to its explicitly configured source provider",
+          "kind": "normal"
+        },
+        {
+          "path": "src/bootstrap/providers/resolve-market-data-symbols-by-provider.test.js",
+          "name": "requires explicit market-data routes for multi-provider deployments",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
+          "name": "starts one independent runtime per configured provider account",
+          "kind": "normal"
+        },
+        {
+          "path": "src/bootstrap/providers/start-provider-accounts.test.js",
+          "name": "fails startup when no configured account can start",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
       "invariants": [
         "Gate trading until configured-asset balances and account-wide open orders are captured and durably recorded; startup-snapshot orders are external to the current process and are never adopted.",
         "Incomplete snapshots, ownership uncertainty, or balance/order discrepancies fail closed.",
-        "External open orders are unowned audit evidence and follow configured per-market policy: IGNORE permits scoped continuation; BLOCK blocks only the affected market. Audit readiness classification alone is not a global stop."
+        "External open orders are unowned audit evidence and follow configured per-market policy: IGNORE permits scoped continuation; BLOCK blocks only the affected market. Audit readiness classification alone is not a global stop.",
+        "Every enabled strategy-market has one explicit execution-provider assignment and one market-data source; configured routes must reference known providers and compatible trading environments, and multi-provider startup fails closed without explicit routing.",
+        "Provider account readers expose account snapshots and open orders only from the corresponding configured runtime; account-update subscriptions are disposed during cleanup."
       ]
     },
     {
@@ -2596,6 +2631,60 @@
         "branches": 78.57,
         "functions": 97.92
       }
+    },
+    {
+      "path": "src/bootstrap/providers/create-exchange-account-readers.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/bootstrap/providers/resolve-execution-symbols-by-provider.js",
+      "baseline": {
+        "lines": 97.55,
+        "branches": 95.7,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 97.55,
+        "branches": 95.7,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/bootstrap/providers/resolve-market-data-symbols-by-provider.js",
+      "baseline": {
+        "lines": 87.86,
+        "branches": 89.86,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 85,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 87.86,
+        "branches": 89.86,
+        "functions": 100
+      }
     }
   ],
   "runtimeScope": {
@@ -2614,17 +2703,17 @@
     ]
   },
   "latestCoverageMeasurement": {
-    "measuredAt": "2026-11-23T06:42:22Z",
-    "branch": "fix/harvester/1362-archive-reconstruction-preflight-20261123",
-    "prHeadSha": "a3350692af668f78d15e7dc03b07c1b3491a00df",
-    "workflowRunId": 45125806219,
-    "harvesterJobId": 137529748875,
+    "measuredAt": "2026-11-27T15:50:49Z",
+    "branch": "fix/harvester/1923-provider-bootstrap-critical-inventory-sync",
+    "prHeadSha": "27044b40ac6f0bd8f1fe3d064a20163bca9830b7",
+    "workflowRunId": 46028341253,
+    "harvesterJobId": 140605433799,
     "aggregate": {
-      "lines": 90.57,
-      "branches": 83.66,
-      "functions": 96.05
+      "lines": 91.24,
+      "branches": 84.38,
+      "functions": 96.1
     },
-    "checkedCriticalModuleCount": 42,
+    "checkedCriticalModuleCount": 50,
     "gatePassed": true
   }
 }
