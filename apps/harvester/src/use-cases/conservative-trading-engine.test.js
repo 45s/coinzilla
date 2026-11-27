@@ -137,7 +137,10 @@ function createHarnessEventPublisher({ eventPublisher } = {}) {
     })
   const flushWrites = typeof eventPublisher.flushWrites === "function"
     ? eventPublisher.flushWrites
-    : flush
+    : async () => ({
+      ok: true,
+      durable: true,
+    })
   return {
     ...eventPublisher,
     flush,
