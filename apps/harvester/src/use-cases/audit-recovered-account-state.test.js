@@ -461,7 +461,10 @@ function removeAssetFromPreflightSnapshot({ entry, assetCode }) {
   }
   return {
     ...entry,
-    balances: entry.balances.filter((balance) => isNotAsset({ balance, assetCode })),
+    balances: entry.balances.filter((balance) => isNotAsset({
+      balance,
+      assetCode,
+    })),
   }
 }
 
