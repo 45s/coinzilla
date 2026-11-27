@@ -114,7 +114,10 @@ test("fails closed when recovery decision publication is still pending", async (
   dependencies.eventPublisher.publish = () => new Promise(() => {})
   dependencies.eventPublisher.flushWrites = async () => {
     flushCalls += 1
-    return { ok: true, durable: true }
+    return {
+      ok: true,
+      durable: true,
+    }
   }
 
   await assert.rejects(
