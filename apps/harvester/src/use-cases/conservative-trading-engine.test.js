@@ -2072,10 +2072,16 @@ function createPendingCancellationIntentPublisher() {
   const pendingPublication = new Promise((resolve) => { resolvePendingPublication = resolve })
   let globalFlushCalls = 0
   let writeOnlyFlushCalls = 0
+  let lastPublishedEventName
+  const sequence = []
 
   return {
+    sequence,
     eventPublisher: {
-      publish: (event) => event.name === "order.cancel_requested" ? pendingPublication : ({ ok: true }),
+      publish: (event) => {
+        lastPublishedEventName = event.name
+        return event.name === "order.cancel_requested" ? pendingPublication : ({ ok: true })
+      },
       flush: async () => {
         globalFlushCalls += 1
         return {
@@ -2085,6 +2091,7 @@ function createPendingCancellationIntentPublisher() {
       },
       flushWrites: async () => {
         writeOnlyFlushCalls += 1
+        sequence.push(`flushWrites:${lastPublishedEventName}`)
         return {
           ok: true,
           durable: true,
@@ -2100,10 +2107,12 @@ function createPendingCancellationIntentPublisher() {
 function createWriteOnlyDurableIntentPublisher({ events, sequence, onEvent }) {
   let globalFlushCalls = 0
   let writeOnlyFlushCalls = 0
+  let lastPublishedEventName
 
   return {
     eventPublisher: {
       publish: (event) => {
+        lastPublishedEventName = event.name
         events.push(event)
         onEvent?.(event)
         return { ok: true }
@@ -2118,7 +2127,7 @@ function createWriteOnlyDurableIntentPublisher({ events, sequence, onEvent }) {
       },
       flushWrites: async () => {
         writeOnlyFlushCalls += 1
-        sequence.push("flushWrites")
+        sequence.push(`flushWrites:${lastPublishedEventName}`)
         return {
           ok: true,
           durable: true,
@@ -2158,7 +2167,7 @@ async function applyCompletedBuyAndAssertDurableSellCancellation({
   assert.equal(cancelled.data.side, "SELL")
   assert.equal(cancelled.data.status, "CANCELED")
   const cancelIntentIndex = sequence.lastIndexOf("publish:cancel_requested")
-  const cancelFlushIndex = sequence.lastIndexOf("flushWrites")
+  const cancelFlushIndex = sequence.lastIndexOf("flushWrites:order.cancel_requested")
   const brokerCancelIndex = sequence.indexOf("broker:cancel")
   const cancelLogIndex = sequence.lastIndexOf("log:CANCEL_REQUESTED")
   assert.ok(cancelIntentIndex >= 0)
@@ -2226,7 +2235,8 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
     sellOrder,
   })
   assert.equal(durableIntentPublisher.getGlobalFlushCalls(), 0, "A durable trading intent must not drain global EventBus observers.")
-  assert.equal(durableIntentPublisher.getWriteOnlyFlushCalls(), 2, "Submission and cancellation intents must each use the write-only Journal barrier.")
+  assert.ok(sequence.includes("flushWrites:order.submission_requested"), "The recovery SELL submission intent must use the write-only Journal barrier.")
+  assert.ok(sequence.includes("flushWrites:order.cancel_requested"), "The recovery SELL cancellation intent must use the write-only Journal barrier.")
 })
 
 test("does not cancel a recovery SELL when cancellation intent publication is still pending", async () => {
@@ -2266,7 +2276,8 @@ test("does not cancel a recovery SELL when cancellation intent publication is st
   pendingPublisher.resolve()
   assert.equal(result.ok, false, "Pending cancellation-intent publication must not be acknowledged as durable.")
   assert.equal(pendingPublisher.getGlobalFlushCalls(), 0, "Pending intent publication must not trigger a global EventBus flush.")
-  assert.equal(pendingPublisher.getWriteOnlyFlushCalls(), 1, "Only the preceding SELL submission intent may reach the write-only Journal barrier.")
+  assert.ok(pendingPublisher.sequence.includes("flushWrites:order.submission_requested"), "The preceding SELL submission intent must use the write-only Journal barrier.")
+  assert.ok(!pendingPublisher.sequence.includes("flushWrites:order.cancel_requested"), "Pending cancellation intent publication must not reach the Journal flush.")
   assert.equal(cancelCalls, 0, "The broker must not receive cancellation before its durable intent is confirmed.")
   assert.ok(
     harness.pauses.includes("RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE"),
