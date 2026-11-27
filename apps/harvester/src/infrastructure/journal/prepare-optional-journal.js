@@ -244,11 +244,29 @@ function createJournalLifecycle({ journal, ready, state, reportFailure }) {
   return Object.freeze({
     ready,
     get status() {
-      return getJournalStatus({ journal, state })
+      return getJournalStatus({
+        journal,
+        state,
+      })
     },
-    flush: createJournalFlush({ journal, ready, state, reportFailure }),
-    flushWrites: createJournalWriteOnlyFlush({ journal, ready, state, reportFailure }),
-    close: createJournalClose({ journal, ready, state, reportFailure }),
+    flush: createJournalFlush({
+      journal,
+      ready,
+      state,
+      reportFailure,
+    }),
+    flushWrites: createJournalWriteOnlyFlush({
+      journal,
+      ready,
+      state,
+      reportFailure,
+    }),
+    close: createJournalClose({
+      journal,
+      ready,
+      state,
+      reportFailure,
+    }),
   })
 }
 
