@@ -323,6 +323,9 @@ function publishStrategyDecisionEvent({ dependencies, context, balances, allocat
 }
 
 function assertRecoveryDecisionPublicationSucceeded({ publication } = {}) {
+  if (publication?.pending === true) {
+    throw new Error("Recovery strategy decision evidence requires synchronous publication")
+  }
   if (publication?.ok !== true) {
     throw publication?.errors?.[0] ?? new Error("Recovery strategy decision evidence publication failed")
   }
