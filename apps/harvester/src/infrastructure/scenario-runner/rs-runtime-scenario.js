@@ -1463,6 +1463,25 @@ function createRuntimeScenarioOrderEventWorkflow({
     }),
   })
 }
+function isExpectedTerminalReconciliationPersistenceFailure({
+  eventResult,
+  terminalAccountingResult,
+  stopPersisted,
+  expectedStopPersisted,
+  expectedTerminalReconciliationFailure,
+}) {
+  return expectedTerminalReconciliationFailure &&
+    eventResult?.ok === false &&
+    terminalAccountingResult?.ok === false &&
+    stopPersisted === expectedStopPersisted
+}
+
+function isExpectedTerminalSellStop({ eventResult, terminalAccountingResult, stopPersisted, expectedStopPersisted }) {
+  return eventResult?.ok === false &&
+    terminalAccountingResult?.ok === true &&
+    stopPersisted === expectedStopPersisted
+}
+
 function assertRuntimeScenarioTerminalSellReconciled({
   eventResult,
   terminalAccountingResult,
@@ -1472,15 +1491,21 @@ function assertRuntimeScenarioTerminalSellReconciled({
 }) {
   const stopPersisted = runtime.operationalStateStore.getRecords().some((fact) =>
     fact.factType === "SAFETY_BLOCKER_RAISED" && fact.data?.scope === "ACCOUNT")
-  if (expectedTerminalReconciliationFailure &&
-      eventResult?.ok === false &&
-      terminalAccountingResult?.ok === false &&
-      stopPersisted === expectedStopPersisted) {
+  if (isExpectedTerminalReconciliationPersistenceFailure({
+    eventResult,
+    terminalAccountingResult,
+    stopPersisted,
+    expectedStopPersisted,
+    expectedTerminalReconciliationFailure,
+  })) {
     return
   }
-  if (eventResult?.ok === false &&
-      terminalAccountingResult?.ok === true &&
-      stopPersisted === expectedStopPersisted) {
+  if (isExpectedTerminalSellStop({
+    eventResult,
+    terminalAccountingResult,
+    stopPersisted,
+    expectedStopPersisted,
+  })) {
     return
   }
   throw eventResult?.errors?.[0] ??
@@ -1798,6 +1823,25 @@ function createRuntimeScenarioStopAdmissionExpected({ seed, pairConfig }) {
   }
 }
 
+function createTerminalReconciliationPersistenceFailureExpected({ seed, pairConfig }) {
+  return {
+    ...createRuntimeScenarioSellExpectedBase({
+      seed,
+      pairConfig,
+    }),
+    terminalOrderStatus: "FILLED",
+    terminalReconciliationFailed: true,
+    terminalReconciled: false,
+    eventWorkflowFailedClosed: true,
+    stopFactAppended: true,
+    marketPaused: true,
+    accountAdmissionBlocked: true,
+    buyAdmissionBlocked: true,
+    reservationRetained: true,
+    stagedSellFillCount: 1,
+  }
+}
+
 function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
   const submissionPersistenceExpected = createRuntimeScenarioSubmissionPersistenceFailureExpected({
     scenarioId,
@@ -1820,22 +1864,10 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
     }
   }
   if (scenarioId === "RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001") {
-    return {
-      ...createRuntimeScenarioSellExpectedBase({
-        seed,
-        pairConfig,
-      }),
-      terminalOrderStatus: "FILLED",
-      terminalReconciliationFailed: true,
-      terminalReconciled: false,
-      eventWorkflowFailedClosed: true,
-      stopFactAppended: true,
-      marketPaused: true,
-      accountAdmissionBlocked: true,
-      buyAdmissionBlocked: true,
-      reservationRetained: true,
-      stagedSellFillCount: 1,
-    }
+    return createTerminalReconciliationPersistenceFailureExpected({
+      seed,
+      pairConfig,
+    })
   }
   if (scenarioId === "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001") {
     return createRuntimeScenarioTerminalSellExpected({
@@ -1987,12 +2019,37 @@ function createStopPersistenceFailureAssertions({ output, expected }) {
   ]
 }
 
-function createTerminalReconciliationPersistenceFailureAssertions({ output, expected }) {
+function createRuntimeScenarioSellSubmissionAssertions({ output, expected }) {
   return [
     createAssertion({
       name: "production runtime selects the authorized SELL action",
       actual: output.decision?.outcome,
       expected: expected.decisionOutcome,
+    }),
+    createAssertion({
+      name: "SELL action uses the approved side and quantity",
+      actual: {
+        side: output.action?.side,
+        quantity: output.action?.quantity,
+      },
+      expected: {
+        side: expected.actionSide,
+        quantity: expected.actionQuantity,
+      },
+    }),
+    createAssertion({
+      name: "simulation broker acknowledges exactly one order",
+      actual: output.submittedOrders.length,
+      expected: expected.submittedOrderCount,
+    }),
+  ]
+}
+
+function createTerminalReconciliationPersistenceFailureAssertions({ output, expected }) {
+  return [
+    ...createRuntimeScenarioSellSubmissionAssertions({
+      output,
+      expected,
     }),
     createAssertion({
       name: "terminal broker result remains FILLED after reconciliation persistence fails",
@@ -2060,6 +2117,13 @@ function createPartialSellAssertions({ output, expected }) {
       expected,
     })
   }
+  return createStandardPartialSellAssertions({
+    output,
+    expected,
+  })
+}
+
+function createStandardPartialSellAssertions({ output, expected }) {
   return [
     createAssertion({
       name: "production RS transition selects a SELL action",
