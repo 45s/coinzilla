@@ -262,18 +262,12 @@ function createMultiAccountRuntime({
     }
     const durableProcessStopAcknowledged = startedAccounts.every((entry) =>
       entry.durableProcessStopAcknowledged === true)
-    if (!durableProcessStopAcknowledged) {
-      return {
-        ok: false,
-        errors: [new Error("Multi-account shutdown did not confirm durable PROCESS_STOPPED for every provider account")],
-      }
-    }
     return {
       ok: true,
       status: "STOPPED",
       stopped: true,
       data: {
-        durableProcessStopAcknowledged: true,
+        durableProcessStopAcknowledged,
       },
     }
   }
