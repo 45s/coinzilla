@@ -700,7 +700,10 @@ async function assertStartupCancellationState({ startResult, closeResult, journa
 test("waits for startup cancellation to release the writer lock before close resolves", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "coinzilla-journal-start-close-race-"))
   const eventBus = new EventBus()
-  const journal = new Journal({ eventBus, directory })
+  const journal = new Journal({
+    eventBus,
+    directory,
+  })
   const { createSessionFileStarted, releaseCreateSessionFile } = blockSessionCreation({ journal })
   let startPromise
   let closePromise
@@ -727,7 +730,10 @@ test("waits for startup cancellation to release the writer lock before close res
     releaseCreateSessionFile()
     await Promise.allSettled([startPromise, closePromise].filter(Boolean))
     await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
