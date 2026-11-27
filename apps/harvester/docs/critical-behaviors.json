@@ -1167,7 +1167,7 @@
       "tests": [
         {
           "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
-          "name": "closes account admission before awaiting durable STOP persistence",
+          "name": "closes RS BUY and SELL admission before awaiting durable STOP persistence",
           "kind": "failure"
         },
         {

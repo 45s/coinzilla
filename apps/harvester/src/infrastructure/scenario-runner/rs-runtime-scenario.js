@@ -1748,70 +1748,76 @@ function createRuntimeScenarioTerminalSellExpected({
   return expected
 }
 
-function createRuntimeScenarioSubmissionPersistenceFailureExpected({ scenarioId }) {
-  if (scenarioId === "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001") {
-    return {
-      submissionOutcomePersistenceFailed: true,
-      submissionRejected: true,
-      submittedOrderCount: 0,
-      stopFactAppended: false,
-      reservationRetained: true,
-      brokerSubmissionCallCount: 1,
-      buyAdmissionBlocked: true,
-      sellAdmissionBlocked: true,
-    }
+function createRuntimeScenarioSubmissionPersistenceFailureExpectation({
+  failureField,
+  stopFactAppended,
+  reservationRetained,
+  brokerSubmissionCallCount,
+  buyAdmissionBlocked,
+  sellAdmissionBlocked,
+} = {}) {
+  return {
+    [failureField]: true,
+    submissionRejected: true,
+    submittedOrderCount: 0,
+    stopFactAppended,
+    reservationRetained,
+    brokerSubmissionCallCount,
+    buyAdmissionBlocked,
+    sellAdmissionBlocked,
   }
-  if (scenarioId === "RS-RUNTIME-SELL-RESERVATION-FAILURE-001") {
-    return {
-      submissionReservationFailure: true,
-      submissionRejected: true,
-      submittedOrderCount: 0,
-      stopFactAppended: true,
-      reservationRetained: false,
-      brokerSubmissionCallCount: 0,
-      buyAdmissionBlocked: true,
-      sellAdmissionBlocked: false,
-    }
-  }
-  if (scenarioId === "RS-RUNTIME-SELL-BROKER-EXCEPTION-001") {
-    return {
-      submissionOutcomeUnknown: true,
-      submissionRejected: true,
-      submittedOrderCount: 0,
-      stopFactAppended: true,
-      reservationRetained: true,
-      brokerSubmissionCallCount: 1,
-      buyAdmissionBlocked: true,
-      sellAdmissionBlocked: false,
-    }
-  }
-  if (scenarioId === "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001") {
-    return {
-      submissionOutcomePersistenceFailed: true,
-      submissionRejected: true,
-      submittedOrderCount: 0,
-      stopFactAppended: true,
-      reservationRetained: true,
-      brokerSubmissionCallCount: 1,
-      buyAdmissionBlocked: true,
-      sellAdmissionBlocked: false,
-    }
-  }
-  if (scenarioId === "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001") {
-    return {
-      submissionIntentPersistenceFailed: true,
-      submissionRejected: true,
-      submittedOrderCount: 0,
-      stopFactAppended: true,
-      reservationRetained: false,
-      brokerSubmissionCallCount: 0,
-      buyAdmissionBlocked: true,
-      sellAdmissionBlocked: false,
-    }
-  }
-  return null
 }
 
+function createRuntimeScenarioSubmissionPersistenceFailureExpected({ scenarioId }) {
+  const expectations = {
+    "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001": () =>
+      createRuntimeScenarioSubmissionPersistenceFailureExpectation({
+        failureField: "submissionOutcomePersistenceFailed",
+        stopFactAppended: false,
+        reservationRetained: true,
+        brokerSubmissionCallCount: 1,
+        buyAdmissionBlocked: true,
+        sellAdmissionBlocked: true,
+      }),
+    "RS-RUNTIME-SELL-RESERVATION-FAILURE-001": () =>
+      createRuntimeScenarioSubmissionPersistenceFailureExpectation({
+        failureField: "submissionReservationFailure",
+        stopFactAppended: true,
+        reservationRetained: false,
+        brokerSubmissionCallCount: 0,
+        buyAdmissionBlocked: true,
+        sellAdmissionBlocked: false,
+      }),
+    "RS-RUNTIME-SELL-BROKER-EXCEPTION-001": () =>
+      createRuntimeScenarioSubmissionPersistenceFailureExpectation({
+        failureField: "submissionOutcomeUnknown",
+        stopFactAppended: true,
+        reservationRetained: true,
+        brokerSubmissionCallCount: 1,
+        buyAdmissionBlocked: true,
+        sellAdmissionBlocked: false,
+      }),
+    "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001": () =>
+      createRuntimeScenarioSubmissionPersistenceFailureExpectation({
+        failureField: "submissionOutcomePersistenceFailed",
+        stopFactAppended: true,
+        reservationRetained: true,
+        brokerSubmissionCallCount: 1,
+        buyAdmissionBlocked: true,
+        sellAdmissionBlocked: false,
+      }),
+    "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001": () =>
+      createRuntimeScenarioSubmissionPersistenceFailureExpectation({
+        failureField: "submissionIntentPersistenceFailed",
+        stopFactAppended: true,
+        reservationRetained: false,
+        brokerSubmissionCallCount: 0,
+        buyAdmissionBlocked: true,
+        sellAdmissionBlocked: false,
+      }),
+  }
+  return expectations[scenarioId]?.() ?? null
+}
 function createRuntimeScenarioStopAdmissionExpected({ seed, pairConfig }) {
   return {
     decisionOutcome: "SUBMIT",

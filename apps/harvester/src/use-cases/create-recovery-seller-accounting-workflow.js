@@ -1087,6 +1087,13 @@ function createRecoverySellerPositionSnapshot({ state, market, cycleState }) {
     : undefined
 }
 
+function createSellAdmissionSnapshotFlag({ sellAdmissionBlocked } = {}) {
+  if (typeof sellAdmissionBlocked !== "boolean") {
+    return {}
+  }
+  return { sellAdmissionBlocked }
+}
+
 function createRecoverySellerTransitionSnapshot({
   state,
   createCycleId,
@@ -1142,7 +1149,7 @@ function createRecoverySellerTransitionSnapshot({
     stopState,
     strategyStopped,
     buyAdmissionBlocked,
-    ...(typeof sellAdmissionBlocked === "boolean" ? { sellAdmissionBlocked } : {}),
+    ...createSellAdmissionSnapshotFlag({ sellAdmissionBlocked }),
     marketPaused,
     reconciliationComplete,
     lastBuyPrice: calculateRecoverySellerBuyExecutionVwap({ execution }),

@@ -2676,6 +2676,15 @@ error })}
   })
 }
 
+function createRecoverySellerStopAdmissionCallbacks({ dependencies } = {}) {
+  return {
+    isRecoverySellerBuyAdmissionBlocked: () =>
+      dependencies.recoverySellerStopWorkflow?.isBuyAdmissionBlocked?.() === true,
+    isRecoverySellerSellAdmissionBlocked: () =>
+      dependencies.recoverySellerStopWorkflow?.isSellAdmissionBlocked?.() === true,
+  }
+}
+
 function createConservativeEngineSubmissionContext({ context } = {}) {
   const { dependencies } = context
   context.shutdownRecoverySubmission = { allowed: false }
@@ -2691,10 +2700,7 @@ function createConservativeEngineSubmissionContext({ context } = {}) {
     isVolatilityProtectionEnabledForSymbol: context.isVolatilityProtectionEnabledForSymbol,
     hasBlockingOpenOrdersForSymbol: context.hasBlockingOpenOrdersForSymbol,
     getAccountSafetyBlocker: dependencies.getAccountSafetyBlocker,
-    isRecoverySellerBuyAdmissionBlocked: () =>
-      dependencies.recoverySellerStopWorkflow?.isBuyAdmissionBlocked?.() === true,
-    isRecoverySellerSellAdmissionBlocked: () =>
-      dependencies.recoverySellerStopWorkflow?.isSellAdmissionBlocked?.() === true,
+    ...createRecoverySellerStopAdmissionCallbacks({ dependencies }),
     isPostOnlyOrderCrossing,
     isShutdownRecoverySubmissionAllowed: () => context.shutdownRecoverySubmission.allowed,
   })
