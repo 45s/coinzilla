@@ -1,54 +1,4 @@
 export const ADDITIONAL_TEST_MAPPINGS = Object.freeze({
-  "CON-DECISION-001": [
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "creates the initial BUY below last traded price and rounds down to tick",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "does not duplicate an already active BUY on repeated price events",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "respects investment-cap equality and both sides of the BUY eligibility boundary",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "defers a BUY below MIN_NOTIONAL without blocking a valid recovery SELL",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "defers a BUY below MIN_QUANTITY without emitting an invalid order",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "defers a BUY that rounds to zero at the exchange quantity step",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "defers a configured BUY above MAX_QUANTITY without blocking a valid SELL",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "rejects missing exchange increments and invalid strategy context",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "fails closed when active inventory has no positive recovery cost basis",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "fails closed rather than inventing a next BUY reference while active inventory lacks completed-BUY VWAP",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "rejects a RecoveryLedger belonging to a different market",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "fails closed when RecoveryLedger has cycle accounting but Portfolio has no Position",
-    },
-  ],
   "CON-SELL-001": [
     {
       path: "src/domain/strategies/conservative/strategy.test.js",
@@ -145,10 +95,6 @@ export const ADDITIONAL_TEST_MAPPINGS = Object.freeze({
     {
       path: "src/domain/strategies/conservative/strategy.test.js",
       name: "blocks the next BUY when the required recovery SELL exceeds MAX_PRICE",
-    },
-    {
-      path: "src/domain/strategies/conservative/strategy.test.js",
-      name: "defers a BUY below MIN_NOTIONAL without blocking a valid recovery SELL",
     },
     {
       path: "src/domain/strategies/conservative/strategy.test.js",
