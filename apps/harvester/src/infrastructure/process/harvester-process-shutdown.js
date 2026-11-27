@@ -269,13 +269,15 @@ async function closeProcessLogger({ closeLogger } = {}) {
 }
 
 function getProcessLockReleaseErrors(result) {
-  if (result?.ok === true) {
+  const releaseConfirmed = result?.released === true ||
+    (result?.released === false && result?.alreadyReleased === true)
+  if (result?.ok === true && releaseConfirmed) {
     return []
   }
   if (Array.isArray(result?.errors) && result.errors.length > 0) {
     return result.errors
   }
-  return [new Error("Harvester trading process lock release was not confirmed")]
+  return [new Error("Harvester trading process lock release was not explicitly confirmed")]
 }
 
 async function releaseProcessLock({ processLock } = {}) {
