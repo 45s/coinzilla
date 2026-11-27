@@ -56,6 +56,17 @@ import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, c
 
 // RS-4/RS-5 offline acceptance is complete. RS is enabled by default; pair-level tradingEnvironment controls eligibility.
 const RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = true
+const RECOVERY_SELLER_STOP_PRODUCER = "RECOVERY_SELLER_STOP_WORKFLOW"
+const RECOVERY_SELLER_STOP_REASON = "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+
+function isRecoverySellerStopRestartBlocker(blocker) {
+  return blocker?.scope === "ACCOUNT" &&
+    blocker?.reason === RECOVERY_SELLER_STOP_REASON &&
+    (
+      blocker?.producer === RECOVERY_SELLER_STOP_PRODUCER ||
+      blocker?.producer === undefined
+    )
+}
 
 
 function assertOperationalStateStoreInterface({ operationalStateStore } = {}) {
@@ -183,15 +194,12 @@ function requiresAccountRecoverySnapshot(records) {
   })
 }
 
-function assertOperationalStateCanStart({
+function isAllowedOperationalStateRestart({
   projection,
   records,
-  accountRecoverySnapshotRequired = false,
+  processStarts,
+  accountRecoverySnapshotRequired,
 } = {}) {
-  const processStarts = records.filter((record) => record.factType === "PROCESS_STARTED")
-  if (processStarts.length === 0) {
-    return false
-  }
   const stoppedSessionIds = new Set(records
     .filter((record) => record.factType === "PROCESS_STOPPED")
     .map((record) => record.runtimeSessionId))
@@ -201,16 +209,30 @@ function assertOperationalStateCanStart({
   const observationOnlyRestart = latestProcessStart.data.tradingEnabled === false &&
     stickySafetyBlockers.length === 0
   const singleRecoverySellerStop = stickySafetyBlockers.length === 1 &&
-    stickySafetyBlockers[0].scope === "ACCOUNT" &&
-    stickySafetyBlockers[0].reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+    isRecoverySellerStopRestartBlocker(stickySafetyBlockers[0])
   const accountBlockerResolutionRestart = accountRecoverySnapshotRequired === true &&
     stickySafetyBlockers.every((blocker) => blocker.scope !== "ACCOUNT")
-  if (
-    projection.data.candidateOnly === true &&
+  return projection.data.candidateOnly === true &&
     projection.data.restorationEnabled === false &&
     allSessionsStopped &&
     (observationOnlyRestart || singleRecoverySellerStop || accountBlockerResolutionRestart)
-  ) {
+}
+
+function assertOperationalStateCanStart({
+  projection,
+  records,
+  accountRecoverySnapshotRequired = false,
+} = {}) {
+  const processStarts = records.filter((record) => record.factType === "PROCESS_STARTED")
+  if (processStarts.length === 0) {
+    return false
+  }
+  if (isAllowedOperationalStateRestart({
+    projection,
+    records,
+    processStarts,
+    accountRecoverySnapshotRequired,
+  })) {
     return true
   }
   throw new Error(
