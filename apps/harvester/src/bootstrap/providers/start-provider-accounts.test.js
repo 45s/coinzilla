@@ -1045,8 +1045,14 @@ test("defers provider lock release until outer cleanup and retries only incomple
       accountId: "account-two",
     }),
   ]
-  const runtimeStopCalls = { first: 0, second: 0 }
-  const marketDataStopCalls = { first: 0, second: 0 }
+  const runtimeStopCalls = {
+    first: 0,
+    second: 0,
+  }
+  const marketDataStopCalls = {
+    first: 0,
+    second: 0,
+  }
   let providerLockReleaseCalls = 0
   const runtime = await startProviderAccounts({
     providers,
@@ -1060,7 +1066,7 @@ test("defers provider lock release until outer cleanup and retries only incomple
       }
     },
     start: async (input) => {
-      const providerInstanceId = input.providerIdentity.providerInstanceId
+      const { providerInstanceId } = input.providerIdentity
       return {
         startMarketData: async () => ({ ok: true }),
         stopMarketData: async () => {
@@ -1085,8 +1091,14 @@ test("defers provider lock release until outer cleanup and retries only incomple
   assert.equal(firstStop.ok, false)
   const retryStop = await runtime.stop()
   assert.equal(retryStop.ok, true)
-  assert.deepEqual(runtimeStopCalls, { first: 1, second: 2 })
-  assert.deepEqual(marketDataStopCalls, { first: 1, second: 1 })
+  assert.deepEqual(runtimeStopCalls, {
+    first: 1,
+    second: 2,
+  })
+  assert.deepEqual(marketDataStopCalls, {
+    first: 1,
+    second: 1,
+  })
   assert.equal(providerLockReleaseCalls, 0,
     "Active provider locks must be released only by the outer process shutdown after all cleanup succeeds.")
 })
