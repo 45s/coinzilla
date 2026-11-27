@@ -405,7 +405,7 @@ test("durably closes accepted Journal writes before child exit and makes repeate
     const output = getOutput()
     assert.equal(exit.code, 0, `The child must exit successfully after durable Journal shutdown; stderr: ${output.stderr}`)
     assert.equal(exit.signal, null, "The child must exit naturally rather than being killed by a signal.")
-    const outputLines = output.stdout.trim().split(/\\r?\\n/)
+    const outputLines = output.stdout.trim().split(/\r?\n/)
     assert.deepEqual(
       outputLines.slice(0, 3),
       ["EVENT_BUS_CLOSED", "LOGGER_CLOSED", "LOCK_RELEASED"],
