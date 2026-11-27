@@ -237,7 +237,8 @@ test("still rejects an invalid recovery-facts checkpoint instead of publishing m
   const originalFacts = await readFile(filename, "utf8")
   const facts = originalFacts.trim().split("\n").map((line) => JSON.parse(line))
   facts.at(-1).digest = "f".repeat(64)
-  await writeFile(filename, jsonLines(facts), "utf8")
+  const invalidFactsContent = jsonLines(facts)
+  await writeFile(filename, invalidFactsContent, "utf8")
   await assert.rejects(
     runHarvesterDebugArchive(archiveDependencies({
       fixture,
@@ -248,7 +249,7 @@ test("still rejects an invalid recovery-facts checkpoint instead of publishing m
   )
   assert.equal(
     await readFile(filename, "utf8"),
-    jsonLines(facts),
+    invalidFactsContent,
     "Archive failure must leave the invalid source ledger unchanged for diagnosis",
   )
 })
