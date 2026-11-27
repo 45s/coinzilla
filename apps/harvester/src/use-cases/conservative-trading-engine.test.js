@@ -2177,8 +2177,8 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
       timestamp: 1
     },
   })
-  assert.equal(started.ok, true)
-  assert.equal(flushCount, 1)
+  assert.equal(started.ok, true, "The pre-existing BUY and active Position must still allow the initial recovery SELL evaluation.")
+  assert.equal(flushCount, 1, "Only the recovery SELL submission intent must be flushed; the pre-existing BUY has no new submission intent.")
 
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
   const result = await harness.engine.processUserDataEvent({
@@ -2195,11 +2195,11 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
     },
   })
 
-  assert.equal(result.ok, false)
-  assert.equal(flushCount, 2)
-  assert.equal(cancelCalls, 0)
-  assert.ok(harness.pauses.includes("RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE"))
-  assert.equal(harness.engine.getOrders().find((order) => order.side === "SELL").status, "OPEN")
+  assert.equal(result.ok, false, "A non-durable recovery SELL cancellation intent must fail before broker cancellation.")
+  assert.equal(flushCount, 2, "The failed second flush must be the recovery SELL cancellation-intent durability barrier.")
+  assert.equal(cancelCalls, 0, "The broker must not receive a cancellation request when its durable intent cannot be committed.")
+  assert.ok(harness.pauses.includes("RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE"), "The market must remain paused when the recovery SELL cancellation intent is not durable.")
+  assert.equal(harness.engine.getOrders().find((order) => order.side === "SELL").status, "OPEN", "The existing recovery SELL must remain OPEN when cancellation intent persistence fails.")
 })
 
 test("uses the volume-weighted actual execution price for the next standing BUY reference", async () => {
@@ -4237,21 +4237,21 @@ async function assertLateNewReportsIgnoredAfterFilled({ scenario, buyOrder }) {
 
 async function assertShutdownRecoverySellReplaced({ scenario }) {
   const staleCoverage = await scenario.harness.engine.auditShutdownRecoverySellCoverage()
-  assert.equal(staleCoverage.ok, true)
-  assert.equal(staleCoverage.data.covered, false)
-  assert.equal(staleCoverage.data.findings[0].reason, "RECOVERY_SELL_UNDERSIZED")
+  assert.equal(staleCoverage.ok, true, "The initial shutdown coverage audit must return a structured result.")
+  assert.equal(staleCoverage.data.covered, false, "The original recovery SELL must be recognized as undersized after the late BUY fill.")
+  assert.equal(staleCoverage.data.findings[0].reason, "RECOVERY_SELL_UNDERSIZED", "The stale recovery SELL must be classified by its insufficient remaining quantity.")
   const reconciliation = await scenario.harness.engine.reconcileRecoverySellsForShutdown()
   assert.equal(reconciliation.ok, true, reconciliation.errors?.[0]?.message)
   const coverage = await scenario.harness.engine.auditShutdownRecoverySellCoverage()
   assert.equal(coverage.ok, true, "The coverage audit must return a structured result after successful recovery SELL replacement.")
-  assert.equal(coverage.data.covered, true)
+  assert.equal(coverage.data.covered, true, "The replacement recovery SELL must fully cover the reconciled active Position.")
   const sells = scenario.harness.engine.getOrders().filter((order) => order.side === "SELL")
   const replacementSell = sells.at(-1)
-  assert.equal(sells.length, 2)
-  assert.equal(sells[0].status, "CANCELED")
-  assert.equal(replacementSell.status, "OPEN")
-  assert.equal(scenario.harness.engine.getOrders().filter((order) => order.side === "BUY").length, 1)
-  assert.deepEqual(scenario.sequence.slice(-2), ["cancel:SELL", "submit:SELL"])
+  assert.equal(sells.length, 2, "Exactly the original and its one required replacement recovery SELL may exist in the order history.")
+  assert.equal(sells[0].status, "CANCELED", "The undersized recovery SELL must be terminally canceled before replacement.")
+  assert.equal(replacementSell.status, "OPEN", "The replacement recovery SELL must remain OPEN after successful acknowledgement.")
+  assert.equal(scenario.harness.engine.getOrders().filter((order) => order.side === "BUY").length, 1, "The pre-existing BUY must remain the only BUY order; recovery must not create a next BUY.")
+  assert.deepEqual(scenario.sequence.slice(-2), ["cancel:SELL", "submit:SELL"], "Recovery SELL replacement must preserve cancellation-before-submission ordering.")
   return replacementSell
 }
 
@@ -4273,11 +4273,11 @@ function assertReplacementMatchesStrategy({ scenario, replacementSell }) {
     }),
   })
   const expectedSell = expectedDecision.actions.find((action) => action.side === "SELL")
-  assert.equal(replacementSell.originalQuantity.amount, expectedSell.quantity)
+  assert.equal(replacementSell.originalQuantity.amount, expectedSell.quantity, "The replacement recovery SELL quantity must match the strategy decision from the latest reconciled Position.")
   assert.ok(compareDecimal({
     left: replacementSell.limitPrice.amount,
     right: expectedSell.price,
-  }) >= 0)
+  }) >= 0, "The replacement recovery SELL limit price must cover the latest strategy recovery target.")
 }
 
 
@@ -4354,7 +4354,7 @@ test("reconciles multiple BUY fills racing shutdown cancellation and replaces on
     },
   })
   assert.equal(partialResult.ok, true, partialResult.errors?.[0]?.message)
-  assert.equal(partialResult.data.recoverySellReplanPending, true)
+  assert.equal(partialResult.data.recoverySellReplanPending, true, "A late fill on the pre-existing BUY must mark the recovery SELL for re-evaluation.")
 
   const cancellation = scenario.harness.engine.cancelOwnedBuyOrdersForShutdown()
   await scenario.cancelStarted
@@ -4485,7 +4485,7 @@ async function runShutdownRecoveryFailureScenario({ scenario }) {
     },
   })
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
-  assert.ok(buyOrder)
+  assert.ok(buyOrder, "The pre-existing BUY must remain registered so its late fill can be reconciled during shutdown.")
   const fill = makeBuyFill({
     order: buyOrder,
     tradeId: ["shutdown-unresolved", scenario.name].join("-"),
@@ -4514,9 +4514,9 @@ async function runShutdownRecoveryFailureScenario({ scenario }) {
     ["An unresolved ", scenario.name, " outcome must fail shutdown recovery."].join(""),
   )
   const audit = await harness.engine.auditShutdownRecoverySellCoverage()
-  assert.equal(audit.ok, true)
-  assert.equal(audit.data.covered, false)
-  assert.equal(harness.engine.getOrders().filter((order) => order.side === "BUY").length, 1)
+  assert.equal(audit.ok, true, "The shutdown recovery SELL coverage audit must return a structured result after the unresolved outcome.")
+  assert.equal(audit.data.covered, false, "Unresolved recovery SELL cancellation or replacement must leave coverage unproven.")
+  assert.equal(harness.engine.getOrders().filter((order) => order.side === "BUY").length, 1, "The pre-existing BUY must not be replaced by a new BUY during unresolved shutdown recovery.")
 }
 
 
@@ -5978,7 +5978,7 @@ test("suppresses trailing BUY repricing while an actual active Position exists",
   })
   assert.equal(first.ok, true, first.errors?.[0]?.message)
   const initialBuy = harness.engine.getOrders().find((order) => order.side === "BUY")
-  assert.ok(initialBuy)
+  assert.ok(initialBuy, "The pre-existing BUY must remain registered while the active Position blocks trailing replacement.")
 
   const upward = await harness.engine.processMarketPrice({
     symbol: "DOGEUSDT",
@@ -6003,7 +6003,7 @@ test("suppresses trailing BUY repricing while an actual active Position exists",
   assert.deepEqual(harness.cancellationIds, [], "an active Position must prevent trailing cancellation")
   assert.equal(harness.orders.filter((order) => order.side === "BUY").length, 0, "No replacement BUY may be submitted while the Position is active.")
   assert.equal(harness.orders.filter((order) => order.side === "SELL").length, 1, "Recovery SELL evaluation must continue while trailing BUY repricing is skipped.")
-  assert.equal(harness.engine.getOrders().find((order) => order.side === "BUY").clientOrderId, initialBuy.clientOrderId)
+  assert.equal(harness.engine.getOrders().find((order) => order.side === "BUY").clientOrderId, initialBuy.clientOrderId, "The existing BUY clientOrderId must remain unchanged while recovery SELL evaluation continues.")
 })
 
 test("reprices an active BUY normally when no Position exists", async () => {
@@ -6505,7 +6505,7 @@ async function fillInitialRecoveryOnlyBuy({ harness, observedReferences }) {
   })
   assert.equal(started.ok, true, started.errors?.[0]?.message)
   const firstBuy = harness.engine.getOrders().find(({ side }) => side === "BUY")
-  assert.ok(firstBuy)
+  assert.ok(firstBuy, "The recovery-only scenario must begin with exactly one acknowledged initial BUY.")
   const fill = makeBuyFill({
     order: firstBuy,
     tradeId: "recovery-only-buy-fill",
@@ -6529,7 +6529,7 @@ async function fillInitialRecoveryOnlyBuy({ harness, observedReferences }) {
   await harness.engine.evaluateLatest({
     symbol: "DOGEUSDT",
   })
-  assert.equal(harness.engine.getOrders().filter(({ side }) => side === "SELL").length, 1)
+  assert.equal(harness.engine.getOrders().filter(({ side }) => side === "SELL").length, 1, "The filled Position above keepQuantity must establish exactly one recovery SELL before subsequent evaluations.")
   observedReferences.length = 0
 }
 
@@ -6561,12 +6561,12 @@ test("a fully filled BUY keeps subsequent evaluations in recovery-only mode whil
     harness,
   })
 
-  assert.equal(harness.orders.filter(({ side }) => side === "BUY").length, 1)
-  assert.equal(harness.orders.filter(({ side }) => side === "SELL").length, 1)
-  assert.equal(harness.orders.length, 2)
-  assert.equal(observedReferences.length, 12)
-  assert.ok(observedReferences.every((price) => price !== null))
-  assert.equal(harness.engine.getPausedMarkets().length, 0)
+  assert.equal(harness.orders.filter(({ side }) => side === "BUY").length, 1, "Only the original BUY may be submitted before recovery completion.")
+  assert.equal(harness.orders.filter(({ side }) => side === "SELL").length, 1, "The recovery cycle must retain exactly one acknowledged SELL across all subsequent market evaluations.")
+  assert.equal(harness.orders.length, 2, "The twelve market evaluations must not create any additional BUY or SELL order intents.")
+  assert.equal(observedReferences.length, 12, "Every subsequent market evaluation must use the reconciled BUY execution reference.")
+  assert.ok(observedReferences.every((price) => price !== null), "No recovery-only evaluation may lose the reconciled BUY price reference.")
+  assert.equal(harness.engine.getPausedMarkets().length, 0, "A valid active recovery cycle must continue without introducing a market pause.")
 })
 
 
