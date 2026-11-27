@@ -302,7 +302,13 @@ function verifySandboxTools({
     stdio: ["ignore", "pipe", "ignore"],
     timeout: 5_000,
   })
+  const bwrapHelp = execFileSync(bwrap.path, ["--help"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: 5_000,
+  })
   if (typeof bwrapVersion !== "string" || !bwrapVersion.toLowerCase().includes("bubblewrap") ||
+      typeof bwrapHelp !== "string" || !bwrapHelp.includes("--seccomp") || !bwrapHelp.includes("--preserve-fds") ||
       typeof prlimitVersion !== "string" || !prlimitVersion.trim()) {
     throw new Error("Bubblewrap or prlimit version verification failed")
   }
