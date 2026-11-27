@@ -835,6 +835,40 @@ test("closes observability after publishing startup failure", async () => {
 })
 
 
+test("reports an ambiguous process-lock release during startup cleanup", async () => {
+  const diagnostics = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main({
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => ({ ok: true }),
+      }),
+      createEventBus: () => ({
+        publish: () => ({ ok: true }),
+        close: async () => ({ ok: true, closed: true }),
+      }),
+      createJournalService: disabledJournalService,
+      start: async () => {
+        throw new Error("startup failed")
+      },
+      logger: {
+        info() {},
+        debug() {},
+        error: ({ message }) => diagnostics.push(message),
+      },
+    })
+    assert.equal(process.exitCode, 1)
+    assert.ok(
+      diagnostics.includes("observability shutdown incomplete"),
+      "An ambiguous lock-release result must be reported as incomplete cleanup.",
+    )
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
 test("writes and durably closes a JSONL session in the injected Journal directory", async () => {
   const previousExitCode = process.exitCode
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-journal-session-"))
