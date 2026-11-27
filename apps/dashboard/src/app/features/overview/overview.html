@@ -6,9 +6,9 @@
   </div>
   <div class="snapshot-meta">
     <span class="snapshot-indicator"></span>
-    <span>STATIC PREVIEW</span>
+    <span>LIVE SYSTEM HEALTH</span>
     <span class="meta-divider">·</span>
-    <span>DEMO SNAPSHOT</span>
+    <span>DEMO PORTFOLIO</span>
   </div>
 </section>
 
@@ -81,19 +81,22 @@
         <h2>System health</h2>
         <p>Connection status overview</p>
       </div>
-      <span class="health-count">0 / 3 CONNECTED</span>
+      <span class="health-count">{{ connectedCount() }} / 3 CONNECTED</span>
     </div>
 
     <div class="service-list">
-      @for (service of services; track service.name) {
+      @for (service of services(); track service.name) {
         <div class="service-row">
           <span class="service-icon" aria-hidden="true">⌁</span>
           <div class="service-copy">
             <strong>{{ service.name }}</strong>
             <small>{{ service.description }}</small>
           </div>
-          <span class="service-state" [class.idle]="service.state === 'idle'">
-            {{ service.state === 'idle' ? 'IDLE' : 'OFFLINE' }}
+          <span class="service-state"
+            [class.online]="service.state === 'connected'"
+            [class.idle]="service.state === 'checking'"
+            [class.offline]="service.state === 'offline' || service.state === 'unavailable'">
+            {{ service.label }}
           </span>
         </div>
       }
@@ -101,7 +104,7 @@
 
     <div class="health-note">
       <span class="note-icon">i</span>
-      <p>This preview is not connected to Harvester. No trading status or exchange readiness is being reported.</p>
+      <p>Connection health is not exchange readiness or permission to trade. Portfolio and performance figures elsewhere on this page remain fictional demo data.</p>
     </div>
   </article>
 </section>
