@@ -64,12 +64,29 @@ test("binds process start and clean/unclean stop facts to the durable store runt
   const operationalStateStore = await createStore(t)
   const baseline = await recordConfigurationBaseline({ operationalStateStore,
 appConfig })
+  const processIdentity = {
+    application: "harvester",
+    version: "1.0.001",
+    runtimeSessionId: "process-facts-test-session",
+    processId: 24680,
+    startedAt: "2026-11-12T00:00:00.000Z",
+    source: {
+      branch: "feature/recovery\r\nhotfix",
+      commit: "a".repeat(40),
+      shortCommit: "a".repeat(8),
+      commitMessage: "test durable process provenance",
+      commitDate: "2026-11-11T23:59:00.000Z",
+      workingTree: "dirty",
+      metadataSource: "git",
+    },
+  }
   const started = await recordProcessStarted({
     operationalStateStore,
     configurationFingerprint: baseline.data.fingerprint,
     strategyName: baseline.data.strategyName,
     markets: baseline.data.markets,
     tradingEnabled: true,
+    processIdentity,
   })
   const stopped = await recordProcessStopped({
     operationalStateStore,
@@ -86,6 +103,23 @@ appConfig })
   assert.deepEqual(processFacts.map(({ factType }) => factType), ["PROCESS_STARTED", "PROCESS_STOPPED"])
   assert.ok(processFacts.every(({ runtimeSessionId }) => runtimeSessionId === "process-facts-test-session"))
   assert.equal(processFacts[1].data.clean, true)
+  assert.deepEqual(
+    processFacts[0].data.processIdentity,
+    {
+      application: "harvester",
+      version: "1.0.001",
+      runtimeSessionId: "process-facts-test-session",
+      processId: 24680,
+      startedAt: "2026-11-12T00:00:00.000Z",
+      source: {
+        branch: "feature/recovery hotfix",
+        commit: "a".repeat(40),
+        workingTree: "dirty",
+        metadataSource: "git",
+      },
+    },
+    "The durable PROCESS_STARTED fact must preserve the allowlisted process ID, runtime ID, source revision, and worktree state.",
+  )
 })
 
 test("rejects malformed process-boundary and configuration-baseline facts", async (t) => {
@@ -129,6 +163,138 @@ clean: "true" },
   }
 })
 
+function createProcessIdentityFixture() {
+  return {
+    application: "harvester",
+    version: "1.0.001",
+    runtimeSessionId: "process-facts-test-session",
+    processId: 24680,
+    startedAt: "2026-11-12T00:00:00.000Z",
+    source: {
+      branch: "develop",
+      commit: "a".repeat(40),
+      workingTree: "clean",
+      metadataSource: "git",
+    },
+  }
+}
+
+function createProcessStartedFact(identity) {
+  return {
+    factId: "process-started:process-facts-test-session",
+    factType: "PROCESS_STARTED",
+    data: {
+      configurationFingerprint: "a".repeat(64),
+      strategyName: "CG_coinGrabber",
+      markets: ["BTCUSDT"],
+      tradingEnabled: true,
+      processIdentity: identity,
+    },
+  }
+}
+
+function createInvalidProcessIdentityEnvelopeVariants(processIdentity) {
+  return [
+    null,
+    [],
+    {
+      ...processIdentity,
+      application: "other",
+    },
+    {
+      ...processIdentity,
+      runtimeSessionId: "another-session",
+    },
+    {
+      ...processIdentity,
+      version: " ",
+    },
+    {
+      ...processIdentity,
+      processId: 0,
+    },
+    {
+      ...processIdentity,
+      startedAt: "not-a-timestamp",
+    },
+    {
+      ...processIdentity,
+      source: null,
+    },
+    {
+      ...processIdentity,
+      unexpected: true,
+    },
+  ]
+}
+
+function createInvalidProcessIdentitySourceVariants(processIdentity) {
+  return [
+    {
+      ...processIdentity,
+      source: {
+        ...processIdentity.source,
+        unexpected: true,
+      },
+    },
+    {
+      ...processIdentity,
+      source: {
+        ...processIdentity.source,
+        branch: 42,
+      },
+    },
+    {
+      ...processIdentity,
+      source: {
+        ...processIdentity.source,
+        commit: "A".repeat(40),
+      },
+    },
+    {
+      ...processIdentity,
+      source: {
+        ...processIdentity.source,
+        workingTree: "maybe",
+      },
+    },
+    {
+      ...processIdentity,
+      source: {
+        ...processIdentity.source,
+        metadataSource: "unknown",
+      },
+    },
+  ]
+}
+
+test("validates every durable process identity field and accepts explicitly unknown source metadata", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const processIdentity = createProcessIdentityFixture()
+  const invalidIdentities = [
+    ...createInvalidProcessIdentityEnvelopeVariants(processIdentity),
+    ...createInvalidProcessIdentitySourceVariants(processIdentity),
+  ]
+
+  for (const identity of invalidIdentities) {
+    const result = await operationalStateStore.append(createProcessStartedFact(identity))
+    assert.equal(result.ok, false, "Malformed or unsupported process identity metadata must fail closed.")
+    assert.notEqual(result.data?.durable, true, "Invalid process identity metadata must never be acknowledged as durable.")
+  }
+
+  const unknownSourceIdentity = {
+    ...processIdentity,
+    source: {
+      branch: null,
+      commit: null,
+      workingTree: "unknown",
+      metadataSource: "unavailable",
+    },
+  }
+  const accepted = await operationalStateStore.append(createProcessStartedFact(unknownSourceIdentity))
+  assert.equal(accepted.ok, true, accepted.errors?.[0]?.message)
+  assert.equal(accepted.data.durable, true, "Explicitly unavailable source provenance is valid when represented by the supported unknown/null values.")
+})
 test("rejects process boundaries that are not tied to the store runtime session", async (t) => {
   const operationalStateStore = await createStore(t)
   const result = await recordProcessStopped({
