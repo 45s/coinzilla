@@ -122,7 +122,8 @@ test("fails closed when recovery decision publication is still pending", async (
       dependencies,
       context: createCandidateNotionalContext(),
     }),
-    /synchronous publication/,
+    (error) => error.code === "RECOVERY_DECISION_EVIDENCE_PERSISTENCE_FAILED" &&
+      error.cause?.message.includes("synchronous publication"),
     "A write-only flush must not be mistaken for durability while the decision event is still pending admission.",
   )
   assert.equal(flushCalls, 0, "The Journal barrier must not run before synchronous decision publication succeeds.")
