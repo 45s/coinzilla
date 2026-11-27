@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import nodeTest from "node:test"
 
 import { createLatestTransitionEvaluator } from "./create-latest-transition-evaluator.js"
+import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 
 const test = (...args) => {
   const [name, ...testArgs] = args

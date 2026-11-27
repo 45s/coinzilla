@@ -2140,7 +2140,7 @@ function mapOptionalEvidenceTimestamp({ value, field } = {}) {
     return null
   }
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw new TypeError("Evidence timestamp must be a non-negative safe integer or null")
+    throw new TypeError([field, " must be a non-negative safe integer timestamp or null"].join(""))
   }
   return value
 }
