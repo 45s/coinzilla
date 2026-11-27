@@ -553,6 +553,8 @@ The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERV
 
 **Status:** TEST-MAPPED — application-path cases are mapped; exact-head verification is pending.
 
+**Scenario registry:** `CON-RECOVERY-001`.
+
 **Behavior:** A BUY acknowledged before a Conservative recovery cycle became active remains an existing order lifecycle, not a new BUY intent. Its presence must not suppress recovery SELL evaluation. If that BUY fills while a recovery SELL is active, Harvester must reconcile the fill exactly once and update or replace only the recovery SELL coverage from the latest canonical Position and RecoveryLedger state. New/replacement BUY admission remains closed until full cycle completion.
 
 **Given / preconditions:**
