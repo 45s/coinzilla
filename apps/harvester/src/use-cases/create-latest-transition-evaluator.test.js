@@ -444,6 +444,7 @@ function configureResidualSellThroughSubmission({
   submissions,
   pauses,
   completionCalls,
+  symbol,
 } = {}) {
   dependencies.allocateOrderCommitments = ({ actions }) => ({
     ok: true,
@@ -457,7 +458,7 @@ function configureResidualSellThroughSubmission({
     dependencies.state.residualSellThroughActiveOrders.push({
       clientOrderId: "residual-sell-client",
       brokerOrderId: "residual-sell-broker",
-      market: { id: dependencies.state.prices.keys().next().value },
+      market: { id: symbol },
       side: "SELL",
       status: "OPEN",
     })
@@ -523,6 +524,7 @@ function configureResidualSellThroughDependencies(input = {}) {
     submissions,
     pauses,
     completionCalls,
+    symbol,
   })
   return {
     submissions,
