@@ -361,6 +361,7 @@ test("fails closed in real process startup when a synced fact has no manifest ch
       createOperationalStateStore: (options) => createFileOperationalStateStore(options),
     }),
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_VERIFICATION_FAILED" &&
+      error.cause?.code === "DURABLE_FACTS_INTEGRITY_FAILED" &&
       /Operational State record exists beyond the committed-head manifest journal/.test(error.cause?.message ?? ""),
     "Real process startup must reject the uncheckpointed fact before broker-capable startup.",
   )
