@@ -189,6 +189,37 @@ test("rejects user-data resolution when its reason is reserved for Recovery Sell
   assert.equal(read.data.records.filter((entry) => entry.factType === "SAFETY_BLOCKER_RESOLVED").length, 0)
 })
 
+test("rejects unauthenticated direct Recovery Seller STOP resolution", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const raised = await recordSafetyBlockerRaised({
+    operationalStateStore,
+    producer: "RECOVERY_SELLER_STOP_WORKFLOW",
+    scope: "ACCOUNT",
+    symbol: null,
+    reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    evidenceDigest: "a".repeat(64),
+  })
+  assert.equal(raised.ok, true)
+  const result = await recordSafetyBlockerResolved({
+    operationalStateStore,
+    blockerId: raised.data.record.data.blockerId,
+    resolvedBy: "operator:operator-7:rs-stop-action-001",
+    resolution: "OPERATOR_ACTION",
+    evidenceDigest: "b".repeat(64),
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(
+    result.errors?.[0]?.message ?? "",
+    /authenticated OS identity and unique action ID/,
+  )
+  const read = await operationalStateStore.readAll()
+  assert.equal(
+    read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length,
+    0,
+  )
+})
+
 test("does not initialize a missing Operational State Store for safety controls", async (t) => {
   const directory = path.join(os.tmpdir(), `harvester-safety-recorders-missing-${  process.pid  }-${  Date.now()}`)
   t.after(() => rm(directory, { recursive: true,
