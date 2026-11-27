@@ -7,6 +7,8 @@ import { createTradingHistoryQueries } from "../../use-cases/trading-history/que
 import { startTradingHistoryApiServer } from "./trading-history-api.js"
 import { createScenarioRunnerHost } from "./create-scenario-runner-host.js"
 import { createUnavailableScenarioAdapter } from "../scenario-runner/create-unavailable-scenario-adapter.js"
+import { createProcessScenarioAdapter } from "../scenario-runner/create-process-scenario-adapter.js"
+import { createLinuxBubblewrapSandboxLauncher } from "../scenario-runner/create-linux-bubblewrap-sandbox-launcher.js"
 
 const DEFAULT_API_HOST = "127.0.0.1"
 const DEFAULT_API_PORT = 4201
@@ -113,6 +115,35 @@ function resolveScenarioRunnerSourceRevision({ env } = {}) {
   }
 }
 
+function createScenarioRunnerAdapter({ env }) {
+  if (env.HARVESTER_SCENARIO_SANDBOX !== "linux-bubblewrap") {
+    return createUnavailableScenarioAdapter({
+      strategyId: "RS",
+      reason: "Scenario execution is disabled; explicitly configure the verified Linux Bubblewrap sandbox to enable isolated simulation.",
+    })
+  }
+  let launcher
+  try {
+    launcher = createLinuxBubblewrapSandboxLauncher()
+  } catch {
+    return createUnavailableScenarioAdapter({
+      strategyId: "RS",
+      reason: "The configured Linux Bubblewrap/prlimit sandbox failed verification; Recovery Seller scenario execution remains blocked.",
+    })
+  }
+  try {
+    return createProcessScenarioAdapter({
+      strategyId: "RS",
+      spawnSandboxedWorker: launcher,
+    })
+  } catch {
+    return createUnavailableScenarioAdapter({
+      strategyId: "RS",
+      reason: "Recovery Seller scenario execution requires a verified OS sandbox launcher.",
+    })
+  }
+}
+
 function createQueryFacade({ database }) {
   const repository = createTradingHistoryQueryRepository({ database })
   return createTradingHistoryQueries({ repository })
@@ -174,7 +205,7 @@ export async function startTradingHistoryApi({
   const queries = createQueryFacade({ database })
   const runnerHost = createScenarioRunnerHost({
     eventBus,
-    adapters: [createUnavailableScenarioAdapter({ strategyId: "RS" })],
+    adapters: [createScenarioRunnerAdapter({ env })],
     sourceRevision: resolveScenarioRunnerSourceRevision({ env }),
   })
   const server = await openApiServer({
