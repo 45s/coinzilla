@@ -4,6 +4,11 @@ import { EventEmitter } from "node:events"
 import { fork } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import { createProcessScenarioAdapter } from "./create-process-scenario-adapter.js"
+import { PassThrough } from "node:stream"
+import {
+  buildScenarioSeccompFilter,
+  createLinuxBubblewrapSandboxLauncher,
+} from "./create-linux-bubblewrap-sandbox-launcher.js"
 
 const defaultWorker = fileURLToPath(new URL("./scenario-worker.js", import.meta.url))
 
@@ -52,6 +57,11 @@ function createSimulatedSandboxLauncher({
     level: "os",
     ...TEST_SANDBOX_PROFILE,
     maxOutputBytes,
+    bwrapSha256: "a".repeat(64),
+    prlimitSha256: "b".repeat(64),
+    shellSha256: "c".repeat(64),
+    nodeRuntimeSha256: "d".repeat(64),
+    cgroupV2Verified: true,
   })
   return launcher
 }
@@ -513,4 +523,260 @@ test("process adapter waits for an explicit worker-ready handshake before dispat
     expectedExecuteMessage,
     result,
   })
+})
+
+
+const LINUX_SANDBOX_PROFILE = Object.freeze({
+  networkAccess: "deny",
+  filesystemAccess: "read-only-allowlisted-runtime",
+  processExecution: "deny-child-processes",
+  memoryLimitBytes: 268_435_456,
+  cpuTimeLimitMs: 30_000,
+  wallTimeLimitMs: 30_000,
+  maxOutputBytes: 1_048_576,
+})
+
+test("Linux sandbox launcher refuses non-Linux hosts before attestation", () => {
+  assert.throws(() => createLinuxBubblewrapSandboxLauncher({
+    platform: "win32",
+  }), /Linux/)
+})
+
+function createSandboxChildFixture() {
+  let closeHandler
+  const child = {
+    pid: 4321,
+    stdio: [null, null, null, null, new PassThrough()],
+    kill: () => true,
+    once(...eventArguments) {
+      const [event, handler] = eventArguments
+      if (event === "close") {
+        closeHandler = handler
+      }
+      return this
+    },
+  }
+  return {
+    child,
+    close: () => closeHandler(),
+  }
+}
+
+function createLinuxSandboxLauncherFixture() {
+  let spawned
+  let cgroupCleanupCount = 0
+  const childFixture = createSandboxChildFixture()
+  const { child } = childFixture
+  const launcher = createLinuxBubblewrapSandboxLauncher({
+    platform: "linux",
+    repositoryRoot: "/repo",
+    nodeExecutable: "/opt/toolcache/node/24.22.3/x64/bin/node",
+    bwrapPath: "/usr/bin/bwrap",
+    prlimitPath: "/usr/bin/prlimit",
+    verifyExecutable: ({ path }) => ({
+      path,
+      sha256: "a".repeat(64),
+    }),
+    cgroupController: {
+      verify() {},
+      create() {
+        return {
+          cgroupProcsPath: "/sys/fs/cgroup/scenario-test/cgroup.procs",
+          cleanup() {
+            cgroupCleanupCount += 1
+          },
+        }
+      },
+    },
+    execFileSync: (...execArguments) => {
+      const [path, args] = execArguments
+      if (args[0] === "--help") {
+        return "bubblewrap --seccomp --preserve-fds"
+      }
+      return path.includes("bwrap") ? "bubblewrap 0.9.0" : "prlimit from util-linux"
+    },
+    existsSync: () => true,
+    realpathSync: (path) => path,
+    spawn: (...spawnArguments) => {
+      const [command, args, options] = spawnArguments
+      spawned = {
+        command,
+        args,
+        options,
+      }
+      return child
+    },
+  })
+  return {
+    launcher,
+    child,
+    getSpawned: () => spawned,
+    close: childFixture.close,
+    cleanupCount: () => cgroupCleanupCount,
+  }
+}
+
+function assertTrustedNodeRuntimeBind({ spawned }) {
+  const nodeRuntimeDirectory = "/opt/toolcache/node/24.22.3/x64"
+  let nodeRuntimeBindIndex = -1
+  for (let index = 0; index < spawned.args.length - 2; index += 1) {
+    if (spawned.args[index] === "--ro-bind" &&
+        spawned.args[index + 1] === nodeRuntimeDirectory &&
+        spawned.args[index + 2] === nodeRuntimeDirectory) {
+      nodeRuntimeBindIndex = index
+      break
+    }
+  }
+  assert.ok(nodeRuntimeBindIndex >= 0, "Trusted Node installation must be mounted read-only at its host path")
+  assert.ok(spawned.args.includes("/opt/toolcache/node/24.22.3/x64/bin/node"),
+    "Worker must execute the verified host Node binary from the read-only bind")
+}
+
+function filterContainsSyscallCheck({ filter, syscallNumber }) {
+  for (let offset = 0; offset < filter.length; offset += 8) {
+    if (filter.readUInt16LE(offset) === 0x15 &&
+        filter.readUInt32LE(offset + 4) === syscallNumber) {
+      return true
+    }
+  }
+  return false
+}
+
+test("Linux sandbox launcher attests the OS profile and applies cgroup, seccomp and IPC", async () => {
+  const fixture = createLinuxSandboxLauncherFixture()
+  const returned = fixture.launcher({
+    workerPath: "/repo/apps/harvester/src/infrastructure/scenario-runner/scenario-worker.js",
+    env: { SCENARIO_RUN_WORKER: "1" },
+    execArgv: [],
+    stdio: ["ignore", "ignore", "ignore", "ipc"],
+    sandboxProfile: LINUX_SANDBOX_PROFILE,
+  })
+  const spawned = fixture.getSpawned()
+  assert.equal(returned, fixture.child)
+  assert.equal(fixture.launcher.isolationAttestation.level, "os")
+  assert.equal(fixture.launcher.isolationAttestation.networkAccess, "deny")
+  assert.equal(fixture.launcher.isolationAttestation.maxOutputBytes, 1_048_576)
+  assert.equal(fixture.launcher.isolationAttestation.cgroupV2Verified, true)
+  assert.equal(typeof fixture.launcher.isolationAttestation.shellSha256, "string")
+  assert.equal(spawned.command, "/bin/sh")
+  assert.ok(spawned.args.includes("--as=8589934592:8589934592"))
+  assert.ok(spawned.args.includes("/sys/fs/cgroup/scenario-test/cgroup.procs"))
+  assertTrustedNodeRuntimeBind({ spawned })
+  assert.ok(spawned.args.includes("--cpu=30:30"))
+  assert.ok(spawned.args.includes("--unshare-net"))
+  assert.ok(spawned.args.includes("--unshare-pid"))
+  assert.ok(spawned.args.includes("--seccomp"))
+  assert.ok(spawned.args.includes("--preserve-fds"))
+  assert.equal(spawned.options.stdio[3], "ipc")
+  assert.equal(spawned.options.env.NODE_CHANNEL_FD, "3")
+  assert.equal(spawned.options.env.NODE_CHANNEL_SERIALIZATION_MODE, "json")
+  assert.ok(buildScenarioSeccompFilter({ arch: "x64" }).length > 0)
+  await new Promise((resolve) => setImmediate(resolve))
+  fixture.close()
+  assert.equal(fixture.cleanupCount(), 1)
+})
+
+test("sandbox seccomp permits Bubblewrap's initial execve and denies child-process creation", () => {
+  const x64Filter = buildScenarioSeccompFilter({ arch: "x64" })
+  const arm64Filter = buildScenarioSeccompFilter({ arch: "arm64" })
+  assert.equal(filterContainsSyscallCheck({
+    filter: x64Filter,
+    syscallNumber: 59,
+  }), false, "x64 seccomp must allow Bubblewrap's initial execve of the worker")
+  assert.equal(filterContainsSyscallCheck({
+    filter: arm64Filter,
+    syscallNumber: 221,
+  }), false, "arm64 seccomp must allow Bubblewrap's initial execve of the worker")
+  assert.equal(filterContainsSyscallCheck({
+    filter: x64Filter,
+    syscallNumber: 57,
+  }), true, "x64 seccomp must deny fork")
+  assert.equal(filterContainsSyscallCheck({
+    filter: x64Filter,
+    syscallNumber: 58,
+  }), true, "x64 seccomp must deny vfork")
+  assert.equal(filterContainsSyscallCheck({
+    filter: x64Filter,
+    syscallNumber: 322,
+  }), true, "x64 seccomp must deny execveat")
+  assert.equal(filterContainsSyscallCheck({
+    filter: arm64Filter,
+    syscallNumber: 281,
+  }), true, "arm64 seccomp must deny execveat")
+})
+
+test("Linux sandbox launcher rejects a mismatched isolation profile before spawning", () => {
+  let spawnCalls = 0
+  const launcher = createLinuxBubblewrapSandboxLauncher({
+    platform: "linux",
+    repositoryRoot: "/repo",
+    nodeExecutable: "/usr/bin/node",
+    bwrapPath: "/usr/bin/bwrap",
+    prlimitPath: "/usr/bin/prlimit",
+    verifyExecutable: ({ path }) => ({
+      path,
+      sha256: "b".repeat(64),
+    }),
+    execFileSync: (...execArguments) => {
+      const [path, args] = execArguments
+      if (args[0] === "--help") {
+        return "bubblewrap --seccomp --preserve-fds"
+      }
+      return path.includes("bwrap") ? "bubblewrap 0.9.0" : "prlimit from util-linux"
+    },
+    existsSync: () => true,
+    realpathSync: (path) => path,
+    spawn: () => {
+      spawnCalls += 1
+      return { stdio: [] }
+    },
+    cgroupController: {
+      verify() {},
+      create() {
+        return {
+          cgroupProcsPath: "/sys/fs/cgroup/scenario-test/cgroup.procs",
+          cleanup() {},
+        }
+      },
+    },
+  })
+  assert.throws(() => launcher({
+    workerPath: "/repo/apps/harvester/src/infrastructure/scenario-runner/scenario-worker.js",
+    env: {},
+    execArgv: [],
+    stdio: ["ignore", "ignore", "ignore", "ipc"],
+    sandboxProfile: {
+      ...LINUX_SANDBOX_PROFILE,
+      networkAccess: "allow",
+    },
+  }), /profile does not match/)
+  assert.equal(spawnCalls, 0)
+})
+
+test("Linux sandbox launcher fails closed when delegated cgroup controllers are unavailable", () => {
+  assert.throws(() => createLinuxBubblewrapSandboxLauncher({
+    platform: "linux",
+    repositoryRoot: "/repo",
+    nodeExecutable: "/usr/bin/node",
+    bwrapPath: "/usr/bin/bwrap",
+    prlimitPath: "/usr/bin/prlimit",
+    verifyExecutable: ({ path }) => ({
+      path,
+      sha256: "e".repeat(64),
+    }),
+    cgroupController: {
+      verify() {
+        throw new Error("cgroup v2 memory/cpu/pids delegation is required")
+      },
+      create() {
+        throw new Error("unreachable")
+      },
+    },
+    existsSync: () => true,
+    realpathSync: (path) => path,
+    execFileSync: () => "not reached",
+    spawn: () => {
+      throw new Error("unreachable")
+    },
+  }), /cgroup v2 memory\/cpu\/pids delegation is required/)
 })

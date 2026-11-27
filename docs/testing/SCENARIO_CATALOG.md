@@ -1640,3 +1640,7 @@ The initial inventory contains 18 scenarios across 16 categories: 15 TEST-MAPPED
 The RS scenario registry now maps RS-002-006-B to an application authorizer/account-allocation regression: a registered RS partial BUY with 6 remaining at price 10 retains a 60-quote commitment; a new 10-quote BUY defers when free quote is 65. The test is not yet run on the current head. RS-002-006 / RS-002 remain PARTIAL; no scenario is VERIFIED. Full order-event lifecycle proof remains outstanding.
 
 Additional RS-002-020-B mapping: an application authorizer test asserts 20 existing exposure + 60 pending owned BUY commitment + 20 new BUY equals the 100 pair cap and is accepted. Test execution is pending; RS-002-020 / RS-002 remain PARTIAL.
+
+## Scenario Runner real Linux isolation acceptance — 2026-11-27
+
+The opt-in integration test `apps/harvester/src/infrastructure/scenario-runner/linux-sandbox-e2e.test.js` and manual workflow `.github/workflows/harvester-scenario-sandbox-e2e.yml` provide adversarial OS-boundary evidence for the application-level RS simulation adapter. The test checks namespace separation, secret non-forwarding, read-only source mounts, network denial, child-process denial, and the actual cgroup memory/swap/CPU/pids controls. It is not domain RS-001…RS-010 evidence and does not promote any scenario to VERIFIED. Run only on a trusted self-hosted Linux runner with delegated cgroup v2 controllers; acceptance remains pending until the workflow succeeds.

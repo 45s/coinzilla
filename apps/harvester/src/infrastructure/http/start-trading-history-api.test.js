@@ -4,6 +4,7 @@ import { resolve } from "node:path"
 import test from "node:test"
 import { EventBus } from "@coinzilla/event-bus"
 import { startTradingHistoryApi } from "./start-trading-history-api.js"
+import { createScenarioRunnerHost } from "./create-scenario-runner-host.js"
 
 const API_TOKEN = "test-token-with-more-than-thirty-two-characters"
 
@@ -63,7 +64,7 @@ test("starts the local API without requiring bearer-token configuration", async 
     scenario.id === "RS-RUNTIME-SELL-SUBMISSION-001")
   assert.equal(runtimeScenario.executable, false,
     "The incomplete runtime scenario must remain non-executable in production.")
-  assert.equal(runtimeScenario.executionStatus, "PRELIMINARY")
+  assert.equal(runtimeScenario.executionStatus, "BLOCKED")
   assert.ok(runtimeScenario.readinessReasons.some((reason) => /sandbox/i.test(reason)),
     "The production catalogue must expose the missing OS-sandbox boundary.")
   const blockedRun = serverInput.scenarioRunner.submit({
@@ -276,5 +277,35 @@ test("derives the source revision from a clean Git checkout when build metadata 
   assert.equal(blocked.sourceRevision, expectedRevision,
     "A clean source checkout must stamp runs with the exact checked-out commit.")
   await service.close()
+  await eventBus.close()
+})
+
+test("Scenario Runner host marks runtime simulation executable only with a verified adapter", async () => {
+  const eventBus = new EventBus()
+  const host = createScenarioRunnerHost({
+    eventBus,
+    sourceRevision: "c".repeat(40),
+    adapters: [{
+      strategyId: "RS",
+      executionMode: "simulation-only",
+      osSandboxVerified: true,
+      execute: async () => ({
+        ok: true,
+        data: {},
+      }),
+      cancel: async () => ({
+        ok: true,
+        data: {},
+      }),
+    }],
+  })
+  const registration = host.catalog.find((item) => item.strategyId === "RS")
+  const runtimeScenario = registration.scenarios.find((item) =>
+    item.id === "RS-RUNTIME-SELL-SUBMISSION-001")
+  assert.equal(runtimeScenario.executable, true)
+  assert.equal(runtimeScenario.executionStatus, "EXECUTABLE")
+  assert.equal(runtimeScenario.status, "PARTIAL",
+    "Simulation execution does not promote production acceptance.")
+  await host.runner.close()
   await eventBus.close()
 })

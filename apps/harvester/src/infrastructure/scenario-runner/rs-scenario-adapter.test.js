@@ -262,6 +262,37 @@ test("production RS STOP blocks new BUY spending while allowing an eligible firs
     "The production runtime must report the simulated SELL as submitted.")
 })
 
+test("production RS runtime fails closed when terminal reconciliation persistence fails", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-terminal-reconciliation-persistence-failure",
+    scenarioId: "RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.terminalSell.orderStatus, "FILLED",
+    "The canonical broker terminal status must remain FILLED after persistence fails.")
+  assert.equal(result.output.terminalSell.terminalReconciliationFailed, true,
+    "The production accounting boundary must report its failed durable reconciliation.")
+  assert.equal(result.output.terminalSell.terminalReconciled, false,
+    "The runtime must not report terminal reconciliation as committed.")
+  assert.equal(result.output.terminalSell.eventWorkflowFailedClosed, true,
+    "The production order-event workflow must fail closed.")
+  assert.equal(result.output.terminalSell.stopFactAppended, true,
+    "The account STOP must be durably appended in the run-local operational store.")
+  assert.equal(result.output.terminalSell.marketPaused, true,
+    "The affected market must be paused after reconciliation persistence fails.")
+  assert.equal(result.output.accountAdmissionBlocked, true,
+    "Account admission must remain blocked after the terminal reconciliation failure.")
+  assert.equal(result.output.reservedSellCycle.clientOrderId,
+    result.output.terminalSell.clientOrderId,
+    "The sole-SELL reservation must remain held until reconciliation commits.")
+  assert.equal(result.output.terminalSell.stagedSellFillCount, 1,
+    "The canonical fill must be staged once for the failed reconciliation attempt.")
+})
+
 test("production RS runtime fails closed when account STOP persistence fails after an under-target FILLED SELL", async () => {
   const result = await executeRecoverySellerRuntimeScenario({
     runId: "run-rs-runtime-filled-stop-persistence-failure",
@@ -309,43 +340,189 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
   assert.deepEqual(catalog.map((scenario) => scenario.id), [
     "RS-004-011",
     "RS-RUNTIME-SELL-SUBMISSION-001",
+    "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001",
+    "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001",
+    "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001",
+    "RS-RUNTIME-SELL-BROKER-EXCEPTION-001",
+    "RS-RUNTIME-SELL-RESERVATION-FAILURE-001",
     "RS-RUNTIME-SELL-REJECTION-001",
     "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
     "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001",
+    "RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001",
     "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001",
     "RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001",
   ], "The production catalog must preserve all expected RS scenario IDs and their stable order.")
   const runtimeScenario = catalog.find((scenario) => scenario.id === "RS-RUNTIME-SELL-SUBMISSION-001")
-  assert.equal(runtimeScenario.executable, false,
-    "The existing runtime scenario must remain blocked until trusted OS isolation is ready.")
-  assert.equal(runtimeScenario.executionStatus, "PRELIMINARY",
-    "The runtime scenario must not claim verified execution readiness.")
+  assert.equal(runtimeScenario.executable, true,
+    "Runtime-flow scenarios are eligible for isolated simulation; the host enforces launcher attestation.")
+  assert.equal(runtimeScenario.executionStatus, "EXECUTABLE",
+    "The scenario registration advertises simulation capability; host readiness remains authoritative.")
   assert.equal(runtimeScenario.status, "PARTIAL",
     "The runtime scenario must retain its incomplete acceptance status.")
   assert.equal(runtimeScenario.layer, "APPLICATION",
     "The production-flow scenario must be classified at the application layer.")
   assert.equal(runtimeScenario.readinessReasons.some((reason) => reason.includes("under-target FILLED SELL STOP")), false,
     "The under-target FILLED SELL STOP runtime scenario is now present in the production-flow catalogue.")
-  assert.ok(runtimeScenario.readinessReasons.some((reason) => reason.includes("infrastructure-failure")),
-    "General infrastructure-failure coverage remains an explicit readiness gap.")
-  assert.ok(runtimeScenario.readinessReasons.some((reason) => reason.includes("OS-level sandbox")),
-    "Missing trusted OS sandbox must remain an explicit execution readiness blocker.")
+  assert.ok(runtimeScenario.readinessReasons.some((reason) => reason.includes("remaining infrastructure")),
+    "Remaining infrastructure-failure coverage must stay an explicit acceptance gap.")
+  assert.equal(runtimeScenario.readinessReasons.some((reason) => reason.includes("OS-level sandbox")), false,
+    "Sandbox readiness is supplied by host adapter attestation, not duplicated in scenario metadata.")
   const underTargetScenario = catalog.find((scenario) =>
     scenario.id === "RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001")
   assert.ok(underTargetScenario, "The under-target FILLED runtime scenario must be registered.")
   assert.equal(underTargetScenario.status, "PARTIAL",
     "The under-target FILLED SELL scenario must remain partial until all production gates are met.")
-  assert.equal(underTargetScenario.executable, false,
-    "A runtime scenario must remain non-executable until trusted OS isolation is verified.")
+  assert.equal(underTargetScenario.executable, true,
+    "Runtime scenario eligibility is for isolated simulation; host attestation controls effective readiness.")
+  const terminalReconciliationFailureScenario = catalog.find((scenario) =>
+    scenario.id === "RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001")
+  assert.ok(terminalReconciliationFailureScenario,
+    "The terminal reconciliation persistence-failure scenario must be registered.")
+  assert.equal(terminalReconciliationFailureScenario.status, "PARTIAL",
+    "The terminal reconciliation persistence-failure scenario must remain partial until production acceptance.")
+  assert.equal(terminalReconciliationFailureScenario.executable, true,
+    "Terminal reconciliation failure is eligible for isolated simulation under a verified host adapter.")
   const stopFailureScenario = catalog.find((scenario) =>
     scenario.id === "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001")
   assert.ok(stopFailureScenario, "The STOP persistence-failure runtime scenario must be registered.")
   assert.equal(stopFailureScenario.status, "PARTIAL",
     "The STOP persistence-failure scenario must remain partial until all production gates are met.")
-  assert.equal(stopFailureScenario.executable, false,
-    "Infrastructure-failure scenarios must remain non-executable until trusted OS isolation is verified.")
+  assert.equal(stopFailureScenario.executable, true,
+    "Infrastructure-failure scenarios are eligible for isolated simulation under a verified host adapter.")
   assert.equal(catalog[0].executable, false,
     "The helper-only domain mapping must not be executable in the production runtime catalogue.")
   assert.equal(catalog[0].executionStatus, "PRELIMINARY",
     "The helper-only domain mapping must retain preliminary execution status.")
+})
+
+
+test("production RS runtime fails closed before broker submission when SELL intent persistence fails", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-sell-intent-persistence-failure",
+    scenarioId: "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.submissionRejected, true,
+    "The production submitter must fail the SELL when its durable intent cannot be recorded.")
+  assert.equal(result.output.submittedOrders.length, 0,
+    "The simulated broker must not acknowledge an order whose intent was not durably recorded.")
+  assert.equal(result.output.brokerSubmissionCallCount, 0,
+    "The broker port must not be called before durable submission intent succeeds.")
+  assert.equal(result.output.stopFactAppended, true,
+    "An unresolved SELL submission must latch the run-local account STOP.")
+  assert.equal(result.output.reservedSellCycle, null,
+    "A SELL cycle must not be reserved before durable submission intent succeeds.")
+  assert.equal(result.output.accountAdmissionBlocked, true,
+    "Failed intent persistence must keep account BUY admission blocked.")
+})
+
+
+test("production RS runtime fails closed when broker acknowledgement outcome persistence fails", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-sell-outcome-persistence-failure",
+    scenarioId: "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.submissionRejected, true,
+    "The submitter must not report success when the broker acknowledgement outcome is not durably recorded.")
+  assert.equal(result.output.brokerSubmissionCallCount, 1,
+    "The simulated broker must be called once before the outcome persistence failure.")
+  assert.ok(result.output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_INTENT"),
+    "The immutable SELL intent must be persisted before broker placement.")
+  assert.equal(result.output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_OUTCOME"), false,
+    "The failed outcome append must not appear as a durable fact.")
+  assert.equal(result.output.stopFactAppended, true,
+    "An acknowledged-but-unconfirmed submission must latch the run-local account STOP.")
+  assert.notEqual(result.output.reservedSellCycle, null,
+    "The sole-SELL reservation must remain retained while the submission outcome is unresolved.")
+  assert.equal(result.output.accountAdmissionBlocked, true,
+    "Account BUY admission must remain blocked while broker outcome persistence is unresolved.")
+})
+
+
+test("production RS runtime keeps account admission blocked when both outcome and STOP persistence fail", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-sell-outcome-and-stop-persistence-failure",
+    scenarioId: "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.submissionRejected, true,
+    "The submitter must fail closed when both outcome and STOP persistence are unavailable.")
+  assert.equal(result.output.brokerSubmissionCallCount, 1,
+    "The simulated broker must be called once before both persistence failures.")
+  assert.ok(result.output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_INTENT"),
+    "The durable SELL intent must exist before the broker side effect.")
+  assert.equal(result.output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_OUTCOME"), false,
+    "The failed outcome append must not be reported as durable.")
+  assert.equal(result.output.stopFactAppended, false,
+    "The failed STOP append must not be reported as durable.")
+  assert.notEqual(result.output.reservedSellCycle, null,
+    "The SELL reservation must remain retained while broker outcome and STOP persistence are unresolved.")
+  assert.equal(result.output.accountAdmissionBlocked, true,
+    "The in-memory account admission latch must stay active despite STOP persistence failure.")
+})
+
+
+test("production RS runtime persists UNKNOWN and blocks BUY admission after broker placement throws", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-sell-broker-exception",
+    scenarioId: "RS-RUNTIME-SELL-BROKER-EXCEPTION-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.submissionRejected, true,
+    "A thrown broker transport error must remain an unresolved submission, not success.")
+  assert.equal(result.output.brokerSubmissionCallCount, 1,
+    "The simulated broker placement port must be invoked exactly once.")
+  assert.ok(result.output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_INTENT"),
+    "The durable SELL intent must precede the broker placement attempt.")
+  assert.ok(result.output.simulationFacts.some((fact) =>
+    fact.factType === "ORDER_SUBMISSION_OUTCOME" && fact.data?.outcome === "UNKNOWN"),
+    "The ambiguous broker response must be durably classified UNKNOWN.")
+  assert.equal(result.output.stopFactAppended, true,
+    "An ambiguous broker outcome must latch the account STOP.")
+  assert.notEqual(result.output.reservedSellCycle, null,
+    "The sole-SELL reservation must remain held pending reconciliation.")
+  assert.equal(result.output.accountAdmissionBlocked, true,
+    "BUY admission must remain blocked after the broker transport exception.")
+})
+
+
+test("production RS runtime fails closed when sole-SELL reservation callback fails", async () => {
+  const result = await executeRecoverySellerRuntimeScenario({
+    runId: "run-rs-runtime-sell-reservation-failure",
+    scenarioId: "RS-RUNTIME-SELL-RESERVATION-FAILURE-001",
+    input: {
+      marketPrice: "12.3",
+    },
+  })
+
+  assert.equal(result.passed, true, JSON.stringify(result.assertions))
+  assert.equal(result.output.submissionRejected, true,
+    "The production submitter must reject when the sole-SELL reservation callback fails.")
+  assert.ok(result.output.simulationFacts.some((fact) => fact.factType === "ORDER_SUBMISSION_INTENT"),
+    "The immutable SELL intent must be recorded before reservation.")
+  assert.equal(result.output.brokerSubmissionCallCount, 0,
+    "The broker must not be called unless the sole-SELL reservation is accepted.")
+  assert.equal(result.output.reservedSellCycle, null,
+    "The failed reservation callback must not leave a cycle reservation.")
+  assert.equal(result.output.stopFactAppended, true,
+    "Reservation failure must latch account STOP.")
+  assert.equal(result.output.accountAdmissionBlocked, true,
+    "BUY admission must remain blocked after reservation failure.")
 })
