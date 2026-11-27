@@ -37,13 +37,21 @@ jobs:
           command -v bwrap
           command -v prlimit
           test -r /sys/fs/cgroup/cgroup.controllers
-          test -w /sys/fs/cgroup
-          grep -qw memory /sys/fs/cgroup/cgroup.controllers
-          grep -qw cpu /sys/fs/cgroup/cgroup.controllers
-          grep -qw pids /sys/fs/cgroup/cgroup.controllers
+          relative_cgroup="$(awk -F: '$1 == "0" { print $3 }' /proc/self/cgroup)"
+          test -n "$relative_cgroup"
+          delegated_cgroup="$(readlink -f "/sys/fs/cgroup$relative_cgroup")"
+          case "$delegated_cgroup" in /sys/fs/cgroup/*) ;; *) echo "Runner cgroup escaped cgroup v2 root"; exit 1 ;; esac
+          test -w "$delegated_cgroup"
+          grep -qw memory "$delegated_cgroup/cgroup.controllers"
+          grep -qw cpu "$delegated_cgroup/cgroup.controllers"
+          grep -qw pids "$delegated_cgroup/cgroup.controllers"
+          grep -Eq '(^| )\+?memory( |$)' "$delegated_cgroup/cgroup.subtree_control"
+          grep -Eq '(^| )\+?cpu( |$)' "$delegated_cgroup/cgroup.subtree_control"
+          grep -Eq '(^| )\+?pids( |$)' "$delegated_cgroup/cgroup.subtree_control"
           printf 'kernel: '; uname -r
-          printf 'cgroup controllers: '; cat /sys/fs/cgroup/cgroup.controllers
-          printf 'delegated subtree controllers: '; cat /sys/fs/cgroup/cgroup.subtree_control
+          printf 'delegated cgroup: %s\n' "$delegated_cgroup"
+          printf 'cgroup controllers: '; cat "$delegated_cgroup/cgroup.controllers"
+          printf 'delegated subtree controllers: '; cat "$delegated_cgroup/cgroup.subtree_control"
 
       - name: Set up pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
