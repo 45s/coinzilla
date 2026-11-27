@@ -2,6 +2,7 @@
 
 Canonical repository-wide engineering guidance is linked below. Policy ownership is defined in [Documentation Governance](../DOCUMENTATION_GOVERNANCE.md).
 
+- [CLI source identity rollout](CLI_SOURCE_IDENTITY.md) — shared helper, migrated CLI entrypoints and remaining inventory scope for #1631
 - [Domain ownership](DOMAIN_OWNERSHIP.md) — paths, responsibilities and local instruction files
 - [Task workflows](TASK_WORKFLOWS.md) — practical task-specific checklists
 - [AI refactoring and code audit standard](AI_REFACTORING_AUDIT_STANDARD.md) — mandatory evidence-led process for AI refactoring and code audits

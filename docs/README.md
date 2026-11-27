@@ -17,6 +17,8 @@ This index is the entry point for maintained repository documentation. The gover
 
 ## Repository-wide engineering
 
+- [CLI source identity rollout](engineering/CLI_SOURCE_IDENTITY.md) — shared implementation, migrated entrypoints and remaining inventory scope for #1631
+
 - [Engineering documentation index](engineering/README.md)
 - [Feature Specification Standard](FEATURE_SPECIFICATION_STANDARD.md) — how to create, structure, review and maintain AI-readable feature specifications
 - [Architecture and decisions](architecture/README.md)

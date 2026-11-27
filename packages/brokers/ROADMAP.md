@@ -16,6 +16,7 @@
 - Public broker contract: [BROKER_API.md](./BROKER_API.md)
 - Provider implementation and acceptance: source/tests plus the linked provider audit documents
 - Cross-workspace package ownership: [Domain Ownership](../../docs/engineering/DOMAIN_OWNERSHIP.md)
+- CLI source identity rollout: [#1631](https://github.com/45s/coinzilla/issues/1631) and [repository inventory](../../docs/engineering/CLI_SOURCE_IDENTITY.md)
 - Work status and acceptance evidence: linked GitHub issues and PRs
 
 ## Maintenance rule

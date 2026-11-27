@@ -1,5 +1,9 @@
 # Broker provider operations
 
+## Bitunix healthcheck CLI
+
+Run the operator healthcheck with `pnpm --filter @coinzilla/brokers bitunix:healthcheck`. Its `--version` path prints package/script/source identity before loading credentials and does not contact Bitunix. Existing operator-only LIVE order controls are unchanged. See the repository [CLI source identity rollout inventory](../../docs/engineering/CLI_SOURCE_IDENTITY.md).
+
 Bitunix-specific engineering references and readiness notes are indexed in [docs/README.md](./docs/README.md). Live order-probe observations and raw exchange placement outcomes are recorded in the [Bitunix live order-probe evidence log](./BITUNIX_ORDER_PROBE_LOG.md).
 
 For every Bitunix Spot capability, follow the [mandatory reference-first workflow](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit) and consult the maintained [Bitunix external implementation reference audit](./docs/BITUNIX_REFERENCE_AUDIT.md). Start with [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) and [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp); search additional C#, TypeScript, Python, Go and Ruby implementations when coverage is missing or references disagree. The audit records source paths, fixtures, known defects, parity status and safe implementation picks. Official Bitunix Spot documentation remains authoritative.
