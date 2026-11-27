@@ -54,10 +54,10 @@ const ORDER_STATUS_PRESENTATION = Object.freeze({
 
 function formatOrderLifecycleDetail({ data, clientOrderId } = {}) {
   const rawDetail = typeof data.detail === "string" && data.detail.length > 0
-    ? data.detail.replace(/[\\r\\n]+/g, " ")
+    ? data.detail.replace(/[\r\n]+/g, " ")
     : ""
   return rawDetail
-    .split(/\\s*\\|\\s*/)
+    .split(/\s*\|\s*/)
     .map((segment) => segment.trim())
     .filter((segment) => segment.length > 0 && segment !== `Client order ID: ${clientOrderId}`)
     .join(" | ")
