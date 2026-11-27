@@ -107,6 +107,7 @@ async function submitAdaFirstBuyAndWait({ replay, initialBuy }) {
     fillQuantity: "50",
     cumulativeExecutedQuantity: "50",
   })
+  await replay.publishMarketPrice("0.1524")
   const firstSell = await firstSellSubmission
   assert.equal(firstSell.price, "0.1539")
   assert.equal(firstSell.quantity, "49.9")
