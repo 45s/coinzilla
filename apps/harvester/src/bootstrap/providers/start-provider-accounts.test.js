@@ -940,7 +940,10 @@ test("retains an account lock when runtime stop does not confirm STOPPED status"
     env: { TRADING_MODE: "testnet" },
     releaseProviderLock: async (providerInstanceId) => {
       releasedLocks.push(providerInstanceId)
-      return { ok: true, released: true }
+      return {
+        ok: true,
+        released: true,
+      }
     },
     start: async (input) => ({
       startMarketData: async () => ({ ok: true }),
@@ -1026,7 +1029,10 @@ test("propagates durable process-stop acknowledgement from every provider runtim
     providers,
     appConfig: appConfigForProviderSubset(providers),
     env: { TRADING_MODE: "testnet" },
-    releaseProviderLock: async () => ({ ok: true, released: true }),
+    releaseProviderLock: async () => ({
+      ok: true,
+      released: true,
+    }),
     start: async () => ({
       startMarketData: async () => ({ ok: true }),
       stopMarketData: async () => ({ ok: true }),
