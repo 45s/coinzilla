@@ -320,6 +320,7 @@ function createProcessEventPublisher({ eventBus, logger, journalService, resourc
       }
     },
   })
+}
 
 function publishProcessStartedEvidence({ processStartedDataResult, resources, logger } = {}) {
   if (!processStartedDataResult.ok) {
