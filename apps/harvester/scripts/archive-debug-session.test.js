@@ -167,6 +167,7 @@ async function assertPublishedArchive({ directory, remote, expectedIdentityStatu
   assert.deepEqual(manifest.logSelection, {
     cumulative: "excluded",
     sessions: "all-identified-TESTNET-sessions-preserved-independently; exact-runtime-id-match-required; gzip-compressed",
+    selectionReason: expectedIdentityStatus === "matched" ? "exact-runtime-id-match" : "no-exact-runtime-session",
   }, "Debug archive manifest must preserve TESTNET sessions independently and require an exact runtime identity match.")
   assert.equal(
     await readFile(path.join(directory, "data_commit_hash"), "utf8"),
@@ -220,7 +221,7 @@ test("adds _debug to the existing timestamp and archive-ID directory name", () =
   )
 })
 
-test("publishes only the selected TESTNET session and recovery facts", async (t) => {
+test("preserves TESTNET session inventory and recovery facts without changing source evidence", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
@@ -259,12 +260,8 @@ test("publishes mismatched log and recovery evidence as independent sources with
   })
   assert.equal(result.remoteCommit, REMOTE_COMMIT, "Independently valid mismatched evidence must still be published")
   assert.ok(
-    progressMessages.some((message) => message.includes("WARNING: log-session and recovery-facts runtimeSessionId values differ.")),
-    "The operator must be warned about the identity mismatch before publication",
-  )
-  assert.ok(
-    progressMessages.some((message) => message.includes("independently; do not correlate them as one runtime session.")),
-    "The warning must explicitly prohibit cross-session correlation",
+    progressMessages.some((message) => message.includes("WARNING: matchingTradingLogsAvailable=false")),
+    "The operator must be told explicitly that no matching trading-runtime logs are available.",
   )
   assert.equal(
     await readFile(filename, "utf8"),

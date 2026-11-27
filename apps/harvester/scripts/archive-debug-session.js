@@ -557,15 +557,15 @@ async function readLatestRecoveryCheckpoint(recoveryFactsDirectory) {
     ? processStartFacts[0].data?.processIdentity ?? null
     : null
   const processIdentityWarnings = []
-  if (processStartFacts.length === 0 || processIdentity === null) {
-    processIdentityWarnings.push({
-      code: "TRADING_RUNTIME_PROCESS_IDENTITY_MISSING",
-      message: "No durable process identity is available for the latest recovery-facts runtime.",
-    })
-  } else if (processStartFacts.length > 1) {
+  if (processStartFacts.length > 1) {
     processIdentityWarnings.push({
       code: "TRADING_RUNTIME_PROCESS_IDENTITY_AMBIGUOUS",
       message: "More than one PROCESS_STARTED fact is bound to the latest recovery-facts runtime.",
+    })
+  } else if (processStartFacts.length === 0 || processIdentity === null) {
+    processIdentityWarnings.push({
+      code: "TRADING_RUNTIME_PROCESS_IDENTITY_MISSING",
+      message: "No durable process identity is available for the latest recovery-facts runtime.",
     })
   }
   if (!processIdentity?.source?.commit) {
