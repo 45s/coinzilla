@@ -787,6 +787,21 @@ test("defers a FILLED Recovery Seller BUY when Journal fill evidence is incomple
   assert.match(restored.errors?.[0]?.message ?? "", /Recovery Seller Journal replay is deferred/)
 })
 
+test("reports the target market blocked status when a canonical target market is supplied", () => {
+  const { projection, restored } = restoreState({})
+  const recoveredState = resolveRestoredOrdersAsFilled({ recoveredState: restored })
+  const result = auditRecoveredAccountState({
+    projection,
+    recoveredState,
+    currentAccountSnapshot: snapshot(),
+    openOrders: [],
+    markets: [market],
+    targetMarket: market,
+  })
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.targetMarketBlocked, false)
+})
+
 test("accepts balances and reservations that exactly match replayed strategy ownership", () => {
   const { projection, restored } = restoreState()
   const result = auditRecoveredAccountState({

@@ -1908,6 +1908,11 @@
           "path": "src/use-cases/audit-recovered-account-state.test.js",
           "name": "fails closed on malformed or unmarketed Journal commission fills",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/audit-recovered-account-state.test.js",
+          "name": "reports the target market blocked status when a canonical target market is supplied",
+          "kind": "normal"
         }
       ],
       "invariants": [
