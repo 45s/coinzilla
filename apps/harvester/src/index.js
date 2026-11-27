@@ -1135,7 +1135,14 @@ function logStartupFailure({ error, logger } = {}) {
 
 async function closeStartupLogger({ closeLogger, logger } = {}) {
   try {
-    await closeLogger()
+    const result = await closeLogger()
+    if (result === false || result?.ok === false) {
+      const errors = getCleanupErrors({
+        result,
+        fallbackError: new Error("Log transport shutdown did not complete successfully"),
+      })
+      throw new AggregateError(errors, "Log transport shutdown failed during startup cleanup")
+    }
     return true
   } catch (error) {
     process.exitCode = 1
@@ -1153,6 +1160,31 @@ async function closeStartupLogger({ closeLogger, logger } = {}) {
     }
     return false
   }
+}
+
+async function releaseStartupProcessLockAfterLogger({
+  cleanupErrors,
+  runtimeStartAttempted,
+  loggerClosed,
+  processLock,
+  logger,
+} = {}) {
+  if (cleanupErrors.length > 0 || runtimeStartAttempted || !loggerClosed) {
+    return []
+  }
+  const errors = await releaseProcessLock({
+    processLock,
+    allowProcessLockRelease: true,
+    journalClosed: true,
+    eventBusClosed: true,
+    tradingHistoryApiClosed: true,
+    databaseClosed: true,
+  })
+  if (errors.length > 0) {
+    process.exitCode = 1
+    reportObservabilityCleanupErrors({ errors, logger })
+  }
+  return errors
 }
 
 async function cleanupProcessStartupFailure({ error, options, resources } = {}) {
@@ -1193,27 +1225,13 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
     logger })
   const loggerClosed = await closeStartupLogger({ closeLogger,
     logger })
-  if (
-    cleanupErrors.length === 0 &&
-    !resources.runtimeStartAttempted &&
-    loggerClosed
-  ) {
-    const processLockErrors = await releaseProcessLock({
-      processLock: resources.processLock,
-      allowProcessLockRelease: true,
-      journalClosed: true,
-      eventBusClosed: true,
-      tradingHistoryApiClosed: true,
-      databaseClosed: true,
-    })
-    if (processLockErrors.length > 0) {
-      process.exitCode = 1
-      reportObservabilityCleanupErrors({
-        errors: processLockErrors,
-        logger,
-      })
-    }
-  }
+  await releaseStartupProcessLockAfterLogger({
+    cleanupErrors,
+    runtimeStartAttempted: resources.runtimeStartAttempted,
+    loggerClosed,
+    processLock: resources.processLock,
+    logger,
+  })
   process.exitCode = 1
 }
 

@@ -889,6 +889,11 @@
           "path": "src/index.test.js",
           "name": "retains the process lock when startup EventBus flush is not confirmed",
           "kind": "failure"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "retains the process lock when startup logger returns an explicit failure",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",

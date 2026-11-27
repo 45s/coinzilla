@@ -291,8 +291,19 @@ test("logs startup failures as one structured logger argument", async () => {
 
   const previousExitCode = process.exitCode
   process.exitCode = 0
+  let processLockReleaseCalls = 0
   try {
     await runMain({
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => {
+          processLockReleaseCalls += 1
+          return {
+            ok: true,
+            released: true,
+          }
+        },
+      }),
       start: async () => { throw error },
       logger,
     })
@@ -304,7 +315,8 @@ test("logs startup failures as one structured logger argument", async () => {
     assert.equal(startupFailures[0].data.errorDetails.name, "Error")
     assert.equal(startupFailures[0].data.errorDetails.message, "configuration failed")
     assert.match(startupFailures[0].data.errorDetails.stack, /configuration failed/)
-    assert.ok(calls.some((call) => call.data?.message === "observability shutdown incomplete"), "the process lock must remain held when runtime shutdown cannot be confirmed")
+    assert.equal(processLockReleaseCalls, 0,
+      "The process lock must remain held when runtime startup was attempted but did not complete.")
     assert.equal(process.exitCode, 1)
   } finally {
     process.exitCode = previousExitCode
@@ -357,8 +369,19 @@ test("preserves nested AggregateError details in startup diagnostics", async () 
   const error = new AggregateError([rootError], "startup and cleanup failed")
   const previousExitCode = process.exitCode
   process.exitCode = 0
+  let processLockReleaseCalls = 0
   try {
     await runMain({
+      acquireProcessLock: async () => ({
+        ok: true,
+        release: async () => {
+          processLockReleaseCalls += 1
+          return {
+            ok: true,
+            released: true,
+          }
+        },
+      }),
       start: async () => { throw error },
       logger: {
         info() {},
@@ -372,7 +395,8 @@ test("preserves nested AggregateError details in startup diagnostics", async () 
     assert.equal(startupFailures[0].errorDetails.message, "startup and cleanup failed")
     assert.equal(startupFailures[0].errorDetails.errors[0].message, "broker request failed")
     assert.match(startupFailures[0].errorDetails.errors[0].stack, /broker request failed/)
-    assert.ok(calls.some((call) => call.message === "observability shutdown incomplete"), "the process lock must remain held when runtime shutdown cannot be confirmed")
+    assert.equal(processLockReleaseCalls, 0,
+      "The process lock must remain held when runtime startup was attempted but did not complete.")
     assert.equal(process.exitCode, 1)
   } finally {
     process.exitCode = previousExitCode
@@ -1054,6 +1078,41 @@ test("retains the process lock when startup EventBus flush is not confirmed", as
       "eventBus.close",
       "logger.close",
     ], "The process lock must remain held when startup EventBus flush is not confirmed.")
+    assert.equal(process.exitCode, 1)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("retains the process lock when startup logger returns an explicit failure", async () => {
+  const calls = []
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await main(createStartupFailureCleanupOptions({
+      calls,
+      releaseResult: {
+        ok: true,
+        released: true,
+      },
+      closeLogger: async () => {
+        calls.push("logger.close")
+        return {
+          ok: false,
+          errors: [new Error("Logger close failed")],
+        }
+      },
+      logger: {
+        info() {},
+        debug() {},
+        error() {},
+      },
+    }))
+    assert.deepEqual(calls, [
+      "journal.close",
+      "eventBus.close",
+      "logger.close",
+    ], "The process lock must remain held when logger close returns an explicit failure.")
     assert.equal(process.exitCode, 1)
   } finally {
     process.exitCode = previousExitCode
