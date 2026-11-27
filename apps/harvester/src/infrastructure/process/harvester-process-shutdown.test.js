@@ -160,6 +160,11 @@ function createDurableJournalChildHandlerSource({ shutdownModuleUrl } = {}) {
         if (result.ok !== true || result.durable !== true) {
           return result.errors ?? [new Error("The real Journal close was not durably confirmed.")]
         }
+        const eventBusResult = await eventBus.close({ timeoutMs: 5000 })
+        if (eventBusResult.ok !== true) {
+          return eventBusResult.errors ?? [new Error("The real EventBus did not close successfully.")]
+        }
+        process.stdout.write("EVENT_BUS_CLOSED\\n")
         return []
       },
       closeLogger: async () => {
@@ -402,9 +407,9 @@ test("durably closes accepted Journal writes before child exit and makes repeate
     assert.equal(exit.signal, null, "The child must exit naturally rather than being killed by a signal.")
     const outputLines = output.stdout.trim().split(/\\r?\\n/)
     assert.deepEqual(
-      outputLines.slice(0, 2),
-      ["LOGGER_CLOSED", "LOCK_RELEASED"],
-      "The process logger must close and the Journal must durably close before the real process lock is released.",
+      outputLines.slice(0, 3),
+      ["EVENT_BUS_CLOSED", "LOGGER_CLOSED", "LOCK_RELEASED"],
+      "The Journal and EventBus must close before the process logger and real process lock are released.",
     )
     const journalFileLine = outputLines.find((line) => line.startsWith("JOURNAL_FILE="))
     assert.ok(journalFileLine, "The child must report the real Journal session file for post-exit verification.")
