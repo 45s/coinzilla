@@ -549,3 +549,100 @@ test("blocks a BUY when a durable account-scoped safety blocker is active", () =
     blockerId: "incident-sequence-13",
   })
 })
+test("blocks a Conservative BUY while RecoveryLedger buyCost remains non-zero after Position reset", () => {
+  const dependencies = createDependencies()
+  dependencies.state.shutdownBuyGate = false
+  dependencies.canTrade = () => true
+  dependencies.isStopping = () => false
+  dependencies.getPortfolio = () => ({
+    getPosition: () => ({
+      positionId: "doge-conservative-position",
+      quantity: { amount: "0" },
+      spent: { amount: "0" },
+    }),
+  })
+  dependencies.getRecoveryLedger = () => ({
+    buyCost: "10",
+    netSellProceeds: "0",
+  })
+
+  const result = createSubmissionGate(dependencies)({
+    order: createOrder({ side: "BUY" }),
+    purpose: "STANDING_BUY",
+  })
+
+  assert.equal(result.allowed, false)
+  assert.equal(result.reason, "CONSERVATIVE_RECOVERY_CYCLE_ACTIVE")
+  assert.deepEqual(result.details, {
+    symbol: "DOGEUSDT",
+    positionId: "doge-conservative-position",
+    activeQuantity: "0",
+    positionSpent: "0",
+    netSellProceeds: "0",
+  })
+})
+
+test("fails closed when Conservative recovery admission dependencies are unavailable", () => {
+  const configurations = [
+    (dependencies) => {
+      dependencies.getPortfolio = undefined
+    },
+    (dependencies) => {
+      dependencies.getRecoveryLedger = undefined
+    },
+    (dependencies) => {
+      dependencies.getPortfolio = () => {
+        throw new Error("portfolio unavailable")
+      }
+    },
+    (dependencies) => {
+      dependencies.getPortfolio = () => ({})
+    },
+    (dependencies) => {
+      dependencies.getRecoveryLedger = () => {
+        throw new Error("recovery ledger unavailable")
+      }
+    },
+  ]
+
+  for (const configure of configurations) {
+    const dependencies = createDependencies()
+    dependencies.state.shutdownBuyGate = false
+    dependencies.canTrade = () => true
+    dependencies.isStopping = () => false
+    configure(dependencies)
+
+    const result = createSubmissionGate(dependencies)({
+      order: createOrder({ side: "BUY" }),
+      purpose: "STANDING_BUY",
+    })
+
+    assert.equal(result.allowed, false)
+    assert.equal(result.reason, "CONSERVATIVE_RECOVERY_STATE_UNAVAILABLE")
+  }
+})
+
+test("fails closed when Conservative recovery admission accounting contains an invalid decimal", () => {
+  const dependencies = createDependencies()
+  dependencies.state.shutdownBuyGate = false
+  dependencies.canTrade = () => true
+  dependencies.isStopping = () => false
+  dependencies.getPortfolio = () => ({
+    getPosition: () => ({
+      quantity: { amount: "not-a-decimal" },
+      spent: { amount: "0" },
+    }),
+  })
+  dependencies.getRecoveryLedger = () => ({
+    buyCost: "0",
+    netSellProceeds: "0",
+  })
+
+  const result = createSubmissionGate(dependencies)({
+    order: createOrder({ side: "BUY" }),
+    purpose: "STANDING_BUY",
+  })
+
+  assert.equal(result.allowed, false)
+  assert.equal(result.reason, "CONSERVATIVE_RECOVERY_STATE_UNAVAILABLE")
+})
