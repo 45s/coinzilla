@@ -543,6 +543,11 @@
           "path": "test/use-cases/conservative-trading-engine.test.js",
           "name": "a pre-existing partially filled BUY is reconciled during recovery SELL acknowledgement and replaces SELL from latest fills",
           "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a Conservative BUY while an owned recovery SELL remains active after accounting totals reset",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
