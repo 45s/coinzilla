@@ -172,33 +172,7 @@ function collectProcessLockReleaseErrors({
   return [new Error(`Provider account ${providerInstanceId} process-lock release was not confirmed`)]
 }
 
-async function releaseStoppedAccountLock({
-  entry,
-  releaseProviderLock,
-}) {
-  if (entry.lockReleased || typeof releaseProviderLock !== "function") {
-    entry.lockReleased = true
-    return []
-  }
-  try {
-    const result = await releaseProviderLock(entry.provider.providerInstanceId)
-    const errors = collectProcessLockReleaseErrors({
-      result,
-      providerInstanceId: entry.provider.providerInstanceId,
-    })
-    if (errors.length === 0) {
-      entry.lockReleased = true
-    }
-    return errors
-  } catch (error) {
-    return [error]
-  }
-}
-
-async function stopOneStartedAccount({
-  entry,
-  releaseProviderLock,
-}) {
+async function stopOneStartedAccount({ entry }) {
   if (!entry.runtimeStopped) {
     try {
       const result = await entry.runtime.stop?.()
@@ -241,34 +215,20 @@ async function stopOneStartedAccount({
       return [error]
     }
   }
-  return releaseStoppedAccountLock({
-    entry,
-    releaseProviderLock,
-  })
+  // Active account locks remain held until the outer process cleanup completes.
+  return []
 }
 
-async function stopStartedAccounts({
-  startedAccounts,
-  releaseProviderLock,
-}) {
+async function stopStartedAccounts({ startedAccounts }) {
   const errors = []
   for (const entry of [...startedAccounts].reverse()) {
-    errors.push(...await stopOneStartedAccount({
-      entry,
-      releaseProviderLock,
-    }))
+    errors.push(...await stopOneStartedAccount({ entry }))
   }
   return errors
 }
 
-async function stopMultiAccountRuntime({
-  startedAccounts,
-  releaseProviderLock,
-}) {
-  const errors = await stopStartedAccounts({
-    startedAccounts,
-    releaseProviderLock,
-  })
+async function stopMultiAccountRuntime({ startedAccounts }) {
+  const errors = await stopStartedAccounts({ startedAccounts })
   if (errors.length > 0) {
     return {
       ok: false,
@@ -291,12 +251,8 @@ function createMultiAccountRuntime({
   appConfig,
   startedAccounts,
   failedAccounts,
-  releaseProviderLock,
 }) {
-  const stop = () => stopMultiAccountRuntime({
-    startedAccounts,
-    releaseProviderLock,
-  })
+  const stop = () => stopMultiAccountRuntime({ startedAccounts })
   const primary = startedAccounts[0].runtime
   const providerAccounts = Object.freeze(startedAccounts.map(({ provider, runtime, executionEnabled }) => Object.freeze({
     providerInstanceId: provider.providerInstanceId,
@@ -425,16 +381,12 @@ async function throwIfRequiredProviderFailed({
   startedAccounts,
   failedAccounts,
   failedErrors,
-  releaseProviderLock,
 }) {
   const requiredFailures = failedAccounts.filter(({ required }) => required !== false)
   if (requiredFailures.length === 0) {
     return
   }
-  const cleanupErrors = await stopStartedAccounts({
-    startedAccounts,
-    releaseProviderLock,
-  })
+  const cleanupErrors = await stopStartedAccounts({ startedAccounts })
   throw new AggregateError(
     [...failedErrors, ...cleanupErrors],
     "A required provider account failed to start; all started provider accounts were rolled back",
@@ -631,7 +583,6 @@ function recordProviderAccountStartResult({
       executionEnabled: true,
       runtimeStopped: false,
       marketDataStopped: false,
-      lockReleased: false,
     })
     return
   }

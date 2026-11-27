@@ -717,7 +717,8 @@ test("retains a failed account lock when startup cleanup is not confirmed", asyn
   assert.deepEqual(retainedLocks, ["second"])
   assert.deepEqual(releasedLocks, [])
   assert.equal((await runtime.stop()).ok, true)
-  assert.deepEqual(releasedLocks, ["first"])
+  assert.deepEqual(releasedLocks, [],
+    "The active account lock must remain held until outer process cleanup completes.")
 })
 
 test("isolates an optional provider market-data startup failure", async () => {
