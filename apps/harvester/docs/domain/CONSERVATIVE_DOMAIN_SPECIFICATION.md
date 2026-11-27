@@ -160,9 +160,9 @@ Validation is fail-closed: a recovery purpose requires explicit ownership; strat
 
 The Conservative order-registration callback returns its immutable CG ownership record to the shared executor. The executor carries that same record into durable submission intent, outcome, deferral and failure callbacks; it must not reconstruct or relabel strategy ownership downstream. If durable intent validation or append fails, remove the local unsubmitted PENDING registration, latch the market's `ORDER_INTENT_NOT_DURABLE` safety pause, and stop the ordered decision batch before any sibling action is registered or submitted. A later market tick must not create a fresh client order ID while that pause remains active. Before a new recovery SELL decision, sum the exact remaining quantities of every owned PENDING, OPEN, PARTIALLY_FILLED, and UNKNOWN SELL for the market. The aggregate must not exceed net sellable Position inventory after actual base-asset commissions and `keepQuantity`; missing/invalid remaining quantities or an excess reservation fail closed and pause the market. An UNKNOWN order remains reserved until canonical client-order-ID reconciliation proves its terminal state. A durable intent must be committed before the broker placement side effect. If intent persistence fails, remove the local unsubmitted PENDING registration, retain the market safety pause, and do not call the broker. A PENDING lifecycle log is not an exchange acknowledgement. A transport timeout or ambiguous broker outcome remains UNKNOWN under the original client order identity; reconcile that identity and complete canonical order/fill history before any retry or replacement. See the [Recovery Seller Domain Specification](recovery-seller-domain-specification.md) for RS cycle ownership and lifecycle rules.
 
-### Partial SELL with no new BUY
+### Partial SELL while recovery remains active
 
-When an acknowledged SELL is OPEN or PARTIALLY_FILLED and no new BUY fill has occurred:
+When an acknowledged SELL is OPEN or PARTIALLY_FILLED and no additional fill from a pre-existing BUY has occurred:
 
 - Keep the same exchange order and the same limit price.
 - Do not cancel, replace, reprice, or recalculate its remaining quantity because of a partial fill.
@@ -170,17 +170,17 @@ When an acknowledged SELL is OPEN or PARTIALLY_FILLED and no new BUY fill has oc
 - Let the exchange maintain the remaining quantity.
 - Do not interpret a partial fill as recovery completion.
 
-### New BUY fill while a recovery SELL is open — owner decision B
+### Pre-existing BUY late fill while a recovery SELL is open — owner decision B
 
-When a new BUY fill occurs while a recovery SELL is OPEN or PARTIALLY_FILLED:
+A BUY may still fill after its original acknowledgement if it was already submitted before the recovery cycle became active. This is an existing order lifecycle event, not permission to submit a new or replacement BUY. When such a late fill occurs while a recovery SELL is OPEN or PARTIALLY_FILLED:
 
-1. Record the triggering BUY execution and its actual commission facts exactly once.
+1. Record the triggering fill from that already-acknowledged BUY order and its actual commission facts exactly once.
 2. Request cancellation of the existing SELL. If it is still PENDING, wait for its broker acknowledgement and valid broker order ID; never cancel an unacknowledged order.
 3. Reconcile the SELL's terminal exchange state and retrieve its complete canonical fill history, including every fill that raced with cancellation.
 4. Validate ownership, market, side, order identity, unique fill identities, commission facts, and equality between summed distinct SELL fill quantity and broker-reported cumulative executed quantity.
 5. Apply all newly discovered SELL fills exactly once and commit the BUY and SELL accounting updates consistently.
-6. Only after terminal state and complete fill reconciliation succeed, calculate and submit a replacement SELL from the updated position quantity, full accumulated spent, and cumulative net SELL proceeds.
-7. If cancellation, terminal state, fill history, commissions, or accounting cannot be reconciled completely, fail closed. Do not submit a replacement from stale or partial information.
+6. Only after terminal state and complete fill reconciliation succeed, calculate and submit a replacement SELL from the updated Position quantity, full accumulated spent, and cumulative net SELL proceeds. Do not submit a replacement or next standing BUY.
+7. If cancellation, terminal state, fill history, commissions, or accounting cannot be reconciled completely, fail closed. Do not submit a replacement from stale or partial information. The Conservative BUY gate remains closed until the entire recovery cycle is completed and the Position/RecoveryLedger basis is reset.
 
 If the SELL becomes FILLED while cancellation is in flight, reconcile and process it as a terminal FILLED order. Do not misclassify a successful terminal fill as a confirmed cancellation, and do not submit a duplicate replacement.
 
@@ -323,7 +323,7 @@ flowchart TD
   N --> O{SELL event}
   O -- Partial fill; no new BUY --> P[Apply actual fill/fee; keep same order and same price]
   P --> O
-  O -- New BUY fill while SELL open --> E
+  O -- Pre-existing BUY late fill while SELL open --> E
   O -- Terminal FILLED/CANCELED/EXPIRED/REJECTED --> Q[Reconcile terminal state and all actual fills/fees]
   Q --> R{Reconciliation complete?}
   R -- No --> X
