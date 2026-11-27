@@ -320,3 +320,35 @@ test("composes executable simulation catalogue only when a launcher attests the 
   await service.close()
   await eventBus.close()
 })
+
+test("configured Linux sandbox failure leaves the RS adapter unavailable", async () => {
+  const database = createDatabase()
+  const eventBus = new EventBus()
+  let serverInput
+  const service = await startTradingHistoryApi({
+    database,
+    eventBus,
+    env: {
+      TRADING_MODE: "testnet",
+      HARVESTER_SCENARIO_SANDBOX: "linux-bubblewrap",
+    },
+    logger: { info() {} },
+    startServer: async (input) => {
+      serverInput = input
+      return {
+        address: { address: "127.0.0.1", port: 4201 },
+        close: async () => {},
+      }
+    },
+  })
+  const registration = serverInput.scenarioRunnerCatalog.find((item) => item.strategyId === "RS")
+  const runtimeScenario = registration.scenarios.find((item) =>
+    item.id === "RS-RUNTIME-SELL-SUBMISSION-001")
+  assert.equal(runtimeScenario.executable, false,
+    "A missing or unverified Linux sandbox must never enable scenario execution.")
+  assert.equal(runtimeScenario.executionStatus, "BLOCKED")
+  assert.ok(runtimeScenario.readinessReasons.some((reason) => /sandbox/i.test(reason)))
+  await service.close()
+  await eventBus.close()
+})
+

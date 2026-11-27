@@ -97,6 +97,7 @@ function verifySandboxTools({ bwrap, prlimit, execFileSync }) {
   const bwrapVersion = execFileSync(bwrap.path, ["--version"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
+    timeout: 5_000,
   })
   const prlimitVersion = execFileSync(prlimit.path, ["--version"], {
     encoding: "utf8",
@@ -125,6 +126,7 @@ function verifySandboxCapabilities({ bwrap, prlimit, execFileSync }) {
   ], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
+    timeout: 5_000,
   })
 }
 

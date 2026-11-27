@@ -331,8 +331,8 @@ test("production RS registry exposes the runtime scenario and keeps the helper-o
     "The production-flow scenario must be classified at the application layer.")
   assert.equal(runtimeScenario.readinessReasons.some((reason) => reason.includes("under-target FILLED SELL STOP")), false,
     "The under-target FILLED SELL STOP runtime scenario is now present in the production-flow catalogue.")
-  assert.ok(runtimeScenario.readinessReasons.some((reason) => reason.includes("infrastructure-failure")),
-    "General infrastructure-failure coverage remains an explicit readiness gap.")
+  assert.ok(runtimeScenario.readinessReasons.some((reason) => reason.includes("remaining infrastructure")),
+    "Remaining infrastructure-failure coverage must stay an explicit acceptance gap.")
   assert.equal(runtimeScenario.readinessReasons.some((reason) => reason.includes("OS-level sandbox")), false,
     "Sandbox readiness is supplied by host adapter attestation, not duplicated in scenario metadata.")
   const underTargetScenario = catalog.find((scenario) =>
