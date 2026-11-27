@@ -469,10 +469,10 @@ function createHarnessResult({ engine, brokerState, state } = {}) {
   }
 }
 
-function createSeededBuyOrder({ market, status, brokerOrderId, acknowledgedAt }) {
+function createSeededBuyOrder({ targetMarket, status, brokerOrderId, acknowledgedAt }) {
   const order = {
     clientOrderId: "seeded-conservative-standing-buy",
-    market,
+    market: targetMarket,
     side: "BUY",
     type: "LIMIT_MAKER",
     limitPrice: new Money({
@@ -500,9 +500,9 @@ function createSeededBuyOrder({ market, status, brokerOrderId, acknowledgedAt })
   return new CanonicalOrder(order)
 }
 
-function createSeededOpenBuyOrderRegistry({ market, positionId }) {
+function createSeededOpenBuyOrderRegistry({ targetMarket, positionId }) {
   const pendingOrder = createSeededBuyOrder({
-    market,
+    targetMarket,
     status: "PENDING",
   })
   const pendingRegistry = OrderRegistry.empty().registerPending({
@@ -514,7 +514,7 @@ function createSeededOpenBuyOrderRegistry({ market, positionId }) {
     },
   }).registry
   const openOrder = createSeededBuyOrder({
-    market,
+    targetMarket,
     status: "OPEN",
     brokerOrderId: "seeded-conservative-standing-buy-broker",
     acknowledgedAt: 2,
