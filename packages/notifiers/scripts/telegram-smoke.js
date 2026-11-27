@@ -1,6 +1,6 @@
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { TelegramNotifier } from "../src/index.js"
+import { printCliIdentity } from "../../../scripts/cli-identity.js"
 
 function validateSmokeTestEnvironment(env) {
   if (!env || typeof env !== "object" || Array.isArray(env)) {
@@ -21,8 +21,10 @@ function validateSmokeTestEnvironment(env) {
       "TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must both be configured for the live smoke test",
     )
   }
-  return { token,
-    chatId }
+  return {
+    token,
+    chatId,
+  }
 }
 
 /**
@@ -31,7 +33,10 @@ function validateSmokeTestEnvironment(env) {
  */
 export async function runTelegramSmokeTest({
   env = process.env,
-  createNotifier = (options) => new TelegramNotifier(options),
+  createNotifier = async (options) => {
+    const { TelegramNotifier } = await import("../src/index.js")
+    return new TelegramNotifier(options)
+  },
   now = () => new Date(),
 } = {}) {
   const { token, chatId } = validateSmokeTestEnvironment(env)
@@ -41,8 +46,10 @@ export async function runTelegramSmokeTest({
     throw new TypeError("now() must return a valid Date")
   }
 
-  const notifier = createNotifier({ token,
-    chatId })
+  const notifier = await createNotifier({
+    token,
+    chatId,
+  })
   if (!notifier || typeof notifier.sendMessage !== "function") {
     throw new TypeError("createNotifier() must return an object exposing sendMessage()")
   }
@@ -70,15 +77,27 @@ const isDirectExecution =
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 
 if (isDirectExecution) {
-  try {
-    const { messageId } = await runTelegramSmokeTest()
-    process.stdout.write(
-      `Telegram smoke test accepted by Telegram (message_id=${messageId}).\n`,
-    )
-  } catch (error) {
-    process.stderr.write(
-      `Telegram smoke test failed: ${error instanceof Error ? error.message : String(error)}\n`,
-    )
-    process.exitCode = 1
+  const scriptDirectory = path.dirname(fileURLToPath(import.meta.url))
+  const packageRoot = path.resolve(scriptDirectory, "..")
+  const repositoryRoot = path.resolve(packageRoot, "../..")
+  printCliIdentity({
+    packageRoot,
+    repositoryRoot,
+    scriptName: "telegram:smoke",
+  })
+  if (process.argv.slice(2).includes("--version")) {
+    process.exitCode = 0
+  } else {
+    try {
+      const { messageId } = await runTelegramSmokeTest()
+      process.stdout.write(
+        `Telegram smoke test accepted by Telegram (message_id=${messageId}).\n`,
+      )
+    } catch (error) {
+      process.stderr.write(
+        `Telegram smoke test failed: ${error instanceof Error ? error.message : String(error)}\n`,
+      )
+      process.exitCode = 1
+    }
   }
 }

@@ -27,7 +27,7 @@
     "lint": "eslint . --max-warnings 0",
     "lint:changed": "node scripts/lint-changed.js",
     "lint:fix": "eslint . --fix",
-    "test": "pnpm --recursive --if-present test",
+    "test": "node --test scripts/cli-identity.test.js && pnpm --recursive --if-present test",
     "test:coverage": "pnpm --filter './packages/*' --filter './apps/*' --recursive exec node --test --experimental-test-coverage",
     "test:external-links": "node --test scripts/check-external-links.test.js",
     "test:module-dependency-analysis": "node --test scripts/module-import-analysis.test.js scripts/module-import-resolution.test.js scripts/module-dependency-graph.test.js scripts/module-dependency-cycles.test.js scripts/repository-module-discovery.test.js scripts/repository-module-graph-report.test.js",

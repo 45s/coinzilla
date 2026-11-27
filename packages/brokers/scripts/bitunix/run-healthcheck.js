@@ -1,5 +1,3 @@
-import { execFileSync } from "node:child_process"
-import { readFileSync } from "node:fs"
 import { loadEnvFile } from "node:process"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
@@ -10,47 +8,12 @@ import { getBitunixOrderProbe } from "./operator/order-probe-matrix.js"
 import { runHealthcheckWorkflow } from "./workflows/run-healthcheck.js"
 import { parseHealthcheckMode } from "./helpers/parse-healthcheck-mode.js"
 import { sanitizeDiagnosticError } from "./helpers/sanitize-diagnostic-data.js"
-import { formatCliIdentity } from "./helpers/cli-identity.js"
+import { printCliIdentity } from "../../../../scripts/cli-identity.js"
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const brokersRoot = resolve(scriptDirectory, "../..")
 const repositoryRoot = resolve(brokersRoot, "../..")
 const envPath = resolve(brokersRoot, ".env.development")
-const packageMetadata = JSON.parse(readFileSync(resolve(brokersRoot, "package.json"), "utf8"))
-
-function readGitOutput({ args }) {
-  try {
-    return execFileSync("git", args, {
-      cwd: repositoryRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim()
-  } catch {
-    return null
-  }
-}
-
-function printCliIdentity({ stdout = process.stdout } = {}) {
-  const commitSha = readGitOutput({
-    args: ["rev-parse", "HEAD"],
-  })
-  const worktreeStatus = readGitOutput({
-    args: ["status", "--porcelain"],
-  })
-  let worktree = "unknown"
-  if (worktreeStatus !== null) {
-    worktree = worktreeStatus.length === 0 ? "clean" : "dirty"
-  }
-  const identity = formatCliIdentity({
-    packageName: packageMetadata.name,
-    scriptName: "bitunix:healthcheck",
-    packageVersion: packageMetadata.version,
-    commitSha,
-    worktree,
-    nodeVersion: process.version,
-  })
-  stdout.write(`${identity}\n`)
-}
 
 function printHelp() {
   process.stdout.write([
@@ -162,7 +125,11 @@ async function runReadOnlyMode({ mode, includeGeneralDiagnostics = false }) {
 }
 
 async function runHealthcheck({ args = process.argv.slice(2) } = {}) {
-  printCliIdentity()
+  printCliIdentity({
+    packageRoot: brokersRoot,
+    repositoryRoot,
+    scriptName: "bitunix:healthcheck",
+  })
   const mode = parseHealthcheckMode({ args })
   if (mode === "help") {
     printHelp()
