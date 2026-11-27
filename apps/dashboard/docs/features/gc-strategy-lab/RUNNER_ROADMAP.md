@@ -120,7 +120,6 @@ The Harvester Scenario Runner has a manual self-hosted E2E workflow that exercis
 
 The runner now rejects a caller-supplied `replayProvenance.verified: true` claim even when all identity fields contain syntactically valid hashes. The runner records the supplied identity for diagnostics but forces replay provenance to remain unverified until a trusted build-artifact verifier is integrated into trusted runtime composition. Exact replay remains blocked; no claim of artifact attestation or replay acceptance is made.
 
-
 ## Windows-first local scenario acceptance — 2026-11-27
 
 The supported developer workflow is to run the Dashboard client and Harvester server locally on Windows. That is the expected environment for functional scenario development and acceptance: configure a scenario, submit it through the local API, execute the production-flow simulation with simulated infrastructure, and inspect the resulting status, assertions, trace, diagnostics and report.
