@@ -69,11 +69,6 @@
           "kind": "failure"
         },
         {
-          "path": "test/replays/doge-zro-conservative-replay.test.js",
-          "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
-          "kind": "integration"
-        },
-        {
           "path": "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.test.js",
           "name": "requires complete Position and cycle identity for an RS-owned durable SELL intent",
           "kind": "normal"
@@ -117,6 +112,11 @@
           "path": "src/use-cases/execute-strategy-decision.test.js",
           "name": "does not submit a sibling BUY when the recovery SELL intent is not durable",
           "kind": "failure"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "submits only the recovery SELL while the recovery cycle remains active",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
@@ -410,11 +410,6 @@
           "kind": "failure"
         },
         {
-          "path": "test/replays/doge-zro-conservative-replay.test.js",
-          "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
-          "kind": "integration"
-        },
-        {
           "path": "src/domain/strategies/conservative/state-predicates.test.js",
           "name": "matches active orders by symbol and side",
           "kind": "normal"
@@ -468,11 +463,67 @@
           "path": "src/use-cases/conservative-submission-durability.integration.test.js",
           "name": "keeps the active recovery SELL and pauses safely when a later strategy evaluation fails",
           "kind": "failure"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "plans only a recovery SELL while a filled Position remains active",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "blocks the next BUY while an acknowledged recovery SELL remains open",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/strategies/conservative/strategy.test.js",
+          "name": "blocks the next BUY while the recovery SELL acknowledgement is pending or unknown",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a Conservative BUY while the Position still has active recovery inventory",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks a Conservative BUY after SELL proceeds recover cost but before cycle completion resets the Position",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "allows a Conservative BUY only after recovery basis and cycle totals have been reset",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "does not apply the Conservative recovery BUY gate to Recovery Seller orders",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "does not submit a next standing BUY while the Conservative recovery cycle remains active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "submits only the recovery SELL while the recovery cycle remains active",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "accounts streamed partial BUY executions before recovery SELL planning",
+          "kind": "integration"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "completes the recovery cycle only after the SELL fill report is received and reconciled",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
       "invariants": [
-        "While recovery capital or an active Position exists, prohibit new/trailing BUY; recovery SELL must be submitted and reconciled first.",
+        "No new Conservative BUY may be submitted until full recovery-cycle reconciliation, retained-inventory allocation and Position/RecoveryLedger basis reset; SELL acknowledgement or realized proceeds alone do not release admission.",
+        "A BUY already acknowledged before the recovery cycle became active remains under its canonical lifecycle; late fills are reconciled exactly once and recovery SELL coverage is recalculated, without creating a replacement BUY.",
         "An unresolved order or failed recovery SELL path keeps the market paused and blocks subsequent BUY submission.",
         "At most one active Conservative recovery SELL may reserve a Position; PENDING, OPEN, PARTIALLY_FILLED and UNKNOWN orders hold that reservation until a canonical terminal transition."
       ]
