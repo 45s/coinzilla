@@ -1606,6 +1606,7 @@ test("treats decimal-formatted zero as no execution in recovery SELL cancellatio
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
+    seedExistingBuy: true,
     accountingApplied: true,
     cancelExecutedQuantity: "0.0",
   })
@@ -2046,6 +2047,7 @@ test("durably journals recovery SELL cancellation intent before broker cancellat
     },
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
+    seedExistingBuy: true,
     baseFreeBalance: "1",
     onCancelOrderStarted: () => sequence.push("broker:cancel"),
     eventPublisher: {
@@ -2097,6 +2099,7 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
+    seedExistingBuy: true,
     baseFreeBalance: "1",
     onCancelOrderStarted: () => { cancelCalls += 1 },
     eventPublisher: {
@@ -2226,6 +2229,7 @@ test("publishes recovery SELL cancellation failures and pauses the pair", async 
   const { engine } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
+    seedExistingBuy: true,
     baseFreeBalance: "1",
     cancelFailure: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
@@ -2272,6 +2276,7 @@ test("publishes thrown recovery SELL cancellation outcomes as unconfirmed", asyn
   const { engine } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
+    seedExistingBuy: true,
     baseFreeBalance: "1",
     cancelThrow: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
@@ -2956,6 +2961,7 @@ test("reconciles the recovery SELL after any partial BUY fill without completing
   const harness = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
+    seedExistingBuy: true,
     baseFreeBalance: "1",
     updateTradingAccounting: createHarnessFillAccounting({
       getHarness: () => harness,
@@ -3905,6 +3911,7 @@ test("serializes market and user-data transitions until a pending SELL is acknow
   } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
+    seedExistingBuy: true,
     baseFreeBalance: "1",
     placeOrderGate,
     onPlaceOrderStarted: ({ order }) => { if (order.side === "SELL") {signalSellSubmission()} },
@@ -4496,6 +4503,7 @@ async function createShutdownRecoveryFailureHarness({ scenario, seeded, state })
   return createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
+    seedExistingBuy: true,
     baseFreeBalance: "1",
     canTrade: () => !state.stopping,
     isStopping: () => state.stopping,
@@ -6029,6 +6037,7 @@ test("suppresses trailing BUY repricing while an actual active Position exists",
     strategyPolicy,
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
+    seedExistingBuy: true,
   })
 
   const first = await harness.engine.processMarketPrice({
@@ -10087,6 +10096,7 @@ test("preserves an OPEN recovery SELL after a locally blocked NOT_SENT cancellat
   const { engine } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
+    seedExistingBuy: true,
     baseFreeBalance: "1",
     cancelNotSent: true,
     eventPublisher: { publish: (event) => { events.push(event); return { ok: true } } },
@@ -10380,6 +10390,7 @@ test("publishes an explicit cycle outcome when the recovery SELL fills during ca
   } = await createHarness({
     initialPortfolio: seeded.portfolio,
     initialRecoveryLedger: seeded.recoveryLedger,
+    seedExistingBuy: true,
     baseFreeBalance: "1",
     cancelWithFill: true,
     cancelExecutedQuantity: ({ order }) => order.originalQuantity.amount,
