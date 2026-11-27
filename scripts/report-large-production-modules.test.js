@@ -51,6 +51,41 @@ function writeFixtureModules({ root }) {
     relativePath: "packages/example/node_modules/vendor.js",
     lineCount: 999,
   })
+  for (const fixture of [
+    {
+      relativePath: "apps/example/src/Z-large.js",
+      lineCount: 501,
+    },
+    {
+      relativePath: "apps/example/src/a-large.js",
+      lineCount: 501,
+    },
+    {
+      relativePath: "apps/example/specs/spec-helper.js",
+      lineCount: 999,
+    },
+    {
+      relativePath: "packages/example/testdata/test-data-helper.js",
+      lineCount: 999,
+    },
+    {
+      relativePath: "scripts/example/e2e/e2e-helper.js",
+      lineCount: 999,
+    },
+    {
+      relativePath: "packages/example/__snapshots__/snapshot-helper.js",
+      lineCount: 999,
+    },
+    {
+      relativePath: "apps/example/src/large.e2e.js",
+      lineCount: 999,
+    },
+  ]) {
+    writeModule({
+      root,
+      ...fixture,
+    })
+  }
 }
 
 test("inventories production modules over the threshold and excludes test support", () => {
@@ -74,11 +109,19 @@ test("inventories production modules over the threshold and excludes test suppor
           lines: 502,
         },
         {
+          path: "apps/example/src/Z-large.js",
+          lines: 501,
+        },
+        {
+          path: "apps/example/src/a-large.js",
+          lines: 501,
+        },
+        {
           path: "apps/example/src/large.js",
           lines: 501,
         },
       ],
-      "The report must sort by size and exclude exactly-threshold files, tests, test-support, and vendor trees.",
+      "The report must sort ties by stable code-unit path order and exclude test/spec/e2e/snapshot, test-support, and vendor trees.",
     )
   } finally {
     rmSync(root, {
