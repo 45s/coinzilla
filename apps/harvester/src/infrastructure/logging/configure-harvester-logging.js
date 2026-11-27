@@ -52,6 +52,41 @@ const ORDER_STATUS_PRESENTATION = Object.freeze({
   STALE_CANCEL_IGNORED: "STALE CANCEL IGNORED",
 })
 
+function formatOrderLifecycleDetail({ data, clientOrderId } = {}) {
+  const rawDetail = typeof data.detail === "string" && data.detail.length > 0
+    ? data.detail.replace(/[\r\n]+/g, " ")
+    : ""
+  return rawDetail
+    .split(/\s*\|\s*/)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0 && segment !== `Client order ID: ${clientOrderId}`)
+    .join(" | ")
+}
+
+function formatRejectedOrderLifecycleConsoleLine({
+  time,
+  strategy,
+  status,
+  symbol,
+  side,
+  quantity,
+  price,
+  detail,
+} = {}) {
+  return [
+    time,
+    ...(strategy ? [strategy] : []),
+    status,
+    symbol,
+    side,
+    quantity,
+    "@",
+    price,
+    detail ? "|" : "",
+    detail,
+  ].filter(Boolean).join(" ")
+}
+
 function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
   const time = new Date(timestamp).toLocaleTimeString("en-GB", {
     hour: "2-digit",
@@ -71,14 +106,23 @@ function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
   const clientOrderId = !data.brokerOrderId && typeof data.clientOrderId === "string"
     ? data.clientOrderId
     : ""
-  const rawDetail = typeof data.detail === "string" && data.detail.length > 0
-    ? data.detail.replace(/[\r\n]+/g, " ")
-    : ""
-  const detail = rawDetail
-    .split(/\s*\|\s*/)
-    .map((segment) => segment.trim())
-    .filter((segment) => segment.length > 0 && segment !== `Client order ID: ${clientOrderId}`)
-    .join(" | ")
+  const detail = formatOrderLifecycleDetail({
+    data,
+    clientOrderId,
+  })
+
+  if (data.lifecycleStatus === "REJECTED") {
+    return formatRejectedOrderLifecycleConsoleLine({
+      time,
+      strategy,
+      status,
+      symbol,
+      side,
+      quantity,
+      price,
+      detail,
+    })
+  }
 
   return [
     time,
@@ -404,7 +448,7 @@ function createPortfolioStatsConsoleLine({ time, strategyPrefix, details } = {})
 function formatStartupConsoleMessage(message) {
   const subscriptionMatch = /^Connected; subscribed to (\d+) enabled market\(s\)\. (.+)$/.exec(message)
   if (subscriptionMatch) {
-    return `Binance market-data stream connected; active market subscriptions: ${subscriptionMatch[1]}. ${subscriptionMatch[2]}`
+    return `Binance market-data stream connected; subscriptions: ${subscriptionMatch[1]}.`
   }
 
   const modeMatch = /^Connected; Binance trading mode is (.+)\.$/.exec(message)
@@ -412,7 +456,7 @@ function formatStartupConsoleMessage(message) {
     return `Binance market-data stream connected; Binance trading mode is ${modeMatch[1]}.`
   }
 
-  return message
+  return message.replace(/Operational State Store/g, "OSS")
 }
 
 function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary, strategyId } = {}) {
