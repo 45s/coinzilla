@@ -43,7 +43,7 @@ function createDirectorySyncRecordingFileSystem({ directories, syncedDirectories
   return {
     ...fsPromises,
     async open(...openArguments) {
-      const filePath = openArguments[0]
+      const [filePath] = openArguments
       const handle = await fsPromises.open(...openArguments)
       if (!directorySet.has(filePath)) {
         return handle
@@ -883,7 +883,10 @@ test("does not repair or replace an existing corrupt ledger", async (t) => {
 
 test("initialization fsyncs newly created directory entries before durable acknowledgement", async (t) => {
   const root = await createDirectory()
-  t.after(() => rm(root, { recursive: true, force: true }))
+  t.after(() => rm(root, {
+    recursive: true,
+    force: true,
+  }))
   const nested = path.join(root, "nested")
   const directory = path.join(nested, "store")
   const syncedDirectories = []
