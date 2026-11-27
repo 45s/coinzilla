@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url"
 const DEFAULT_MAX_OUTPUT_BYTES = 1_048_576
 const SANDBOX_ROOT = "/workspace/coinzilla"
 const CGROUP_ROOT = "/sys/fs/cgroup"
+const SANDBOX_NODE_EXECUTABLE = "/usr/bin/node"
 const MEMORY_ADDRESS_SPACE_LIMIT_BYTES = 8_589_934_592
 const CPU_QUOTA_MICROSECONDS = 100_000
 const CPU_PERIOD_MICROSECONDS = 100_000
@@ -509,6 +510,16 @@ function createBubblewrapArguments({ workerPath, repositoryRoot, nodeExecutable,
     existsSync,
     realpathSync,
   })
+  if (!existsSync(SANDBOX_NODE_EXECUTABLE)) {
+    throw new Error("The sandbox runtime requires /usr/bin/node as its worker mount point")
+  }
+  if (realpathSync(SANDBOX_NODE_EXECUTABLE) !== nodeExecutable) {
+    addReadOnlyBind({
+      args,
+      source: nodeExecutable,
+      target: SANDBOX_NODE_EXECUTABLE,
+    })
+  }
   args.push("--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp")
   addWorkspaceBinds({
     args,
@@ -520,7 +531,7 @@ function createBubblewrapArguments({ workerPath, repositoryRoot, nodeExecutable,
     "--seccomp", "4",
     "--preserve-fds", "1",
     "--",
-    nodeExecutable,
+    SANDBOX_NODE_EXECUTABLE,
     "--max-old-space-size=96",
     sandboxWorkerPath,
   )
@@ -730,9 +741,6 @@ function resolveSandboxTools({
 
 function resolveTrustedNodeRuntime({ nodeExecutable, realpathSync, verifyExecutable }) {
   const path = realpathSync(nodeExecutable)
-  if (!path.startsWith("/usr/")) {
-    throw new Error("The scenario sandbox requires a trusted Node runtime below /usr")
-  }
   const runtime = verifyExecutable({ path })
   if (runtime.path !== path || !/^[a-f0-9]{64}$/i.test(runtime.sha256)) {
     throw new Error("The scenario Node runtime failed trusted executable verification")
