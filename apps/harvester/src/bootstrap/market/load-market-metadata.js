@@ -16,8 +16,19 @@ function logSystem({ logger, ...data }) {
  * Disabled markets retain canonical asset metadata for account-audit coverage but
  * do not undergo order-readiness validation or emit trading-rule capture events.
  */
+function readMetadataCaptureTimestamp({ now } = {}) {
+  if (typeof now !== "function") {
+    throw new TypeError("Market metadata capture clock must be a function")
+  }
+  const timestamp = now()
+  if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
+    throw new TypeError("Market metadata capture clock must return a non-negative safe integer timestamp")
+  }
+  return timestamp
+}
+
 export async function loadMarketMetadata({
-  broker, pairs, marketMetadata, eventPublisher, logger,
+  broker, pairs, marketMetadata, eventPublisher, logger, now = Date.now,
 } = {}) {
     for (const [symbol, pairConfig] of Object.entries(pairs)) {
       const filtersResult = await broker.getSymbolFilters({ symbol })
@@ -28,7 +39,14 @@ export async function loadMarketMetadata({
           }${details ? `: ${  details}` : ""}`,
         )
       }
-      const {market} = filtersResult.data
+      const metadataCapturedAt = readMetadataCaptureTimestamp({ now })
+      const metadataVersion = filtersResult.data.metadataVersion ?? null
+      const receivedMetadata = Object.freeze({
+        ...filtersResult.data,
+        metadataCapturedAt,
+        metadataVersion,
+      })
+      const {market} = receivedMetadata
       logger?.trace?.({
         message: "Exchange market metadata received",
         component: "market-metadata-bootstrap",
@@ -48,7 +66,7 @@ export async function loadMarketMetadata({
         throw new Error(`Configured pair ${  symbol  } does not expose canonical base/quote asset metadata`)
       }
       if (!pairConfig.enabled) {
-        marketMetadata.set(symbol, filtersResult.data)
+        marketMetadata.set(symbol, receivedMetadata)
         logSystem({ logger,
           message: "Configured disabled market asset metadata loaded",
           symbol,
@@ -61,18 +79,23 @@ export async function loadMarketMetadata({
       const validatedMetadata = validateMarketTradingReadiness({
         symbol,
         pairConfig,
-        marketMetadata: filtersResult.data,
+        marketMetadata: receivedMetadata,
       })
-      marketMetadata.set(symbol, validatedMetadata)
+      const metadataSnapshot = Object.freeze({
+        ...validatedMetadata,
+        metadataCapturedAt,
+        metadataVersion,
+      })
+      marketMetadata.set(symbol, metadataSnapshot)
       publishLifecycleEvent({
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.MARKET_TRADING_RULES_CAPTURED,
-        dataResult: mapMarketTradingRulesCapturedData({ metadata: validatedMetadata }),
+        dataResult: mapMarketTradingRulesCapturedData({ metadata: metadataSnapshot }),
       })
       logSystem({ logger,
         message: "Supported exchange trading rules validated",
         symbol,
-        unvalidatedConstraintCount: validatedMetadata.unvalidatedConstraints.length,
+        unvalidatedConstraintCount: metadataSnapshot.unvalidatedConstraints.length,
       })
     }
 

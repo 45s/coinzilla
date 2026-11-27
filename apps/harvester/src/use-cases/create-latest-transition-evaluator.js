@@ -265,6 +265,15 @@ function prepareConservativeTransitionAllocation({ dependencies, context, exclud
     allocation,
   })
   if (noExecutableActions) {
+    const hasResidualSell = context.effectiveActions.some((action) => action.side === "SELL")
+    if (!context.preflightOnly && hasResidualSell) {
+      publishStrategyDecision({
+        dependencies,
+        context,
+        balances,
+        allocation,
+      })
+    }
     return { result: noExecutableActions }
   }
   publishStrategyDecision({
@@ -298,6 +307,12 @@ async function executeConservativeLatestTransition({ dependencies, options, gate
       marketPrice: gate.marketPrice,
     },
   })
+  if (!context.preflightOnly && context.effectiveActions.length === 0 && context.decision.inventoryDisposition !== undefined) {
+    publishStrategyDecision({
+      dependencies,
+      context,
+    })
+  }
   const dustResult = await completeDustRecoveryIfNeeded({
     dependencies,
     context,
