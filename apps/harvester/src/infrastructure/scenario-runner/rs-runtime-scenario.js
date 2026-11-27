@@ -293,7 +293,7 @@ function validateScenarioInput({ schema, defaults, input }) {
 
 const RUNTIME_SCENARIO_READINESS_REASONS = Object.freeze([
   "Scenario infrastructure uses a run-local simulated broker and in-memory operational store; it does not prove durable production account or STOP state.",
-  "SELL intent/reservation/outcome failures, ambiguous broker placement, terminal-reconciliation persistence failure, STOP persistence failures and BUY-only STOP admission are covered; runner-specific retry/idempotency acceptance remains outstanding.",
+  "SELL intent/reservation/outcome failures, ambiguous broker placement, terminal-reconciliation persistence failure, STOP persistence failures and BUY-only STOP admission are covered; remaining infrastructure acceptance includes runner-specific retry/idempotency.",
 ])
 
 export const RECOVERY_SELLER_RUNTIME_SCENARIOS = Object.freeze([
@@ -1987,7 +1987,80 @@ function createStopPersistenceFailureAssertions({ output, expected }) {
   ]
 }
 
+function createTerminalReconciliationPersistenceFailureAssertions({ output, expected }) {
+  return [
+    createAssertion({
+      name: "production runtime selects the authorized SELL action",
+      actual: output.decision?.outcome,
+      expected: expected.decisionOutcome,
+    }),
+    createAssertion({
+      name: "terminal broker result remains FILLED after reconciliation persistence fails",
+      actual: output.terminalSell?.orderStatus,
+      expected: expected.terminalOrderStatus,
+    }),
+    createAssertion({
+      name: "terminal reconciliation persistence failure is surfaced",
+      actual: output.terminalSell?.terminalReconciliationFailed,
+      expected: expected.terminalReconciliationFailed,
+    }),
+    createAssertion({
+      name: "failed durable reconciliation is not reported as committed",
+      actual: output.terminalSell?.terminalReconciled,
+      expected: expected.terminalReconciled,
+    }),
+    createAssertion({
+      name: "production order-event workflow fails closed after reconciliation persistence failure",
+      actual: output.terminalSell?.eventWorkflowFailedClosed,
+      expected: expected.eventWorkflowFailedClosed,
+    }),
+    createAssertion({
+      name: "terminal reconciliation persistence failure latches an account STOP",
+      actual: output.terminalSell?.stopFactAppended,
+      expected: expected.stopFactAppended,
+    }),
+    createAssertion({
+      name: "terminal reconciliation persistence failure pauses the affected market",
+      actual: output.terminalSell?.marketPaused,
+      expected: expected.marketPaused,
+    }),
+    createAssertion({
+      name: "account admission remains blocked after terminal reconciliation persistence fails",
+      actual: output.terminalSell?.accountAdmissionBlocked,
+      expected: expected.accountAdmissionBlocked,
+    }),
+    createAssertion({
+      name: "BUY admission remains blocked after terminal reconciliation persistence fails",
+      actual: output.terminalSell?.buyAdmissionBlocked,
+      expected: expected.buyAdmissionBlocked,
+    }),
+    createAssertion({
+      name: "canonical SELL fill is staged once for reconciliation",
+      actual: output.terminalSell?.stagedSellFillCount,
+      expected: expected.stagedSellFillCount,
+    }),
+    createAssertion({
+      name: "sole-SELL reservation remains held until reconciliation commits",
+      actual: output.reservedSellCycle?.clientOrderId === output.terminalSell?.clientOrderId,
+      expected: expected.reservationRetained,
+    }),
+    createAssertion({
+      name: "terminal reconciliation exposes the injected durable persistence failure",
+      actual: output.terminalSell?.terminalReconciliationError?.includes(
+        "Simulated terminal SELL reconciliation persistence failure",
+      ) === true,
+      expected: true,
+    }),
+  ]
+}
+
 function createPartialSellAssertions({ output, expected }) {
+  if (expected.terminalReconciliationFailed === true) {
+    return createTerminalReconciliationPersistenceFailureAssertions({
+      output,
+      expected,
+    })
+  }
   return [
     createAssertion({
       name: "production RS transition selects a SELL action",
