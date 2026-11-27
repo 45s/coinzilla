@@ -49,18 +49,52 @@ function encodeInstruction({ code, jt = 0, jf = 0, k = 0 }) {
 
 function buildFilterInstructions({ auditArch, clone, denied }) {
   const instructions = [
-    encodeInstruction({ code: 0x20, k: 4 }),
-    encodeInstruction({ code: 0x15, jt: 1, k: auditArch }),
-    encodeInstruction({ code: 0x06, k: SECCOMP_KILL_PROCESS }),
-    encodeInstruction({ code: 0x20, k: 0 }),
-    encodeInstruction({ code: 0x15, jf: 4, k: clone }),
-    encodeInstruction({ code: 0x20, k: 16 }),
-    encodeInstruction({ code: 0x45, jt: 1, k: CLONE_THREAD }),
-    encodeInstruction({ code: 0x06, k: ERRNO_PERMISSION_DENIED }),
-    encodeInstruction({ code: 0x06, k: SECCOMP_ALLOW }),
+    encodeInstruction({
+      code: 0x20,
+      k: 4,
+    }),
+    encodeInstruction({
+      code: 0x15,
+      jt: 1,
+      k: auditArch,
+    }),
+    encodeInstruction({
+      code: 0x06,
+      k: SECCOMP_KILL_PROCESS,
+    }),
+    encodeInstruction({
+      code: 0x20,
+      k: 0,
+    }),
+    encodeInstruction({
+      code: 0x15,
+      jf: 4,
+      k: clone,
+    }),
+    encodeInstruction({
+      code: 0x20,
+      k: 16,
+    }),
+    encodeInstruction({
+      code: 0x45,
+      jt: 1,
+      k: CLONE_THREAD,
+    }),
+    encodeInstruction({
+      code: 0x06,
+      k: ERRNO_PERMISSION_DENIED,
+    }),
+    encodeInstruction({
+      code: 0x06,
+      k: SECCOMP_ALLOW,
+    }),
   ]
   for (const syscall of denied) {
-    instructions.push(encodeInstruction({ code: 0x15, jf: 1, k: syscall }))
+    instructions.push(encodeInstruction({
+      code: 0x15,
+      jf: 1,
+      k: syscall,
+    }))
     instructions.push(encodeInstruction({ code: 0x06, k: ERRNO_PERMISSION_DENIED }))
   }
   instructions.push(encodeInstruction({ code: 0x06, k: SECCOMP_ALLOW }))
@@ -93,7 +127,11 @@ function resolveTrustedExecutable({ candidates, existsSync, verifyExecutable }) 
   throw new Error(`Required OS sandbox executable is unavailable: ${candidates[0]}`)
 }
 
-function verifySandboxTools({ bwrap, prlimit, execFileSync }) {
+function verifySandboxTools({
+    bwrap,
+    prlimit,
+    execFileSync,
+  }) {
   const bwrapVersion = execFileSync(bwrap.path, ["--version"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
@@ -110,7 +148,11 @@ function verifySandboxTools({ bwrap, prlimit, execFileSync }) {
   }
 }
 
-function verifySandboxCapabilities({ bwrap, prlimit, execFileSync }) {
+function verifySandboxCapabilities({
+    bwrap,
+    prlimit,
+    execFileSync,
+  }) {
   execFileSync(prlimit.path, [
     "--as=268435456:268435456",
     "--cpu=30:30",
@@ -144,7 +186,11 @@ function assertIsolationProfile({ profile, maxOutputBytes }) {
   }
 }
 
-function addReadOnlyBind({ args, source, target }) {
+function addReadOnlyBind({
+      args,
+      source,
+      target,
+    }) {
   args.push("--ro-bind", source, target)
 }
 
@@ -161,15 +207,27 @@ function addParentDirectories({ args, target, seen }) {
   let current = ""
   for (const segment of segments) {
     current += `/${segment}`
-    addDirectory({ args, directory: current, seen })
+    addDirectory({
+      args,
+      directory: current,
+      seen,
+    })
   }
 }
 
-function addSystemRuntimeBinds({ args, existsSync, realpathSync }) {
+function addSystemRuntimeBinds({
+    args,
+    existsSync,
+    realpathSync,
+  }) {
   const createdDirectories = new Set()
   for (const source of ["/usr", "/bin", "/lib", "/lib64"]) {
     if (existsSync(source)) {
-      addDirectory({ args, directory: source, seen: createdDirectories })
+      addDirectory({
+        args,
+        directory: source,
+        seen: createdDirectories,
+      })
       addReadOnlyBind({
         args,
         source: realpathSync(source),
@@ -177,7 +235,11 @@ function addSystemRuntimeBinds({ args, existsSync, realpathSync }) {
       })
     }
   }
-  addDirectory({ args, directory: "/etc", seen: createdDirectories })
+  addDirectory({
+    args,
+    directory: "/etc",
+    seen: createdDirectories,
+  })
   for (const source of [
     "/etc/ld.so.cache",
     "/etc/passwd",
@@ -186,12 +248,24 @@ function addSystemRuntimeBinds({ args, existsSync, realpathSync }) {
     "/etc/localtime",
   ]) {
     if (existsSync(source)) {
-      addReadOnlyBind({ args, source: realpathSync(source), target: source })
+      addReadOnlyBind({
+        args,
+        source: realpathSync(source),
+        target: source,
+      })
     }
   }
   if (existsSync("/etc/ssl/certs")) {
-    addDirectory({ args, directory: "/etc/ssl", seen: createdDirectories })
-    addDirectory({ args, directory: "/etc/ssl/certs", seen: createdDirectories })
+    addDirectory({
+      args,
+      directory: "/etc/ssl",
+      seen: createdDirectories,
+    })
+    addDirectory({
+      args,
+      directory: "/etc/ssl/certs",
+      seen: createdDirectories,
+    })
     addReadOnlyBind({
       args,
       source: realpathSync("/etc/ssl/certs"),
@@ -200,7 +274,11 @@ function addSystemRuntimeBinds({ args, existsSync, realpathSync }) {
   }
 }
 
-function addWorkspaceBinds({ args, repositoryRoot, existsSync }) {
+function addWorkspaceBinds({
+    args,
+    repositoryRoot,
+    existsSync,
+  }) {
   const createdDirectories = new Set()
   const sources = [
     ["apps/harvester/src", "apps/harvester/src"],
@@ -217,7 +295,11 @@ function addWorkspaceBinds({ args, repositoryRoot, existsSync }) {
       }
       continue
     }
-    addParentDirectories({ args, target, seen: createdDirectories })
+    addParentDirectories({
+      args,
+      target,
+      seen: createdDirectories,
+    })
     addReadOnlyBind({ args, source, target })
   }
 }
@@ -304,7 +386,10 @@ function createLinuxLauncher({
   maxOutputBytes,
 }) {
   const launcher = ({ workerPath, stdio, sandboxProfile }) => {
-    assertIsolationProfile({ profile: sandboxProfile, maxOutputBytes })
+    assertIsolationProfile({
+      profile: sandboxProfile,
+      maxOutputBytes,
+    })
     const args = [
       "--as=268435456:268435456",
       "--cpu=30:30",
@@ -362,7 +447,10 @@ function resolveSandboxTools({ bwrapPath, prlimitPath, existsSync, verifyExecuta
     existsSync,
     verifyExecutable,
   })
-  return { bwrap, prlimit }
+  return {
+    bwrap,
+    prlimit,
+  }
 }
 
 function resolveTrustedNodeRuntime({ nodeExecutable, realpathSync, verifyExecutable }) {
@@ -383,21 +471,22 @@ function verifyLinuxSandboxRuntime({ bwrap, prlimit, execFileSync, arch }) {
   syscallNumbers({ arch })
 }
 
-export function createLinuxBubblewrapSandboxLauncher({
-  platform = process.platform,
-  arch = process.arch,
-  repositoryRoot = fileURLToPath(new URL("../../../../..", import.meta.url)),
-  nodeExecutable = process.execPath,
-  bwrapPath = "/usr/bin/bwrap",
-  prlimitPath = "/usr/bin/prlimit",
-  maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES,
-  spawn = spawnNative,
-  execFileSync = execFileSyncNative,
-  existsSync = existsSyncNative,
-  realpathSync = realpathSyncNative,
-  statSync = statSyncNative,
-  readFileSync = readFileSyncNative,
+function createLinuxBubblewrapSandboxLauncherInternal({
+  platform,
+  arch,
+  repositoryRoot,
+  nodeExecutable,
+  bwrapPath,
+  prlimitPath,
+  maxOutputBytes,
+  spawn,
+  execFileSync,
+  existsSync,
+  realpathSync,
+  statSync,
+  readFileSync,
   verifyExecutable,
+}) {
   if (platform !== "linux") {
     throw new Error("The trusted Bubblewrap scenario sandbox is supported only on Linux")
   }
@@ -438,50 +527,22 @@ export function createLinuxBubblewrapSandboxLauncher({
     maxOutputBytes,
   })
 }
-} = {}) {
-  if (platform !== "linux") {
-    throw new Error("The trusted Bubblewrap scenario sandbox is supported only on Linux")
-  }
-  if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 1) {
-    throw new RangeError("Sandbox maximum output bytes must be a positive safe integer")
-  }
-  const verify = verifyExecutable ?? (({ path }) => verifyTrustedExecutable({
-    path,
-    realpathSync,
-    statSync,
-    readFileSync,
-  }))
-  const bwrap = resolveTrustedExecutable({
-    candidates: [bwrapPath, "/bin/bwrap"],
-    existsSync,
-    verifyExecutable: verify,
-  })
-  const prlimit = resolveTrustedExecutable({
-    candidates: [prlimitPath, "/bin/prlimit"],
-    existsSync,
-    verifyExecutable: verify,
-  })
-  verifySandboxTools({ bwrap, prlimit, execFileSync })
-  verifySandboxCapabilities({ bwrap, prlimit, execFileSync })
-  syscallNumbers({ arch })
-  const resolvedRepositoryRoot = realpathSync(resolve(repositoryRoot))
-  const resolvedNodeExecutable = realpathSync(nodeExecutable)
-  if (!resolvedNodeExecutable.startsWith("/usr/")) {
-    throw new Error("The scenario sandbox requires a trusted Node runtime below /usr")
-  }
-  const nodeRuntime = verify({ path: resolvedNodeExecutable })
-  if (nodeRuntime.path !== resolvedNodeExecutable || !/^[a-f0-9]{64}$/i.test(nodeRuntime.sha256)) {
-    throw new Error("The scenario Node runtime failed trusted executable verification")
-  }
-  return createLinuxLauncher({
-    bwrap,
-    prlimit,
-    repositoryRoot: resolvedRepositoryRoot,
-    nodeExecutable: resolvedNodeExecutable,
-    nodeRuntimeSha256: nodeRuntime.sha256,
-    spawn,
-    existsSync,
-    realpathSync,
-    maxOutputBytes,
+
+export function createLinuxBubblewrapSandboxLauncher(options = {}) {
+  return createLinuxBubblewrapSandboxLauncherInternal({
+    platform: process.platform,
+    arch: process.arch,
+    repositoryRoot: fileURLToPath(new URL("../../../../..", import.meta.url)),
+    nodeExecutable: process.execPath,
+    bwrapPath: "/usr/bin/bwrap",
+    prlimitPath: "/usr/bin/prlimit",
+    maxOutputBytes: DEFAULT_MAX_OUTPUT_BYTES,
+    spawn: spawnNative,
+    execFileSync: execFileSyncNative,
+    existsSync: existsSyncNative,
+    realpathSync: realpathSyncNative,
+    statSync: statSyncNative,
+    readFileSync: readFileSyncNative,
+    ...options,
   })
 }
