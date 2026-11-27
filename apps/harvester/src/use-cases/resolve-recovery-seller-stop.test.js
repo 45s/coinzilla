@@ -54,6 +54,22 @@ function createValidEvidence({ blockerId }) {
   }
 }
 
+
+async function createStore(t) {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-rs-stop-resolution-"))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  const store = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "rs-stop-resolution-test-session",
+    now: () => new Date("2026-11-19T00:00:00.000Z"),
+  })
+  const initialized = await store.initialize()
+  assert.equal(initialized.ok, true, "The isolated Operational State Store must initialize for this test.")
+  return store
+}
 async function createStoppedBlocker(t) {
   const operationalStateStore = await createStore(t)
   const raised = await recordSafetyBlockerRaised({
