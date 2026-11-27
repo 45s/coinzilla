@@ -764,7 +764,14 @@ test("coalesces repeated shutdown signals into one cleanup operation", async () 
     flush: async () => ({ ok: true }),
   }
   const journalService = {
-    close: async () => { operations.push("journal.close"); return { ok: true, closed: true, durable: true } },
+    close: async () => {
+      operations.push("journal.close")
+      return {
+        ok: true,
+        closed: true,
+        durable: true,
+      }
+    },
   }
   await main({
     createEventBus: () => eventBus,
@@ -854,7 +861,10 @@ test("reports an ambiguous process-lock release during startup cleanup", async (
       createEventBus: () => ({
         publish: () => ({ ok: true }),
         flush: async () => ({ ok: true }),
-        close: async () => ({ ok: true, closed: true }),
+        close: async () => ({
+          ok: true,
+          closed: true,
+        }),
       }),
       createJournalService: () => ({
         status: { enabled: false },
@@ -862,8 +872,15 @@ test("reports an ambiguous process-lock release during startup cleanup", async (
           ok: false,
           errors: [new Error("Journal readiness failed")],
         }),
-        flush: async () => ({ ok: true, durable: true }),
-        close: async () => ({ ok: true, closed: true, disabled: true }),
+        flush: async () => ({
+          ok: true,
+          durable: true,
+        }),
+        close: async () => ({
+          ok: true,
+          closed: true,
+          disabled: true,
+        }),
       }),
       start: async () => {
         throw new Error("Runtime must not start before Journal readiness succeeds.")
