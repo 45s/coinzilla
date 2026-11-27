@@ -356,7 +356,7 @@ function createFixtureEngine({
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData,
-    initialState: { pausedMarkets, orderRegistry },
+    initialState: orderRegistry === undefined ? { pausedMarkets } : { pausedMarkets, orderRegistry },
     onPause: async () => {},
     isStopping: () => false,
   });
