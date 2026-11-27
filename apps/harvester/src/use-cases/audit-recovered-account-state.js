@@ -574,7 +574,11 @@ function indexRecoveredOrderIdentities({ orders }) {
   }
 }
 
-function addExpectedOrderCommitment({ order, expectedByBrokerId, expectedLocked }) {
+function addExpectedOrderCommitment({
+      order,
+      expectedByBrokerId,
+      expectedLocked,
+    }) {
   if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status)) {
     throw new Error(`Recovered active order remains unresolved and cannot pass account audit: ${order.clientOrderId}`)
   }
@@ -663,7 +667,10 @@ function inspectUnownedOrderFacts({ order, identity, brokerOrderId, symbol, mark
     left: originalQuantity,
     right: executedQuantity,
   })
-  if (compareDecimal({ left: remainingQuantity, right: "0" }) <= 0) {
+  if (compareDecimal({
+    left: remainingQuantity,
+    right: "0",
+  }) <= 0) {
     throw new Error(`Unowned exchange order has no positive remaining quantity: ${brokerOrderId}`)
   }
   const actualPrice = requireAmount({
@@ -689,7 +696,10 @@ function reserveUnownedOrderBalance({ order, externalMarket, remainingQuantity, 
     addAmount({
       amounts: expectedLocked,
       asset: externalMarket.quoteAsset.code,
-      amount: multiplyDecimal({ left: remainingQuantity, right: actualPrice }),
+      amount: multiplyDecimal({
+        left: remainingQuantity,
+        right: actualPrice,
+      }),
     })
     return
   }
@@ -803,7 +813,14 @@ function inspectExchangeOpenOrder({
   seenOpenOrderIds.add(brokerOrderId)
   const expected = expectedByBrokerId.get(brokerOrderId)
   if (expected) {
-    validateOwnedOpenOrder({ order, identity, expected, symbol, brokerOrderId, actualOpenByBrokerId })
+    validateOwnedOpenOrder({
+      order,
+      identity,
+      expected,
+      symbol,
+      brokerOrderId,
+      actualOpenByBrokerId,
+    })
     return
   }
   if (recoveredByBrokerId.has(brokerOrderId)) {
