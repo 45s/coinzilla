@@ -30,6 +30,8 @@ Do not assert merely that a single action was returned. Verify its side, purpose
 
 Set up a canonical active recovery Position and recovery SELL together with a standing BUY that was already acknowledged before the recovery cycle became active. Deliver its late/partial fill and its cancellation/terminal evidence in different orders, including delayed and unknown outcomes.
 
+While that pre-existing BUY remains active, an ordinary market-price event must skip only trailing-BUY replacement and still run normal Conservative evaluation so required recovery SELL coverage is established or maintained. The no-new-BUY policy remains enforced by the strategy and final submission gate.
+
 The expected behavior is to apply each canonical BUY fill exactly once, retain the pre-existing order's ownership/lifecycle, reconcile any cancellation race through the existing durable workflow, and recalculate recovery SELL coverage from the updated Position and confirmed proceeds. Do not create a replacement or next standing BUY while the recovery cycle remains unresolved. Pure policy tests assert the decision from a reconciled snapshot; application tests own broker cancellation, race ordering and barriers.
 
 ### Partial and completed recovery SELL
