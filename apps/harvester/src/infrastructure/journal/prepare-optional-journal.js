@@ -32,6 +32,7 @@ function reportJournalFailure({ logger, error, errors }) {
     logger?.error?.({
       message: "Optional Harvester Journal startup failed",
       ...describeJournalError(firstError),
+      error: firstError,
       errors: originalErrors,
     })
   } catch {
