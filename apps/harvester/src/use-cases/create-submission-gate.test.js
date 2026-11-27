@@ -706,6 +706,25 @@ test("blocks Recovery Seller SELL while STOP persistence is unverified", () => {
     "The gate must distinguish unverified STOP persistence from a durable investment STOP.")
 })
 
+test("blocks RS submission while SELL persistence gate is active even if BUY gate is clear", () => {
+  const dependencies = createVolatilityProtectedDependencies()
+  dependencies.isRecoverySellerBuyAdmissionBlocked = () => false
+  dependencies.isRecoverySellerSellAdmissionBlocked = () => true
+  const result = createSubmissionGate(dependencies)({
+    order: createOrder({ side: "SELL" }),
+    purpose: "RECOVERY_SELL",
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-position-1",
+      cycleId: "rs-cycle-1",
+    },
+  })
+
+  assert.equal(result.allowed, false,
+    "An explicitly pending or unverified SELL persistence gate must block even with BUY admission clear.")
+  assert.equal(result.reason, "RECOVERY_SELLER_STOP_PERSISTENCE_UNVERIFIED")
+})
+
 test("fails closed when RS STOP BUY gate is active but SELL persistence gate is unavailable", () => {
   const dependencies = createVolatilityProtectedDependencies()
   dependencies.isRecoverySellerBuyAdmissionBlocked = () => true

@@ -1249,6 +1249,11 @@
           "path": "src/use-cases/create-submission-gate.test.js",
           "name": "fails closed when RS STOP BUY gate is active but SELL persistence gate is unavailable",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-submission-gate.test.js",
+          "name": "blocks RS submission while SELL persistence gate is active even if BUY gate is clear",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
