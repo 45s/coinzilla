@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
+import { authenticateLocalOperator } from "../infrastructure/security/local-operator-identity.js"
 import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-store.js"
 import { createRecoverySellerStopWorkflow } from "./create-recovery-seller-stop-workflow.js"
 import { recordSafetyBlockerRaised } from "./record-safety-control-facts.js"
@@ -37,8 +38,13 @@ async function createWorkflow(t) {
 
 function validResolutionEvidence() {
   return {
+    operatorIdentity: authenticateLocalOperator({
+      operatorId: "operator-45s",
+      getUserInfo: () => ({ username: "operator-45s" }),
+    }),
     operatorId: "operator-45s",
     actionId: "rs-stop-reset-2",
+    resolutionReason: "Underlying cause fixed and account reconciled",
     causeFixed: true,
     reconciliation: {
       ordersReconciled: true,
@@ -107,26 +113,45 @@ test("restores a persisted RS STOP and does not append a duplicate blocker", asy
   )
 })
 
-test("clears RS STOP only after explicit operator evidence is durably recorded", async (t) => {
+test("durable STOP resolution leaves both admission gates closed pending controlled restart", async (t) => {
   const { operationalStateStore, workflow } = await createWorkflow(t)
   await workflow.latch({
     explanation: "The RS BUY acknowledgement is unresolved",
   })
+  const blockerId = workflow.getBlockerId()
 
   const result = await workflow.resolve(validResolutionEvidence())
   const read = await operationalStateStore.readAll()
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
-  assert.equal(workflow.getStopState().status, "CLEAR")
-  assert.equal(workflow.isBuyAdmissionBlocked(), false)
-  assert.equal(workflow.isSellAdmissionBlocked(), false)
-  assert.equal(workflow.getBlockerId(), null)
+  assert.equal(workflow.getStopState().status, "STOPPED")
+  assert.equal(workflow.isBuyAdmissionBlocked(), true)
+  assert.equal(workflow.isSellAdmissionBlocked(), true)
+  assert.equal(workflow.isResolutionPendingRestart(), true)
+  assert.equal(workflow.getBlockerId(), blockerId)
   assert.equal(
     read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length,
     1,
   )
-  const raisedRecord = read.data.records.find((entry) => entry.factType === "SAFETY_BLOCKER_RAISED")
-  assert.equal(raisedRecord.data.producer, "RECOVERY_SELLER_STOP_WORKFLOW")
+})
+
+test("restores resolved RS STOP as pending controlled restart rather than clearing on process restart", async (t) => {
+  const { operationalStateStore, workflow } = await createWorkflow(t)
+  await workflow.latch({
+    explanation: "The RS BUY acknowledgement is unresolved",
+  })
+  const resolved = await workflow.resolve(validResolutionEvidence())
+  assert.equal(resolved.ok, true, resolved.errors?.[0]?.message)
+
+  const restarted = await createRecoverySellerStopWorkflow({
+    operationalStateStore,
+  })
+
+  assert.equal(restarted.ok, true, restarted.errors?.[0]?.message)
+  assert.equal(restarted.data.getStopState().status, "STOPPED")
+  assert.equal(restarted.data.isBuyAdmissionBlocked(), true)
+  assert.equal(restarted.data.isSellAdmissionBlocked(), true)
+  assert.equal(restarted.data.isResolutionPendingRestart(), true)
 })
 
 test("keeps account admission blocked when durable STOP resolution persistence fails", async (t) => {

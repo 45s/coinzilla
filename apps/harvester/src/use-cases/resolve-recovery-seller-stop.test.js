@@ -3,14 +3,20 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
+import { authenticateLocalOperator } from "../infrastructure/security/local-operator-identity.js"
 import { createRecoverySellerStopDecision, createRecoverySellerStopState, latchRecoverySellerStop } from "../domain/strategies/recovery-seller/stop-decision.js"
 import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-store.js"
 import { recordSafetyBlockerRaised } from "./record-safety-control-facts.js"
 import { resolveRecoverySellerStop } from "./resolve-recovery-seller-stop.js"
 
 const validEvidence = Object.freeze({
+  operatorIdentity: authenticateLocalOperator({
+    operatorId: "operator-45s",
+    getUserInfo: () => ({ username: "operator-45s" }),
+  }),
   operatorId: "operator-45s",
   actionId: "rs-stop-reset-1",
+  resolutionReason: "Underlying cause fixed and account reconciled",
   causeFixed: true,
   reconciliation: Object.freeze({
     ordersReconciled: true,
@@ -67,6 +73,29 @@ async function createStoppedBlocker(t) {
     stopState,
   }
 }
+
+test("rejects caller-supplied operator identity without OS authentication", async (t) => {
+  const fixture = await createStoppedBlocker(t)
+  const result = await resolveRecoverySellerStop({
+    ...fixture,
+    ...validEvidence,
+    operatorIdentity: {
+      operatorId: "operator-45s",
+      authMethod: "OS_ACCOUNT",
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(
+    result.errors?.[0]?.message ?? "",
+    /authenticated operating-system operator identity/,
+  )
+  const read = await fixture.operationalStateStore.readAll()
+  assert.equal(
+    read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length,
+    0,
+  )
+})
 
 test("persists an explicit operator STOP resolution before returning a clear state", async (t) => {
   const fixture = await createStoppedBlocker(t)
