@@ -117,10 +117,10 @@ function resolveScenarioRunnerSourceRevision({ env } = {}) {
 
 function createScenarioRunnerAdapter({ env }) {
   if (env.HARVESTER_SCENARIO_SANDBOX !== "linux-bubblewrap") {
-      return createUnavailableScenarioAdapter({
-        strategyId: "RS",
-        reason: "Scenario execution is disabled; explicitly configure the verified Linux Bubblewrap sandbox to enable isolated simulation.",
-      })
+    return createUnavailableScenarioAdapter({
+      strategyId: "RS",
+      reason: "Scenario execution is disabled; explicitly configure the verified Linux Bubblewrap sandbox to enable isolated simulation.",
+    })
   }
   let launcher
   try {

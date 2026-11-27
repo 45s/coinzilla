@@ -366,6 +366,8 @@ function createSandboxEnvironment() {
     PATH: "/usr/bin:/bin",
     NODE_ENV: "test",
     NODE_OPTIONS: "--max-old-space-size=96",
+    NODE_CHANNEL_FD: "3",
+    NODE_CHANNEL_SERIALIZATION_MODE: "json",
     HOME: "/tmp",
     TMPDIR: "/tmp",
     SCENARIO_RUN_WORKER: "1",

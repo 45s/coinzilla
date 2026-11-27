@@ -586,6 +586,8 @@ test("Linux sandbox launcher attests the required OS profile and passes a seccom
   assert.ok(spawned.args.includes("--seccomp"))
   assert.ok(spawned.args.includes("--preserve-fds"))
   assert.equal(spawned.options.stdio[3], "ipc")
+  assert.equal(spawned.options.env.NODE_CHANNEL_FD, "3")
+  assert.equal(spawned.options.env.NODE_CHANNEL_SERIALIZATION_MODE, "json")
   assert.ok(Buffer.isBuffer(buildScenarioSeccompFilter({ arch: "x64" })))
   assert.ok(buildScenarioSeccompFilter({ arch: "x64" }).length > 0)
   await new Promise((resolve) => setImmediate(resolve))
