@@ -301,6 +301,8 @@ Do not confuse an account open-order audit classification of `BLOCKED` with this
 
 ## Recovery Seller STOP resolution boundary
 
-Recovery Seller STOP resolution requires a trusted local OS-account principal, explicit cause-fixed acknowledgement, a durable blocker identity, authoritative account-wide order/fill/balance reconciliation, and verified Portfolio/legacy/reservation accounting. Copying operator identity fields or supplying UI evidence is not authentication.
+Recovery Seller STOP resolution is an offline, authenticated local OS-account action. It requires explicit cause-fixed acknowledgement, the exact durable blocker ID, fresh (at most five minutes old) authoritative account-wide order/fill/balance reconciliation for every configured market, zero unresolved facts/discrepancies, and verified Portfolio/legacy/reservation accounting. Copying operator identity fields or supplying UI evidence is not authentication.
 
-Durable STOP resolution does not clear in-process BUY/SELL admission gates or resume trading. The current process remains blocked until a separate controlled restart performs fresh authoritative reconciliation and PREFLIGHT. No automatic clear, self-resume, or implicit restart is permitted.
+Run `node scripts/recovery-seller-stop.js --context <evidence.json> --operator-id <local-user> --action-id <unique-id> --resolution-reason <text> --cause-fixed` from the Harvester package. The context file is operator-reviewed offline evidence; the command does not query exchanges or submit/cancel orders.
+
+Durable resolution does not clear in-process BUY/SELL admission gates, reset runtime state, restart the process, or resume trading. The current process remains blocked and reports `requiresControlledRestart: true`. A separate controlled restart must perform fresh authoritative reconciliation and PREFLIGHT before execution. Telegram STOP status remains read-only.

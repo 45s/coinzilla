@@ -56,9 +56,10 @@ function validResolutionEvidence({ blockerId } = {}) {
       scope: "ACCOUNT",
       status: "READY",
       allConfiguredMarketsAudited: true,
+      configuredMarkets: ["BTCUSDT"],
       auditedMarkets: ["BTCUSDT"],
       reconciliationId: "rs-stop-audit-20261127",
-      capturedAt: "2026-11-27T00:00:00.000Z",
+      capturedAt: new Date().toISOString(),
       operatorId,
       operatorAuthMethod: "OS_ACCOUNT",
       actionId,
@@ -151,6 +152,12 @@ test("clears RS STOP only after explicit operator evidence is durably recorded",
   )
   const raisedRecord = read.data.records.find((entry) => entry.factType === "SAFETY_BLOCKER_RAISED")
   assert.equal(raisedRecord.data.producer, "RECOVERY_SELLER_STOP_WORKFLOW")
+  const resolvedRecord = read.data.records.find((entry) => entry.factType === "SAFETY_BLOCKER_RESOLVED")
+  assert.equal(resolvedRecord.data.operatorId, "operator-45s")
+  assert.equal(resolvedRecord.data.operatorAuthMethod, "OS_ACCOUNT")
+  assert.equal(resolvedRecord.data.actionId, "rs-stop-reset-2")
+  assert.equal(resolvedRecord.data.resolutionReason, "Cause fixed and authoritative reconciliation completed")
+  assert.deepEqual(resolvedRecord.data.actionBlockerIds, [blockerId])
 })
  
 test("keeps RS BUY and SELL admission blocked after durable STOP resolution", async (t) => {
@@ -351,4 +358,64 @@ test("does not restore Recovery Seller STOP from a user-data blocker with the sa
   assert.equal(created.data.isBuyAdmissionBlocked(), false, "A user-data blocker is owned by the account admission workflow")
   assert.equal(created.data.isSellAdmissionBlocked(), false, "A user-data blocker must not be claimed by the RS STOP workflow")
   assert.equal(created.data.getBlockerId(), null, "The Recovery Seller workflow must not claim the user-data blocker")
+})
+
+test("rejects stale reconciliation evidence before resolving Recovery Seller STOP", async (t) => {
+  const { operationalStateStore, workflow } = await createWorkflow(t)
+  await workflow.latch({ explanation: "The RS BUY acknowledgement is unresolved" })
+  const blockerId = workflow.getBlockerId()
+  const evidence = validResolutionEvidence({ blockerId })
+  evidence.reconciliation.capturedAt = "2026-01-01T00:00:00.000Z"
+
+  const result = await workflow.resolve(evidence)
+  const read = await operationalStateStore.readAll()
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /fresh authoritative account reconciliation/)
+  assert.equal(read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length, 0)
+})
+
+test("rejects incomplete configured-market reconciliation before resolving Recovery Seller STOP", async (t) => {
+  const { operationalStateStore, workflow } = await createWorkflow(t)
+  await workflow.latch({ explanation: "The RS BUY acknowledgement is unresolved" })
+  const blockerId = workflow.getBlockerId()
+  const evidence = validResolutionEvidence({ blockerId })
+  evidence.reconciliation.configuredMarkets = ["BTCUSDT", "ETHUSDT"]
+
+  const result = await workflow.resolve(evidence)
+  const read = await operationalStateStore.readAll()
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /every configured market/)
+  assert.equal(read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length, 0)
+})
+
+test("rejects inconsistent accounting before resolving Recovery Seller STOP", async (t) => {
+  const { operationalStateStore, workflow } = await createWorkflow(t)
+  await workflow.latch({ explanation: "The RS BUY acknowledgement is unresolved" })
+  const blockerId = workflow.getBlockerId()
+  const evidence = validResolutionEvidence({ blockerId })
+  evidence.accounting.reservationsConsistent = false
+
+  const result = await workflow.resolve(evidence)
+  const read = await operationalStateStore.readAll()
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /verified Portfolio, legacy, and reservation accounting/)
+  assert.equal(read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length, 0)
+})
+
+test("requires cause-fixed acknowledgement before resolving Recovery Seller STOP", async (t) => {
+  const { operationalStateStore, workflow } = await createWorkflow(t)
+  await workflow.latch({ explanation: "The RS BUY acknowledgement is unresolved" })
+  const blockerId = workflow.getBlockerId()
+  const evidence = validResolutionEvidence({ blockerId })
+  evidence.causeFixed = false
+
+  const result = await workflow.resolve(evidence)
+  const read = await operationalStateStore.readAll()
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /cause-fixed acknowledgement/)
+  assert.equal(read.data.records.filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED").length, 0)
 })

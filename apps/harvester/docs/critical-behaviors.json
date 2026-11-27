@@ -2,6 +2,8 @@
   "schemaVersion": 1,
   "criticalPathPrefixes": [
     "src/bootstrap/account/",
+    "src/bootstrap/providers/",
+    "src/bootstrap/providers/start-provider-accounts.js",
     "src/bootstrap/shutdown/",
     "src/bootstrap/start-harvester.js",
     "src/domain/fills/",
@@ -19,17 +21,17 @@
     "src/use-cases/collect-owned-order-snapshots.js",
     "src/use-cases/conservative-trading-engine.js",
     "src/use-cases/create-conservative-shutdown-safety.js",
+    "src/use-cases/create-recovery-seller-stop-workflow.js",
     "src/use-cases/create-submission-gate.js",
     "src/use-cases/create-user-data-event-transition.js",
     "src/use-cases/fetch-account-trade-history.js",
     "src/use-cases/reconcile-terminal-order-fills.js",
     "src/use-cases/record-safety-control-facts.js",
     "src/use-cases/resolve-offline-user-data-account-blockers.js",
+    "src/use-cases/resolve-recovery-seller-stop.js",
     "src/use-cases/resolve-user-data-account-blockers.helpers.js",
     "src/use-cases/resolve-user-data-account-blockers.js",
-    "src/use-cases/restore-harvester-operational-state.js",
-    "src/bootstrap/providers/",
-    "src/bootstrap/providers/start-provider-accounts.js"
+    "src/use-cases/restore-harvester-operational-state.js"
   ],
   "behaviors": [
     {
@@ -1468,7 +1470,7 @@
         },
         {
           "path": "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
-          "name": "keeps Recovery Seller STOP exclusive to its dedicated legacy operator action",
+          "name": "projects legacy and structured Recovery Seller STOP operator actions without account-wide bypass",
           "kind": "failure"
         },
         {
@@ -1745,8 +1747,11 @@
       "id": "RECOVERY_SELLER_STOP_RESOLUTION",
       "title": "Authenticated Recovery Seller STOP resolution and no-auto-resume boundary",
       "sourceModules": [
+        "src/use-cases/create-recovery-seller-stop-workflow.js",
+        "src/use-cases/resolve-recovery-seller-stop.js",
         "src/infrastructure/security/local-operator-identity.js",
-        "src/use-cases/record-safety-control-facts.js"
+        "src/use-cases/record-safety-control-facts.js",
+        "src/infrastructure/operational-state/project-harvester.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -1769,14 +1774,70 @@
           "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
           "name": "rejects non-authoritative reconciliation evidence for Recovery Seller STOP resolution",
           "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "rejects stale reconciliation evidence before resolving Recovery Seller STOP",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "rejects incomplete configured-market reconciliation before resolving Recovery Seller STOP",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "rejects inconsistent accounting before resolving Recovery Seller STOP",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-recovery-seller-stop-workflow.test.js",
+          "name": "requires cause-fixed acknowledgement before resolving Recovery Seller STOP",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/record-safety-control-facts.test.js",
+          "name": "requires authenticated structured operator action to resolve Recovery Seller STOP",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
+          "name": "projects legacy and structured Recovery Seller STOP operator actions without account-wide bypass",
+          "kind": "integration"
+        },
+        {
+          "path": "scripts/recovery-seller-stop.test.js",
+          "name": "authenticates the local OS account before attempting RS STOP resolution",
+          "kind": "normal"
+        },
+        {
+          "path": "scripts/recovery-seller-stop.test.js",
+          "name": "reports durable STOP resolution while keeping readiness blocked and not resuming",
+          "kind": "normal"
+        },
+        {
+          "path": "scripts/recovery-seller-stop.test.js",
+          "name": "rejects a mismatched OS account before reading evidence or creating the store",
+          "kind": "failure"
+        },
+        {
+          "path": "scripts/recovery-seller-stop.test.js",
+          "name": "rejects stale blocker identity without invoking the resolver",
+          "kind": "failure"
+        },
+        {
+          "path": "scripts/recovery-seller-stop.test.js",
+          "name": "requires explicit cause-fixed confirmation and rejects unknown authentication flags",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "offline-only",
-      "limitation": "Offline operator resolution uses a trusted local OS-account principal and operator-reviewed authoritative reconciliation evidence. It does not clear in-process admission gates or resume execution; controlled restart with fresh authoritative reconciliation and PREFLIGHT remains a separate acceptance gate.",
+      "limitation": "Offline resolution requires a trusted local OS-account principal and operator-reviewed authoritative account reconciliation. It records the exact action durably but does not clear in-process gates or resume execution; controlled restart with fresh reconciliation and PREFLIGHT remains a separate acceptance gate. The Telegram operator facade remains read-only.",
       "invariants": [
         "Only a WeakSet-authenticated OS-account principal may resolve an RS STOP; copied identity fields are rejected.",
-        "Resolution is durably recorded with operator/action/evidence metadata and exact blocker identity.",
-        "Successful resolution keeps BUY and SELL admission closed in the current process; no order submission or auto-resume occurs.",
+        "Resolution is durably recorded with operator/action/evidence metadata and the exact single blocker identity.",
+        "Reconciliation must be fresh, authoritative, account-wide, cover every configured market, and contain zero unresolved orders/fills or balance discrepancies.",
+        "Successful resolution keeps BUY and SELL admission closed in the current process; no order submission, runtime reset, restart, or auto-resume occurs.",
         "A controlled restart may re-enable execution only after fresh authoritative account reconciliation and PREFLIGHT."
       ]
     }
@@ -1794,7 +1855,7 @@
       "branches": 83.22,
       "functions": 96
     },
-    "note": "The original 30 critical-module floors retain their measured baseline provenance. The seven additional critical modules introduced by release PR #1662 were measured from its develop source head and then re-measured with all 37 modules enforced in workflow run 44966859719; their per-module baseline and minimum values are recorded in moduleCoverage. The start-provider-accounts.js module was separately measured from develop 6405aafa1824e61de7fee420f54b436eed30cb5e in workflow run 45934755515 (Harvester job 140295275348); its measured baseline is lines 92.78%, branches 76.83%, functions 97.87%, with policy floors 90%, 75%, and 95%."
+    "note": "The original 30 critical-module floors retain their measured baseline provenance. The seven additional critical modules introduced by release PR #1662 were measured from its develop source head and then re-measured with all 37 modules enforced in workflow run 44966859719; their per-module baseline and minimum values are recorded in moduleCoverage. The start-provider-accounts.js module was separately measured from develop 6405aafa1824e61de7fee420f54b436eed30cb5e in workflow run 45934755515 (Harvester job 140295275348); its measured baseline is lines 92.78%, branches 76.83%, functions 97.87%, with policy floors 90%, 75%, and 95%. The Recovery Seller STOP workflow and resolver were measured from develop source SHA 2a030b960ba43a6911a98b2f5b2662b04eef5453 in workflow run 46041844024 (Harvester job 140651244165), before their implementation changes; measured baselines and non-weakened minimum floors are recorded in moduleCoverage."
   },
   "moduleCoverage": [
     {
@@ -2748,6 +2809,42 @@
       "latestObserved": {
         "lines": 87.86,
         "branches": 89.86,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/use-cases/create-recovery-seller-stop-workflow.js",
+      "baseline": {
+        "lines": 96.59,
+        "branches": 92.59,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 85,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 96.59,
+        "branches": 92.59,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/use-cases/resolve-recovery-seller-stop.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 88.89,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 85,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 88.89,
         "functions": 100
       }
     }

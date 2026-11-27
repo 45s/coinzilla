@@ -169,6 +169,7 @@ function createStopLatch({
   setStopSnapshot,
   setBuyAdmissionBlocked,
   setSellAdmissionBlocked,
+  setRequiresControlledRestart,
 } = {}) {
   let pendingLatch = null
   return async ({ explanation, orderIdentity } = {}) => {
@@ -186,6 +187,7 @@ function createStopLatch({
     if (pendingLatch) {
       return pendingLatch
     }
+    setRequiresControlledRestart(false)
     setBuyAdmissionBlocked(true)
     setSellAdmissionBlocked(true)
     pendingLatch = persistStopLatch({
@@ -204,12 +206,15 @@ function createStopLatch({
   }
 }
 
+
 function createStopResolver({
   operationalStateStore,
   getStopSnapshot,
   setStopSnapshot,
   setBuyAdmissionBlocked,
   setSellAdmissionBlocked,
+  setRequiresControlledRestart,
+  now,
 } = {}) {
   return async (evidence = {}) => {
     const current = getStopSnapshot()
@@ -217,24 +222,29 @@ function createStopResolver({
       return toResult({ error: new Error("Recovery Seller has no persisted STOP blocker to resolve") })
     }
     const result = await resolveRecoverySellerStop({
+      ...evidence,
       operationalStateStore,
       blockerId: current.blockerId,
       stopState: current.stopState,
-      ...evidence,
+      now,
     })
     if (result.ok) {
       setStopSnapshot({
         stopState: result.data.stopState,
         blockerId: null,
       })
-      setBuyAdmissionBlocked(false)
-      setSellAdmissionBlocked(false)
+      setBuyAdmissionBlocked(true)
+      setSellAdmissionBlocked(true)
+      setRequiresControlledRestart(true)
     }
     return result
   }
 }
 
-export async function createRecoverySellerStopWorkflow({ operationalStateStore } = {}) {
+export async function createRecoverySellerStopWorkflow({
+  operationalStateStore,
+  now = () => new Date(),
+} = {}) {
   try {
     validateOperationalStateStore({
       operationalStateStore,
@@ -254,6 +264,7 @@ export async function createRecoverySellerStopWorkflow({ operationalStateStore }
     }
     let buyAdmissionBlocked = Boolean(blocker)
     let sellAdmissionBlocked = false
+    let requiresControlledRestart = false
     const getStopSnapshot = () => snapshot
     const setStopSnapshot = (next) => {
       snapshot = Object.freeze(next)
@@ -264,6 +275,9 @@ export async function createRecoverySellerStopWorkflow({ operationalStateStore }
     const setSellAdmissionBlocked = (blocked) => {
       sellAdmissionBlocked = blocked === true
     }
+    const setRequiresControlledRestart = (required) => {
+      requiresControlledRestart = required === true
+    }
     return toResult({
       data: Object.freeze({
         latch: createStopLatch({
@@ -272,6 +286,7 @@ export async function createRecoverySellerStopWorkflow({ operationalStateStore }
           setStopSnapshot,
           setBuyAdmissionBlocked,
           setSellAdmissionBlocked,
+          setRequiresControlledRestart,
         }),
         resolve: createStopResolver({
           operationalStateStore,
@@ -279,12 +294,15 @@ export async function createRecoverySellerStopWorkflow({ operationalStateStore }
           setStopSnapshot,
           setBuyAdmissionBlocked,
           setSellAdmissionBlocked,
+          setRequiresControlledRestart,
+          now,
         }),
         getStopState: () => snapshot.stopState,
         getState: () => snapshot.stopState,
         getBlockerId: () => snapshot.blockerId,
         isBuyAdmissionBlocked: () => buyAdmissionBlocked,
         isSellAdmissionBlocked: () => sellAdmissionBlocked,
+        requiresControlledRestart: () => requiresControlledRestart,
       }),
     })
   } catch (error) {

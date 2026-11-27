@@ -86,6 +86,11 @@ function createReadRecoverySellerStopState({ recoverySellerStopWorkflow }) {
         data: {
           stopState: recoverySellerStopWorkflow.getStopState(),
           blockerId: recoverySellerStopWorkflow.getBlockerId(),
+          requiresControlledRestart: recoverySellerStopWorkflow.requiresControlledRestart?.() === true,
+          admissionBlocked: {
+            buy: recoverySellerStopWorkflow.isBuyAdmissionBlocked?.() === true,
+            sell: recoverySellerStopWorkflow.isSellAdmissionBlocked?.() === true,
+          },
         },
       }
     } catch (error) {

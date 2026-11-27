@@ -283,3 +283,51 @@ test("requires structured operator action before resolving user-data ACCOUNT blo
   const read = await operationalStateStore.readAll()
   assert.equal(read.data.records.filter((entry) => entry.factType === "SAFETY_BLOCKER_RESOLVED").length, 0)
 })
+
+test("requires authenticated structured operator action to resolve Recovery Seller STOP", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const raised = await recordSafetyBlockerRaised({
+    operationalStateStore,
+    producer: "RECOVERY_SELLER_STOP_WORKFLOW",
+    scope: "ACCOUNT",
+    reason: "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+    evidenceDigest: "a".repeat(64),
+  })
+  assert.equal(raised.ok, true)
+  const { blockerId } = raised.data.record.data
+  const operatorId = "operator-45s"
+  const actionId = "rs-stop-action-001"
+  const resolutionReason = "Cause fixed and authoritative reconciliation completed"
+  const resolvedBy = "operator:" + operatorId + ":" + actionId
+  const legacy = await recordSafetyBlockerResolved({
+    operationalStateStore,
+    blockerId,
+    resolvedBy,
+    resolution: "OPERATOR_ACTION",
+    evidenceDigest: "b".repeat(64),
+  })
+  const operatorIdentity = authenticateLocalOperator({
+    operatorId,
+    getUserInfo: () => ({ username: operatorId }),
+  })
+  const structured = await recordSafetyBlockerResolved({
+    operationalStateStore,
+    blockerId,
+    resolvedBy,
+    resolution: "OPERATOR_ACTION",
+    evidenceDigest: "c".repeat(64),
+    operatorIdentity,
+    operatorId,
+    actionId,
+    resolutionReason,
+    actionBlockerIds: [blockerId],
+  })
+
+  assert.equal(legacy.ok, false, "Legacy unstructured actions cannot create new RS STOP resolutions.")
+  assert.equal(structured.ok, true, structured.errors?.[0]?.message)
+  assert.equal(structured.data.record.data.operatorId, operatorId)
+  assert.equal(structured.data.record.data.operatorAuthMethod, "OS_ACCOUNT")
+  assert.equal(structured.data.record.data.actionId, actionId)
+  assert.equal(structured.data.record.data.resolutionReason, resolutionReason)
+  assert.deepEqual(structured.data.record.data.actionBlockerIds, [blockerId])
+})
