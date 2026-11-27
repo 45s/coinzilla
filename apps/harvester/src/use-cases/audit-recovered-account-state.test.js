@@ -984,6 +984,7 @@ test("reconciles a third-asset commission when the fee asset is also a market as
     }),
     openOrders: [],
     markets: [market, bnbMarket],
+    targetMarket: bnbMarket,
   })
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
 })
