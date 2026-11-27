@@ -11405,6 +11405,7 @@ async function createRecoverySellDeferralHarness({ failDeferralFlush = false } =
     appConfig: withExternalOrdersPolicy("block"),
     hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
     strategyPolicy: createRecoverySellDeferralStrategyPolicy(),
+    baseFreeBalance: "1",
     eventPublisher: {
       publish: (event) => {
         journalEvents.push(event)
