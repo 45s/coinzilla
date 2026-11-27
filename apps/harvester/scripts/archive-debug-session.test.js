@@ -101,7 +101,7 @@ async function createFixture() {
   }
 }
 
-function archiveDependencies({ fixture, overrides = {} } = {}) {
+function archiveDependencies({ fixture, overrides = {}, expectedIdentityStatus = "matched" } = {}) {
   return {
     packageDirectory: fixture.packageDirectory,
     lockDirectory: fixture.lockDirectory,
@@ -126,7 +126,19 @@ function archiveDependencies({ fixture, overrides = {} } = {}) {
         "logs/cumulative/**",
       ], "Debug archives must declare databases and cumulative logs excluded")
       assert.equal(manifest.logRuntimeSessionId, RUNTIME_SESSION_ID, "Selected log evidence must identify the completed TESTNET runtime session")
-      assert.equal(manifest.recoveryRuntimeSessionId, RUNTIME_SESSION_ID, "Recovery facts must identify the same runtime session as the logs")
+      assert.equal(
+        manifest.runtimeIdentity.status,
+        expectedIdentityStatus,
+        "Archive manifest must explicitly state whether the log and recovery evidence share a runtime identity",
+      )
+      assert.equal(
+        manifest.runtimeIdentity.correlation,
+        expectedIdentityStatus === "matched"
+          ? "same-runtime-session"
+          : "independent-evidence-do-not-correlate",
+        "Mismatched evidence must never be represented as one correlated runtime session",
+      )
+      assert.equal(manifest.recoveryRuntimeSessionId, expectedIdentityStatus === "matched" ? RUNTIME_SESSION_ID : OTHER_SESSION_ID)
       assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "Archive manifest must preserve the latest committed recovery checkpoint digest")
       assert.deepEqual(manifest.logSelection, {
         cumulative: "excluded",
@@ -183,7 +195,7 @@ test("publishes only the selected TESTNET session and recovery facts", async (t)
   }
 })
 
-test("refuses to combine logs and recovery facts from different runtime sessions", async (t) => {
+test("publishes mismatched log and recovery evidence as independent sources with an explicit warning", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
@@ -193,10 +205,22 @@ test("refuses to combine logs and recovery facts from different runtime sessions
   const facts = (await readFile(filename, "utf8")).trim().split("\n").map((line) => JSON.parse(line))
   facts.at(-1).runtimeSessionId = OTHER_SESSION_ID
   await writeFile(filename, jsonLines(facts), "utf8")
-  await assert.rejects(
-    runHarvesterDebugArchive(archiveDependencies({ fixture })),
-    /runtime identities do not match/i,
-    "Archive must reject log and recovery-fact evidence from different runtime sessions",
+  const progressMessages = []
+  const result = await runHarvesterDebugArchive({
+    ...archiveDependencies({
+      fixture,
+      expectedIdentityStatus: "mismatched",
+    }),
+    onProgress: (message) => progressMessages.push(message),
+  })
+  assert.equal(result.remoteCommit, REMOTE_COMMIT, "Independently valid mismatched evidence must still be published")
+  assert.ok(
+    progressMessages.some((message) => message.includes("WARNING: log-session and recovery-facts runtimeSessionId values differ.")),
+    "The operator must be warned about the identity mismatch before publication",
+  )
+  assert.ok(
+    progressMessages.some((message) => message.includes("independently; do not correlate them as one runtime session.")),
+    "The warning must explicitly prohibit cross-session correlation",
   )
 })
 
