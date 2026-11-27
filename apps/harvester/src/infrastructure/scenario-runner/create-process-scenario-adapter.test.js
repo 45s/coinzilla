@@ -787,8 +787,12 @@ test("process adapter fails the run when sandbox cgroup cleanup cannot be confir
   const child = new EventEmitter()
   child.exitCode = null
   child.signalCode = null
+  let cleanupAttempts = 0
   child.sandboxCleanup = () => {
-    throw cleanupError
+    cleanupAttempts += 1
+    if (cleanupAttempts < 3) {
+      throw cleanupError
+    }
   }
   child.send = (message) => {
     if (message.type === "execute") {
@@ -836,4 +840,14 @@ test("process adapter fails the run when sandbox cgroup cleanup cannot be confir
       "The cgroup cleanup failure must remain available as the rejection cause")
     return true
   })
+}
+  await assert.rejects(adapter.cancel({
+    runId: "run-worker-cgroup-cleanup-failure",
+  }), /sandbox cgroup cleanup could not be confirmed/,
+  "The child must remain registered when a cleanup retry still fails")
+  assert.equal(await adapter.cancel({
+    runId: "run-worker-cgroup-cleanup-failure",
+  }), true, "A later confirmed cleanup retry must release the retained child")
+  assert.equal(cleanupAttempts, 3,
+    "Execution and cancellation must retry cleanup until the cgroup removal is confirmed")
 })
