@@ -207,7 +207,8 @@ test("publishes mismatched log and recovery evidence as independent sources with
   const filename = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
   const facts = (await readFile(filename, "utf8")).trim().split("\n").map((line) => JSON.parse(line))
   facts.at(-1).runtimeSessionId = OTHER_SESSION_ID
-  await writeFile(filename, jsonLines(facts), "utf8")
+  const mismatchedFactsContent = jsonLines(facts)
+  await writeFile(filename, mismatchedFactsContent, "utf8")
   const progressMessages = []
   const result = await runHarvesterDebugArchive({
     ...archiveDependencies({
@@ -224,6 +225,11 @@ test("publishes mismatched log and recovery evidence as independent sources with
   assert.ok(
     progressMessages.some((message) => message.includes("independently; do not correlate them as one runtime session.")),
     "The warning must explicitly prohibit cross-session correlation",
+  )
+  assert.equal(
+    await readFile(filename, "utf8"),
+    mismatchedFactsContent,
+    "Publishing mismatched evidence must leave the original recovery-facts source unchanged",
   )
 })
 
