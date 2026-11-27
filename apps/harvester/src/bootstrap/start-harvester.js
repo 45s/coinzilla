@@ -194,15 +194,12 @@ function requiresAccountRecoverySnapshot(records) {
   })
 }
 
-function assertOperationalStateCanStart({
+function isAllowedOperationalStateRestart({
   projection,
   records,
-  accountRecoverySnapshotRequired = false,
+  processStarts,
+  accountRecoverySnapshotRequired,
 } = {}) {
-  const processStarts = records.filter((record) => record.factType === "PROCESS_STARTED")
-  if (processStarts.length === 0) {
-    return false
-  }
   const stoppedSessionIds = new Set(records
     .filter((record) => record.factType === "PROCESS_STOPPED")
     .map((record) => record.runtimeSessionId))
@@ -215,12 +212,27 @@ function assertOperationalStateCanStart({
     isRecoverySellerStopRestartBlocker(stickySafetyBlockers[0])
   const accountBlockerResolutionRestart = accountRecoverySnapshotRequired === true &&
     stickySafetyBlockers.every((blocker) => blocker.scope !== "ACCOUNT")
-  if (
-    projection.data.candidateOnly === true &&
+  return projection.data.candidateOnly === true &&
     projection.data.restorationEnabled === false &&
     allSessionsStopped &&
     (observationOnlyRestart || singleRecoverySellerStop || accountBlockerResolutionRestart)
-  ) {
+}
+
+function assertOperationalStateCanStart({
+  projection,
+  records,
+  accountRecoverySnapshotRequired = false,
+} = {}) {
+  const processStarts = records.filter((record) => record.factType === "PROCESS_STARTED")
+  if (processStarts.length === 0) {
+    return false
+  }
+  if (isAllowedOperationalStateRestart({
+    projection,
+    records,
+    processStarts,
+    accountRecoverySnapshotRequired,
+  })) {
     return true
   }
   throw new Error(
