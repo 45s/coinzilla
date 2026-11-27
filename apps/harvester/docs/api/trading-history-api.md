@@ -1,6 +1,6 @@
 # Trading-history API v1
 
-The Harvester local API exposes persisted order, execution, and commission facts through a stable HTTP contract and streams live exchange-account snapshots over its local WebSocket. It runs inside the existing Harvester process and reuses its already-open environment-specific relational database connection and provider-account readers.
+The Harvester local API exposes persisted order, execution, and commission facts, runtime operator queries, public market data, and live exchange-account snapshots. It runs inside the existing Harvester process and reuses its already-open environment-specific relational database connection when available, plus the runtime's provider-account readers.
 
 This API is intentionally for a single-user local development setup. It has no authentication or bearer-token configuration. The listener binds to `127.0.0.1` by default; do not bind it to a LAN or public interface. The Angular Dashboard connects automatically.
 
@@ -33,17 +33,17 @@ curl --fail-with-body -sS "${API_URL}/api/v1/trading/fills?symbol=DOGEUSDT&limit
 
 No `jq` dependency is required; Node.js formats the JSON. Each response is paginated (maximum `limit=100`); inspect `data.pagination.hasMore` and increment `offset` to retrieve later pages.
 
-The API starts only when the relational trading-history database is ready. If startup logs say relational persistence is unavailable or the API was not started, these requests cannot succeed: diagnose and resolve that persistence failure first. Do not interpret connection refusal as an empty DOGE history.
+The local runtime API starts whenever the Harvester runtime and EventBus are available. If relational history persistence is unavailable, runtime status, operator snapshots, market data, and provider-account WebSocket snapshots remain available. Persisted order, fill, commission, and metadata resources return HTTP 503 with `HARVESTER_TRADING_HISTORY_PERSISTENCE_UNAVAILABLE`; they never return a fabricated empty history. Diagnose the database failure tracked by [#1854](https://github.com/45s/coinzilla/issues/1854) before expecting persisted history to recover. Do not interpret HTTP 503 or connection refusal as an empty DOGE history.
 
 The API starts with Harvester at `http://127.0.0.1:4201`. It uses Harvester's selected `TRADING_MODE` and `HARVESTER_DATABASE_DIRECTORY`; TESTNET and LIVE remain separate database files. No API token or Dashboard credential is needed.
 
-The `HARVESTER_API_PORT` setting can change the listener port. The host is fixed to `127.0.0.1`. The API starts only when the existing runtime and relational history persistence are available. Harvester closes the API listener before closing the shared database connection.
+The `HARVESTER_API_PORT` setting can change the listener port. The host is fixed to `127.0.0.1`. The API starts when the active runtime and EventBus are available; relational history persistence is required only for persisted-history resources. The Dashboard may be served from any valid HTTP port on `localhost` or `127.0.0.1`. Harvester closes the API listener before closing the shared database connection.
 
 ## Local-only security boundary
 
-The HTTP and WebSocket endpoints have no authentication. This is a deliberate local-only tradeoff for a single-user development machine, not a production or remote-host configuration. The listener is fixed to loopback, HTTP CORS is limited to the local Dashboard origins, and WebSocket upgrades validate the browser Origin. Do not expose this listener through a reverse proxy, container port mapping, LAN interface, or public host.
+The HTTP and WebSocket endpoints have no authentication. This is a deliberate local-only tradeoff for a single-user development machine, not a production or remote-host configuration. The listener is fixed to loopback, HTTP CORS, WebSocket upgrades, and operator commands accept only HTTP origins on exact `localhost` or `127.0.0.1` hosts, on any valid port. External and LAN origins remain rejected. Do not expose this listener through a reverse proxy, container port mapping, LAN interface, or public host.
 
-The API remains read-only: it exposes persisted history and does not submit, cancel, or modify exchange orders.
+Persisted-history resources are read-only. The same local server also exposes the existing operator-control contract, limited to explicit BUY pause/resume commands; it does not submit or cancel exchange orders.
 
 ## Versioned resources
 

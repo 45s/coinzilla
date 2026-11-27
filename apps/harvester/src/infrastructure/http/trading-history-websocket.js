@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { consumeWebSocketFrames, encodeWebSocketFrame } from "./trading-history-websocket-frame.js"
+import { isLocalDashboardOrigin } from "./is-local-dashboard-origin.js"
 
 const WEBSOCKET_PATH = "/api/v1/trading/events"
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -10,10 +11,6 @@ const MAX_FRAME_BYTES = 1024
 // One complete snapshot may be large; keep the application message cap explicit and bounded.
 const MAX_MESSAGE_BYTES = 1024 * 1024
 const MAX_BUFFERED_BYTES = 2 * 1024 * 1024
-const ALLOWED_BROWSER_ORIGINS = new Set([
-  "http://127.0.0.1:4200",
-  "http://localhost:4200",
-])
 const HISTORY_UPDATED_EVENT = "trading-history.updated"
 const SCENARIO_RUN_UPDATED_EVENT = "scenario-run.updated"
 const ACCOUNT_UPDATE_EVENTS = Object.freeze([
@@ -278,7 +275,7 @@ function getUpgradeKey({ request, socket, clients } = {}) {
     })
     return null
   }
-  if (request.headers.origin && !ALLOWED_BROWSER_ORIGINS.has(request.headers.origin)) {
+  if (request.headers.origin && !isLocalDashboardOrigin(request.headers.origin)) {
     rejectUpgrade({
       socket,
       status: 403,

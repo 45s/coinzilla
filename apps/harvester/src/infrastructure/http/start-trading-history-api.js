@@ -68,16 +68,16 @@ function resolveStartupConfiguration({ env, environment } = {}) {
 }
 
 function validateApiDependencies({ database, eventBus, environment }) {
-  if (!database || typeof database.prepare !== "function") {
+  if (database !== undefined && database !== null && typeof database.prepare !== "function") {
     throw new TradingHistoryApiStartupError({
-      message: "The Harvester relational trading-history database is unavailable; the optional API cannot start.",
+      message: "The supplied Harvester relational trading-history database handle is invalid.",
       code: "HARVESTER_TRADING_HISTORY_API_DATABASE_UNAVAILABLE",
       environment,
     })
   }
   if (!eventBus || typeof eventBus.subscribe !== "function") {
     throw new TradingHistoryApiStartupError({
-      message: "The Harvester EventBus is unavailable; the optional trading-history API cannot start.",
+      message: "The Harvester EventBus is unavailable; the local runtime API cannot start.",
       code: "HARVESTER_TRADING_HISTORY_API_EVENT_BUS_UNAVAILABLE",
       environment,
     })
@@ -158,7 +158,29 @@ function createScenarioRunnerAdapter({ env, platform }) {
   }
 }
 
+
+function createUnavailableTradingHistoryQueries() {
+  const unavailable = () => ({
+    ok: false,
+    errors: [{
+      code: "HARVESTER_TRADING_HISTORY_PERSISTENCE_UNAVAILABLE",
+      message: "Persisted trading history is unavailable because relational history persistence is not ready.",
+    }],
+  })
+  return Object.freeze({
+    getSummary: unavailable,
+    listOrders: unavailable,
+    getOrder: unavailable,
+    listFills: unavailable,
+    getFill: unavailable,
+    listCommissions: unavailable,
+  })
+}
+
 function createQueryFacade({ database }) {
+  if (!database) {
+    return createUnavailableTradingHistoryQueries()
+  }
   const repository = createTradingHistoryQueryRepository({ database })
   return createTradingHistoryQueries({ repository })
 }
