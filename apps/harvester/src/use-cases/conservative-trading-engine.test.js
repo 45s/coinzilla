@@ -2332,7 +2332,7 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
       timestamp: 1
     },
   })
-  assert.equal(started.ok, true, "The pre-existing BUY and active Position must still allow the initial recovery SELL evaluation.")
+  assert.equal(started.ok, true, started.errors?.[0]?.message ?? "The pre-existing BUY and active Position must still allow the initial recovery SELL evaluation.")
   assert.equal(flushCount, 1, "Only the recovery SELL submission intent must be flushed; the pre-existing BUY has no new submission intent.")
 
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
@@ -7737,7 +7737,7 @@ test("reconciles recovered orders without canceling or replacing any exchange or
   assert.equal(
     reevaluation.ok,
     true,
-    "A process restart must safely reevaluate after reconciling the outstanding recovery SELL.",
+    reevaluation.errors?.[0]?.message ?? "A process restart must safely reevaluate after reconciling the outstanding recovery SELL.",
   )
   const activeRecoverySells = harness.engine.getActiveOrders().filter((order) => order.side === "SELL")
   assert.equal(
@@ -10945,7 +10945,8 @@ test("volatility protection rejects a SELL that lacks explicit recovery purpose"
     },
   })
 
-  assert.equal(result.ok, true)
+  assert.equal(result.ok, false, "An unowned SELL action without explicit recovery purpose must be rejected.")
+  assert.ok(result.errors?.length > 0)
   assert.deepEqual(harness.orders, [], "A SELL side alone must not bypass volatility protection.")
 })
 
@@ -11396,6 +11397,7 @@ function createRecoverySellDeferralStrategyPolicy() {
 }
 
 async function createRecoverySellDeferralHarness({ failDeferralFlush = false } = {}) {
+  const seeded = makeSeededRecoveryState()
   let hasExternalOrder = false
   let flushCount = 0
   const journalEvents = []
@@ -11405,6 +11407,8 @@ async function createRecoverySellDeferralHarness({ failDeferralFlush = false } =
     appConfig: withExternalOrdersPolicy("block"),
     hasUnownedOpenOrdersForSymbol: () => hasExternalOrder,
     strategyPolicy: createRecoverySellDeferralStrategyPolicy(),
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
     baseFreeBalance: "1",
     eventPublisher: {
       publish: (event) => {
