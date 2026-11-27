@@ -163,6 +163,69 @@ clean: "true" },
   }
 })
 
+test("validates every durable process identity field and accepts explicitly unknown source metadata", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const processIdentity = {
+    application: "harvester",
+    version: "1.0.001",
+    runtimeSessionId: "process-facts-test-session",
+    processId: 24680,
+    startedAt: "2026-11-12T00:00:00.000Z",
+    source: {
+      branch: "develop",
+      commit: "a".repeat(40),
+      workingTree: "clean",
+      metadataSource: "git",
+    },
+  }
+  const createFact = (identity) => ({
+    factId: "process-started:process-facts-test-session",
+    factType: "PROCESS_STARTED",
+    data: {
+      configurationFingerprint: "a".repeat(64),
+      strategyName: "CG_coinGrabber",
+      markets: ["BTCUSDT"],
+      tradingEnabled: true,
+      processIdentity: identity,
+    },
+  })
+  const invalidIdentities = [
+    null,
+    [],
+    { ...processIdentity, application: "other" },
+    { ...processIdentity, runtimeSessionId: "another-session" },
+    { ...processIdentity, version: " " },
+    { ...processIdentity, processId: 0 },
+    { ...processIdentity, startedAt: "not-a-timestamp" },
+    { ...processIdentity, source: null },
+    { ...processIdentity, unexpected: true },
+    { ...processIdentity, source: { ...processIdentity.source, unexpected: true } },
+    { ...processIdentity, source: { ...processIdentity.source, branch: 42 } },
+    { ...processIdentity, source: { ...processIdentity.source, commit: "A".repeat(40) } },
+    { ...processIdentity, source: { ...processIdentity.source, workingTree: "maybe" } },
+    { ...processIdentity, source: { ...processIdentity.source, metadataSource: "unknown" } },
+  ]
+
+  for (const identity of invalidIdentities) {
+    const result = await operationalStateStore.append(createFact(identity))
+    assert.equal(result.ok, false, "Malformed or unsupported process identity metadata must fail closed.")
+    assert.notEqual(result.data?.durable, true, "Invalid process identity metadata must never be acknowledged as durable.")
+  }
+
+  const unknownSourceIdentity = {
+    ...processIdentity,
+    source: {
+      branch: null,
+      commit: null,
+      workingTree: "unknown",
+      metadataSource: "unavailable",
+    },
+  }
+  const accepted = await operationalStateStore.append(createFact(unknownSourceIdentity))
+  assert.equal(accepted.ok, true, accepted.errors?.[0]?.message)
+  assert.equal(accepted.data.durable, true, "Explicitly unavailable source provenance is valid when represented by the supported unknown/null values.")
+})
+
 test("rejects process boundaries that are not tied to the store runtime session", async (t) => {
   const operationalStateStore = await createStore(t)
   const result = await recordProcessStopped({
