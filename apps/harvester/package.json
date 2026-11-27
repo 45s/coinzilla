@@ -182,7 +182,11 @@
       "src/bootstrap/create-harvester-stop.test.js",
       "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.test.js",
       "src/bootstrap/shutdown/create-shutdown-handler.test.js",
-      "src/bootstrap/providers/start-provider-accounts.test.js"
+      "src/bootstrap/providers/start-provider-accounts.test.js",
+      "src/bootstrap/harvester-candle-history-service.test.js",
+      "src/bootstrap/harvester-operational-state-callbacks.test.js",
+      "src/bootstrap/harvester-trading-engine-composition.test.js",
+      "src/bootstrap/harvester-user-data-runtime.test.js"
     ]
   },
   "scripts": {
