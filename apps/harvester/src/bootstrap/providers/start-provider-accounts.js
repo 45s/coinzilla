@@ -245,34 +245,42 @@ async function stopStartedAccounts({
   return errors
 }
 
+async function stopMultiAccountRuntime({
+  startedAccounts,
+  releaseProviderLock,
+}) {
+  const errors = await stopStartedAccounts({
+    startedAccounts,
+    releaseProviderLock,
+  })
+  if (errors.length > 0) {
+    return {
+      ok: false,
+      errors,
+    }
+  }
+  const durableProcessStopAcknowledged = startedAccounts.every((entry) =>
+    entry.durableProcessStopAcknowledged === true)
+  return {
+    ok: true,
+    status: "STOPPED",
+    stopped: true,
+    data: {
+      durableProcessStopAcknowledged,
+    },
+  }
+}
+
 function createMultiAccountRuntime({
   appConfig,
   startedAccounts,
   failedAccounts,
   releaseProviderLock,
 }) {
-  const stop = async () => {
-    const errors = await stopStartedAccounts({
-      startedAccounts,
-      releaseProviderLock,
-    })
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        errors,
-      }
-    }
-    const durableProcessStopAcknowledged = startedAccounts.every((entry) =>
-      entry.durableProcessStopAcknowledged === true)
-    return {
-      ok: true,
-      status: "STOPPED",
-      stopped: true,
-      data: {
-        durableProcessStopAcknowledged,
-      },
-    }
-  }
+  const stop = () => stopMultiAccountRuntime({
+    startedAccounts,
+    releaseProviderLock,
+  })
   const primary = startedAccounts[0].runtime
   const providerAccounts = Object.freeze(startedAccounts.map(({ provider, runtime, executionEnabled }) => Object.freeze({
     providerInstanceId: provider.providerInstanceId,
