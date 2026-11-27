@@ -293,7 +293,7 @@ function validateScenarioInput({ schema, defaults, input }) {
 
 const RUNTIME_SCENARIO_READINESS_REASONS = Object.freeze([
   "Scenario infrastructure uses a run-local simulated broker and in-memory operational store; it does not prove durable production account or STOP state.",
-  "SELL intent/reservation/outcome failures, ambiguous broker placement, STOP persistence failures and BUY-only STOP admission are covered; terminal reconciliation and remaining infrastructure cases still require additional acceptance.",
+  "SELL intent/reservation/outcome failures, ambiguous broker placement, terminal-reconciliation persistence failure, STOP persistence failures and BUY-only STOP admission are covered; runner-specific retry/idempotency acceptance remains outstanding.",
 ])
 
 export const RECOVERY_SELLER_RUNTIME_SCENARIOS = Object.freeze([
@@ -397,6 +397,17 @@ export const RECOVERY_SELLER_RUNTIME_SCENARIOS = Object.freeze([
     input: RUNTIME_FIXTURE.input,
   }),
   Object.freeze({
+    id: "RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001",
+    name: "Production Recovery Seller fails closed when terminal reconciliation persistence fails after a FILLED SELL",
+    layer: "APPLICATION",
+    status: "PARTIAL",
+    executionStatus: "EXECUTABLE",
+    executable: true,
+    readinessReasons: RUNTIME_SCENARIO_READINESS_REASONS,
+    inputSchema: RUNTIME_FIXTURE.inputSchema,
+    input: RUNTIME_FIXTURE.input,
+  }),
+  Object.freeze({
     id: "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001",
     name: "Production Recovery Seller fails closed when account STOP persistence fails after a FILLED SELL",
     layer: "APPLICATION",
@@ -434,10 +445,17 @@ function createRuntimeScenarioStore({
   failStopPersistence = false,
   failSubmissionIntentPersistence = false,
   failSubmissionOutcomePersistence = false,
+  failTerminalReconciliationPersistence = false,
 } = {}) {
   const records = []
   return {
     append: async (fact) => {
+      if (failTerminalReconciliationPersistence &&
+          fact.factType === "RECOVERY_SELLER_MIXED_SELL_RECONCILED") {
+        return toResult({
+          error: new Error("Simulated terminal SELL reconciliation persistence failure"),
+        })
+      }
       if (failSubmissionOutcomePersistence && fact.factType === "ORDER_SUBMISSION_OUTCOME") {
         return {
           ok: false,
@@ -949,6 +967,8 @@ async function createRuntimeScenarioState({
     failSubmissionIntentPersistence: scenarioId === "RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001",
     failSubmissionOutcomePersistence: scenarioId === "RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001" ||
       scenarioId === "RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001",
+    failTerminalReconciliationPersistence:
+      scenarioId === "RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001",
   })
   const marketMetadata = createRuntimeScenarioMarketMetadata({
     market,
@@ -1253,10 +1273,17 @@ function createRuntimeScenarioTerminalSellResult({
   stagedSellFills,
   pauses,
 }) {
+  const cycleState = runtime.seed.workflow.getCycleStateForMarket({
+    marketId: runtime.market.id,
+  })
   return {
+    clientOrderId: terminalOrder.clientOrderId,
     orderStatus: terminalOrder.status,
     executedQuantity: terminalOrder.executedQuantity.amount,
-    profitabilityEligible: result.data.profitability?.eligible === true,
+    profitabilityEligible: result?.data?.profitability?.eligible === true,
+    terminalReconciliationFailed: result?.ok === false,
+    terminalReconciliationError: result?.errors?.[0]?.message ?? null,
+    terminalReconciled: result?.ok === true && cycleState?.terminalReconciled === true,
     eventWorkflowFailedClosed: eventResult?.ok === false,
     marketPaused: pauses.some((pause) => pause.symbol === runtime.market.symbol),
     pauseReasons: pauses.map((pause) => pause.reason),
@@ -1271,9 +1298,7 @@ function createRuntimeScenarioTerminalSellResult({
     postFailureActionSubmitted: false,
     eventFillStaged: stagedSellFills.length === 1,
     stagedSellFillCount: stagedSellFills.length,
-    cycleState: runtime.seed.workflow.getCycleStateForMarket({
-      marketId: runtime.market.id,
-    }),
+    cycleState,
   }
 }
 
@@ -1443,9 +1468,16 @@ function assertRuntimeScenarioTerminalSellReconciled({
   terminalAccountingResult,
   runtime,
   expectedStopPersisted = true,
+  expectedTerminalReconciliationFailure = false,
 }) {
   const stopPersisted = runtime.operationalStateStore.getRecords().some((fact) =>
     fact.factType === "SAFETY_BLOCKER_RAISED" && fact.data?.scope === "ACCOUNT")
+  if (expectedTerminalReconciliationFailure &&
+      eventResult?.ok === false &&
+      terminalAccountingResult?.ok === false &&
+      stopPersisted === expectedStopPersisted) {
+    return
+  }
   if (eventResult?.ok === false &&
       terminalAccountingResult?.ok === true &&
       stopPersisted === expectedStopPersisted) {
@@ -1492,6 +1524,7 @@ async function reconcileRuntimeScenarioTerminalSell({
   fill,
   fullCycle = false,
   expectedStopPersisted = true,
+  expectedTerminalReconciliationFailure = false,
 }) {
   const stagedSellFills = []
   const pauses = []
@@ -1525,6 +1558,7 @@ async function reconcileRuntimeScenarioTerminalSell({
     terminalAccountingResult,
     runtime,
     expectedStopPersisted,
+    expectedTerminalReconciliationFailure,
   })
   return createRuntimeScenarioTerminalSellResult({
     runtime,
@@ -1565,6 +1599,7 @@ async function reconcileRuntimeScenarioFilledSell({
   runtime,
   execution,
   stopPersistenceFailure = false,
+  terminalReconciliationPersistenceFailure = false,
 }) {
   const { orderRegistry, openOrder } = resolveSubmittedRuntimeSellOrder({
     runtime,
@@ -1585,6 +1620,7 @@ async function reconcileRuntimeScenarioFilledSell({
     fill,
     fullCycle: true,
     expectedStopPersisted: !stopPersistenceFailure,
+    expectedTerminalReconciliationFailure: terminalReconciliationPersistenceFailure,
   })
 }
 function createRuntimeScenarioOutput({
@@ -1781,6 +1817,24 @@ function createRuntimeScenarioExpected({ seed, pairConfig, scenarioId }) {
       submittedOrderCount: 0,
       stopFactAppended: true,
       reservationRetained: true,
+    }
+  }
+  if (scenarioId === "RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001") {
+    return {
+      ...createRuntimeScenarioSellExpectedBase({
+        seed,
+        pairConfig,
+      }),
+      terminalOrderStatus: "FILLED",
+      terminalReconciliationFailed: true,
+      terminalReconciled: false,
+      eventWorkflowFailedClosed: true,
+      stopFactAppended: true,
+      marketPaused: true,
+      accountAdmissionBlocked: true,
+      buyAdmissionBlocked: true,
+      reservationRetained: true,
+      stagedSellFillCount: 1,
     }
   }
   if (scenarioId === "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001") {
@@ -2431,6 +2485,13 @@ async function executeRuntimeScenarioTerminalSell({ runtime, scenarioId, effecti
     return reconcileRuntimeScenarioFilledSell({
       runtime,
       execution,
+    })
+  }
+  if (scenarioId === "RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001") {
+    return reconcileRuntimeScenarioFilledSell({
+      runtime,
+      execution,
+      terminalReconciliationPersistenceFailure: true,
     })
   }
   if (scenarioId !== "RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001") {
