@@ -1673,6 +1673,7 @@ const captureProcessProvenanceScenario = async () => {
   const contexts = []
   const processIdentity = createProcessProvenanceIdentity()
   let journalFlushCalls = 0
+  let journalWriteFlushCalls = 0
   const eventBus = createProvenanceEventBus({
     events,
     operations,
@@ -1698,10 +1699,14 @@ const captureProcessProvenanceScenario = async () => {
     createJournalService: () => createProvenanceJournal({
       operations,
       onFlush: () => { journalFlushCalls += 1 },
+      onWriteFlush: () => { journalWriteFlushCalls += 1 },
     }),
     start: async ({ eventPublisher }) => {
       operations.push("runtime.start")
       await eventPublisher.flush()
+      const writeFlushResult = await eventPublisher.flushWrites()
+      assert.equal(writeFlushResult.ok, true, "The process publisher must expose the Journal write-only flush.")
+      assert.equal(writeFlushResult.durable, true, "The process publisher must preserve durable write confirmation.")
       return {
         connected: false,
         tradingEnabled: false,
@@ -1724,11 +1729,12 @@ const captureProcessProvenanceScenario = async () => {
     events,
     contexts,
     journalFlushCalls,
+    journalWriteFlushCalls,
   }
 }
 
 test("captures process provenance before trading startup and publishes it separately from runtime startup", async () => {
-  const { operations, events, contexts, journalFlushCalls } = await captureProcessProvenanceScenario()
+  const { operations, events, contexts, journalFlushCalls, journalWriteFlushCalls } = await captureProcessProvenanceScenario()
   assert.deepEqual(
     operations.slice(0, 3),
     ["logger.context", "eventBus.create", "processLock.acquire"],
@@ -1758,6 +1764,7 @@ test("captures process provenance before trading startup and publishes it separa
   assert.deepEqual(contexts[0], events[0].data, "every shared log entry must receive the same sanitized process identity as logger context")
   assert.equal(JSON.stringify(events[0]).includes("private-value"), false, "process-start evidence must not retain sensitive values embedded in build metadata")
   assert.equal(journalFlushCalls, 1, "process provenance must be included by the existing bootstrap flush without introducing an additional Journal flush")
+  assert.equal(journalWriteFlushCalls, 1, "The write-only barrier must be wired to the process publisher.")
   assert.ok(operations.indexOf("publish:harvester.process_started") < operations.indexOf("runtime.start"), "trading bootstrap must start only after the process event has been admitted to the existing Journal/EventBus pipeline")
 })
 
@@ -2538,12 +2545,19 @@ function createRecordingEventBus({ events }) {
 }
 
 
-function createProvenanceJournal({ operations, onFlush }) {
+function createProvenanceJournal({ operations, onFlush, onWriteFlush }) {
   operations.push("journal.create")
   return {
     ready: Promise.resolve({ ok: true }),
     flush: async () => {
       onFlush()
+      return {
+        ok: true,
+        durable: true,
+      }
+    },
+    flushWrites: async () => {
+      onWriteFlush()
       return {
         ok: true,
         durable: true,

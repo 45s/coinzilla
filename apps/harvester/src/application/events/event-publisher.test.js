@@ -93,3 +93,37 @@ test("exposes structured failure reporting for lifecycle DTO mapping errors", ()
   assert.equal(logs[0].eventName, "order.updated", "The diagnostic must identify the lifecycle event that could not be mapped.")
   assert.equal(logs[0].error, error, "The diagnostic must retain the original mapper error.")
 })
+
+test("delegates write-only flush and requires a durable acknowledgement", async () => {
+  let calls = 0
+  const eventBus = {
+    publish: () => ({ ok: true }),
+  }
+  const publisher = makeEventPublisher({
+    eventBus,
+    flushWrites: async () => {
+      calls += 1
+      return {
+        ok: true,
+        durable: true,
+      }
+    },
+  })
+  const result = await publisher.flushWrites()
+  assert.equal(result.ok, true, "The write-only flush should succeed when Journal confirms durability.")
+  assert.equal(result.durable, true, "The publisher must preserve the durable acknowledgement.")
+  assert.equal(calls, 1, "The write-only Journal callback should run once.")
+
+  const nonDurablePublisher = makeEventPublisher({
+    eventBus,
+    flushWrites: async () => ({
+      ok: true,
+      durable: false,
+    }),
+  })
+  const nonDurableResult = await nonDurablePublisher.flushWrites()
+  assert.equal(nonDurableResult.ok, false, "An acknowledgement without durable sync must fail closed.")
+
+  const unavailableResult = await makeEventPublisher({ eventBus }).flushWrites()
+  assert.equal(unavailableResult.ok, false, "A missing write-only flush capability must fail closed.")
+})

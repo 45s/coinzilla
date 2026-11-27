@@ -420,7 +420,7 @@ function readActiveStrategySafetyPauseBuyOrders({ state, symbol }) {
     }))
 }
 
-async function persistStrategySafetyPauseFact({ callback, symbol, reason }) {
+async function persistStrategySafetyPauseFact({ callback, symbol, reason, error }) {
   if (typeof callback !== "function") {
     return {
       persisted: null,
@@ -431,16 +431,17 @@ async function persistStrategySafetyPauseFact({ callback, symbol, reason }) {
     const result = await callback({
       symbol,
       reason,
+      ...(error === undefined ? {} : { error }),
     })
     const persisted = result?.ok === true && result.data?.durable === true
     return {
       persisted,
       errors: persisted ? [] : result?.errors ?? [new Error("Strategy safety pause fact was not durably committed")],
     }
-  } catch (error) {
+  } catch (pauseError) {
     return {
       persisted: false,
-      errors: [error],
+      errors: [pauseError],
     }
   }
 }
@@ -606,6 +607,7 @@ async function prepareStrategySafetyPause({
       callback: onOperationalStateStrategyMarketPaused,
       symbol,
       reason,
+      error,
     })
     pauseFactPersisted = fact.persisted
     failures.push(...fact.errors)
@@ -1600,27 +1602,63 @@ function createSubmissionLifecycleCallbacks({
   logger,
 } = {}) {
   return {
-    onSubmissionDeferred: async ({ order, registered, reason, errors, error } = {}) => {
+    onSubmissionDeferred: async ({ order, registered, purpose, reason, errors, error } = {}) => {
+      const recoverySell = order.side === "SELL" && purpose === "RECOVERY_SELL"
+      let publication
+      let persistenceError
+      if (registered || recoverySell) {
+        try {
+          publication = publishSubmissionDeferral({
+            eventPublisher,
+            order,
+            reason: reason ?? "SUBMISSION_NOT_ALLOWED",
+            ...(recoverySell ? { purpose, registered } : {}),
+          })
+        } catch (failure) {
+          if (!recoverySell) {
+            throw failure
+          }
+          persistenceError = failure
+        }
+      }
       if (registered) {
-        publishSubmissionDeferral({
-          eventPublisher,
-          order,
-          reason: reason ?? "SUBMISSION_NOT_ALLOWED",
-        })
         const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
         if (!removal.removed) {
           throw new Error("Cannot remove a pending order deferred before broker submission")
         }
         state.registry = removal.registry
-        if (reason === "ORDER_INTENT_NOT_DURABLE") {
-          await pause({
-            symbol: order.market.symbol,
-            reason: "ORDER_INTENT_NOT_DURABLE",
-            error: error ?? errors?.[0] ?? new Error("Durable order-submission intent was not committed"),
-          })
-        }
       }
       state.deferredEvaluations.add(order.market.symbol)
+      if (recoverySell && persistenceError === undefined) {
+        if (publication?.ok !== true) {
+          persistenceError = publication?.errors?.[0] ?? new Error("Recovery SELL deferral evidence publication failed")
+        } else if (typeof eventPublisher?.flushWrites !== "function") {
+          persistenceError = new TypeError("Recovery SELL deferral evidence requires a write-only durable Journal flush capability")
+        } else {
+          try {
+            const flushed = await eventPublisher.flushWrites()
+            if (flushed?.ok !== true || flushed?.durable !== true) {
+              persistenceError = flushed?.errors?.[0] ?? new Error("Recovery SELL deferral evidence was not durably journaled")
+            }
+          } catch (failure) {
+            persistenceError = failure
+          }
+        }
+      }
+      const intentError = reason === "ORDER_INTENT_NOT_DURABLE"
+        ? error ?? errors?.[0] ?? new Error("Durable order-submission intent was not committed")
+        : undefined
+      const pauseError = intentError ?? persistenceError
+      if (pauseError) {
+        await pause({
+          symbol: order.market.symbol,
+          reason: "ORDER_INTENT_NOT_DURABLE",
+          error: pauseError,
+        })
+      }
+      if (persistenceError) {
+        throw persistenceError
+      }
     },
     onPendingOrder: createPendingOrderLifecycleHandler({
       state,
@@ -5535,10 +5573,12 @@ async function reconcileOwnedOrdersTransition({ context, options }) {
 /** Coordinate an injected strategy policy, in-process order ownership, and actual fills. */
 
 
-function publishSubmissionDeferral({ eventPublisher, order, reason } = {}) {
+function publishSubmissionDeferral({ eventPublisher, order, reason, purpose, registered } = {}) {
   const dataResult = mapOrderSubmissionDeferredData({
     order,
     reason,
+    purpose,
+    registered,
   })
   if (dataResult?.ok !== true) {
     publishLifecycleEvent({

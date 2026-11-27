@@ -240,7 +240,7 @@ function handleNoExecutableActions({ dependencies, context, allocation } = {}) {
   })
 }
 
-function prepareConservativeTransitionAllocation({ dependencies, context, excludedActiveOrderClientId } = {}) {
+async function prepareConservativeTransitionAllocation({ dependencies, context, excludedActiveOrderClientId } = {}) {
   const balances = getPortfolioBalanceContext({
     dependencies,
     context: {
@@ -265,9 +265,18 @@ function prepareConservativeTransitionAllocation({ dependencies, context, exclud
     allocation,
   })
   if (noExecutableActions) {
+    const hasResidualSell = context.effectiveActions.some((action) => action.side === "SELL")
+    if (!context.preflightOnly && hasResidualSell) {
+      await publishStrategyDecision({
+        dependencies,
+        context,
+        balances,
+        allocation,
+      })
+    }
     return { result: noExecutableActions }
   }
-  publishStrategyDecision({
+  await publishStrategyDecision({
     dependencies,
     context,
     balances,
@@ -298,6 +307,12 @@ async function executeConservativeLatestTransition({ dependencies, options, gate
       marketPrice: gate.marketPrice,
     },
   })
+  if (!context.preflightOnly && context.effectiveActions.length === 0 && context.decision.inventoryDisposition !== undefined) {
+    await publishStrategyDecision({
+      dependencies,
+      context,
+    })
+  }
   const dustResult = await completeDustRecoveryIfNeeded({
     dependencies,
     context,
@@ -312,7 +327,7 @@ async function executeConservativeLatestTransition({ dependencies, options, gate
   if (noActions) {
     return noActions
   }
-  const allocation = prepareConservativeTransitionAllocation({
+  const allocation = await prepareConservativeTransitionAllocation({
     dependencies,
     context,
     excludedActiveOrderClientId,
