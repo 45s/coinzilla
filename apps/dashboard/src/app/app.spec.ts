@@ -139,7 +139,6 @@ describe('AppComponent', () => {
     socket.sendMessage(createBotsSnapshot());
     fixture.detectChanges();
 
-    const http = TestBed.inject(HttpTestingController);
     http.expectNone('http://127.0.0.1:4201/api/v1/trading/operator/status');
     http.expectNone('http://127.0.0.1:4201/api/v1/trading/operator/markets');
     http.expectNone('http://127.0.0.1:4201/api/v1/trading/operator/portfolio');
