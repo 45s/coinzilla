@@ -1,0 +1,32 @@
+# CodeQL is intentionally manual-only.
+# The advanced CodeQL workflow replaces repository default setup, preventing
+# automatic CodeQL runs from becoming pull-request CI checks. Run manually
+# from Actions when a security scan is explicitly needed.
+name: CodeQL
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze JavaScript and TypeScript
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          build-mode: none
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3

@@ -268,7 +268,11 @@ function createExecutionState({ resolve, reject, children, runId, child }) {
     try {
       confirmSandboxCleanup({ child })
     } catch (cleanupError) {
-      finalError = cleanupError
+      finalError = error
+        ? new AggregateError([error, cleanupError], "Scenario worker failed and sandbox cgroup cleanup could not be confirmed", {
+          cause: error,
+        })
+        : cleanupError
       retainChild = true
     }
     settled = true

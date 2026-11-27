@@ -782,8 +782,7 @@ test("Linux sandbox launcher fails closed when delegated cgroup controllers are 
 })
 
 
-test("process adapter fails the run when sandbox cgroup cleanup cannot be confirmed", async () => {
-  const cleanupError = new Error("cgroup removal failed")
+function createSandboxCleanupRetryChild({ cleanupError }) {
   const child = new EventEmitter()
   child.exitCode = null
   child.signalCode = null
@@ -816,12 +815,21 @@ test("process adapter fails the run when sandbox cgroup cleanup cannot be confir
     child.emit("close", 0, signal)
     return true
   }
+  return {
+    child,
+    cleanupAttempts: () => cleanupAttempts,
+  }
+}
+
+test("process adapter fails the run when sandbox cgroup cleanup cannot be confirmed", async () => {
+  const cleanupError = new Error("cgroup removal failed")
+  const fixture = createSandboxCleanupRetryChild({ cleanupError })
   const launcher = createSimulatedSandboxLauncher({
     spawn: () => {
-      process.nextTick(() => child.emit("message", {
+      process.nextTick(() => fixture.child.emit("message", {
         type: "ready",
       }))
-      return child
+      return fixture.child
     },
   })
   const adapter = createProcessScenarioAdapter({
@@ -847,6 +855,6 @@ test("process adapter fails the run when sandbox cgroup cleanup cannot be confir
   assert.equal(await adapter.cancel({
     runId: "run-worker-cgroup-cleanup-failure",
   }), true, "A later confirmed cleanup retry must release the retained child")
-  assert.equal(cleanupAttempts, 3,
+  assert.equal(fixture.cleanupAttempts(), 3,
     "Execution and cancellation must retry cleanup until the cgroup removal is confirmed")
 })
