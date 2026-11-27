@@ -2325,7 +2325,7 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
       },
       flushWrites: async () => {
         flushCount += 1
-        return flushCount === 2
+        return flushCount === 3
           ? {
             ok: false,
             errors: [new Error(
@@ -2349,7 +2349,7 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
     },
   })
   assert.equal(started.ok, true, started.errors?.[0]?.message ?? "The pre-existing BUY and active Position must still allow the initial recovery SELL evaluation.")
-  assert.equal(flushCount, 1, "Only the recovery SELL submission intent must be flushed; the pre-existing BUY has no new submission intent.")
+  assert.equal(flushCount, 2, "The recovery decision evidence and recovery SELL submission intent must both be durable; the pre-existing BUY must remain untouched.")
 
   const buyOrder = harness.engine.getOrders().find((order) => order.side === "BUY")
   const result = await harness.engine.processUserDataEvent({
@@ -2367,7 +2367,7 @@ test("does not cancel a recovery SELL when its durable cancellation intent flush
   })
 
   assert.equal(result.ok, false, "A non-durable recovery SELL cancellation intent must fail before broker cancellation.")
-  assert.equal(flushCount, 2, "The failed second flush must be the recovery SELL cancellation-intent durability barrier.")
+  assert.equal(flushCount, 3, "The failed third flush must be the recovery SELL cancellation-intent durability barrier.")
   assert.equal(cancelCalls, 0, "The broker must not receive a cancellation request when its durable intent cannot be committed.")
   assert.ok(harness.pauses.includes("RECOVERY_SELL_CANCEL_INTENT_NOT_DURABLE"), "The market must remain paused when the recovery SELL cancellation intent is not durable.")
   assert.equal(harness.engine.getOrders().find((order) => order.side === "SELL").status, "OPEN", "The existing recovery SELL must remain OPEN when cancellation intent persistence fails.")
