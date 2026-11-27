@@ -1184,14 +1184,82 @@ function describeActiveOrders({ engine }) {
     .sort(compareActiveOrderDescriptions)
 }
 
+function createSeededOpenDogeBuyOrderRegistry({ market, positionId }) {
+  const pendingOrder = new CanonicalOrder({
+    clientOrderId: "seeded-doge-standing-buy",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "99",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: market.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: market.baseAsset,
+    }),
+    status: "PENDING",
+    createdAt: 1,
+    updatedAt: 1,
+  })
+  const pendingRegistry = OrderRegistry.empty().registerPending({
+    order: pendingOrder,
+    ownership: {
+      strategyId: StrategyId.COIN_GRABBER,
+      positionId,
+      purpose: "CONSERVATIVE_BUY",
+    },
+  }).registry
+  return pendingRegistry.applyUpdate({
+    order: new CanonicalOrder({
+      clientOrderId: "seeded-doge-standing-buy",
+      brokerOrderId: "broker-seeded-doge-standing-buy",
+      market,
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      limitPrice: new Money({
+        amount: "99",
+        asset: quoteAsset,
+      }),
+      originalQuantity: new Quantity({
+        amount: "1",
+        asset: market.baseAsset,
+      }),
+      executedQuantity: new Quantity({
+        amount: "0",
+        asset: market.baseAsset,
+      }),
+      status: "OPEN",
+      createdAt: 1,
+      acknowledgedAt: 2,
+      updatedAt: 2,
+    }),
+  }).registry
+}
+
 async function createShutdownSellCancellationHarness() {
   const dogeMarket = marketsBySymbol.get("DOGEUSDT")
   const { portfolio, recoveryLedger } = createOperatorPauseRecoveryPosition({ market: dogeMarket })
+  const position = portfolio.getPosition({
+    marketId: dogeMarket.id,
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  const orderRegistry = createSeededOpenDogeBuyOrderRegistry({
+    market: dogeMarket,
+    positionId: position.positionId,
+  })
   const strategyPolicy = createOperatorPauseStrategyPolicy()
   const { engine } = await createHarness({
     portfolio,
     strategyPolicy,
     recoveryLedgersByMarket: new Map([[dogeMarket.id, recoveryLedger]]),
+    initialState: {
+      orderRegistry,
+    },
   })
   await startBothMarkets({ engine })
   engine.beginShutdown()
