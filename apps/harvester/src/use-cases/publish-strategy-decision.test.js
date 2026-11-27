@@ -105,3 +105,25 @@ test("keeps residual notional distinct from a zero exchange-rounded candidate no
 
   assertCandidateNotionalEvidence({ events })
 })
+
+
+test("fails closed when recovery decision publication is still pending", async () => {
+  const events = []
+  let flushCalls = 0
+  const dependencies = createCandidateNotionalDependencies({ events })
+  dependencies.eventPublisher.publish = () => new Promise(() => {})
+  dependencies.eventPublisher.flushWrites = async () => {
+    flushCalls += 1
+    return { ok: true, durable: true }
+  }
+
+  await assert.rejects(
+    publishStrategyDecision({
+      dependencies,
+      context: createCandidateNotionalContext(),
+    }),
+    /synchronous publication/,
+    "A write-only flush must not be mistaken for durability while the decision event is still pending admission.",
+  )
+  assert.equal(flushCalls, 0, "The Journal barrier must not run before synchronous decision publication succeeds.")
+})
