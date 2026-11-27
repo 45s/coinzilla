@@ -19,6 +19,7 @@ Telegram transport, provider-oriented layout, reliability hardening, EventBus in
 
 - Package usage and supported behavior: [README](./README.md)
 - Implementation and tests: package source
+- CLI source identity rollout: [#1631](https://github.com/45s/coinzilla/issues/1631) and [repository inventory](../../docs/engineering/CLI_SOURCE_IDENTITY.md)
 - Task status: GitHub Issues/PRs
 
 Detailed phases, decisions, validation records, and historical delivery notes are preserved in [ROADMAP_HISTORY_2026-11-26.md](../../docs/archive/roadmap-history-2026-11-26.md#notifiers-roadmap).

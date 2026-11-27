@@ -53,7 +53,7 @@ Every maintained, user-invoked executable CLI entrypoint MUST make its running s
 - Inventory maintained executable CLI entrypoints and migrate them in coherent increments. Exclude libraries, imported modules, generated artifacts, test fixtures, and non-user-invoked scripts; document justified exceptions.
 - Keep identity discovery read-only and deterministic. It must not fetch from remotes or alter the working tree.
 
-The owning package documents any command-specific presentation details; this section is the repository-wide source of truth.
+The owning package documents any command-specific presentation details; this section is the repository-wide source of truth. The incremental migration inventory and current entrypoint status are maintained in [CLI source identity rollout](docs/engineering/CLI_SOURCE_IDENTITY.md).
 
 ## Exchange environment configuration
 
