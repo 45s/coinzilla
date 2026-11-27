@@ -89,22 +89,30 @@ describe('AppComponent', () => {
     BotsTestWebSocket.instances = [];
   });
 
-  it('renders the Coinzilla dashboard shell and keeps the Overview explicitly labeled as preview data', async () => {
+  it('renders the Coinzilla dashboard shell and the live Overview workspace', async () => {
+    vi.stubGlobal('WebSocket', BotsTestWebSocket as unknown as typeof WebSocket);
     await TestBed.configureTestingModule({
       imports: [AppComponent],
-      providers: [provideHttpClient()],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
     }).compileComponents();
 
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('http://127.0.0.1:4201/api/v1/trading/operator/status')
+      .flush({ ok: true, data: createBotsSnapshot().data.status.data });
+    await fixture.whenStable();
 
     const renderedText = fixture.nativeElement.textContent as string;
 
-    expect(renderedText).toContain('coinzilla');
-    expect(renderedText).toContain('Overview');
-    expect(renderedText).toContain('MOCK DATA');
-    expect(renderedText).toContain('Portfolio performance');
-    expect(renderedText).toContain('fictional demo data');
+    expect(renderedText, 'The dashboard shell must retain its product identity.').toContain('coinzilla');
+    expect(renderedText, 'The primary navigation must retain Overview.').toContain('Overview');
+    expect(renderedText, 'The dashboard shell must identify the Overview as a live Harvester view.').toContain('LIVE SYSTEM VIEW');
+    expect(renderedText, 'The Overview shell must no longer label its live data as a preview.').not.toContain('PREVIEW');
+    expect(renderedText, 'The Overview shell must not describe live data as fictional.').not.toContain('fictional demo data');
+    expect(renderedText, 'Overview must show its live system-health panel.').toContain('System health');
+    expect(renderedText, 'Overview must not render the removed fictional performance chart.').not.toContain('Portfolio performance');
+    fixture.destroy();
   });
 
   it('provides a dedicated Bots workspace from the live Harvester snapshot stream', async () => {
@@ -116,6 +124,10 @@ describe('AppComponent', () => {
 
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
+    const http = TestBed.inject(HttpTestingController);
+    http.expectOne('http://127.0.0.1:4201/api/v1/trading/operator/status')
+      .flush({ ok: true, data: createBotsSnapshot().data.status.data });
+    await fixture.whenStable();
     const botsButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button.nav-item'))
       .find((button) => button.textContent?.includes('Bots')) as HTMLButtonElement | undefined;
     expect(botsButton, 'The primary navigation must expose Bots as a separate workspace.').toBeDefined();
@@ -129,7 +141,6 @@ describe('AppComponent', () => {
     socket.sendMessage(createBotsSnapshot());
     fixture.detectChanges();
 
-    const http = TestBed.inject(HttpTestingController);
     http.expectNone('http://127.0.0.1:4201/api/v1/trading/operator/status');
     http.expectNone('http://127.0.0.1:4201/api/v1/trading/operator/markets');
     http.expectNone('http://127.0.0.1:4201/api/v1/trading/operator/portfolio');
