@@ -258,14 +258,16 @@ test("allows a Conservative BUY only after recovery basis and cycle totals have 
 
 
 test("blocks a Conservative BUY while an owned recovery SELL remains active after accounting totals reset", () => {
-  for (const status of ACTIVE_RECOVERY_SELL_STATUSES) {
+  for (const status of ["PENDING", "OPEN", "PARTIALLY_FILLED", "UNKNOWN"]) {
     const { dependencies, activeOrder } = createActiveRecoverySellDependencies({
       status,
       clientOrderId: `doge-recovery-sell-${status}`,
     })
+    const marketId = activeOrder.market.id
+    const positionId = JSON.stringify([marketId, StrategyId.COIN_GRABBER])
     dependencies.getPortfolio = () => ({
       getPosition: () => ({
-        positionId: CONSERVATIVE_POSITION_ID,
+        positionId,
         quantity: { amount: "0" },
         spent: { amount: "0" },
       }),
@@ -279,7 +281,7 @@ test("blocks a Conservative BUY while an owned recovery SELL remains active afte
       order: {
         ...createOrder({ side: "BUY" }),
         market: {
-          id: CONSERVATIVE_MARKET_ID,
+          id: marketId,
           symbol: "DOGEUSDT",
         },
       },
