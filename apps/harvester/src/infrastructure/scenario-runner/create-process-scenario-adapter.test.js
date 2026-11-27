@@ -858,3 +858,56 @@ test("process adapter fails the run when sandbox cgroup cleanup cannot be confir
   assert.equal(fixture.cleanupAttempts(), 3,
     "Execution and cancellation must retry cleanup until the cgroup removal is confirmed")
 })
+
+
+function createSandboxSetupCleanupHandle({ cleanupError }) {
+  let cleanupAttempts = 1
+  const cleanupHandle = {
+    exitCode: 0,
+    signalCode: "SIGKILL",
+    sandboxCleanup() {
+      cleanupAttempts += 1
+      if (cleanupAttempts < 3) {
+        throw cleanupError
+      }
+    },
+  }
+  const setupError = new AggregateError(
+    [new Error("seccomp filter IPC setup failed"), cleanupError],
+    "Sandbox setup failed and cgroup cleanup could not be confirmed",
+  )
+  setupError.sandboxCleanupHandle = cleanupHandle
+  setupError.sandboxCleanupError = cleanupError
+  return {
+    setupError,
+    cleanupAttempts: () => cleanupAttempts,
+  }
+}
+
+test("process adapter retains cleanup handle when sandbox setup fails after spawn", async () => {
+  const cleanupError = new Error("cgroup directory removal failed")
+  const fixture = createSandboxSetupCleanupHandle({ cleanupError })
+  const launcher = createSimulatedSandboxLauncher({
+    spawn: () => {
+      throw fixture.setupError
+    },
+  })
+  const adapter = createProcessScenarioAdapter({
+    strategyId: "RS",
+    spawnSandboxedWorker: launcher,
+  })
+
+  await assert.rejects(adapter.execute({
+    runId: "run-worker-setup-cleanup-failure",
+    scenarioId: "RS-004-011",
+    input: null,
+  }), /cgroup cleanup could not be confirmed/)
+  await assert.rejects(adapter.cancel({
+    runId: "run-worker-setup-cleanup-failure",
+  }), /sandbox cgroup cleanup could not be confirmed/,
+  "The cleanup handle must remain registered after a failed retry")
+  assert.equal(await adapter.cancel({
+    runId: "run-worker-setup-cleanup-failure",
+  }), true, "A later confirmed cgroup cleanup must release the retained handle")
+  assert.equal(fixture.cleanupAttempts(), 3)
+})

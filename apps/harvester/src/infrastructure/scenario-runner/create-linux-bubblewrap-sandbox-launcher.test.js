@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { EventEmitter } from "node:events"
 
 import { createLinuxBubblewrapSandboxLauncher } from "./create-linux-bubblewrap-sandbox-launcher.js"
 
@@ -13,7 +14,7 @@ const SANDBOX_PROFILE = Object.freeze({
   maxOutputBytes: 1_048_576,
 })
 
-function createLauncherHarness({ cleanupError = null } = {}) {
+function createLauncherHarness({ cleanupError = null, spawnChild = null } = {}) {
   let cleanupCount = 0
   let spawnCount = 0
   const cgroupController = {
@@ -60,6 +61,9 @@ function createLauncherHarness({ cleanupError = null } = {}) {
     cgroupController,
     spawn() {
       spawnCount += 1
+      if (spawnChild) {
+        return spawnChild
+      }
       throw new Error("Sandbox process must not spawn for an invalid worker path")
     },
   })
@@ -112,4 +116,40 @@ test("sandbox setup failure reports when cgroup cleanup cannot be confirmed", ()
     "A worker with an invalid path must never spawn when cleanup also fails")
   assert.equal(harness.getCleanupCount(), 1,
     "The failed cleanup attempt must be observable and must not be silently retried as success")
+})
+
+
+test("launcher retains child cleanup handle when seccomp setup and cgroup cleanup fail", () => {
+  const cleanupError = new Error("cgroup directory removal failed")
+  const seccompError = new Error("seccomp filter IPC setup failed")
+  const child = new EventEmitter()
+  child.stdio = []
+  child.stdio[4] = {
+    once() {},
+    end() {
+      throw seccompError
+    },
+  }
+  child.kill = () => true
+  const harness = createLauncherHarness({
+    cleanupError,
+    spawnChild: child,
+  })
+
+  assert.throws(() => harness.launcher({
+    workerPath: "/trusted/repository/apps/harvester/src/infrastructure/scenario-runner/scenario-worker.js",
+    stdio: ["ignore", "ignore", "ignore", "ipc"],
+    sandboxProfile: SANDBOX_PROFILE,
+  }), (error) => {
+    assert.match(error.message, /cgroup cleanup could not be confirmed/i)
+    assert.equal(error.cause, seccompError)
+    assert.equal(error.sandboxCleanupHandle, child,
+      "A spawned worker must be retained when setup cleanup cannot be confirmed")
+    assert.equal(error.sandboxCleanupError, cleanupError,
+      "The cgroup cleanup failure must remain available for cancellation diagnostics")
+    return true
+  })
+
+  assert.equal(harness.getSpawnCount(), 1)
+  assert.equal(harness.getCleanupCount(), 1)
 })
