@@ -704,7 +704,9 @@ function createOperationalStateStoreVerificationOperation({
     } catch (error) {
       if (error.code !== "ENOENT" && error.code !== "DURABLE_FACTS_COMMIT_UNCERTAIN") {
         store.writeUncertain = true
-        error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
+        if (!error.code) {
+          error.code = "DURABLE_FACTS_INTEGRITY_FAILED"
+        }
       }
       return toResult({ error })
     }
@@ -734,7 +736,9 @@ function createOperationalStateStoreReadAllOperation({
     } catch (error) {
       if (error.code !== "ENOENT" && error.code !== "DURABLE_FACTS_COMMIT_UNCERTAIN") {
         store.writeUncertain = true
-        error.code = "DURABLE_FACTS_COMMIT_UNCERTAIN"
+        if (!error.code) {
+          error.code = "DURABLE_FACTS_INTEGRITY_FAILED"
+        }
       }
       return toResult({ error })
     }
