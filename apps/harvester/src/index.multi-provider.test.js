@@ -476,9 +476,9 @@ test("retains an account process lock when startup cleanup is unconfirmed", asyn
     await fixture.signalHandlers.get("SIGINT")()
     assert.deepEqual(fixture.stopped, ["binanceTestnetPrimary"], "Shutdown must stop the healthy account without stopping the failed account")
     assert.deepEqual(fixture.releasedLocks, [
-      "binanceTestnetPrimary",
       "binanceTestnetSecondary",
-    ], "Confirmed process shutdown must release both the retained failed-account lock and the healthy account lock")
+      "binanceTestnetPrimary",
+    ], "Confirmed process shutdown must release all account locks in reverse acquisition order after cleanup")
     assert.equal(process.exitCode, 0, "A clean shutdown after an isolated startup failure must exit successfully")
   } finally {
     process.exitCode = previousExitCode
