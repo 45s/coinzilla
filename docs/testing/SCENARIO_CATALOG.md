@@ -465,12 +465,19 @@ The [Conservative Domain Specification](../../apps/harvester/docs/domain/CONSERV
   - `blocks the next BUY while an acknowledged recovery SELL remains open`
   - `blocks the next BUY while the recovery SELL acknowledgement is pending or unknown`
   - `keeps recovery SELL eligible while investment limits cannot reopen BUY during an active cycle`
+  - `fails closed when an active Position is missing its RecoveryLedger`
+  - `fails closed when Position.spent and RecoveryLedger buyCost diverge`
+  - `fails closed when active recovery SELL commitments exceed sellable Position inventory`
+  - `rejects a negative remaining quantity on an active recovery SELL`
 - [`create-submission-gate.test.js`](../../apps/harvester/src/use-cases/create-submission-gate.test.js)
   - `blocks a Conservative BUY while the Position still has active recovery inventory`
   - `blocks a Conservative BUY after SELL proceeds recover cost but before cycle completion resets the Position`
   - `allows a Conservative BUY only after recovery basis and cycle totals have been reset`
   - `blocks a Conservative BUY while an owned recovery SELL remains active after accounting totals reset`
   - `does not apply the Conservative recovery BUY gate to Recovery Seller orders`
+  - `blocks a Conservative BUY while RecoveryLedger buyCost remains non-zero after Position reset`
+  - `fails closed when Conservative recovery admission dependencies are unavailable`
+  - `fails closed when Conservative recovery admission accounting contains an invalid decimal`
 - [`conservative-trading-engine.test.js`](../../apps/harvester/src/use-cases/conservative-trading-engine.test.js)
   - `does not submit a next standing BUY while the Conservative recovery cycle remains active`
   - `a fully filled BUY keeps subsequent evaluations in recovery-only mode while its SELL remains open`
