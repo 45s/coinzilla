@@ -136,34 +136,34 @@ function hasCompleteActiveSnapshotStreams(marker) {
     && marker.streams?.traceLog === true
 }
 
-function hasValidActiveSnapshotLockFiles(marker) {
-  if (!Array.isArray(marker.lockFiles) || marker.lockFiles.length < 2) {
+function getExpectedActiveSnapshotLockName(lockFile) {
+  if (lockFile.namespace === "application") {
+    return `.harvester-trading-${lockFile.fingerprint}.lock`
+  }
+  if (lockFile.namespace === "host" && typeof lockFile.broker === "string" && /^[a-z0-9-]+$/i.test(lockFile.broker)) {
+    return `.${lockFile.broker.toLowerCase()}-harvester-trading-${lockFile.fingerprint}.lock`
+  }
+  return null
+}
+
+
+function isValidActiveSnapshotLockFile(lockFile, processStartedAt) {
+  if (!lockFile || typeof lockFile !== "object") {
     return false
   }
-  const processStartedAt = Date.parse(marker.processStartedAt)
-  if (!Number.isFinite(processStartedAt)) {
-    return false
-  }
+  const lockStartedAt = Date.parse(lockFile.startedAt)
+  return /^[a-f0-9]{64}$/i.test(lockFile.fingerprint ?? "")
+    && typeof lockFile.name === "string"
+    && Number.isFinite(lockStartedAt)
+    && Math.abs(lockStartedAt - processStartedAt) <= 30_000
+    && ["application", "host"].includes(lockFile.namespace)
+    && lockFile.name === getExpectedActiveSnapshotLockName(lockFile)
+}
+
+
+function hasCompleteActiveSnapshotLockPairs(lockFiles) {
   const namespacesByFingerprint = new Map()
-  for (const lockFile of marker.lockFiles) {
-    const lockStartedAt = Date.parse(lockFile?.startedAt)
-    if (
-      !/^[a-f0-9]{64}$/i.test(lockFile?.fingerprint ?? "")
-      || typeof lockFile.name !== "string"
-      || !Number.isFinite(lockStartedAt)
-      || Math.abs(lockStartedAt - processStartedAt) > 30_000
-      || !["application", "host"].includes(lockFile.namespace)
-    ) {
-      return false
-    }
-    const expectedName = lockFile.namespace === "application"
-      ? ".harvester-trading-" + lockFile.fingerprint + ".lock"
-      : typeof lockFile.broker === "string" && /^[a-z0-9-]+$/i.test(lockFile.broker)
-        ? "." + lockFile.broker.toLowerCase() + "-harvester-trading-" + lockFile.fingerprint + ".lock"
-        : null
-    if (lockFile.name !== expectedName) {
-      return false
-    }
+  for (const lockFile of lockFiles) {
     const namespaces = namespacesByFingerprint.get(lockFile.fingerprint) ?? new Set()
     if (namespaces.has(lockFile.namespace)) {
       return false
@@ -176,6 +176,16 @@ function hasValidActiveSnapshotLockFiles(marker) {
   )
 }
 
+
+function hasValidActiveSnapshotLockFiles(marker) {
+  if (!Array.isArray(marker.lockFiles) || marker.lockFiles.length < 2) {
+    return false
+  }
+  const processStartedAt = Date.parse(marker.processStartedAt)
+  return Number.isFinite(processStartedAt)
+    && marker.lockFiles.every((lockFile) => isValidActiveSnapshotLockFile(lockFile, processStartedAt))
+    && hasCompleteActiveSnapshotLockPairs(marker.lockFiles)
+}
 
 function isValidActiveSnapshotMarker({ marker, identity, manifest, expectedRuntimeId } = {}) {
   return marker.formatVersion === 1

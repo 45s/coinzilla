@@ -12,7 +12,7 @@ import {
 } from "node:fs/promises"
 import { spawn } from "node:child_process"
 import { createReadStream, createWriteStream } from "node:fs"
-import { Readable } from "node:stream"
+import { Readable, Writable } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { createGzip, createGunzip } from "node:zlib"
 import path from "node:path"
@@ -756,7 +756,7 @@ function resolveArchiveLogSelectionStatus({ sessions, matchingRuntimeSessions } 
     return "ambiguous"
   }
   if (matchingRuntimeSessions.length === 1) {
-    const matchingSession = matchingRuntimeSessions[0]
+    const [matchingSession] = matchingRuntimeSessions
     if (!Number.isSafeInteger(matchingSession.processId) || matchingSession.processId <= 0) {
       return "incomplete"
     }
@@ -1440,27 +1440,26 @@ async function createArchiveManifest({
 }
 
 
-async function* discardDecompressedChunks(source) {
-  for await (const chunk of source) {
-    void chunk
-  }
-}
-
-
 async function assertReadableGzipFile({ filename } = {}) {
+  const discardStream = new Writable({
+    write(chunk, encoding, callback) {
+      void chunk
+      void encoding
+      callback()
+    },
+  })
   try {
     await pipeline(
       createReadStream(filename),
       createGunzip(),
-      discardDecompressedChunks,
+      discardStream,
     )
   } catch (error) {
-    throw new Error("Compressed archive evidence is not readable gzip data: " + filename, {
+    throw new Error(`Compressed archive evidence is not readable gzip data: ${filename}`, {
       cause: error,
     })
   }
 }
-
 
 export async function verifyArchive({ directory, manifest } = {}) {
   const expectedPaths = manifest.files.map((entry) => entry.path).sort()
@@ -1761,17 +1760,17 @@ function resolveHarvesterProcessLockNamespace(lockName) {
 function assertActiveProcessLockNamespacePairs(owners) {
   const lockPairs = new Map()
   for (const owner of owners) {
-    const pairKey = String(owner.pid) + ":" + owner.fingerprint
+    const pairKey = `${owner.pid}:${owner.fingerprint}`
     const namespaces = lockPairs.get(pairKey) ?? new Set()
     if (namespaces.has(owner.namespace)) {
-      throw new Error("Cannot snapshot Harvester: duplicate " + owner.namespace + " lock for active process " + owner.pid + ".")
+      throw new Error(`Cannot snapshot Harvester: duplicate ${owner.namespace} lock for active process ${owner.pid}.`)
     }
     namespaces.add(owner.namespace)
     lockPairs.set(pairKey, namespaces)
   }
   for (const [pairKey, namespaces] of lockPairs) {
     if (!namespaces.has("host") || !namespaces.has("application")) {
-      throw new Error("Cannot snapshot Harvester: active process lock namespace pair is incomplete for " + pairKey + "; both host and application lock namespaces are required.")
+      throw new Error(`Cannot snapshot Harvester: active process lock namespace pair is incomplete for ${pairKey}; both host and application lock namespaces are required.`)
     }
   }
 }
@@ -1792,7 +1791,7 @@ async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.ho
     if (isProcessAlive(owner.pid)) {
       const lockNamespace = resolveHarvesterProcessLockNamespace(entry.name)
       if (!lockNamespace) {
-        throw new Error("Cannot snapshot Harvester: unsupported active process lock namespace " + entry.name + ".")
+        throw new Error(`Cannot snapshot Harvester: unsupported active process lock namespace ${entry.name}.`)
       }
       owners.push({
         ...lockNamespace,
@@ -1809,7 +1808,7 @@ async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.ho
   if (uniqueOwners.length > 1) {
     throw new Error(`Cannot snapshot Harvester: multiple active process owners: ${uniqueOwners.map((owner) => owner.pid).join(", ")}.`)
   }
-  const activeOwner = uniqueOwners[0]
+  const [activeOwner] = uniqueOwners
   return activeOwner
     ? {
         ...activeOwner,
@@ -1818,22 +1817,16 @@ async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.ho
     : null
 }
 
-async function writeActiveProcessSnapshotMarker({ localArchive, logSelection, activeProcessOwner, recoveryCheckpoint } = {}) {
-  const session = logSelection.sessions.find((candidate) =>
-    candidate.runtimeSessionId === recoveryCheckpoint.runtimeSessionId && candidate.completionStatus === "active"
-  )
-  if (!session?.activeSnapshotPath) {
-    throw new Error(`Cannot create an active snapshot marker without one uniquely matched active session for ${recoveryCheckpoint.runtimeSessionId}.`)
-  }
-  const streams = logSelection.evidenceIntegrity?.streams
-  const marker = {
+function createActiveProcessSnapshotMarker({ session, streams, activeProcessOwner, recoveryCheckpoint } = {}) {
+  const lockOwners = activeProcessOwner.lockOwners ?? [activeProcessOwner]
+  return {
     formatVersion: 1,
     snapshotType: "active-harvester-process",
     runtimeSessionId: recoveryCheckpoint.runtimeSessionId,
     processId: activeProcessOwner.pid,
     hostname: activeProcessOwner.hostname,
     lockStartedAt: activeProcessOwner.startedAt,
-    lockFiles: (activeProcessOwner.lockOwners ?? [activeProcessOwner]).map((owner) => ({
+    lockFiles: lockOwners.map((owner) => ({
       name: owner.lockName,
       namespace: owner.namespace,
       broker: owner.broker ?? null,
@@ -1848,7 +1841,23 @@ async function writeActiveProcessSnapshotMarker({ localArchive, logSelection, ac
       traceLog: streams?.traceLog?.status === "matched" && streams.traceLog.fileCount > 0,
     },
   }
-  if (!session?.activeSnapshotPath || !marker.streams.harvesterLog || !marker.streams.traceLog) {
+}
+
+
+async function writeActiveProcessSnapshotMarker({ localArchive, logSelection, activeProcessOwner, recoveryCheckpoint } = {}) {
+  const session = logSelection.sessions.find((candidate) =>
+    candidate.runtimeSessionId === recoveryCheckpoint.runtimeSessionId && candidate.completionStatus === "active"
+  )
+  if (!session?.activeSnapshotPath) {
+    throw new Error(`Cannot create an active snapshot marker without one uniquely matched active session for ${recoveryCheckpoint.runtimeSessionId}.`)
+  }
+  const marker = createActiveProcessSnapshotMarker({
+    session,
+    streams: logSelection.evidenceIntegrity?.streams,
+    activeProcessOwner,
+    recoveryCheckpoint,
+  })
+  if (!marker.streams.harvesterLog || !marker.streams.traceLog) {
     throw new Error(`Cannot create an active snapshot marker without both runtime-matched log streams for ${recoveryCheckpoint.runtimeSessionId}.`)
   }
   const markerPath = path.join(localArchive, session.activeSnapshotPath)
@@ -1926,6 +1935,50 @@ async function writeIncompleteActiveSnapshotMarker({
 }
 
 
+async function assertActiveSnapshotOwnershipStable({
+  localArchive,
+  activeProcessOwner,
+  lockDirectory,
+  isProcessAlive,
+  recoveryCheckpoint,
+} = {}) {
+  let currentOwner
+  let ownershipReadError
+  try {
+    currentOwner = await readActiveHarvesterProcessOwner({
+      lockDirectory,
+      isProcessAlive,
+    })
+  } catch (error) {
+    ownershipReadError = error
+  }
+  const lockOwnershipUnchanged = !ownershipReadError && areActiveProcessLockOwnersUnchanged({
+    initialOwner: activeProcessOwner,
+    currentOwner,
+  })
+  const processStillAlive = isProcessAlive(activeProcessOwner.pid)
+  if (lockOwnershipUnchanged && processStillAlive) {
+    return
+  }
+  let reason = "process-lock-ownership-changed-during-collection"
+  let failureMessage = "The active Harvester process lock ownership changed or became ambiguous during archive collection"
+  if (!processStillAlive) {
+    reason = "process-exited-during-collection"
+    failureMessage = "The active Harvester process exited during archive collection"
+  } else if (ownershipReadError) {
+    reason = "process-lock-ownership-unverifiable-during-collection"
+  }
+  await writeIncompleteActiveSnapshotMarker({
+    localArchive,
+    activeProcessOwner,
+    recoveryCheckpoint,
+    reason,
+  })
+  throw new Error(`${failureMessage} (PID ${activeProcessOwner.pid}); the snapshot is not publishable.`, {
+    cause: ownershipReadError,
+  })
+}
+
 async function copyArchiveEvidence({
   sourcePaths,
   packageDirectory,
@@ -1968,40 +2021,13 @@ async function copyArchiveEvidence({
     )
   }
   if (activeProcessOwner) {
-    let currentOwner
-    let ownershipReadError
-    try {
-      currentOwner = await readActiveHarvesterProcessOwner({
-        lockDirectory,
-        isProcessAlive,
-      })
-    } catch (error) {
-      ownershipReadError = error
-    }
-    const lockOwnershipUnchanged = !ownershipReadError && areActiveProcessLockOwnersUnchanged({
-      initialOwner: activeProcessOwner,
-      currentOwner,
+    await assertActiveSnapshotOwnershipStable({
+      localArchive,
+      activeProcessOwner,
+      lockDirectory,
+      isProcessAlive,
+      recoveryCheckpoint,
     })
-    const processStillAlive = isProcessAlive(activeProcessOwner.pid)
-    if (!lockOwnershipUnchanged || !processStillAlive) {
-      let reason = "process-lock-ownership-changed-during-collection"
-      let failureMessage = "The active Harvester process lock ownership changed or became ambiguous during archive collection"
-      if (!processStillAlive) {
-        reason = "process-exited-during-collection"
-        failureMessage = "The active Harvester process exited during archive collection"
-      } else if (ownershipReadError) {
-        reason = "process-lock-ownership-unverifiable-during-collection"
-      }
-      await writeIncompleteActiveSnapshotMarker({
-        localArchive,
-        activeProcessOwner,
-        recoveryCheckpoint,
-        reason,
-      })
-      throw new Error(failureMessage + " (PID " + activeProcessOwner.pid + "); the snapshot is not publishable.", {
-        cause: ownershipReadError,
-      })
-    }
     const activeSessionMatches = logSelection.sessions.some((session) =>
       session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId
         && session.completionStatus === "active"

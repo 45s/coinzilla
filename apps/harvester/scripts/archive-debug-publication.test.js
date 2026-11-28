@@ -14,6 +14,25 @@ const execFileAsync = promisify(execFile)
 const ARCHIVE_NAME = "2026-11-28T12-00-00Z_123e4567_debug"
 const REMOTE = "https://github.com/45s/coinzilla-archive.git"
 
+function createActiveSnapshotLockFiles(startedAt) {
+  const fingerprint = "a".repeat(64)
+  return [
+    {
+      name: `.harvester-trading-${fingerprint}.lock`,
+      namespace: "application",
+      fingerprint,
+      startedAt,
+    },
+    {
+      name: `.binance-harvester-trading-${fingerprint}.lock`,
+      namespace: "host",
+      broker: "binance",
+      fingerprint,
+      startedAt,
+    },
+  ]
+}
+
 function createSourceFileEntries() {
   return [
     {
@@ -693,21 +712,7 @@ test("publishes a verified active-process snapshot without requiring completion 
     processId: session.processId,
     hostname: os.hostname(),
     lockStartedAt: session.startedAt,
-    lockFiles: [
-      {
-        name: `.harvester-trading-${"a".repeat(64)}.lock`,
-        namespace: "application",
-        fingerprint: "a".repeat(64),
-        startedAt: session.startedAt,
-      },
-      {
-        name: `.binance-harvester-trading-${"a".repeat(64)}.lock`,
-        namespace: "host",
-        broker: "binance",
-        fingerprint: "a".repeat(64),
-        startedAt: session.startedAt,
-      },
-    ],
+    lockFiles: createActiveSnapshotLockFiles(session.startedAt),
     processStartedAt: session.startedAt,
     recoveryDataCommitHash: manifest.dataCommitHash,
     capturedAt: new Date().toISOString(),
@@ -764,21 +769,7 @@ test("publishes a verified active-runtime snapshot without process-completion fi
     processId: 24680,
     hostname: "test-host",
     lockStartedAt: "2026-11-28T11:00:01.000Z",
-    lockFiles: [
-      {
-        name: `.harvester-trading-${"a".repeat(64)}.lock`,
-        namespace: "application",
-        fingerprint: "a".repeat(64),
-        startedAt: "2026-11-28T11:00:01.000Z",
-      },
-      {
-        name: `.binance-harvester-trading-${"a".repeat(64)}.lock`,
-        namespace: "host",
-        broker: "binance",
-        fingerprint: "a".repeat(64),
-        startedAt: "2026-11-28T11:00:01.000Z",
-      },
-    ],
+    lockFiles: createActiveSnapshotLockFiles("2026-11-28T11:00:01.000Z"),
     processStartedAt: "2026-11-28T11:00:00.000Z",
     capturedAt: "2026-11-28T11:05:00.000Z",
     recoveryDataCommitHash: manifest.dataCommitHash,
