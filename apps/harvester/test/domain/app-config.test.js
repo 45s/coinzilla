@@ -28,6 +28,8 @@ quantityPrecision: 1 },
 quantityPrecision: 1 },
   LINEAUSDT: { pricePrecision: 6,
 quantityPrecision: 0 },
+  ARBUSDT: { pricePrecision: 4,
+quantityPrecision: 1 },
 };
 for (const [symbol, pair] of Object.entries(strategy(validConfig).pairs)) {
   Object.assign(pair, marketPrecision[symbol]);
