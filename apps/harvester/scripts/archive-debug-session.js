@@ -2013,7 +2013,7 @@ async function writeStoppedProcessSnapshotMarker({
     recursive: true,
     mode: 0o700,
   })
-  await writeFile(markerPath, `${JSON.stringify(marker, null, 2)}\\n`, {
+  await writeFile(markerPath, `${JSON.stringify(marker, null, 2)}\n`, {
     encoding: "utf8",
     flag: "wx",
     mode: 0o600,
