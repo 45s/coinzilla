@@ -183,7 +183,10 @@ function hasValidActiveSnapshotLockFiles(marker) {
   }
   const processStartedAt = Date.parse(marker.processStartedAt)
   return Number.isFinite(processStartedAt)
-    && marker.lockFiles.every((lockFile) => isValidActiveSnapshotLockFile({ lockFile, processStartedAt }))
+    && marker.lockFiles.every((lockFile) => isValidActiveSnapshotLockFile({
+      lockFile,
+      processStartedAt,
+    }))
     && hasCompleteActiveSnapshotLockPairs(marker.lockFiles)
 }
 

@@ -144,7 +144,7 @@ function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
  * Attach independent DEBUG and TRACE JSONL destinations to the shared logger.
  * The compact console destination remains independently configurable.
  *
- * @param {{ logger?: object, directory?: string, output?: NodeJS.WritableStream, processIdentity?: { startedAt: string, runtimeSessionId: string } }} input
+ * @param {{ logger?: object, directory?: string, output?: NodeJS.WritableStream, processIdentity?: { startedAt: string, runtimeSessionId: string, processId?: number } }} input
  * @returns {Promise<{ directory: string, cumulativeDirectory: string, sessionPaths: object, errorBuffer: object, close: () => Promise<void> }>}
  */
 async function closeHarvesterLogStreams({ streams } = {}) {
