@@ -1169,20 +1169,32 @@ test("completes a DEV-runner identity with the child process ID", async () => {
     environment: process.env.TRADING_MODE ?? "unknown",
     startedAt,
     runtimeSessionId,
-    source: { branch: "develop", commit: "a".repeat(40), workingTree: "clean" },
+    source: {
+      branch: "develop",
+      commit: "a".repeat(40),
+      workingTree: "clean",
+    },
   }))
   const logger = createLogger()
   try {
     const logging = await configureHarvesterLogging({
       logger,
       directory,
-      processIdentity: { startedAt, runtimeSessionId, processId: process.pid, version: "test" },
+      processIdentity: {
+        startedAt,
+        runtimeSessionId,
+        processId: process.pid,
+        version: "test",
+      },
     })
     const identity = JSON.parse(await readFile(path.join(sessionDirectory, "process-identity.json"), "utf8"))
     assert.equal(identity.runtimeSessionId, runtimeSessionId)
     assert.equal(identity.processId, process.pid, "The child must complete the pre-created identity with its own PID.")
     await logging.close()
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
