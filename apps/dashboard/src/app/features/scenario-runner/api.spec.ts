@@ -67,11 +67,16 @@ describe('ScenarioRunnerApi HTTP gateway', () => {
     for (const path of sourcePaths) {
       const request = http.expectOne(`https://raw.githubusercontent.com/45s/coinzilla/${'a'.repeat(40)}/${path}`);
       expect(request.request.responseType).toBe('text');
-      request.flush('Object.freeze({ id: "RS-001-001", name: "Test scenario", layer: "APPLICATION", status: "PARTIAL", executionStatus: "EXECUTABLE" })');
+      request.flush(path.endsWith('rs-runtime-scenario.js')
+        ? 'Object.freeze({ id: "RS-001-002", name: "Second scenario", layer: "APPLICATION", status: "PARTIAL", executionStatus: "EXECUTABLE" })'
+        : 'Object.freeze({ id: "RS-001-001", name: "Test scenario", layer: "APPLICATION", status: "PARTIAL", executionStatus: "EXECUTABLE" })');
     }
     await expect(response).resolves.toMatchObject({
       commitSha: 'a'.repeat(40),
-      catalog: [{ strategyId: 'RS', scenarios: [{ id: 'RS-001-001', executable: false, executionStatus: 'BLOCKED' }] }],
+      catalog: [{ strategyId: 'RS', scenarios: [
+        { id: 'RS-001-001', executable: false, executionStatus: 'BLOCKED' },
+        { id: 'RS-001-002', executable: false, executionStatus: 'BLOCKED' },
+      ] }],
     });
   });
 

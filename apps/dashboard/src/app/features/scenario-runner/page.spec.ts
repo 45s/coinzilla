@@ -66,7 +66,6 @@ describe('ScenarioRunnerComponent run details', () => {
     expect(checkbox).not.toBeNull();
     if (!checkbox) throw new Error('GitHub catalogue checkbox is missing');
     checkbox.checked = true;
-    checkbox.dispatchEvent(new Event('change'));
     await component.setGitHubCatalogSource(true);
     expect(component.catalog()[0].scenarios[0].id).toBe('RS-NEW-001');
     expect(component.catalogSourceRevision()).toBe('a'.repeat(40));
