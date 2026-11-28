@@ -2,19 +2,21 @@
   @if (error()) {
     <p class="error" role="alert">{{ error() }}</p>
   }
-  <label class="catalog-source-toggle"><input type="checkbox" [checked]="useGitHubDevelopCatalog()" [disabled]="loading()" (change)="setGitHubCatalogSource($any($event.target).checked)" /> Load scenarios from GitHub develop (read-only)</label>
-  @if (catalogSourceRevision(); as revision) {
-    <p class="scenario-status" role="status">GitHub develop snapshot · <code>{{ revision }}</code> · metadata only; switch off to execute against the live Harvester catalogue.</p>
-  }
+  <div class="catalog-source-row">
+    <label class="catalog-source-toggle"><input type="checkbox" [checked]="useGitHubDevelopCatalog()" [disabled]="loading()" (change)="setGitHubCatalogSource($any($event.target).checked)" /> Load scenarios from GitHub develop (read-only)</label>
+    @if (catalogSourceRevision(); as revision) {
+      <p class="scenario-status catalog-source-revision" role="status">GitHub develop snapshot · <code>{{ revision }}</code> · metadata only</p>
+    }
+  </div>
   <div class="controls">
-    <label>Strategy
+    <label class="strategy-control">Strategy
       <select [value]="strategyId()" (change)="selectStrategy($any($event.target).value)">
         @for (item of catalog(); track item.strategyId) {
           <option [value]="item.strategyId">{{ item.strategyName }}</option>
         }
       </select>
     </label>
-    <label>Scenario
+    <label class="scenario-control">Scenario
       <select [value]="scenarioId()" (change)="selectScenario($any($event.target).value)">
         @for (item of scenarios; track item.id) {
           <option [value]="item.id">{{ item.id }} · {{ item.name }}</option>
@@ -26,16 +28,6 @@
     <p class="scenario-status">Source mapping: {{ selectedScenario?.status ?? 'UNAVAILABLE' }}</p>
     <p class="scenario-status">Execution status: {{ selectedScenario?.executionStatus ?? 'UNAVAILABLE' }}</p>
   </div>
-  @if (selectedScenario?.readinessReasons?.length) {
-    <section class="readiness">
-      <h2>Readiness and limitations</h2>
-      <ul>
-        @for (reason of selectedScenario?.readinessReasons ?? []; track reason) {
-          <li>{{ reason }}</li>
-        }
-      </ul>
-    </section>
-  }
   @if (selectedScenarioGuide; as guide) {
     <section class="scenario-guide" aria-labelledby="scenario-guide-title">
       <header class="scenario-guide-heading">
@@ -43,7 +35,6 @@
           <p class="guide-eyebrow">SCENARIO INTENT · NOT EXECUTION EVIDENCE</p>
           <h2 id="scenario-guide-title">What this scenario does</h2>
         </div>
-        <span class="guide-availability" [attr.data-status]="guide.availability">{{ guide.availability }}</span>
       </header>
       <p class="guide-purpose">{{ guide.purpose }}</p>
       <div class="guide-context">
