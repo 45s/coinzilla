@@ -317,6 +317,46 @@ test("fails RS startup explicitly when its durable Operational State Store is mi
   )
 })
 
+test("fails RS startup explicitly when its Operational State Store is invalid", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const invalidStore = Object.create(store)
+  invalidStore.verify = async () => ({
+    ok: true,
+    data: {
+      valid: false,
+      durableWriteSupported: false,
+    },
+  })
+  try {
+    await assert.rejects(
+      () => startHarvesterForTest({
+        loadConfig: async () => createRsOnlyStartupConfig(),
+        env: binanceEnv,
+        operationalStateStore: invalidStore,
+        executionSymbols: ["LINEAUSDT"],
+        executionRoutes: [{
+          strategyId: StrategyId.RECOVERY_SELLER,
+          symbol: "LINEAUSDT",
+        }],
+        marketDataSymbols: ["LINEAUSDT"],
+        eventPublisher: shared.testEventPublisher,
+      }),
+      (error) => {
+        assert.equal(error.code, "DURABLE_FACTS_VERIFICATION_FAILED",
+          "An invalid RS store must preserve the durable verification error code.")
+        assert.match(error.message, /unverified ADR-0001 Operational State Store/,
+          "An invalid RS store must fail before broker-capable startup.")
+        return true
+      },
+    )
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
 test("starts an RS-only provider account without a Conservative execution route", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []
