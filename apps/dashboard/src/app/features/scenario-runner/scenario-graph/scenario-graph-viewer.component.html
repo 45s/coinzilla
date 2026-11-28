@@ -39,12 +39,12 @@
           <text class="node-kind" x="28" y="38">{{ node.properties['guideKind'] ?? node.type }}</text>
           <text class="node-label">
             @for (line of node.labelLines; track $index; let lineIndex = $index) {
-              <tspan x="28" [attr.y]="78 + lineIndex * 34">{{ line }}</tspan>
+              <tspan x="28" [attr.y]="64 + lineIndex * 28">{{ line }}</tspan>
             }
           </text>
           <text class="node-description">
             @for (line of node.descriptionLines; track $index; let lineIndex = $index) {
-              <tspan x="28" [attr.y]="88 + node.labelLines.length * 34 + lineIndex * 26">{{ line }}</tspan>
+              <tspan x="28" [attr.y]="74 + node.labelLines.length * 28 + lineIndex * 22">{{ line }}</tspan>
             }
           </text>
         </g>
