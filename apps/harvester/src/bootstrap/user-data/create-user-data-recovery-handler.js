@@ -580,12 +580,15 @@ function createDisabledUserDataRecoveryHandler({ state, logger } = {}) {
   }
 }
 
-function startUserDataRecovery(options = {}) {
+function createUserDataRecoveryContext({
+  options,
+  generation,
+  userDataSubscription,
+  tradingEngine,
+} = {}) {
   const {
     state,
     isStopped,
-    getUserDataSubscription,
-    getTradingEngine,
     tradingEnabled,
     broker,
     drainUserDataEvents,
@@ -593,6 +596,31 @@ function startUserDataRecovery(options = {}) {
     refreshAccountSnapshot,
     publishAccountSnapshot,
     publishOpenOrdersSnapshot,
+    logger,
+  } = options
+  return createRecoveryContext({
+    state,
+    isStopped,
+    generation,
+    userDataSubscription,
+    tradingEngine,
+    tradingEnabled,
+    broker,
+    drainUserDataEvents,
+    setCanonicalOwnershipReconciled,
+    refreshAccountSnapshot,
+    publishAccountSnapshot,
+    publishOpenOrdersSnapshot,
+    logger,
+  })
+}
+
+function startUserDataRecovery(options = {}) {
+  const {
+    state,
+    isStopped,
+    getUserDataSubscription,
+    getTradingEngine,
     logger,
   } = options
   const userDataSubscription = getUserDataSubscription()
@@ -610,7 +638,10 @@ function startUserDataRecovery(options = {}) {
   if (isRecoveryAlreadyHandled({ state })) {
     return
   }
-  if (!hasRecoveryAcknowledgement({ userDataSubscription, logger })) {
+  if (!hasRecoveryAcknowledgement({
+    userDataSubscription,
+    logger,
+  })) {
     return
   }
   const brokerRecoveryGeneration = state.recoveryBrokerGeneration
@@ -625,20 +656,11 @@ function startUserDataRecovery(options = {}) {
   state.pendingRecovery = false
   state.retryableRecoveryFailure = null
   const generation = state.recoveryGeneration
-  const context = createRecoveryContext({
-    state,
-    isStopped,
+  const context = createUserDataRecoveryContext({
+    options,
     generation,
     userDataSubscription,
     tradingEngine,
-    tradingEnabled,
-    broker,
-    drainUserDataEvents,
-    setCanonicalOwnershipReconciled,
-    refreshAccountSnapshot,
-    publishAccountSnapshot,
-    publishOpenOrdersSnapshot,
-    logger,
   })
   const recoveryTask = executeRecoveryAttempt({ context }).finally(() => {
     if (state.recoveryTask === recoveryTask) {
