@@ -24,7 +24,7 @@ For refactoring or code-audit work, follow the canonical [AI Refactoring and Cod
 
 ## 1. The short version
 
-1. Read the repository-root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, this document, and the owning domain's `AGENTS.md` and `ROADMAP.md`.
+1. Read the repository-root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, and this document. Read the owning domain's `AGENTS.md` and `ROADMAP.md` when the task affects that application or package; do not load unrelated domain instructions.
 2. Identify one owning domain and one focused task.
 3. Create a short-lived task branch from the latest `develop`.
 4. Change only files owned by that domain, unless a coordinated cross-domain task explicitly authorizes otherwise.
