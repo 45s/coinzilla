@@ -609,11 +609,13 @@ function resolveArchiveSessionProcessId({ identity, recoveryCheckpoint } = {}) {
       : null
   }
   const durableIdentity = recoveryCheckpoint?.processIdentity
-  const durableIdentityMatchesSession = durableIdentity?.runtimeSessionId === recoveryCheckpoint?.runtimeSessionId
-    && identity?.runtimeSessionId === recoveryCheckpoint?.runtimeSessionId
-    && durableIdentity.startedAt === identity.startedAt
-    && Number.isSafeInteger(durableIdentity.processId)
-    && durableIdentity.processId > 0
+  const durableIdentityMatchesSession = [
+    durableIdentity?.runtimeSessionId === recoveryCheckpoint?.runtimeSessionId,
+    identity?.runtimeSessionId === recoveryCheckpoint?.runtimeSessionId,
+    durableIdentity?.startedAt === identity?.startedAt,
+    Number.isSafeInteger(durableIdentity?.processId),
+    durableIdentity?.processId > 0,
+  ].every(Boolean)
   return durableIdentityMatchesSession ? durableIdentity.processId : null
 }
 
