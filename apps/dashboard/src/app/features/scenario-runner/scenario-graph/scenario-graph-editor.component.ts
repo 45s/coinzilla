@@ -210,6 +210,23 @@ export class ScenarioGraphEditorComponent {
     this.updateSelectedNode({ description: value });
   }
 
+  updateSelectedProperties(serializedProperties: string): void {
+    const nodeId = this.selectedNodeId();
+    if (!nodeId) {
+      return;
+    }
+    try {
+      this.graph.set(this.editor.updateNodeProperties({
+        graph: this.graph(),
+        nodeId,
+        serializedProperties,
+      }));
+      this.error.set(null);
+    } catch (error) {
+      this.showError(error);
+    }
+  }
+
   deleteSelectedNode(): void {
     const nodeId = this.selectedNodeId();
     if (nodeId) {
