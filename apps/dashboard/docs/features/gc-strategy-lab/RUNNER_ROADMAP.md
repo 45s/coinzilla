@@ -181,7 +181,6 @@ The Scenario Runner catalogue now needs a source-reviewed explanation before exe
 
 Issue [#2001](https://github.com/45s/coinzilla/issues/2001) / PR [#2002](https://github.com/45s/coinzilla/pull/2002) removes the redundant page heading/subtitle in favor of the existing breadcrumb, expands the runner to the available Dashboard width, and places guide context beside the vertical expected-flow graph on desktop. Graph typography and node geometry are reduced modestly from the initial readability pass. Mobile remains single-column. This changes presentation only; scenario intent, source mapping, readiness, limitations, and actual run evidence remain separate and unchanged.
 
-
 ## Dashboard navigation and compact scenario workspace — 2026-11-28
 
 Issue [#2005](https://github.com/45s/coinzilla/issues/2005) / PR [#2006](https://github.com/45s/coinzilla/pull/2006) moves the Dashboard primary navigation into the horizontal top bar and retains breadcrumbs and section tabs. Scenario selection now gives most available width to the scenario identifier, with a compact strategy selector and the GitHub develop snapshot revision displayed beside its checkbox. The duplicate guide availability badge and separate readiness panel are removed; source mapping, execution status, scenario intent limitations and actual run evidence remain. The SVG canvas expands to its full content height, so long scenarios scroll with the page rather than inside the graph.
