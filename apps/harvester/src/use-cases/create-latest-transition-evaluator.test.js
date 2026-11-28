@@ -137,7 +137,11 @@ test("keeps RS-owned active orders out of Conservative policy inputs", async () 
 
 test("evaluates RS-owned symbols through the shared transition when CG has no route", async () => {
   const dependencies = createDependencies()
-  dependencies.recoverySellerPairs = { RSUSDT: { enabled: true } }
+  dependencies.recoverySellerPairs = {
+    RSUSDT: {
+      enabled: true,
+    },
+  }
   let recoverySellerCalls = 0
   dependencies.evaluateRecoverySellerTransition = async ({ symbol }) => {
     recoverySellerCalls += 1
@@ -161,7 +165,9 @@ test("evaluates RS-owned symbols through the shared transition when CG has no ro
 test("does not dispatch RS for a market without an RS execution route", async () => {
   const dependencies = createDependencies()
   dependencies.recoverySellerPairs = {
-    OTHERUSDT: { enabled: true },
+    OTHERUSDT: {
+      enabled: true,
+    },
   }
   let recoverySellerCalls = 0
   dependencies.evaluateRecoverySellerTransition = async () => {
