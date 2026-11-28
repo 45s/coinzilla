@@ -123,11 +123,15 @@
           @if (view.outcomes.safety.marketPaused === true) {
             <small>Market paused</small>
           }
+          @if (view.outcomes.safety.pauseReasons.length) {
+            <small>Pause reason: {{ view.outcomes.safety.pauseReasons | json }}</small>
+          }
         </article>
         <article class="outcome-card">
           <h3>Provenance</h3>
           <strong>{{ view.outcomes.provenance.verified === true ? 'Verified' : view.outcomes.provenance.verified === false ? 'Unverified' : 'Unavailable' }}</strong>
           <small>Catalog: {{ view.outcomes.provenance.catalogStatus ?? 'unknown' }} · build artifact: {{ view.outcomes.provenance.buildArtifactSha256 === null ? 'unavailable' : view.outcomes.provenance.buildArtifactSha256 ?? 'unknown' }}</small>
+          <small>Worker isolation: {{ view.outcomes.provenance.workerIsolation ?? 'unknown' }} · trace completeness: {{ view.outcomes.provenance.traceCompleteness ?? 'unknown' }}</small>
         </article>
       </section>
 
@@ -187,7 +191,7 @@
                 <button type="button" class="timeline-step" [class.selected]="selectedStepId() === step.key" [attr.aria-pressed]="selectedStepId() === step.key" (click)="selectStep(step.key)">
                   <span class="step-kind">{{ step.kind ?? 'Unknown event type' }}</span>
                   <strong>{{ step.label ?? 'No source label supplied' }}</strong>
-                  <small>Source trace item {{ step.sourceIndex + 1 }} · {{ step.id ?? 'ID unavailable' }}</small>
+                  <small>Source trace item {{ step.sourceIndex + 1 }} · {{ step.id ?? 'ID unavailable' }}{{ step.timestamp ? ' · ' + step.timestamp : '' }}</small>
                 </button>
               </li>
             }
@@ -223,6 +227,10 @@
         <details>
           <summary>Technical investigation · complete original JSON</summary>
           <p>The view model above is a projection only. This source payload remains available with unknown fields, explicit nulls and false values intact.</p>
+          <details>
+            <summary>Structured JSON tree · expand fields and copy individual values</summary>
+            <app-json-tree label="Original run payload" [value]="view.rawPayload" />
+          </details>
           <label>Search JSON fields and values
             <input type="search" [value]="rawSearch()" (input)="rawSearch.set($any($event.target).value)" placeholder="Search field names or values" />
           </label>

@@ -6,6 +6,7 @@ export interface ScenarioRunPresentationStep {
   readonly kind: string | null;
   readonly label: string | null;
   readonly sourceIndex: number;
+  readonly timestamp: string | null;
   readonly sourceEvidence: unknown;
 }
 
@@ -90,6 +91,7 @@ export interface ScenarioRunPresentation {
       readonly workerIsolation: string | null;
       readonly missing: readonly unknown[];
       readonly traceCompleteness: string | null;
+      readonly catalogSnapshotProvenance: string | null;
     };
   };
 }
@@ -203,6 +205,15 @@ function isPositiveQuantity(value: string | null): boolean | null {
   return Number.isFinite(quantity) ? quantity > 0 : null;
 }
 
+function isPartialExecution(order: ScenarioRunPresentationOrder): boolean {
+  if (order.executedQuantity === null || order.quantity === null) {
+    return false;
+  }
+  const executed = Number(order.executedQuantity);
+  const total = Number(order.quantity);
+  return Number.isFinite(executed) && Number.isFinite(total) && executed > 0 && executed < total;
+}
+
 function buildOrders(runtimeOutput: EvidenceRecord | null): readonly ScenarioRunPresentationOrder[] {
   const submittedOrders = asArray(runtimeOutput?.['submittedOrders']);
   const terminalOrder = readRecord(runtimeOutput, 'terminalSell');
@@ -279,7 +290,7 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
   );
   const orders = buildOrders(runtimeOutput);
   const decisionSource = readRecord(runtimeOutput, 'decision');
-  const configurationSummary = ['investment', 'orderQuantity', 'sellQuantity', 'keepQuantity', 'minProfit', 'marketPrice']
+  const configurationSummary = ['investment', 'quoteBalanceFree', 'orderQuantity', 'sellQuantity', 'keepQuantity', 'minProfit', 'marketPrice', 'makerPercent', 'takerPercent', 'minQuantity', 'minNotional', 'priceIncrement', 'quantityIncrement']
     .filter((key) => input !== null && Object.prototype.hasOwnProperty.call(input, key))
     .map((key) => ({ key, value: input?.[key] }));
   const artifactHashValue = provenanceIdentity?.['buildArtifactSha256'];
@@ -296,6 +307,7 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
       kind,
       label: readString(step, 'label'),
       sourceIndex: index,
+      timestamp: firstString(readString(step, 'at'), readString(step, 'timestamp'), readString(step, 'occurredAt'), readString(step, 'createdAt')),
       sourceEvidence: value,
     };
   });
@@ -308,9 +320,7 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
   const runStatus = readString(run, 'status');
   const assertions = readAssertions(root, runOutput);
   const terminalOrderCount = orders.filter((order) => order.terminalStatus !== null).length;
-  const partiallyExecutedOrderCount = orders.filter((order) =>
-    order.terminalStatus !== null && isPositiveQuantity(order.executedQuantity) === true,
-  ).length;
+  const partiallyExecutedOrderCount = orders.filter(isPartialExecution).length;
   const pauseReasons = asArray(terminalOrder?.['pauseReasons'] ?? runtimeOutput?.['pauseReasons']);
 
   return {
@@ -379,6 +389,7 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
         workerIsolation: readString(execution, 'workerIsolation'),
         missing: asArray(replayProvenance?.['missing']),
         traceCompleteness: readString(root, 'traceCompleteness'),
+        catalogSnapshotProvenance: readString(root, 'scenarioCatalogSnapshotProvenance'),
       },
     },
   };

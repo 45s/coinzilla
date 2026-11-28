@@ -1,6 +1,7 @@
 import { JsonPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { ScenarioRunnerApi } from './api';
+import { JsonTreeComponent } from './json-tree.component';
 import { createScenarioRunnerApplication, type ScenarioCatalogItem, type ScenarioRunSnapshot } from './application';
 import { createScenarioRunPresentation, type ScenarioRunPresentation, type ScenarioRunPresentationStep } from './core/create-scenario-run-presentation';
 import type { ScenarioRunRecord, ScenarioTraceStep } from './core/run-contract';
@@ -8,7 +9,7 @@ import type { ScenarioRunRecord, ScenarioTraceStep } from './core/run-contract';
 @Component({
   selector: 'app-scenario-runner',
   standalone: true,
-  imports: [JsonPipe],
+  imports: [JsonPipe, JsonTreeComponent],
   templateUrl: './page.html',
   styleUrl: './page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -235,7 +236,7 @@ export class ScenarioRunnerComponent {
 
   get selectedStepJson(): string {
     const evidence = this.selectedStep?.sourceEvidence;
-    return evidence === undefined ? '' : JSON.stringify(evidence, null, 2);
+    return evidence === undefined ? '' : JSON.stringify(evidence, null, 2) ?? '';
   }
 
   get rawJson(): string {
