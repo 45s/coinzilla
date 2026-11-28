@@ -125,7 +125,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
   }),
   'RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001': runtimeGuide({
     title: 'SELL result and STOP cannot be saved — block trading',
-    purpose: 'This example checks that trading stays blocked if the system cannot save either the exchange's SELL acceptance or the STOP record.',
+    purpose: 'This example checks that trading stays blocked if the system cannot save either the exchange\'s SELL acceptance or the STOP record.',
     injectedCondition: 'The store refuses to save both the SELL acceptance result and the safety STOP record.',
     expectedOutcome: 'Keep the SELL reservation. Block both new BUY and SELL submissions. Do not claim that STOP was saved, because that save failed.',
     path: [
@@ -170,7 +170,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
   'RS-RUNTIME-SELL-PARTIAL-CANCEL-001': runtimeGuide({
     title: 'SELL partly fills, then is cancelled',
     purpose: 'This example checks that coins already sold are still counted when the remaining SELL order is later cancelled.',
-    injectedCondition: 'After accepting the SELL, the simulated exchange reports that 2.5 units were sold and then the remaining order was cancelled. The 2.5-unit amount is only this example's input.',
+    injectedCondition: 'After accepting the SELL, the simulated exchange reports that 2.5 units were sold and then the remaining order was cancelled. The 2.5-unit amount is only this example\'s input.',
     expectedOutcome: 'Account for the 2.5 units already sold. Keep the recovery cycle unresolved; a partial sale followed by cancellation is not a completed recovery.',
     path: [
       { id: 'ack', kind: 'production-flow', label: 'Acknowledge the planned SELL', detail: 'The simulated broker returns the open SELL order.' },
