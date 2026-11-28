@@ -53,49 +53,52 @@ function validateExecutionSymbolList({ executionSymbols, routeSymbols } = {}) {
   }
 }
 
+function getDisabledRecoveryOnlySymbols({ configuredAppConfig, executionRoutes } = {}) {
+  const recoverySellerSymbols = Object.keys(configuredAppConfig.strategies?.RS_recoverySeller?.pairs ?? {})
+  const conservativeSymbols = new Set(Object.keys(configuredAppConfig.strategies?.CG_coinGrabber?.pairs ?? {}))
+  const disabledRecoveryOnlySymbols = new Set(
+    recoverySellerSymbols.filter((symbol) => !conservativeSymbols.has(symbol)),
+  )
+  if (!Array.isArray(executionRoutes)) {
+    return disabledRecoveryOnlySymbols
+  }
+
+  const routedConservativeSymbols = new Set()
+  for (const route of executionRoutes) {
+    if (route?.strategyId === StrategyId.COIN_GRABBER) {
+      routedConservativeSymbols.add(route.symbol)
+    }
+  }
+  for (const route of executionRoutes) {
+    if (route?.strategyId === StrategyId.RECOVERY_SELLER &&
+        !routedConservativeSymbols.has(route.symbol)) {
+      disabledRecoveryOnlySymbols.add(route.symbol)
+    }
+  }
+  return disabledRecoveryOnlySymbols
+}
+
 function resolveEffectiveExecutionInputs({
   configuredAppConfig,
   executionSymbols,
   executionRoutes,
 } = {}) {
   if (configuredAppConfig.components?.recovery?.enabled !== false) {
-    return { executionSymbols, executionRoutes };
+    return { executionSymbols, executionRoutes }
   }
 
-  const recoverySellerSymbols = new Set(
-    Object.keys(configuredAppConfig.strategies?.RS_recoverySeller?.pairs ?? {}),
-  );
-  const conservativeSymbols = new Set(
-    Object.keys(configuredAppConfig.strategies?.CG_coinGrabber?.pairs ?? {}),
-  );
-  const disabledRecoveryOnlySymbols = new Set(
-    [...recoverySellerSymbols].filter((symbol) => !conservativeSymbols.has(symbol)),
-  );
-
-  const filteredRoutes = Array.isArray(executionRoutes)
-    ? executionRoutes.filter((route) => route?.strategyId !== StrategyId.RECOVERY_SELLER)
-    : executionRoutes;
-  const routedConservativeSymbols = new Set(
-    (Array.isArray(filteredRoutes) ? filteredRoutes : [])
-      .filter((route) => route?.strategyId === StrategyId.COIN_GRABBER)
-      .map((route) => route.symbol),
-  );
-  const removedRouteSymbols = new Set(
-    (Array.isArray(executionRoutes) ? executionRoutes : [])
-      .filter((route) => route?.strategyId === StrategyId.RECOVERY_SELLER)
-      .map((route) => route.symbol)
-      .filter((symbol) => !routedConservativeSymbols.has(symbol)),
-  );
-  for (const symbol of removedRouteSymbols) {
-    disabledRecoveryOnlySymbols.add(symbol);
-  }
-
+  const disabledRecoveryOnlySymbols = getDisabledRecoveryOnlySymbols({
+    configuredAppConfig,
+    executionRoutes,
+  })
   return {
-    executionRoutes: filteredRoutes,
+    executionRoutes: Array.isArray(executionRoutes)
+      ? executionRoutes.filter((route) => route?.strategyId !== StrategyId.RECOVERY_SELLER)
+      : executionRoutes,
     executionSymbols: executionSymbols === undefined || !Array.isArray(executionSymbols)
       ? executionSymbols
       : executionSymbols.filter((symbol) => !disabledRecoveryOnlySymbols.has(symbol)),
-  };
+  }
 }
 
 function resolveExecutionRouteSymbols({ executionRoutes, executionSymbols } = {}) {
