@@ -422,7 +422,7 @@ test("keeps startup incomplete and the user-data gate closed until deferred mark
   let result
   try {
     result = await startHarvesterForTest({
-      loadConfig: async () => createRsOnlyStartupConfig(),
+      loadConfig: async () => createRsOnlyStartupConfig({ processRecoveryEnabled: false }),
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
       operationalStateStore: store,
