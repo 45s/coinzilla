@@ -678,19 +678,18 @@ function resolveLogRotationIndex(filename) {
 }
 
 function createSessionStreamFileInventory({ selection, artifactProvenance, streamDefinition } = {}) {
-  const files = artifactProvenance
+  const allFiles = artifactProvenance
     .filter((artifact) => {
-      const filename = path.posix.basename(artifact.sourcePath).replace(/\\.gz$/i, "")
+      const filename = path.posix.basename(artifact.sourcePath).replace(/\.gz$/i, "")
       return streamDefinition.pattern.test(filename)
     })
     .map((artifact) => {
       const sessionName = artifact.sourcePath.split("/")[2]
       const session = selection.sessions.find((candidate) => candidate.sessionName === sessionName)
-      const actualRuntimeId = session?.runtimeSessionId ?? null
       return {
         sourcePath: artifact.sourcePath,
         archivePath: artifact.archivePath,
-        actualRuntimeId,
+        actualRuntimeId: session?.runtimeSessionId ?? null,
         sourceSize: artifact.sourceSize,
         archiveSize: artifact.archiveSize,
         sourceSha256: artifact.sourceSha256,
@@ -703,8 +702,9 @@ function createSessionStreamFileInventory({ selection, artifactProvenance, strea
     })
     .sort((left, right) => right.rotationIndex - left.rotationIndex || left.sourcePath.localeCompare(right.sourcePath))
   const expectedRuntimeId = selection.recoveryRuntimeSessionId
-  const matchingFiles = files.filter((file) => file.actualRuntimeId === expectedRuntimeId)
-  const mismatchedFiles = files.filter((file) => file.actualRuntimeId !== expectedRuntimeId)
+  const matchingFiles = allFiles.filter((file) => file.actualRuntimeId === expectedRuntimeId)
+  const mismatchedFiles = allFiles.filter((file) => file.actualRuntimeId !== expectedRuntimeId)
+  const selectedFiles = matchingFiles.length > 0 ? matchingFiles : allFiles
   let status = "matched"
   let reason = null
   if (matchingFiles.length === 0) {
@@ -720,11 +720,12 @@ function createSessionStreamFileInventory({ selection, artifactProvenance, strea
   return {
     status,
     expectedRuntimeId,
-    actualRuntimeIds: [...new Set(files.map((file) => file.actualRuntimeId).filter(Boolean))].sort(),
-    sourcePaths: files.map((file) => file.sourcePath),
+    actualRuntimeIds: [...new Set(selectedFiles.map((file) => file.actualRuntimeId).filter(Boolean))].sort(),
+    sourcePaths: selectedFiles.map((file) => file.sourcePath),
     fileCount: matchingFiles.length,
     totalBytes: matchingFiles.reduce((total, file) => total + file.sourceSize, 0),
-    files,
+    files: selectedFiles,
+    independentFiles: matchingFiles.length > 0 ? mismatchedFiles : [],
     reason,
   }
 }
