@@ -33,6 +33,27 @@ function runtimeGuide({
   expectedOutcome: string;
   path: readonly ScenarioGuideStep[];
 }): ScenarioGuide {
+  const steps: ScenarioGuideStep[] = [
+    {
+      id: 'seed',
+      kind: 'start',
+      label: 'Seed isolated scenario state',
+      detail: 'Create the run-local market, account snapshot, filled recovery BUY/fill, legacy position, accounting workflow and simulated infrastructure.',
+    },
+    {
+      id: 'evaluate',
+      kind: 'production-flow',
+      label: 'Evaluate through production Recovery Seller flow',
+      detail: 'Dispatch the market observation through the runtime evaluator, action authorizer and SELL planner. The diagram does not reimplement their calculations.',
+    },
+    ...path,
+    {
+      id: 'assertions',
+      kind: 'outcome',
+      label: 'Compare actual output with scenario expectations',
+      detail: expectedOutcome,
+    },
+  ];
   return Object.freeze({
     availability: 'EXECUTABLE',
     purpose,
@@ -40,27 +61,27 @@ function runtimeGuide({
     injectedCondition,
     expectedOutcome,
     limitations: runtimeLimitations,
-    steps: Object.freeze([
-      {
-        id: 'seed',
-        kind: 'start',
-        label: 'Seed isolated scenario state',
-        detail: 'Create the run-local market, account snapshot, filled recovery BUY/fill, legacy position, accounting workflow and simulated infrastructure.',
-      },
-      {
-        id: 'evaluate',
-        kind: 'production-flow',
-        label: 'Evaluate through production Recovery Seller flow',
-        detail: 'Dispatch the market observation through the runtime evaluator, action authorizer and SELL planner. The diagram does not reimplement their calculations.',
-      },
-      ...path,
-      {
-        id: 'assertions',
-        kind: 'outcome',
-        label: 'Compare actual output with scenario expectations',
-        detail: expectedOutcome,
-      },
+    steps: Object.freeze(steps),
+  });
+}
+
+function createPreliminaryGuide(): ScenarioGuide {
+  const steps: ScenarioGuideStep[] = [
+    { id: 'start', kind: 'start', label: 'Supply recovery and legacy profitability inputs', detail: 'Provide recovery cost basis/net proceeds, legacy average cost/base debit/net proceeds and quote-asset minProfit.' },
+    { id: 'calculate', kind: 'decision', label: 'Call calculateRecoverySellerProfitability', detail: 'The runner invokes the pure production helper; recovery, legacy and combined-cycle gates are evaluated independently.' },
+    { id: 'outcome', kind: 'outcome', label: 'Compare helper output with expected values', detail: 'The single assertion compares the helper result with expected recovery, legacy and cycle profitability breakdowns.' },
+  ];
+  return Object.freeze({
+    availability: 'PRELIMINARY',
+    purpose: 'Compare recovery-profitability, legacy-profitability and combined-cycle profitability gates. This candidate calls one pure production calculation only; it does not run the Recovery Seller lifecycle.',
+    startingState: 'The input supplies separate recovery cost/proceeds and legacy average-cost/debit/proceeds values plus minProfit as an absolute quote-asset amount.',
+    injectedCondition: 'No runtime event is injected; the helper receives only the explicit profitability input values.',
+    expectedOutcome: 'The helper returns recovery, legacy and combined-cycle calculations, and the assertion compares all three eligibility gates with expected values.',
+    limitations: Object.freeze([
+      'PRELIMINARY and non-executable: this is a helper-only projection, not an executable production runtime scenario.',
+      'It does not create an order, call a broker, reconcile a fill, mutate a cycle or prove STOP/admission behavior.',
     ]),
+    steps: Object.freeze(steps),
   });
 }
 
@@ -187,22 +208,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
       { id: 'sell', kind: 'outcome', label: 'Allow eligible SELL; block BUY', detail: 'The expected action is SELL, with BUY admission blocked and SELL admission not blocked.' },
     ],
   }),
-  'RS-004-011': Object.freeze({
-    availability: 'PRELIMINARY',
-    purpose: 'Compare recovery-profitability, legacy-profitability and combined-cycle profitability gates. This candidate calls one pure production calculation only; it does not run the Recovery Seller lifecycle.',
-    startingState: 'The input supplies separate recovery cost/proceeds and legacy average-cost/debit/proceeds values plus minProfit as an absolute quote-asset amount.',
-    injectedCondition: 'No runtime event is injected; the helper receives only the explicit profitability input values.',
-    expectedOutcome: 'The helper returns recovery, legacy and combined-cycle calculations, and the assertion compares all three eligibility gates with expected values.',
-    limitations: Object.freeze([
-      'PRELIMINARY and non-executable: this is a helper-only projection, not an executable production runtime scenario.',
-      'It does not create an order, call a broker, reconcile a fill, mutate a cycle or prove STOP/admission behavior.',
-    ]),
-    steps: Object.freeze([
-      { id: 'start', kind: 'start', label: 'Supply recovery and legacy profitability inputs', detail: 'Provide recovery cost basis/net proceeds, legacy average cost/base debit/net proceeds and quote-asset minProfit.' },
-      { id: 'calculate', kind: 'decision', label: 'Call calculateRecoverySellerProfitability', detail: 'The runner invokes the pure production helper; recovery, legacy and combined-cycle gates are evaluated independently.' },
-      { id: 'outcome', kind: 'outcome', label: 'Compare helper output with expected values', detail: 'The single assertion compares the helper result with expected recovery, legacy and cycle profitability breakdowns.' },
-    ]),
-  }),
+  'RS-004-011': createPreliminaryGuide(),
 });
 
 export function getScenarioGuide(scenarioId: string): ScenarioGuide | null {
