@@ -95,10 +95,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+function assertAllowedKeys(value: Record<string, unknown>, allowed: readonly string[], code: string): void {
+  if (Object.keys(value).some((key) => !allowed.includes(key))) {
+    throw new Error(code);
+  }
+}
+
 function assertGraphShape(value: unknown): asserts value is ScenarioGraph {
   if (!isRecord(value) || value['schemaVersion'] !== SCENARIO_GRAPH_SCHEMA_VERSION) {
     throw new Error('SCENARIO_GRAPH_SCHEMA_VERSION_UNSUPPORTED');
   }
+  assertAllowedKeys(value, ['schemaVersion', 'status', 'id', 'title', 'description', 'source', 'nodes', 'edges'], 'SCENARIO_GRAPH_DOCUMENT_INVALID');
   if (
     value['status'] !== 'visual-only'
     || typeof value['id'] !== 'string'
@@ -110,6 +117,7 @@ function assertGraphShape(value: unknown): asserts value is ScenarioGraph {
     throw new Error('SCENARIO_GRAPH_DOCUMENT_INVALID');
   }
   const source = value['source'];
+  assertAllowedKeys(source, ['kind', 'reference'], 'SCENARIO_GRAPH_SOURCE_INVALID');
   if (
     (source['kind'] !== 'manual' && source['kind'] !== 'rs-domain-specification')
     || typeof source['reference'] !== 'string'
@@ -121,7 +129,7 @@ function assertGraphShape(value: unknown): asserts value is ScenarioGraph {
       !isRecord(node)
       || typeof node['id'] !== 'string'
       || typeof node['type'] !== 'string'
-      || !(node['type'] in NODE_PORTS)
+      || !Object.hasOwn(NODE_PORTS, node['type'])
       || typeof node['label'] !== 'string'
       || !isRecord(node['position'])
       || typeof node['position']['x'] !== 'number'
@@ -129,6 +137,11 @@ function assertGraphShape(value: unknown): asserts value is ScenarioGraph {
       || !isRecord(node['properties'])
       || Object.values(node['properties']).some((item) => typeof item !== 'string')
     ) {
+      throw new Error('SCENARIO_GRAPH_NODE_INVALID');
+    }
+    assertAllowedKeys(node, ['id', 'type', 'label', 'description', 'position', 'properties'], 'SCENARIO_GRAPH_NODE_INVALID');
+    assertAllowedKeys(node['position'] as Record<string, unknown>, ['x', 'y'], 'SCENARIO_GRAPH_NODE_INVALID');
+    if (node['description'] !== undefined && typeof node['description'] !== 'string') {
       throw new Error('SCENARIO_GRAPH_NODE_INVALID');
     }
   }
@@ -146,6 +159,9 @@ function assertGraphShape(value: unknown): asserts value is ScenarioGraph {
     ) {
       throw new Error('SCENARIO_GRAPH_EDGE_INVALID');
     }
+    assertAllowedKeys(edge, ['id', 'from', 'to', 'label'], 'SCENARIO_GRAPH_EDGE_INVALID');
+    assertAllowedKeys(edge['from'] as Record<string, unknown>, ['nodeId', 'portId'], 'SCENARIO_GRAPH_EDGE_INVALID');
+    assertAllowedKeys(edge['to'] as Record<string, unknown>, ['nodeId', 'portId'], 'SCENARIO_GRAPH_EDGE_INVALID');
   }
 }
 
