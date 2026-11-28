@@ -1807,12 +1807,18 @@ async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive
     if (!lockOwnershipUnchanged || !isHarvesterProcessAlive(activeProcessOwner.pid)) {
       throw new Error(`The active Harvester process lock changed or the process exited during archive collection (PID ${activeProcessOwner.pid}); the snapshot is not publishable.`)
     }
-    await writeActiveProcessSnapshotMarker({
-      localArchive,
-      logSelection,
-      activeProcessOwner,
-      recoveryCheckpoint,
-    })
+    const activeSessionMatches = logSelection.sessions.some((session) =>
+      session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId
+        && session.completionStatus === "active"
+    )
+    if (activeSessionMatches) {
+      await writeActiveProcessSnapshotMarker({
+        localArchive,
+        logSelection,
+        activeProcessOwner,
+        recoveryCheckpoint,
+      })
+    }
   }
   reportProgress(onProgress, `Evidence snapshot complete: ${retainedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
   return logSelection
