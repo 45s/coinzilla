@@ -160,3 +160,15 @@ Dashboard gateway tests now cover catalogue, submit, history, run detail, cancel
 - Added the complete supplied RS partial-CANCELED debug report as a regression fixture plus adapter, JSON-tree and run-details UI tests.
 - The fixture does not contain enough fill price/commission evidence to calculate realized P/L; the UI must show no invented financial result.
 - Implementation and exact-head verification state are tracked in issue #1982 and PR #1983. Do not treat this section as a production-readiness or replay-provenance attestation.
+
+## 2026-11-28 — Pre-run scenario intent diagrams (#1984 / PR #1988)
+
+The Scenario Runner catalogue now needs a source-reviewed explanation before execution, not only an ID/name and raw JSON input. The Dashboard guide model maps each published RS runtime scenario to its business question, seeded starting state, deliberate condition/failure, expected result, limitations and ordered intent-flow nodes.
+
+- The guide covers all twelve executable `RS-RUNTIME-*` entries plus the preliminary, non-executable `RS-004-011` helper-only candidate.
+- The selected guide is rendered before the input editor/run action as a readable flow diagram with a visible distinction between start state, production path, decision/condition, injected failure and expected outcome.
+- Unknown scenario IDs show an explicit unavailable explanation; no generic RS flow is invented.
+- The guide is an authored explanation of scenario intent. The evidence-linked Run Story remains separate and is derived only from actual returned run evidence.
+- No Harvester trading behavior or runner API execution contract changes are made by this Dashboard presentation increment.
+- Source audit: `apps/harvester/src/infrastructure/scenario-runner/rs-runtime-scenario.js` and the helper-only `RS-004-011` adapter in `apps/harvester/src/infrastructure/scenario-runner/rs-scenario-adapter.js`.
+- Tracking: [issue #1984](https://github.com/45s/coinzilla/issues/1984), [PR #1988](https://github.com/45s/coinzilla/pull/1988).
