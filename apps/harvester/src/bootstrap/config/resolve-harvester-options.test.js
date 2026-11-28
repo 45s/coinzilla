@@ -2,6 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { TRADING_ENVIRONMENTS } from "../../domain/trading-environment.js"
+import { appConfig as defaultAppConfig } from "../../../config/index.js"
 import { resolveHarvesterOptions } from "./resolve-harvester-options.js"
 
 const test = (...args) => nodeTest(`[resolve-harvester-options.test.js] ${args[0]}`, ...args.slice(1))
@@ -495,6 +496,45 @@ test("retains CG ownership for the legacy single-strategy route", async () => {
   assert.deepEqual(result.marketPriceStrategyIds, {
     BTCUSDT: "CG_coinGrabber",
   }, "The existing CG-only startup path must keep its canonical strategy attribution.")
+})
+
+test("resolves the configured default LINEA and ARB RS markets when CG process recovery is disabled", async () => {
+  const cfg = structuredClone(defaultAppConfig)
+  cfg.components = {
+    ...cfg.components,
+    recovery: { enabled: false },
+  }
+  const executionRoutes = [
+    {
+      strategyId: "RS_recoverySeller",
+      symbol: "LINEAUSDT",
+    },
+    {
+      strategyId: "RS_recoverySeller",
+      symbol: "ARBUSDT",
+    },
+  ]
+  const fixture = createFixture({
+    cfg,
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
+  const result = await resolveHarvesterOptions({
+    ...fixture.input,
+    executionSymbols: ["LINEAUSDT", "ARBUSDT"],
+    executionRoutes,
+    marketDataSymbols: ["LINEAUSDT", "ARBUSDT"],
+  })
+
+  assert.equal(result.appConfig.strategies.RS_recoverySeller.enabled, true,
+    "The default enabled RS strategy must remain enabled with CG process recovery disabled.")
+  assert.deepEqual(Object.keys(result.recoverySellerPairs), ["LINEAUSDT", "ARBUSDT"],
+    "Both default TESTNET RS markets must survive configuration resolution.")
+  assert.deepEqual(result.executionRoutes, executionRoutes,
+    "The exact RS strategy/market routes must be retained.")
+  assert.deepEqual(result.executionSymbols, ["LINEAUSDT", "ARBUSDT"],
+    "The resolved provider market set must retain both RS markets.")
+  assert.deepEqual(result.enabledSymbols, ["LINEAUSDT", "ARBUSDT"],
+    "Runtime configuration evidence must include both enabled RS markets.")
 })
 
 test("rejects enabled RS configuration when provider execution routes are missing", async () => {
