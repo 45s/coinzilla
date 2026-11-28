@@ -35,6 +35,10 @@ pnpm --filter @coinzilla/dashboard test
 pnpm --filter @coinzilla/dashboard test:coverage
 ```
 
+## Scenario Graph Editor
+
+The Scenario Runner includes a native SVG visual graph editor for the Recovery Seller lifecycle. Nodes can be dragged, selected, edited, added and removed; connections can be created from output ports to input ports and removed independently. The versioned graph schema, validation, editing operations and renderer-neutral geometry are framework-independent TypeScript. Angular is only the current presentation adapter. Graphs are local visual drafts and cannot be executed or saved as Harvester runtime scenarios. See the [Scenario Graph Schema](docs/features/gc-strategy-lab/SCENARIO_GRAPH_SCHEMA.md).
+
 ## Bots workspace
 
 The **Bots** page is a structured live view over Harvester's existing operator snapshots. It receives a complete versioned snapshot on connect and reconnect, then receives newer complete snapshots after relevant process, broker, readiness, market, fill, recovery, account-audit, and successful operator BUY-control events. Revisions are monotonic; an older read racing a newer event is discarded server-side, and the client ignores duplicate or out-of-order messages. It shows process state and running duration, effective runtime strategy mode, TESTNET/LIVE environment, readiness and blockers, enabled/blocked/disabled markets, the latest sampled market prices/freshness, and Portfolio inventory/recovery accounting. The Bots stream is state-driven and intentionally does not broadcast every market-price tick. Decimal amounts remain strings and are rendered without browser-side financial calculations.

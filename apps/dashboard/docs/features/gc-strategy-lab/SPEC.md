@@ -53,6 +53,16 @@ strategy-scenario-explorer/
 
 Names/layout are illustrative; responsibility and dependency direction are mandatory. Domain/application core owns behavior and contracts; adapters implement ports; UI framework code depends inward, never the reverse.
 
+## 2.1.1 Visual graph authoring contract
+
+Issue [#1992](https://github.com/45s/coinzilla/issues/1992) adds a dependency-free, native SVG editor for visual scenario graphs. The editor is a separate authoring/explanation surface; it does not replace the existing execution trace graph or pre-run scenario intent guide.
+
+The graph document uses a versioned, framework-neutral JSON contract defined in [Scenario Graph Schema](./SCENARIO_GRAPH_SCHEMA.md). Domain invariants, validation, graph operations, serialization and renderer-neutral geometry live in plain TypeScript domain/application modules. Angular is only the current SVG presentation adapter. A future React/Vue presentation must reuse the same graph schema, core modules and tests unchanged.
+
+All authored graph documents are explicitly `visual-only`. They are not Harvester executable scenario definitions, cannot be submitted to the runner, and are not persisted as executable runtime scenarios. Existing Harvester catalogue validation, simulation-only execution and fail-closed safety gates remain authoritative.
+
+The initial Recovery Seller graph is a source-reviewed visual adapter over the [RS Domain Specification](../../../../../apps/harvester/docs/domain/recovery-seller-domain-specification.md). It must preserve the sole SELL lifecycle, reconciliation barriers, profitability gates, investment-only STOP behavior and unresolved terminal outcomes. It must not imply unspecified retry/replacement policy or exchange authorization.
+
 ## 2.2 Strategy-neutral execution architecture and MVP flow
 
 The first executable milestone is an end-to-end RS scenario/subcase run using the generic runner contract. RS supplies the first strategy adapter and scenario catalogue; the runner itself has no RS-specific logic. The MVP is executable, not registry-only.
