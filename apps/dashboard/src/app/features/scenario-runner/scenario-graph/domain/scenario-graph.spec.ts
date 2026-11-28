@@ -3,6 +3,7 @@ import {
   connectGraphNodes,
   createScenarioGraph,
   deleteGraphNode,
+  disconnectGraphEdge,
   deserializeScenarioGraph,
   moveGraphNode,
   serializeScenarioGraph,
@@ -65,6 +66,13 @@ describe('scenario graph domain', () => {
       from: { nodeId: 'decision', portId: 'next' },
       to: { nodeId: 'yes', portId: 'in' },
     }), 'decision nodes must connect through declared yes/no ports only').toThrow('SCENARIO_GRAPH_PORT_INVALID');
+  });
+
+  it('disconnects one edge without changing its endpoint nodes', () => {
+    const graph = createValidGraph();
+    const updated = disconnectGraphEdge(graph, 'e2');
+    expect(updated.edges.some((edge) => edge.id === 'e2'), 'the selected connection must be removed').toBe(false);
+    expect(updated.nodes, 'disconnecting an edge must preserve all nodes').toEqual(graph.nodes);
   });
 
   it('deletes a node and all incident edges', () => {

@@ -225,6 +225,13 @@ export function connectGraphNodes(graph: ScenarioGraph, edge: ScenarioGraphEdge)
   });
 }
 
+export function disconnectGraphEdge(graph: ScenarioGraph, edgeId: string): ScenarioGraph {
+  if (!graph.edges.some((edge) => edge.id === edgeId)) {
+    throw new Error('SCENARIO_GRAPH_EDGE_NOT_FOUND');
+  }
+  return copyGraph(graph, { edges: graph.edges.filter((edge) => edge.id !== edgeId) });
+}
+
 export function deleteGraphNode(graph: ScenarioGraph, nodeId: string): ScenarioGraph {
   if (!graph.nodes.some((node) => node.id === nodeId)) {
     throw new Error('SCENARIO_GRAPH_NODE_NOT_FOUND');

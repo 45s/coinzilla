@@ -2,6 +2,7 @@ import {
   connectGraphNodes,
   createScenarioGraph,
   deleteGraphNode,
+  disconnectGraphEdge,
   moveGraphNode,
   serializeScenarioGraph,
   updateGraphNode,
@@ -106,6 +107,10 @@ export function createScenarioGraphEditor({ createId }: {
 
     connect({ graph, edge }: { readonly graph: ScenarioGraph; readonly edge: ScenarioGraphEdge }): ScenarioGraph {
       return connectGraphNodes(graph, edge);
+    },
+
+    disconnect({ graph, edgeId }: { readonly graph: ScenarioGraph; readonly edgeId: string }): ScenarioGraph {
+      return disconnectGraphEdge(graph, edgeId);
     },
 
     deleteNode({ graph, nodeId }: { readonly graph: ScenarioGraph; readonly nodeId: string }): ScenarioGraph {
