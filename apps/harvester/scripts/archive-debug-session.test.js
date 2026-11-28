@@ -364,8 +364,9 @@ async function prepareActiveRuntimeFixture({ fixture } = {}) {
     startedAt: identity.startedAt,
     token: "active-test-lock-token",
   }
-  const lockPath = path.join(fixture.lockDirectory, ".harvester-trading-test.lock")
-  const hostLockPath = path.join(fixture.lockDirectory, ".binance-harvester-trading-test.lock")
+  const lockFingerprint = "a".repeat(64)
+  const lockPath = path.join(fixture.lockDirectory, `.harvester-trading-${lockFingerprint}.lock`)
+  const hostLockPath = path.join(fixture.lockDirectory, `.binance-harvester-trading-${lockFingerprint}.lock`)
   await writeFile(lockPath, JSON.stringify(lockOwner), "utf8")
   await writeFile(hostLockPath, JSON.stringify({
     ...lockOwner,
@@ -922,16 +923,20 @@ test("rejects ambiguous ownership when multiple Harvester processes are alive", 
     force: true,
   }))
   const { lockPath, hostLockPath, lockOwner } = await prepareActiveRuntimeFixture({ fixture })
-  const additionalLockPath = path.join(fixture.lockDirectory, ".bitunix-harvester-trading-secondary.lock")
+  const additionalFingerprint = "b".repeat(64)
+  const additionalHostLockPath = path.join(fixture.lockDirectory, `.bitunix-harvester-trading-${additionalFingerprint}.lock`)
+  const additionalApplicationLockPath = path.join(fixture.lockDirectory, `.harvester-trading-${additionalFingerprint}.lock`)
   const additionalLockOwner = {
     ...lockOwner,
     pid: lockOwner.pid + 100000,
     token: "second-live-process-token",
   }
-  await writeFile(additionalLockPath, JSON.stringify(additionalLockOwner), "utf8")
+  await writeFile(additionalHostLockPath, JSON.stringify(additionalLockOwner), "utf8")
+  await writeFile(additionalApplicationLockPath, JSON.stringify(additionalLockOwner), "utf8")
   const applicationLockBefore = await readFile(lockPath)
   const hostLockBefore = await readFile(hostLockPath)
-  const additionalLockBefore = await readFile(additionalLockPath)
+  const additionalHostLockBefore = await readFile(additionalHostLockPath)
+  const additionalApplicationLockBefore = await readFile(additionalApplicationLockPath)
   await assert.rejects(
     runHarvesterDebugArchive({
       ...archiveDependencies({ fixture }),
@@ -943,7 +948,29 @@ test("rejects ambiguous ownership when multiple Harvester processes are alive", 
   )
   assert.deepEqual(await readFile(lockPath), applicationLockBefore, "Ambiguous ownership must not modify the application lock.")
   assert.deepEqual(await readFile(hostLockPath), hostLockBefore, "Ambiguous ownership must not modify the host lock.")
-  assert.deepEqual(await readFile(additionalLockPath), additionalLockBefore, "Ambiguous ownership must not modify the second process lock.")
+  assert.deepEqual(await readFile(additionalHostLockPath), additionalHostLockBefore, "Ambiguous ownership must not modify the second host process lock.")
+  assert.deepEqual(await readFile(additionalApplicationLockPath), additionalApplicationLockBefore, "Ambiguous ownership must not modify the second application process lock.")
+})
+
+
+test("rejects an active process when one of its required lock namespaces is missing", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const { lockPath, hostLockPath } = await prepareActiveRuntimeFixture({ fixture })
+  await rm(hostLockPath)
+  const applicationLockBefore = await readFile(lockPath)
+  await assert.rejects(
+    runHarvesterDebugArchive({
+      ...archiveDependencies({ fixture }),
+      onArchiveCreatedFn: undefined,
+    }),
+    /lock namespace.*incomplete|both.*lock namespaces/i,
+    "A running Harvester process must have both its host and application lock records.",
+  )
+  assert.deepEqual(await readFile(lockPath), applicationLockBefore, "Rejecting an incomplete lock pair must not modify the remaining lock.")
 })
 
 
