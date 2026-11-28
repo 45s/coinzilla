@@ -697,7 +697,7 @@ async function readArchiveSessionEvidence({ sessionsDirectory, sessionName, reco
   const { value: identity, error: identityError } = identityResult
   const { value: completion, error: completionError } = completionResult
   const { value: loggerCompletion, error: loggerCompletionError } = loggerCompletionResult
-  const isHarvesterSession = isHarvesterSessionSession({ identity })
+  const isHarvesterSession = isHarvesterRuntimeSession({ identity })
   const processId = resolveArchiveSessionProcessId({
     identity,
     recoveryCheckpoint,

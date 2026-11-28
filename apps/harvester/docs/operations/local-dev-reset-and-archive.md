@@ -1,6 +1,6 @@
 # Harvester local DEV reset and evidence archive
 
-This runbook covers the local TESTNET development workflow only. It does not authorize LIVE trading or exchange operations.
+This runbook covers the local TESTNET development workflow. The debug archive collector is read-only and can preserve existing LIVE session evidence, but it does not authorize LIVE trading or exchange operations.
 
 ## Required environment
 
@@ -35,7 +35,7 @@ The command creates a uniquely named local snapshot in the ignored `archive-outp
 Each archive contains:
 
 - `logs/sessions/`: all identified testnet/live sessions are preserved separately; only the exact runtime-ID match is selected, and its files are gzip-compressed.
-- `logs/cumulative/`: the final 5% of structured records belonging to that selected TESTNET runtime session. Shared `terminal.log` is deliberately excluded because it has no reliable per-record environment marker; the selected session's complete terminal log is included in the compressed session directory.
+- `logs/cumulative/`: the final 5% of structured records belonging to that selected runtime session. Shared `terminal.log` is deliberately excluded because it has no reliable per-record environment marker; the selected session's complete terminal log is included in the compressed session directory.
 - `data/`: all regular files and directories except `data/production/`. The configured `HARVESTER_DATABASE_DIRECTORY` override is honored; only non-production entries are copied.
 - `recovery-facts/`: the complete Operational State Store, including facts and manifest streams.
 - `data_commit_hash` and `manifest.json`: the latest committed recovery-facts checkpoint identity, file inventory, byte sizes, and SHA-256 checksums.

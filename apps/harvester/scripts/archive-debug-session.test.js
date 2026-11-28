@@ -212,8 +212,8 @@ async function assertCollectedArchive({ directory, expectedIdentityStatus, expec
   )
   assert.equal(
     gunzipSync(await readFile(path.join(directory, "logs/sessions/2026-11-24_testnet/terminal.log.gz"))).toString("utf8"),
-    "selected TESTNET session evidence",
-    "Selected completed TESTNET log must be preserved in gzip form",
+    "selected runtime session evidence",
+    "The selected runtime log must be preserved in gzip form",
   )
   await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-20_old")), { code: "ENOENT" }, "Older sessions must not be copied into the debug archive")
   assert.equal(
@@ -332,7 +332,7 @@ test("collects a verified archive without requiring GitHub publication configura
   assert.equal(result.archiveName, "2026-11-24T18-30-00Z_123e4567_debug", "Collection must return its local immutable archive identity.")
 })
 
-test("preserves TESTNET session inventory and recovery facts without changing source evidence", async (t) => {
+test("preserves testnet and live session inventory without changing source evidence", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
@@ -644,7 +644,7 @@ test("selects the exact trading-runtime session instead of a newer unrelated TES
       assert.equal(manifest.logSelection.selectionReason, "exact-runtime-id-match", "The manifest must explain why the matching session was selected.")
       assert.equal(
         gunzipSync(await readFile(path.join(directory, "logs/sessions/2026-11-24_testnet/terminal.log.gz"))).toString("utf8"),
-        "selected TESTNET session evidence",
+        "selected runtime session evidence",
         "The exact matching session's terminal output must be archived.",
       )
       assert.equal(
