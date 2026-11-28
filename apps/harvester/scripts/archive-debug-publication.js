@@ -239,7 +239,10 @@ function isCompleteStream({ stream, expectedRuntimeId } = {}) {
 }
 
 function assertCompleteStreamEvidence({ stream, streamLabel, expectedRuntimeId, manifestFiles } = {}) {
-  if (!isCompleteStream({ stream, expectedRuntimeId })) {
+  if (!isCompleteStream({
+    stream,
+    expectedRuntimeId,
+  })) {
     throw new Error(`${streamLabel} evidence is not complete for runtime ${expectedRuntimeId}: status=${stream?.status ?? "missing"}; files=${stream?.fileCount ?? 0}; bytes=${stream?.totalBytes ?? 0}.`)
   }
   for (const file of stream.files) {
