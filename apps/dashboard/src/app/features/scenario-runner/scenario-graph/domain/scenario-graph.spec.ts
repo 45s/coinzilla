@@ -98,6 +98,7 @@ describe('scenario graph domain', () => {
     expect(issues.map((issue) => issue.code), 'validation must report absent decision branches and unreachable nodes').toEqual(expect.arrayContaining([
       'SCENARIO_GRAPH_BRANCH_MISSING',
       'SCENARIO_GRAPH_NODE_UNREACHABLE',
+      'SCENARIO_GRAPH_TERMINAL_MISSING',
     ]));
   });
 

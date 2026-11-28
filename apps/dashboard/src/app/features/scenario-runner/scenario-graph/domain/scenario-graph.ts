@@ -357,6 +357,9 @@ export function validateScenarioGraph(graph: ScenarioGraph): readonly ScenarioGr
     if (node.type === 'end' && (outgoing.get(node.id)?.length ?? 0) > 0) {
       issues.push({ code: 'SCENARIO_GRAPH_END_HAS_OUTPUT', path: `nodes.${node.id}`, message: 'The end node cannot have outgoing edges.' });
     }
+    if (node.type !== 'end' && (outgoing.get(node.id)?.length ?? 0) === 0) {
+      issues.push({ code: 'SCENARIO_GRAPH_TERMINAL_MISSING', path: `nodes.${node.id}`, message: 'Every non-end node must connect to a subsequent node or terminal outcome.' });
+    }
   }
 
   if (startNodes.length === 1) {

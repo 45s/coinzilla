@@ -54,6 +54,7 @@ Version 1 validation reports stable issue codes and paths for:
 - missing or incorrectly labelled decision branches;
 - start nodes with incoming edges and end nodes with outgoing edges;
 - nodes unreachable from the start;
+- non-end nodes without a subsequent connection/terminal outcome;
 - directed cycles (not supported in version 1).
 
 Validation is deterministic and framework-independent. It does not infer business behavior, strategy readiness, exchange authorization, profitability, or scenario executability.
