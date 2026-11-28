@@ -56,7 +56,7 @@ export interface ScenarioRunPresentation {
   };
   readonly configuration: unknown;
   readonly configurationSummary: readonly { readonly key: string; readonly value: unknown }[];
-  readonly assertions: readonly { readonly key: string; readonly label: string | null; readonly passed: boolean | null; readonly expected: unknown; readonly actual: unknown; readonly sourceEvidence: unknown }[];
+  readonly assertions: readonly { readonly key: string; readonly sourceIndex: number; readonly label: string | null; readonly passed: boolean | null; readonly expected: unknown; readonly actual: unknown; readonly sourceEvidence: unknown }[];
   readonly initialState: unknown;
   readonly steps: readonly ScenarioRunPresentationStep[];
   readonly edges: readonly {
@@ -105,6 +105,12 @@ export interface ScenarioRunPresentation {
       readonly missing: readonly unknown[];
       readonly traceCompleteness: string | null;
       readonly catalogSnapshotProvenance: string | null;
+      readonly sourceCommitSha: string | null;
+      readonly checkedOutCommitSha: string | null;
+      readonly sourceTreeSha: string | null;
+      readonly dependencyLockSha256: string | null;
+      readonly runtimeIdentity: string | null;
+      readonly scenarioRegistrySha256: string | null;
     };
   };
 }
@@ -211,6 +217,37 @@ function readAssertions(root: EvidenceRecord | null, runOutput: EvidenceRecord |
     total: results.length,
     failed: results.filter((item) => readBoolean(item, 'passed') === false).length,
   };
+}
+
+function readAssertionDetails(root: EvidenceRecord | null, runOutput: EvidenceRecord | null): readonly {
+  readonly key: string;
+  readonly sourceIndex: number;
+  readonly label: string | null;
+  readonly passed: boolean | null;
+  readonly expected: unknown;
+  readonly actual: unknown;
+  readonly sourceEvidence: unknown;
+}[] {
+  const source = root?.['assertionResults'] ?? runOutput?.['assertionResults'] ?? runOutput?.['assertions'];
+  if (!Array.isArray(source)) {
+    return [];
+  }
+  return source.flatMap((value, index) => {
+    const assertion = asRecord(value);
+    if (!assertion) {
+      return [];
+    }
+    const id = firstString(readString(assertion, 'id'), readString(assertion, 'key'));
+    return [{
+      key: id ?? `assertion-${index}`,
+      sourceIndex: index,
+      label: firstString(readString(assertion, 'name'), readString(assertion, 'label'), id),
+      passed: readBoolean(assertion, 'passed'),
+      expected: assertion['expected'],
+      actual: assertion['actual'],
+      sourceEvidence: value,
+    }];
+  });
 }
 
 function compareDecimalStrings(left: string, right: string): number | null {
@@ -460,6 +497,7 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
   );
   const runStatus = readString(run, 'status');
   const assertions = readAssertions(root, runOutput);
+  const assertionDetails = readAssertionDetails(root, runOutput);
   const terminalOrderCount = orders.filter((order) => order.terminalStatus !== null).length;
   const partiallyExecutedOrderCount = orders.filter(isPartialExecution).length;
   const pauseReasons = asArray(
@@ -479,7 +517,7 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
     },
     configuration: input,
     configurationSummary,
-    assertions: [],
+    assertions: assertionDetails,
     initialState: root?.['initialState'] ?? runtimeOutput?.['initialState'] ?? null,
     steps,
     edges: readEdges(root, runOutput),
@@ -536,6 +574,12 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
         missing: asArray(replayProvenance?.['missing']),
         traceCompleteness: readString(root, 'traceCompleteness'),
         catalogSnapshotProvenance: readString(root, 'scenarioCatalogSnapshotProvenance'),
+        sourceCommitSha: readString(provenanceIdentity, 'sourceCommitSha'),
+        checkedOutCommitSha: readString(provenanceIdentity, 'checkedOutCommitSha'),
+        sourceTreeSha: readString(provenanceIdentity, 'sourceTreeSha'),
+        dependencyLockSha256: readString(provenanceIdentity, 'dependencyLockSha256'),
+        runtimeIdentity: readString(provenanceIdentity, 'runtimeIdentity'),
+        scenarioRegistrySha256: readString(provenanceIdentity, 'scenarioRegistrySha256'),
       },
     },
   };

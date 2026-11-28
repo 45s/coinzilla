@@ -71,6 +71,9 @@ describe('ScenarioRunnerComponent run details', () => {
     expect(text, 'STOP must block BUY admission').toContain('BUY blocked');
     expect(text, 'STOP must not be described as blocking SELL admission').toContain('SELL permitted');
     expect(text, 'unverified replay provenance must remain explicit').toContain('Unverified');
+    expect(text, 'assertion names must remain visible for review').toContain('production RS transition selects a SELL action');
+    expect(text, 'assertion expected values must remain visible').toContain('Expected:');
+    expect(text, 'assertion actual values must remain visible').toContain('Actual:');
     expect(text, 'missing build artifact identity must not be implied to exist').toContain('build artifact: unavailable');
   });
 

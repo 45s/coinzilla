@@ -55,3 +55,9 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:520px;overflow:auto}
 .cycle-history h3{margin:0}
 .cycle-history ol{display:grid;gap:6px;margin:0;padding-left:22px}
 .cycle-history li{overflow-wrap:anywhere}
+
+.assertion-evidence{display:grid;gap:8px}
+.assertion-evidence>details{display:grid;gap:8px}
+.assertion-card{border:1px solid var(--line);border-radius:9px;padding:10px;display:grid;gap:5px}
+.assertion-card p,.provenance-details p{margin:3px 0;overflow-wrap:anywhere}
+.provenance-details{margin-top:6px}

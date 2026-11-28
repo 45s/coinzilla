@@ -115,6 +115,7 @@
           <h3>Accounting / cycle</h3>
           <strong>{{ view.outcomes.accounting.cycleStatus }}</strong>
           <small>{{ view.outcomes.accounting.complete === true ? 'Cycle completed' : view.outcomes.accounting.complete === false ? 'Cycle is not complete' : 'Completion not established' }}</small>
+          <small>Cycle ID: {{ view.cycle.id ?? 'unavailable' }} · Position ID: {{ view.cycle.positionId ?? 'unavailable' }}</small>
         </article>
         <article class="outcome-card">
           <h3>Safety</h3>
@@ -132,6 +133,16 @@
           <strong>{{ view.outcomes.provenance.verified === true ? 'Verified' : view.outcomes.provenance.verified === false ? 'Unverified' : 'Unavailable' }}</strong>
           <small>Catalog: {{ view.outcomes.provenance.catalogStatus ?? 'unknown' }} · build artifact: {{ view.outcomes.provenance.buildArtifactSha256 === null ? 'unavailable' : view.outcomes.provenance.buildArtifactSha256 ?? 'unknown' }}</small>
           <small>Worker isolation: {{ view.outcomes.provenance.workerIsolation ?? 'unknown' }} · trace completeness: {{ view.outcomes.provenance.traceCompleteness ?? 'unknown' }}</small>
+          <details class="provenance-details">
+            <summary>Inspect source and build identity</summary>
+            <p>Source commit: <code>{{ view.outcomes.provenance.sourceCommitSha ?? 'unavailable' }}</code></p>
+            <p>Checked-out commit: <code>{{ view.outcomes.provenance.checkedOutCommitSha ?? 'unavailable' }}</code></p>
+            <p>Source tree: <code>{{ view.outcomes.provenance.sourceTreeSha ?? 'unavailable' }}</code></p>
+            <p>Dependency lock SHA-256: <code>{{ view.outcomes.provenance.dependencyLockSha256 ?? 'unavailable' }}</code></p>
+            <p>Runtime: <code>{{ view.outcomes.provenance.runtimeIdentity ?? 'unavailable' }}</code></p>
+            <p>Scenario registry SHA-256: <code>{{ view.outcomes.provenance.scenarioRegistrySha256 ?? 'unavailable' }}</code></p>
+            <p>Catalog snapshot provenance: {{ view.outcomes.provenance.catalogSnapshotProvenance ?? 'unavailable' }}</p>
+          </details>
         </article>
       </section>
 
@@ -215,6 +226,32 @@
               <li><strong>{{ cycle.id ?? 'Cycle identity unavailable' }}</strong> · {{ cycle.status }} · Position {{ cycle.positionId ?? 'unavailable' }}</li>
             }
           </ol>
+        </section>
+      }
+
+      @if (view.assertions.length) {
+        <section class="assertion-evidence">
+          <details>
+            <summary>Assertion evidence · {{ view.assertions.length }} source records</summary>
+            @for (assertion of view.assertions; track assertion.key) {
+              <article class="assertion-card">
+                <div class="order-heading">
+                  <strong>{{ assertion.label ?? 'Assertion ' + (assertion.sourceIndex + 1) }}</strong>
+                  <span>{{ assertion.passed === true ? 'PASSED' : assertion.passed === false ? 'FAILED' : 'RESULT UNKNOWN' }}</span>
+                </div>
+                @if (assertion.expected !== undefined) {
+                  <p>Expected: <code>{{ assertion.expected | json }}</code></p>
+                }
+                @if (assertion.actual !== undefined) {
+                  <p>Actual: <code>{{ assertion.actual | json }}</code></p>
+                }
+                <details>
+                  <summary>Original assertion record</summary>
+                  <pre>{{ assertion.sourceEvidence | json }}</pre>
+                </details>
+              </article>
+            }
+          </details>
         </section>
       }
 
