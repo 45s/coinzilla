@@ -98,3 +98,23 @@ test("keeps Telegram interaction lifecycle details visible in the INFO console s
     failureClassification: "TELEGRAM_SEND_FAILED",
   })
 })
+
+
+test("preserves the full concrete cause and remediation for catalogued persistence failures", () => {
+  const record = createConsoleRecordPresentation({
+    timestamp: TIMESTAMP,
+    level: "error",
+    method: "error",
+    data: {
+      message: "Relational trading history is unavailable; legacy order history remains active",
+      errorCode: "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
+      errorStage: "RELATIONAL_MIGRATION_V5",
+      errorMessage: "SQLITE_ERROR: no such column: broker_order_id",
+    },
+  })
+
+  assert.equal(record.summary.diagnostic.diagnosticId, "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED")
+  assert.equal(record.summary.diagnostic.stage, "RELATIONAL_MIGRATION_V5")
+  assert.equal(record.summary.diagnostic.cause, "SQLITE_ERROR: no such column: broker_order_id")
+  assert.match(record.summary.details.action, /do not delete or reset/)
+})
