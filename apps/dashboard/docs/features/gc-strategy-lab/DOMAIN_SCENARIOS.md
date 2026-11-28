@@ -407,3 +407,188 @@ The runner executes the original package against that exact production revision.
 **When** the user selects **Copy AI Debug Package**.
 
 **Then** the client copies one complete, versioned JSON package containing scenario identity/definition, original configuration, temporary overrides, validated effective configuration, exact executed revision, market metadata, initial state, ordered events, run status, outputs, assertions, trace, diagnostics and provenance. Secrets are excluded/redacted. If the full package cannot be copied, the UI reports that no complete copy was made and offers a complete export/fallback; it never silently truncates.
+
+
+## Published RS runtime catalogue — what each scenario actually does
+
+This section describes the **currently published Harvester runtime catalogue**, not the older future/exploratory cases above. The Dashboard shows the selected entry as a pre-run flow diagram. These are scenario-intent diagrams: they explain the seeded setup and deliberate condition before execution. After a run, the separate Run Story shows only the trace and evidence actually returned by that run.
+
+**Common entry path for the twelve executable runtime scenarios:** a run-local filled recovery BUY and fill are seeded alongside a legacy position, account snapshot, validated market metadata, and market-price observation. The real Recovery Seller runtime evaluator, authorizer, planner, submitter and (where applicable) order-event/accounting workflows are exercised with simulated infrastructure.
+
+### Runtime scenario index
+
+| Scenario ID | The question it answers | Deliberate condition | Expected result |
+|---|---|---|---|
+| `RS-RUNTIME-SELL-SUBMISSION-001` | Can the production path authorize and submit one recovery SELL? | No injected failure; simulated broker acknowledges | One acknowledged SELL, persisted submission outcome and matching cycle reservation |
+| `RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001` | Is the broker prevented from being called if SELL intent cannot be persisted first? | `ORDER_SUBMISSION_INTENT` append fails | No broker placement or reservation; STOP recorded; BUY blocked |
+| `RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001` | What happens if broker ACK arrives but its outcome cannot be persisted? | `ORDER_SUBMISSION_OUTCOME` append fails after ACK | Reservation retained; STOP recorded; BUY blocked; SELL allowed |
+| `RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001` | What if both submission outcome and STOP persistence fail? | Both `ORDER_SUBMISSION_OUTCOME` and `SAFETY_BLOCKER_RAISED` fail | Reservation retained; both BUY and SELL admission checks blocked; STOP append is not claimed durable |
+| `RS-RUNTIME-SELL-BROKER-EXCEPTION-001` | Is a thrown broker call treated as unknown rather than rejected? | Simulated broker throws during placement | Outcome remains unknown; STOP recorded; reservation retained; BUY blocked |
+| `RS-RUNTIME-SELL-RESERVATION-FAILURE-001` | What if the sole-SELL reservation callback fails? | `onSellReserved` returns an error | Reservation not retained; STOP recorded; BUY blocked; inspect output for submission evidence |
+| `RS-RUNTIME-SELL-REJECTION-001` | Is an explicit broker rejection handled distinctly from ACK? | Simulated broker rejects SELL | No accepted submitted order; STOP recorded; reservation retained per the scenario expectation |
+| `RS-RUNTIME-SELL-PARTIAL-CANCEL-001` | Is a partially filled CANCELED SELL reconciled correctly? | Default fixture supplies a 2.5-unit fill then terminal CANCELED | Fill is reconciled and accounted; cycle remains UNRESOLVED |
+| `RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001` | What if a SELL is FILLED but profitability is below target? | Terminal FILLED order with under-target fill | Fill is reconciled; profitability is ineligible; STOP latched |
+| `RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001` | What if terminal reconciliation cannot be persisted after a FILLED SELL? | `RECOVERY_SELLER_MIXED_SELL_RECONCILED` append fails | Reconciliation fails closed; STOP and market pause; BUY blocked; reservation retained |
+| `RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001` | Does a failed STOP write still prevent a follow-up action? | Under-target FILLED SELL; `SAFETY_BLOCKER_RAISED` append fails; follow-up dispatch attempted | Follow-up dispatch blocked; no second action/order; STOP write remains failed |
+| `RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001` | Does STOP block new BUY spending without blocking an eligible first SELL? | STOP is persisted before normal dispatch | Eligible SELL submitted; BUY blocked; SELL permitted |
+
+### Scenario-intent diagrams
+
+Each diagram is a concise source-derived outline. The interactive Dashboard diagram includes the selected scenario's own labels/details and limitations. The authoritative implementation remains `apps/harvester/src/infrastructure/scenario-runner/rs-runtime-scenario.js`; this document does not redefine trading policy.
+
+#### RS-RUNTIME-SELL-SUBMISSION-001 — normal authorized SELL
+
+```mermaid
+flowchart TD
+  A[Seed recovery BUY + legacy position] --> B[Production RS evaluator]
+  B --> C{SELL eligible and authorized?}
+  C -- No --> D[No SELL submission]
+  C -- Yes --> E[Persist SELL intent]
+  E --> F[Simulated broker ACK]
+  F --> G[Persist outcome]
+  G --> H[Reserve matching SELL cycle]
+  H --> I[Assert one acknowledged SELL]
+```
+
+#### RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001 — fail before broker
+
+```mermaid
+flowchart TD
+  A[Seed state and evaluate] --> B[Prepare SELL intent]
+  B --> C[Persist ORDER_SUBMISSION_INTENT]
+  C -->|Injected failure| D[Stop before broker call]
+  D --> E[No SELL reservation]
+  E --> F[STOP recorded; BUY blocked]
+```
+
+#### RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001 — ACK but outcome write fails
+
+```mermaid
+flowchart TD
+  A[Seed state and evaluate] --> B[Persist SELL intent]
+  B --> C[Simulated broker ACK]
+  C --> D[Persist ORDER_SUBMISSION_OUTCOME]
+  D -->|Injected failure| E[Keep reservation]
+  E --> F[STOP recorded]
+  F --> G[BUY blocked; SELL allowed]
+```
+
+#### RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001 — two persistence failures
+
+```mermaid
+flowchart TD
+  A[Seed state and evaluate] --> B[SELL intent persisted]
+  B --> C[Simulated broker ACK]
+  C --> D[Outcome persistence fails]
+  D --> E[STOP persistence also fails]
+  E --> F[Reservation retained]
+  F --> G[BUY and SELL admission blocked]
+```
+
+#### RS-RUNTIME-SELL-BROKER-EXCEPTION-001 — unknown broker outcome
+
+```mermaid
+flowchart TD
+  A[Seed state and evaluate] --> B[Persist SELL intent]
+  B --> C[Call simulated broker]
+  C -->|Throws| D[Outcome is UNKNOWN]
+  D --> E[Latch STOP]
+  E --> F[Retain reservation; block BUY]
+```
+
+#### RS-RUNTIME-SELL-RESERVATION-FAILURE-001 — reservation callback fails
+
+```mermaid
+flowchart TD
+  A[Seed state and evaluate] --> B[SELL submission path]
+  B --> C[Invoke onSellReserved]
+  C -->|Injected callback failure| D[Reservation not retained]
+  D --> E[STOP recorded]
+  E --> F[BUY admission blocked]
+```
+
+#### RS-RUNTIME-SELL-REJECTION-001 — explicit rejection
+
+```mermaid
+flowchart TD
+  A[Seed state and evaluate] --> B[Persist SELL intent]
+  B --> C[Call simulated broker]
+  C -->|Rejected| D[No accepted submitted order]
+  D --> E[Record STOP]
+  E --> F[Retain reservation as asserted]
+```
+
+#### RS-RUNTIME-SELL-PARTIAL-CANCEL-001 — partial fill then CANCELED
+
+```mermaid
+flowchart TD
+  A[Seed state and evaluate] --> B[Simulated broker ACK]
+  B --> C[Create partial SELL fill]
+  C --> D[Terminal order becomes CANCELED]
+  D --> E[Production order-event reconciliation]
+  E --> F[Apply mixed-position accounting]
+  F --> G[Cycle remains UNRESOLVED]
+```
+
+#### RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001 — FILLED but not profitable enough
+
+```mermaid
+flowchart TD
+  A[Seed state and evaluate] --> B[Simulated broker ACK]
+  B --> C[Terminal SELL FILLED]
+  C --> D[Reconcile canonical fill]
+  D --> E{Profitability reaches target?}
+  E -- No --> F[Latch STOP]
+  E -- Yes --> G[Not this scenario's expected branch]
+```
+
+#### RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001 — terminal fact write fails
+
+```mermaid
+flowchart TD
+  A[Terminal SELL FILLED] --> B[Stage canonical fill]
+  B --> C[Persist reconciliation fact]
+  C -->|Injected failure| D[Reconciliation fails closed]
+  D --> E[STOP + market pause]
+  E --> F[BUY blocked; reservation retained]
+```
+
+#### RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001 — failed STOP write plus follow-up
+
+```mermaid
+flowchart TD
+  A[Under-target SELL FILLED] --> B[Reconcile fill]
+  B --> C[Persist SAFETY_BLOCKER_RAISED]
+  C -->|Injected failure| D[STOP fact not persisted]
+  D --> E[Attempt follow-up dispatch]
+  E --> F[Dispatch blocked; no second action/order]
+```
+
+#### RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001 — direction-specific STOP gate
+
+```mermaid
+flowchart TD
+  A[Persist STOP before dispatch] --> B[Evaluate recovery action]
+  B --> C{Action side?}
+  C -- BUY --> D[Blocked]
+  C -- Eligible SELL --> E[Permitted]
+  E --> F[One SELL submitted]
+```
+
+### RS-004-011 — preliminary helper-only profitability candidate
+
+This entry is not one of the twelve runtime lifecycle scenarios and remains non-executable. It invokes only `calculateRecoverySellerProfitability` and asserts the recovery, legacy and combined-cycle calculation result.
+
+```mermaid
+flowchart TD
+  A[Recovery + legacy cost/proceeds inputs] --> B[calculateRecoverySellerProfitability]
+  B --> C[Recovery profitability gate]
+  B --> D[Legacy profitability gate]
+  B --> E[Combined cycle gate]
+  C --> F[Compare helper output with expected values]
+  D --> F
+  E --> F
+  F --> G[One helper-level assertion]
+```
+
+**Important reading rule:** these are expected scenario paths, not evidence that a run has already taken those steps. The Dashboard's separate Run Story is built from the returned run trace and source facts. It must never fill in missing steps from these intent diagrams.
