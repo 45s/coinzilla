@@ -2786,3 +2786,9 @@ This section is a dated baseline, not a permanent status source. #1780 is the li
 - Issue #1783 remains the repository-wide catalog tracker; it should point to this playbook but continue to own cross-domain catalog work.
 
 **Baseline warning:** re-fetch current branch, PRs, issues, source files and CI before using any of these statuses in a future task. Do not assume this dated baseline remains current.
+
+## 2026-11-28 — RS-004 profitability input-boundary scenarios
+
+- Added six independently named deterministic domain cases in `test/scenarios/recovery-seller-profitability-input-boundaries.scenario.test.js`: exact legacy break-even, sub-cent legacy loss, exhausted legacy allocation, legacy proceeds with no legacy debit rejected, non-positive recovery basis rejected, and non-positive minimum profit rejected.
+- Registered the file in Harvester targeted tests. These are test mappings, not verified scenario evidence; exact-head execution and oracle review remain outstanding.
+- No production trading logic or behavior was changed.

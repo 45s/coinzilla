@@ -2997,7 +2997,7 @@ export function createConservativeEngineOrderEventContext({ context } = {}) {
     publishRecoveryCycleNotCompleted: context.publishRecoveryCycleNotCompleted,
     isStopping: dependencies.isStopping,
     onUnownedExternalOrderObserved: dependencies.onUnownedExternalOrderObserved,
-    currentProcessOrderIdNamespace: context.submit?.orderIdNamespace,
+    isCurrentProcessClientOrderId: context.submit?.isCurrentProcessClientOrderId,
     reconcileRecoverySellerMixedSell: dependencies.recoverySellerWorkflow?.reconcileTerminalMixedSell,
     latchRecoverySellerStop: ({ order, reason, error } = {}) =>
       latchRecoverySellerTerminalFailure({

@@ -3,7 +3,6 @@ import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { getOrderLifecycleStatus, logOrderLifecycle } from "../application/logging/order-lifecycle-log.js"
 import { compareDecimal, toResult } from "@coinzilla/utils"
 import { EXTERNAL_ORDERS_POLICIES } from "../domain/external-orders-policy.js"
-import { isHarvesterClientOrderId } from "../application/orders/is-harvester-client-order-id.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import {
   mapBrokerExecutionReportData,
@@ -15,32 +14,17 @@ import { publishLifecycleEvent } from "../application/events/publish-lifecycle-e
 import { failureResult, withFailure } from "./recovery-failure.js"
 
 
-const HARVESTER_GENERATED_CLIENT_ORDER_ID_PATTERN = /^h-[a-f0-9]{22}-(?:\d+|preflight-\d+)$/i
-
-function hasCurrentSessionHarvesterIdentity({
-  currentProcessOrderIdNamespace,
+function hasCurrentProcessOrderIdentity({
+  isCurrentProcessClientOrderId,
   order,
   event,
 } = {}) {
-  const prefix = typeof currentProcessOrderIdNamespace === "string" &&
-    currentProcessOrderIdNamespace.trim()
-    ? `h-${currentProcessOrderIdNamespace}-`
-    : undefined
-  const clientOrderIds = [
-    order.clientOrderId,
-    event.clientOrderId,
-    event.originalClientOrderId,
-  ]
-  const hasReservedIdentity = clientOrderIds.some(isHarvesterClientOrderId)
-  if (!prefix) {
-    return hasReservedIdentity
+  if (typeof isCurrentProcessClientOrderId !== "function") {
+    return true
   }
-  const hasCurrentProcessIdentity = clientOrderIds.some((clientOrderId) =>
-    typeof clientOrderId === "string" && clientOrderId.startsWith(prefix))
-  const hasMalformedHarvesterIdentity = clientOrderIds.some((clientOrderId) =>
-    isHarvesterClientOrderId(clientOrderId) &&
-    !HARVESTER_GENERATED_CLIENT_ORDER_ID_PATTERN.test(clientOrderId))
-  return hasCurrentProcessIdentity || hasMalformedHarvesterIdentity
+  return [order.clientOrderId, event.clientOrderId, event.originalClientOrderId]
+    .some((clientOrderId) => typeof clientOrderId === "string" &&
+      isCurrentProcessClientOrderId(clientOrderId) === true)
 }
 
 function isIgnorableExternalOrder({ hasCurrentSessionIdentity, externalOrdersPolicy } = {}) {
@@ -130,8 +114,8 @@ async function handleUnownedOrderEvent({ dependencies, event, order, symbol } = 
     eventName: HARVESTER_EVENT_NAMES.EXECUTION_UNOWNED_ORDER,
     dataResult: mapExecutionUnownedOrderData({ order }),
   })
-  const hasCurrentSessionIdentity = hasCurrentSessionHarvesterIdentity({
-    currentProcessOrderIdNamespace: dependencies.currentProcessOrderIdNamespace,
+  const hasCurrentSessionIdentity = hasCurrentProcessOrderIdentity({
+    isCurrentProcessClientOrderId: dependencies.isCurrentProcessClientOrderId,
     order,
     event,
   })
@@ -145,25 +129,27 @@ async function handleUnownedOrderEvent({ dependencies, event, order, symbol } = 
 }
 
 function getRegisteredOrder({ registry, order } = {}) {
-  const byClientOrderId = registry.getOrder?.({
-    clientOrderId: order.clientOrderId,
-  })
-  if (byClientOrderId) {
-    return byClientOrderId
-  }
-  if (order.brokerOrderId && typeof registry.getOrderByBrokerOrderId === "function") {
-    return registry.getOrderByBrokerOrderId({
+  const byBrokerOrderId = order.brokerOrderId &&
+    typeof registry.getOrderByBrokerOrderId === "function"
+    ? registry.getOrderByBrokerOrderId({
       brokerOrderId: order.brokerOrderId,
       marketId: order.market.id,
     })
+    : undefined
+  const byClientOrderId = registry.getOrder?.({
+    clientOrderId: order.clientOrderId,
+  })
+  if (byBrokerOrderId && byClientOrderId &&
+      byBrokerOrderId.clientOrderId !== byClientOrderId.clientOrderId) {
+    throw new Error("Order event brokerOrderId and clientOrderId identify different registered orders")
   }
-  return undefined
+  return byBrokerOrderId ?? byClientOrderId
 }
 
 function publishOrderUpdatedEvent({ eventPublisher, registry, previousOrder, order, event } = {}) {
-  const canonicalClientOrderId = previousOrder?.clientOrderId ?? order.clientOrderId
-  const updatedOrder = registry.getOrder?.({
-    clientOrderId: canonicalClientOrderId,
+  const updatedOrder = getRegisteredOrder({
+    registry,
+    order: previousOrder ?? order,
   }) ?? previousOrder ?? order
   const ownership = registry.getOwnership({
     clientOrderId: updatedOrder.clientOrderId,

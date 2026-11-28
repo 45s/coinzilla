@@ -780,7 +780,7 @@ test("keeps unmatched IDs from the current process namespace fail-closed", async
   const [registeredIntent] = fixture.submittedIntents
   assert.ok(registeredIntent, "The engine must create a real process-scoped client order ID before testing an unknown current-process event.")
   const unmatchedCurrentSessionOrder = new CanonicalOrder({
-    clientOrderId: registeredIntent.clientOrderId.replace(/-\d+$/, "-unmatched"),
+    clientOrderId: "unmatched-external-client-order",
     brokerOrderId: "current-session-order-unmatched",
     market: fixture.market,
     side: "SELL",
@@ -797,7 +797,12 @@ asset: fixture.market.baseAsset }),
     updatedAt: 1,
   })
 
-  const result = await fixture.engine.processUserDataEvent({ event: { executedOrder: unmatchedCurrentSessionOrder } })
+  const result = await fixture.engine.processUserDataEvent({
+    event: {
+      executedOrder: unmatchedCurrentSessionOrder,
+      originalClientOrderId: registeredIntent.clientOrderId,
+    },
+  })
 
   assert.equal(result.ok, false, "An unmatched order from the current process namespace must not be ignored as an external order.")
   assert.deepEqual(result.failure, { category: "OWNERSHIP_INTEGRITY",

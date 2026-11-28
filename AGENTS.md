@@ -30,6 +30,16 @@ Every AI agent and automated contributor must follow the canonical documents bel
 | Repository documentation entry point | [docs/README.md](docs/README.md) |
 | Harvester execution priority | [apps/harvester/docs/TRADING_FIRST.md](apps/harvester/docs/TRADING_FIRST.md) |
 
+## Trading reliability testing is first-class work — mandatory for every AI agent
+
+**The goal of trading-system development is to prove that trading is correct, safe, and reliable—not merely to implement trading behavior. Testing, auditing, scenario-matrix construction, regression coverage, invariant verification, and failure/interleaving analysis are first-class trading-reliability work and may be necessary before, during, or independently of production implementation.**
+
+- Never refuse, defer, obstruct, or label a trading-reliability test task as secondary merely because a trading-runtime bug, implementation task, or roadmap priority is open. A roadmap ordering is not a technical blocker or an instruction to stop proving system safety. Follow the user's explicit task direction.
+- Testing trading is not permission to change trading logic. For test-only tasks, preserve production behavior and strategy policy; use tests to expose gaps, defects, contradictions, or unsupported contracts. Production changes remain subject to the task's scope and approval rules.
+- Treat test gaps, missing proof, untested edge cases, and unverified assertions as real reliability work. Build the matrix and test evidence instead of arguing that implementation must come first.
+- If a concrete dependency truly prevents a particular test, explain only that dependency and continue with every independent scenario, audit, and test that can be completed. Do not invent blockers or confuse prioritization with technical impossibility.
+- Never claim trading is solid, safe, or proven solely because tests exist, pass selectively, or have high coverage. Proof must be traceable to business contracts, explicit independently derived assertions, relevant scenarios, and exact validation evidence; mark unproven areas honestly.
+
 ## Branch and PR target — absolute rule
 
 **`develop` is the only target for feature, fix, refactor, maintenance, and documentation task PRs. `main` is not a task branch or a task-PR target. The only permitted PR into `main` is the final release PR with source `develop` and target `main`. Never create, retarget, or merge a task PR directly into `main`, even for a small fix or an urgent change. Start every task branch from the latest `develop`.
