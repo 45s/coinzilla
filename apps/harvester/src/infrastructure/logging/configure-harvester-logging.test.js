@@ -1085,7 +1085,10 @@ test("renders every catalogued startup and degraded failure in bounded console o
   }
   const lines = written.trim().split("\n")
   for (const entry of Object.values(HARVESTER_ERROR_CATALOG)) {
-    assertCataloguedConsoleEntry({ lines, entry })
+    assertCataloguedConsoleEntry({
+      lines,
+      entry,
+    })
   }
   output.destroy()
 })
