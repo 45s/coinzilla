@@ -705,3 +705,67 @@ test("reports missing required log streams as incomplete instead of accepting fi
   )
   assert.ok(diagnosticDirectory, "An incomplete local diagnostic archive must be retained.")
 })
+
+ 
+test("collects every rotated and pre-compressed DEBUG and TRACE file for the exact runtime", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  const sessionDirectory = path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet")
+  const rotatedDebug = "older rotated debug evidence"
+  const rotatedTrace = Buffer.from("pre-compressed trace evidence")
+  await writeFile(path.join(sessionDirectory, "harvester.log.1"), rotatedDebug)
+  await writeFile(path.join(sessionDirectory, "trace.log.1.gz"), rotatedTrace)
+  await runHarvesterDebugArchive(archiveWithoutPublishing({
+    fixture,
+    inspectArchive: async ({ directory }) => {
+      const manifest = await readArchiveManifest(directory)
+      const debugFile = manifest.evidenceIntegrity.streams.harvesterLog.files.find(({ sourcePath }) => sourcePath.endsWith("harvester.log.1"))
+      const traceFile = manifest.evidenceIntegrity.streams.traceLog.files.find(({ sourcePath }) => sourcePath.endsWith("trace.log.1.gz"))
+      assert.ok(debugFile, "The rotated DEBUG file must be inventoried.")
+      assert.ok(traceFile, "The already-compressed rotated TRACE file must be inventoried.")
+      assert.equal(debugFile.rotationIndex, 1, "Rotation metadata must preserve the numeric generation.")
+      assert.equal(traceFile.rotationIndex, 1, "Compressed rotation metadata must preserve the numeric generation.")
+      assert.equal(traceFile.compression, "source-gzip-preserved", "An existing gzip file must not be compressed a second time.")
+      assert.deepEqual(await readFile(path.join(directory, traceFile.archivePath)), rotatedTrace, "The original compressed bytes and filename must be preserved.")
+    },
+  }))
+})
+
+test("rejects empty TRACE streams and records the empty source file", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  await writeFile(path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/trace.log"), "")
+  await assert.rejects(
+    runHarvesterDebugArchive(archiveWithoutPublishing({
+      fixture,
+      inspectArchive: async ({ directory }) => {
+        const manifest = await readArchiveManifest(directory)
+        assert.equal(manifest.evidenceIntegrity.status, "incomplete", "An empty required stream must make the archive incomplete.")
+        const emptyFile = manifest.evidenceIntegrity.streams.traceLog.files.find(({ sourcePath }) => sourcePath.endsWith("/trace.log"))
+        assert.equal(emptyFile.result, "empty", "The manifest must distinguish an empty stream from a missing stream.")
+        assert.equal(emptyFile.sourceSize, 0, "The empty source size must be explicit.")
+      },
+    })),
+    /incomplete|COLLECTION FAILED/i,
+    "An empty TRACE file must not satisfy stream completeness",
+  )
+})
+
+test("rejects missing process-completion metadata even when both log files exist", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  await rm(path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/process-completed.json"))
+  await assert.rejects(
+    runHarvesterDebugArchive(archiveWithoutPublishing({
+      fixture,
+      inspectArchive: async ({ directory }) => {
+        const manifest = await readArchiveManifest(directory)
+        assert.equal(manifest.evidenceIntegrity.status, "incomplete", "A missing completion record must make evidence incomplete.")
+        const session = manifest.sessionInventory.find(({ sessionName }) => sessionName === "2026-11-24_testnet")
+        assert.ok(session.missingFieldWarnings.includes("COMPLETION_RECORD_MISSING"), "The missing completion record must be named.")
+      },
+    })),
+    /incomplete|COLLECTION FAILED/i,
+    "Log file presence alone must not prove successful process completion",
+  )
+})
