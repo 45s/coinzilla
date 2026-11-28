@@ -14,7 +14,7 @@ const execFileAsync = promisify(execFile)
 const ARCHIVE_NAME = "2026-11-28T12-00-00Z_123e4567_debug"
 const REMOTE = "https://github.com/45s/coinzilla-archive.git"
 
-function createSourceFileEntries(runtimeId) {
+function createSourceFileEntries() {
   return [
     {
       sourcePath: "logs/sessions/fixture/harvester.log",
@@ -31,6 +31,11 @@ function createSourceFileEntries(runtimeId) {
       archivePath: "logs/sessions/fixture/terminal.log.gz",
       content: "terminal session evidence\n",
     },
+  ]
+}
+
+function createLifecycleSourceFileEntries(runtimeId) {
+  return [
     {
       sourcePath: "logs/sessions/fixture/process-identity.json",
       archivePath: "logs/sessions/fixture/process-identity.json.gz",
@@ -73,9 +78,8 @@ function createSourceFileEntries(runtimeId) {
           harvesterLog: true,
           traceLog: true,
         },
-      }) + "\n",
+      })}\n`,
     },
-  ]
 }
 
 function createRecoveryFixture(runtimeId) {
@@ -255,7 +259,7 @@ async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME } = {}) {
   await mkdir(path.join(archiveDirectory, "logs", "sessions", "fixture"), { recursive: true })
   await mkdir(path.join(archiveDirectory, "recovery-facts"), { recursive: true })
   const runtimeId = "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c"
-  const sourceFiles = createSourceFileEntries(runtimeId)
+  const sourceFiles = [...createSourceFileEntries(), ...createLifecycleSourceFileEntries(runtimeId)]
   const recovery = createRecoveryFixture(runtimeId)
   const files = []
   for (const item of sourceFiles) {
