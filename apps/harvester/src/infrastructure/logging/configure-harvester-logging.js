@@ -390,7 +390,11 @@ async function writeHarvesterProcessCompletion({ sessionPaths, processIdentity }
   await writeFile(
     path.join(sessionPaths.sessionDirectory, "process-completed.json"),
     `${JSON.stringify(completion, null, 2)}\n`,
-    { encoding: "utf8", flag: "wx", mode: 0o600 },
+    {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    },
   )
 }
 
@@ -465,7 +469,10 @@ export async function configureHarvesterLogging({
       recursive: true,
     }),
   ])
-  await persistHarvesterSessionIdentity({ sessionPaths, processIdentity })
+  await persistHarvesterSessionIdentity({
+    sessionPaths,
+    processIdentity,
+  })
   const errorBuffer = createHarvesterRuntimeErrorBuffer({ logger })
   logger.addTransport(errorBuffer.transport)
   try {
