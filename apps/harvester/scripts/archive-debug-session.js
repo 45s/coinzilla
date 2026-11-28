@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto"
 import {
   lstat,
+  link,
   mkdir,
   mkdtemp,
   readFile,
@@ -327,7 +328,20 @@ async function copyCompressedFile({ sourcePath, destinationPath, childRelative, 
       sourceBefore,
       sourceSha256Before,
     })
-    await rename(temporaryPath, destinationPath)
+    try {
+      // Publish the completed temporary file without ever replacing an existing archive path.
+      // Two source names can normalize to the same .gz destination (for example,
+      // harvester.log and harvester.log.gz); that is an evidence collision, not an overwrite.
+      await link(temporaryPath, destinationPath)
+    } catch (error) {
+      if (error?.code === "EEXIST") {
+        throw new Error(`Archive path collision: multiple source files map to ${destinationPath}.`, {
+          cause: error,
+        })
+      }
+      throw error
+    }
+    await rm(temporaryPath, { force: true })
   } catch (error) {
     await rm(temporaryPath, { force: true })
     throw error
