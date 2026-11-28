@@ -905,7 +905,7 @@ async function copyIdentifiedSessionEvidence({ sourceDirectory, destinationDirec
         lockStartedAt: selection.activeProcessOwner.startedAt,
         capturedAt: new Date().toISOString(),
         streams: { harvesterLog: true, traceLog: true },
-      }, null, 2)}\\n`, { encoding: "utf8", flag: "wx", mode: 0o600 })
+      }, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 })
     }
   }
   return artifactProvenance
