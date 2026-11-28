@@ -606,8 +606,10 @@ owns the serialized state transition queue; the extracted workflows do not
 create a second concurrency boundary. See the [Harvester roadmap](../ROADMAP.md)
 and the merged [P3 implementation PR #1075](https://github.com/45s/coinzilla/pull/1075).
 
-Only order updates matched to a registered Harvester client order ID may
-mutate the order registry or accounting. TRADE events must contain a canonical
+Only order updates resolved to a registered order by its market-scoped broker
+order ID may mutate the order registry or accounting after acknowledgement.
+The client ID is used for pending-order correlation and as an integrity check;
+when both IDs are present they must resolve to the same registered order. TRADE events must contain a canonical
 Fill and pass the durable execution-fact barrier before Portfolio/RecoveryLedger
 state is committed. A partial fill updates actual accounting but does not
 advance the strategy; the engine waits for the order's terminal state.
@@ -742,8 +744,8 @@ distinction. Price and quantity remain exact decimal strings.
 
 For `order.submitted`, `order.updated`, `order.cancelled`, and
 `order.cancel_failed`, the publisher resolves ownership from the current
-OrderRegistry entry using the exact client-order ID, broker-order ID, and market
-ID. When present, the DTO carries only the registered strategy ID, Position ID,
+OrderRegistry entry by market-scoped broker-order ID after acknowledgement,
+with client-order ID retained for pending correlation and consistency checks. When present, the DTO carries only the registered strategy ID, Position ID,
 purpose, and optional cycle ID. An absent or mismatched ownership record is
 omitted; ownership is never inferred from the symbol, current configuration,
 timestamp, or client-ID shape. This enriches the non-authoritative Journal and
@@ -908,11 +910,15 @@ in [Journal Operations — Normal shutdown](./JOURNAL_OPERATIONS.md#strategy-own
 
 The process entry point in `src/index.js` composes process identity/logging, EventBus, the optional notifier, the Journal service, the broker-wide and Journal-directory process locks, runtime startup, signal handling and coordinated shutdown. Broker-connected startup requires the durable PREFLIGHT account audit before market subscriptions proceed. Detailed event payloads, Journal durability, lock acquisition/release, failure handling and shutdown ordering are maintained in [Journal Operations](./JOURNAL_OPERATIONS.md); do not duplicate those operational procedures here.
 
-## Client order identity
+## Client and broker order identity
 
-The Conservative order executor creates one random process-local namespace at engine construction using a UUID-derived 22-hex-character value (88 bits), then increments a local sequence for each submitted order. Client IDs use the `h-<namespace>-<sequence>` shape; preflight validation uses a separate `preflight` marker within the same namespace. This avoids predictable counter-only identifiers being reused when a new process starts.
+Harvester generates an opaque 32-character hexadecimal `clientOrderId` for each submission. It is a broker-supported correlation value used before acknowledgement and, where the provider supports it, to find an accepted order when the placement acknowledgement is lost. It is not the permanent order identity, and its spelling never establishes ownership. Preflight validation uses a local-only placeholder and does not allocate a broker client ID.
 
-A unique client ID is an identity/correlation aid, **not** permission to retry an ambiguous submission. If the broker outcome is unknown, keep the order UNKNOWN, retain its commitment, pause the market and reconcile the original identity; never create a replacement order merely because an acknowledgement was lost. Durable cross-process retry idempotency and process-restart state restoration are not implemented.
+Once the broker acknowledges the order, its native `brokerOrderId` is the canonical identity for subsequent order updates, cancellation, fill attribution, reconciliation and accounting. Scope it by provider instance/type, account and market because provider order IDs may be market-local. Retain `clientOrderId` as a correlation and integrity-check attribute; while an order is pending it is the provisional lookup key, but it must not compete with the broker ID after acknowledgement. If both identifiers are present, they must resolve to the same registered order.
+
+Current-process ownership is explicit runtime metadata: the execution use case records the client IDs it generated and exposes a membership check to the order-event workflow. An unmatched event carrying one of those IDs remains fail-closed. An ID from a previous process or an external actor is not current-process ownership and follows the configured external-order policy. No ownership decision parses an `h-` prefix or another client-ID format.
+
+A unique client ID is a correlation aid, **not** permission to retry an ambiguous submission. If the broker outcome is unknown, keep the order UNKNOWN, retain its commitment, pause the market and reconcile the original client ID when the provider supports that lookup; never blindly resubmit. This does not implement process-restart restoration or durable cross-process retry idempotency.
 
 ## Recovery failure classification and retry contract
 
