@@ -74,6 +74,8 @@ describe('ScenarioRunnerComponent run details', () => {
     expect(text, 'assertion names must remain visible for review').toContain('production RS transition selects a SELL action');
     expect(text, 'assertion expected values must remain visible').toContain('Expected:');
     expect(text, 'assertion actual values must remain visible').toContain('Actual:');
+    expect(text, 'order cards must expose their exact source submission and terminal evidence').toContain('Inspect exact submission and lifecycle evidence');
+    expect(text, 'decision cards must expose original decision calculations').toContain('Inspect decision calculations and original evidence');
     expect(text, 'missing build artifact identity must not be implied to exist').toContain('build artifact: unavailable');
   });
 

@@ -148,6 +148,8 @@ Dashboard gateway tests now cover catalogue, submit, history, run detail, cancel
 - Added a framework-independent, strategy-neutral presentation adapter over source run/debug evidence.
 - The Dashboard renders execution, assertions, trading lifecycle, accounting/cycle, safety and provenance as independent outcomes.
 - The ordered trace timeline is selectable; explicit source graph edges are shown as branches. Unknown event kinds and missing evidence remain inspectable.
+- Multiple submitted/terminal orders correlate by canonical broker or client order identity; multiple cycle states remain distinct, including an unresolved latest cycle.
+- Assertion records expose expected/actual values and original evidence. Provenance inspection includes source/tree/dependency/registry identities and artifact verification status.
 - Orders correlate submission and terminal evidence only by matching order identity. Partial CANCELED execution is displayed separately from run completion and cycle state.
 - Added expandable JSON tree inspection, per-value/branch copying, text search, full-source copy and JSON download; retained the separate generated AI debug-package action.
 - Added the complete supplied RS partial-CANCELED debug report as a regression fixture plus adapter, JSON-tree and run-details UI tests.

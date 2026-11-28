@@ -585,7 +585,10 @@ The run story presents execution status, assertion results, trading lifecycle, a
 
 ### Technical investigation
 
-- Every visual step exposes its original source trace object.
+- Every visual step exposes its original source trace object. Order, decision and cycle summaries also expose their exact submission, terminal, calculation and cycle-state evidence.
+- Assertion inspection retains each source assertion name, expected value, actual value, pass/fail state and complete source record.
+- Provenance inspection retains source/checked-out commit SHAs, source tree SHA, dependency-lock SHA-256, runtime identity, scenario registry SHA-256, catalog snapshot provenance and build artifact identity.
+- Multiple terminal order records are correlated by broker/client identity rather than array order; repeated cycle-state records remain individually visible in source order.
 - The complete source run payload remains available as the raw object and a JSON serialization that preserves its data fields and values.
 - The technical panel provides a recursive expandable JSON tree, copy controls for individual values and branches, text search across serialized field names and values, copy-all and JSON download.
 - Unknown fields, explicit `null`, `false`, empty strings and empty arrays are not removed from the source object.
