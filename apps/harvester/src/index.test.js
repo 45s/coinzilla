@@ -316,7 +316,7 @@ test("logs startup failures as one structured logger argument", async () => {
     const startupFailures = calls.filter((call) => call.data?.message === "startup failed.")
     assert.equal(startupFailures.length, 1)
     assert.equal(startupFailures[0].level, "error")
-    assert.equal(startupFailures[0].data.error, error)
+    assert.equal(startupFailures[0].data.error, undefined, "Raw Error objects must not bypass credential redaction.")
     assert.equal(startupFailures[0].data.errorDetails.name, "Error")
     assert.equal(startupFailures[0].data.errorDetails.message, "configuration failed")
     assert.match(startupFailures[0].data.errorDetails.stack, /configuration failed/)
