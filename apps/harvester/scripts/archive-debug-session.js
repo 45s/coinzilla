@@ -441,9 +441,20 @@ function createArchiveSessionMissingFieldWarnings({
   loggerCompletionError,
 } = {}) {
   return [
-    ...createProcessIdentityMissingFieldWarnings({ identity, identityError }),
-    ...createCompletionMissingFieldWarnings({ identity, completion, completionError }),
-    ...createLoggerCompletionMissingFieldWarnings({ identity, loggerCompletion, loggerCompletionError }),
+    ...createProcessIdentityMissingFieldWarnings({
+      identity,
+      identityError,
+    }),
+    ...createCompletionMissingFieldWarnings({
+      identity,
+      completion,
+      completionError,
+    }),
+    ...createLoggerCompletionMissingFieldWarnings({
+      identity,
+      loggerCompletion,
+      loggerCompletionError,
+    }),
   ]
 }
 
@@ -453,26 +464,34 @@ function isHarvesterTestnetSession({ identity } = {}) {
     && identity?.environment === "testnet"
 }
 
-function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCompletion, isHarvesterTestnet, activeProcessOwner } = {}) {
+function hasCompleteProcessCompletion({ identity, completion } = {}) {
+  return completion?.runtimeSessionId === identity.runtimeSessionId
+    && completion?.logStreamsComplete === true
+}
+
+function hasCompleteLoggerCompletion({ identity, loggerCompletion } = {}) {
+  return loggerCompletion?.runtimeSessionId === identity.runtimeSessionId
+    && loggerCompletion?.logStreamsComplete === true
+    && loggerCompletion?.streams?.harvesterLog === true
+    && loggerCompletion?.streams?.traceLog === true
+}
+
+function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCompletion, isHarvesterTestnet } = {}) {
   if (!identity) {
     return "identity-missing"
   }
   if (!isHarvesterTestnet) {
     return "non-testnet-or-invalid"
   }
-  const processCompletionMatches = completion?.runtimeSessionId === identity.runtimeSessionId
-    && completion?.logStreamsComplete === true
-  const loggerCompletionMatches = loggerCompletion?.runtimeSessionId === identity.runtimeSessionId
-    && loggerCompletion?.logStreamsComplete === true
-    && loggerCompletion?.streams?.harvesterLog === true
-    && loggerCompletion?.streams?.traceLog === true
-  if (processCompletionMatches && loggerCompletionMatches) {
-    return "complete"
-  }
-  return Number.isSafeInteger(identity.processId)
-    && identity.processId === activeProcessOwner?.pid
-    && identity.startedAt === activeProcessOwner?.startedAt
-    ? "active"
+  return hasCompleteProcessCompletion({ identity, completion })
+    && hasCompleteLoggerCompletion({ identity, loggerCompletion })
+    ? "complete"
+    : "incomplete"
+}
+
+function resolveArchiveSessionLoggerCompletionStatus({ identity, loggerCompletion, isHarvesterTestnet } = {}) {
+  return hasCompleteLoggerCompletion({ identity, loggerCompletion }) && isHarvesterTestnet
+    ? "complete"
     : "incomplete"
 }
 
@@ -499,25 +518,8 @@ function resolveArchiveSessionEndTimestamp(completion) {
   return typeof completion?.endedAt === "string" ? completion.endedAt : null
 }
 
-function createArchiveSessionEvidenceRecord({
-  sessionName,
-  identity,
-  completion,
-  loggerCompletion,
-  processId,
-  missingFieldWarnings,
-  isHarvesterTestnet,
-  activeProcessOwner,
-} = {}) {
-  const completionStatus = resolveArchiveSessionCompletionStatus({
-    identity,
-    completion,
-    loggerCompletion,
-    isHarvesterTestnet,
-    activeProcessOwner,
-  })
+function createArchiveSessionLifecycleFields({ sessionName, identity, completion, loggerCompletion } = {}) {
   return {
-    sessionName,
     relativePath: `logs/sessions/${sessionName}`,
     processIdentityPath: `logs/sessions/${sessionName}/process-identity.json`,
     processCompletionPath: `logs/sessions/${sessionName}/process-completed.json`,
@@ -528,24 +530,54 @@ function createArchiveSessionEvidenceRecord({
     loggerStreamsComplete: loggerCompletion?.logStreamsComplete === true
       && loggerCompletion?.streams?.harvesterLog === true
       && loggerCompletion?.streams?.traceLog === true,
-    environment: identity?.environment ?? "unknown",
-    runtimeSessionId: resolveArchiveSessionRuntimeSessionId(identity),
-    processId,
     startedAt: resolveArchiveSessionStartTimestamp(identity),
     endedAt: resolveArchiveSessionEndTimestamp(completion),
     loggerStreamsEndedAt: loggerCompletion?.endedAt ?? null,
+    processOutcome: resolveProcessOutcome(completion),
+  }
+}
+
+function createArchiveSessionIdentityFields({ identity, processId } = {}) {
+  return {
+    environment: identity?.environment ?? "unknown",
+    runtimeSessionId: resolveArchiveSessionRuntimeSessionId(identity),
+    processId,
     sourceRevision: identity?.source?.commit ?? null,
     workingTreeState: identity?.source?.workingTree ?? "unknown",
+  }
+}
+
+function createArchiveSessionEvidenceRecord({
+  sessionName,
+  identity,
+  completion,
+  loggerCompletion,
+  processId,
+  missingFieldWarnings,
+  isHarvesterTestnet,
+} = {}) {
+  const completionStatus = resolveArchiveSessionCompletionStatus({
+    identity,
+    completion,
+    loggerCompletion,
+    isHarvesterTestnet,
+  })
+  const loggerCompletionStatus = resolveArchiveSessionLoggerCompletionStatus({
+    identity,
+    loggerCompletion,
+    isHarvesterTestnet,
+  })
+  return {
+    sessionName,
+    ...createArchiveSessionLifecycleFields({
+      sessionName,
+      identity,
+      completion,
+      loggerCompletion,
+    }),
+    ...createArchiveSessionIdentityFields({ identity, processId }),
     completionStatus,
-    loggerCompletionStatus: completionStatus === "active"
-      ? "active"
-      : resolveArchiveSessionCompletionStatus({
-        identity,
-        completion: { runtimeSessionId: identity?.runtimeSessionId, logStreamsComplete: true },
-        loggerCompletion,
-        isHarvesterTestnet,
-      }),
-    processOutcome: resolveProcessOutcome(completion),
+    loggerCompletionStatus,
     missingFieldWarnings,
     include: isHarvesterTestnet,
   }
@@ -562,7 +594,10 @@ async function readArchiveSessionEvidence({ sessionsDirectory, sessionName, reco
   const { value: completion, error: completionError } = completionResult
   const { value: loggerCompletion, error: loggerCompletionError } = loggerCompletionResult
   const isHarvesterTestnet = isHarvesterTestnetSession({ identity })
-  const processId = resolveArchiveSessionProcessId({ identity, recoveryCheckpoint })
+  const processId = resolveArchiveSessionProcessId({
+    identity,
+    recoveryCheckpoint,
+  })
   const missingFieldWarnings = createArchiveSessionMissingFieldWarnings({
     identity,
     completion,
@@ -797,7 +832,10 @@ function createSessionStreamFileInventory({ selection, artifactProvenance, strea
   }
   // Array#reduce requires an accumulator and item parameter.
   // eslint-disable-next-line max-params
-  const totalBytes = matchingFiles.reduce((total, file) => total + file.sourceSize, 0)
+  let totalBytes = 0
+  for (const file of matchingFiles) {
+    totalBytes += file.sourceSize
+  }
   return {
     status,
     expectedRuntimeId,
@@ -944,7 +982,10 @@ async function copyIdentifiedSessionEvidence({ sourceDirectory, destinationDirec
 }
 
 async function validateLogRootAndSelectSessions({ sourceDirectory, destinationDirectory, recoveryCheckpoint, activeProcessOwner } = {}) {
-  await mkdir(destinationDirectory, { recursive: true, mode: 0o700 })
+  await mkdir(destinationDirectory, {
+    recursive: true,
+    mode: 0o700,
+  })
   const entries = await readdir(sourceDirectory, { withFileTypes: true })
   const unsupportedEntries = entries.filter((entry) => !["sessions", "cumulative"].includes(entry.name))
   if (unsupportedEntries.length > 0) {
@@ -985,8 +1026,15 @@ async function copySelectedLogs({ sourceDirectory, destinationDirectory, recover
     recoveryRuntimeSessionId: recoveryCheckpoint.runtimeSessionId,
     recoveryProcessIdentity: recoveryCheckpoint.processIdentity,
   }
-  const evidenceIntegrity = createEvidenceIntegrity({ selection: selectionWithRuntime, artifactProvenance })
-  return { ...selectionWithRuntime, evidenceIntegrity, artifactProvenance }
+  const evidenceIntegrity = createEvidenceIntegrity({
+    selection: selectionWithRuntime,
+    artifactProvenance,
+  })
+  return {
+    ...selectionWithRuntime,
+    evidenceIntegrity,
+    artifactProvenance,
+  }
 }
 
 export async function listRegularFiles({ directory, relative = "" } = {}) {
