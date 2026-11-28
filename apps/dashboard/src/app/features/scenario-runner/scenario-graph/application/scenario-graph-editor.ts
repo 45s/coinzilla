@@ -24,6 +24,8 @@ export interface ScenarioGraphNodeDraft {
 export interface ScenarioGraphViewNode extends ScenarioGraphNode {
   readonly width: number;
   readonly height: number;
+  readonly labelLines: readonly string[];
+  readonly descriptionLines: readonly string[];
   readonly input: { readonly x: number; readonly y: number } | null;
   readonly outputs: readonly { readonly id: string; readonly x: number; readonly y: number; readonly label: string | null }[];
 }
