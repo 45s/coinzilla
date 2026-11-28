@@ -413,16 +413,28 @@ async function resolveStartupOptionsForProcessRecovery({ resolved,
     operationalStateStore,
     recoveryEnabled,
   })
-  const tradingEnabled = resolved.tradingEnabled && operationalState.previousProcessStarted !== true
+  const priorProcessStateRequiresObservationOnly =
+    recoveryEnabled === true && operationalState.previousProcessStarted === true
+  const tradingEnabled = resolved.tradingEnabled && !priorProcessStateRequiresObservationOnly
   const startupOptions = tradingEnabled === resolved.tradingEnabled
     ? resolved
     : Object.freeze({ ...resolved,
 tradingEnabled })
-  if (resolved.tradingEnabled && !tradingEnabled) {
+  if (resolved.tradingEnabled && priorProcessStateRequiresObservationOnly) {
     logger.info?.({
-      message: "Trading disabled because process-restart recovery is disabled and prior process history exists",
-      reason: "PROCESS_RESTART_RECOVERY_DISABLED",
+      message: "Trading remains observation-only because prior process state is not restored",
+      reason: "PROCESS_RESTART_RESTORATION_REQUIRED",
+      recoveryEnabled: true,
+      previousProcessStarted: true,
       tradingEnabled: false,
+    })
+  } else if (resolved.tradingEnabled && operationalState.previousProcessStarted === true) {
+    logger.info?.({
+      message: "Starting a fresh current-process session; process-restart recovery is disabled and prior-session orders remain external",
+      reason: "PROCESS_RESTART_RECOVERY_DISABLED",
+      recoveryEnabled: false,
+      previousProcessStarted: true,
+      tradingEnabled: true,
     })
   }
   return {
@@ -433,6 +445,7 @@ tradingEnabled })
         ? operationalState.previousProcessStarted === true
         : null,
       accountRecoverySnapshotRequired: operationalState.accountRecoverySnapshotRequired === true,
+      recoveryEnabled,
       restorationEnabled: false,
     }),
   }
@@ -979,6 +992,7 @@ function createHarvesterReadinessInputs({ startup, portfolio, resources } = {}) 
     processContinuity: startup.processContinuity ?? {
       storeConfigured: false,
       previousProcessStarted: null,
+      recoveryEnabled: null,
       restorationEnabled: false,
     },
     markets: Object.freeze(markets),
