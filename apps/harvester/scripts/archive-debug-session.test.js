@@ -199,7 +199,7 @@ async function assertCollectedArchive({ directory, expectedIdentityStatus, expec
   assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "Archive manifest must preserve the latest committed recovery checkpoint digest")
   assert.deepEqual(manifest.logSelection, {
     cumulative: "excluded",
-    sessions: "all-identified-Harvester-sessions-preserved-independently; exact-runtime-id-match-required; completed sessions or active-process snapshots; gzip-compressed",
+    sessions: "identified-Harvester-sessions-preserved-independently; exact-runtime-id-match-required; completed sessions, active-process snapshots, or stopped-process snapshots with unconfirmed completion; gzip-compressed",
     selectionReason: expectedIdentityStatus === "matched" ? "exact-runtime-id-match" : expectedIdentityStatus,
   }, "Debug archive manifest must preserve testnet and live sessions independently and require an exact runtime identity match.")
   assert.equal(
