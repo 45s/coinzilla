@@ -144,6 +144,14 @@ function createEngine({
     getRecoveryLedger: () => RecoveryLedger.empty({ market }),
     getMarketMetadata: () => marketMetadata,
     getAccountSnapshot: () => brokerState.accountSnapshot,
+    onOperationalStateSubmissionIntent: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+    onOperationalStateSubmissionOutcome: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
     updateTradingAccounting: async () => ({
       ok: true,
       data: {
