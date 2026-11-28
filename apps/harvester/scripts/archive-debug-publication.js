@@ -20,7 +20,7 @@ function validateArchiveName(archiveName) {
 }
 
 function validateManifestHeader(manifest) {
-  const hasExpectedFormat = manifest.formatVersion === 1
+  const hasExpectedFormat = manifest.formatVersion === 2
     && manifest.application === "harvester"
     && manifest.commandTradingMode === "testnet"
   const hasExpectedScope = JSON.stringify(manifest.includedDirectories) === JSON.stringify(REQUIRED_INCLUDED_DIRECTORIES)
@@ -32,6 +32,67 @@ function validateManifestHeader(manifest) {
   }
   if (!Array.isArray(manifest.files) || manifest.files.length === 0) {
     throw new Error("Debug archive manifest must contain a non-empty file inventory.")
+  }
+}
+
+function validateEvidenceIntegrity(manifest) {
+  const integrity = manifest.evidenceIntegrity
+  const expectedRuntimeId = manifest.recoveryRuntimeSessionId
+  if (
+    integrity?.status !== "matched"
+    || integrity.validForPublication !== true
+    || integrity.expectedRuntimeId !== expectedRuntimeId
+    || manifest.matchingTradingLogsAvailable !== true
+    || manifest.logRuntimeSessionId !== expectedRuntimeId
+    || manifest.runtimeIdentity?.status !== "matched"
+    || manifest.runtimeIdentity?.correlation !== "same-runtime-session"
+    || manifest.tradingRuntime?.runtimeSessionId !== expectedRuntimeId
+    || manifest.tradingRuntime?.processIdentity?.runtimeSessionId !== expectedRuntimeId
+  ) {
+    throw new Error(`Debug archive evidence integrity is not publishable: expected runtime=${expectedRuntimeId ?? "unknown"}; status=${integrity?.status ?? "unverifiable"}; matchingTradingLogsAvailable=${manifest.matchingTradingLogsAvailable}.`)
+  }
+  const matchingSessions = (manifest.sessionInventory ?? []).filter((session) =>
+    session.runtimeSessionId === expectedRuntimeId
+    && session.completionStatus === "complete"
+  )
+  if (matchingSessions.length !== 1) {
+    throw new Error(`Debug archive runtime ownership is ambiguous or incomplete: expected exactly one completed process identity for runtime ${expectedRuntimeId}; found ${matchingSessions.length}.`)
+  }
+  const manifestFiles = new Map(manifest.files.map((entry) => [entry.path, entry]))
+  for (const [streamKey, streamLabel] of [
+    ["harvesterLog", "HARVESTER LOG"],
+    ["traceLog", "TRACE LOG"],
+  ]) {
+    const stream = integrity.streams?.[streamKey]
+    if (
+      stream?.status !== "matched"
+      || stream.expectedRuntimeId !== expectedRuntimeId
+      || stream.fileCount < 1
+      || stream.totalBytes < 1
+      || !Array.isArray(stream.files)
+      || stream.files.length < 1
+    ) {
+      throw new Error(`${streamLabel} evidence is not complete for runtime ${expectedRuntimeId}: status=${stream?.status ?? "missing"}; files=${stream?.fileCount ?? 0}; bytes=${stream?.totalBytes ?? 0}.`)
+    }
+    for (const file of stream.files) {
+      const manifestFile = manifestFiles.get(file.archivePath)
+      if (
+        file.actualRuntimeId !== expectedRuntimeId
+        || typeof file.sourcePath !== "string"
+        || file.sourceSize < 1
+        || file.archiveSize < 1
+        || !/^[a-f0-9]{64}$/.test(file.sourceSha256 ?? "")
+        || !/^[a-f0-9]{64}$/.test(file.archiveSha256 ?? "")
+        || !manifestFile
+        || manifestFile.size !== file.archiveSize
+        || manifestFile.sha256 !== file.archiveSha256
+      ) {
+        throw new Error(`${streamLabel} evidence ownership or checksum metadata is invalid for runtime ${expectedRuntimeId}: ${file.sourcePath ?? "unknown source"}.`)
+      }
+    }
+  }
+  if ((integrity.mismatches ?? []).length > 0) {
+    throw new Error(`Debug archive contains mismatched runtime log files for expected runtime ${expectedRuntimeId}; refusing publication.`)
   }
 }
 

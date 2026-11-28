@@ -223,7 +223,7 @@ async function copyCompressedFile({
     throw new Error(`Refusing to compress a non-regular source file: ${sourcePath}`)
   }
   const sourceSha256Before = await sha256File(sourcePath)
-  const sourceAlreadyCompressed = /\.gz$/i.test(childRelative)
+  const sourceAlreadyCompressed = /\\.gz$/i.test(childRelative)
   const compressedRelative = sourceAlreadyCompressed ? childRelative : `${childRelative}.gz`
   const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
   let sourceSha256After
@@ -300,7 +300,7 @@ async function copyCompressedTree({
     } else if (sourceStats.isFile()) {
       await copyCompressedFile({
         sourcePath,
-        destinationPath: path.join(destinationDirectory, /\.gz$/i.test(childRelative) ? childRelative : `${childRelative}.gz`),
+        destinationPath: path.join(destinationDirectory, /\\.gz$/i.test(childRelative) ? childRelative : `${childRelative}.gz`),
         childRelative,
         onFileCopied,
       })
@@ -663,24 +663,24 @@ const LOG_STREAM_DEFINITIONS = Object.freeze([
   {
     key: "harvesterLog",
     label: "HARVESTER LOG",
-    pattern: /^harvester\.log(?:\.\d+)*$/i,
+    pattern: /^harvester\\.log(?:\\.\\d+)*$/i,
   },
   {
     key: "traceLog",
     label: "TRACE LOG",
-    pattern: /^trace\.log(?:\.\d+)*$/i,
+    pattern: /^trace\\.log(?:\\.\\d+)*$/i,
   },
 ])
 
 function resolveLogRotationIndex(filename) {
-  const match = /\.log(?:\.(\d+))?(?:\.gz)?$/i.exec(filename)
+  const match = /\\.log(?:\\.(\\d+))?(?:\\.gz)?$/i.exec(filename)
   return match?.[1] ? Number(match[1]) : 0
 }
 
 function createSessionStreamFileInventory({ selection, artifactProvenance, streamDefinition } = {}) {
   const files = artifactProvenance
     .filter((artifact) => {
-      const filename = path.posix.basename(artifact.sourcePath).replace(/\.gz$/i, "")
+      const filename = path.posix.basename(artifact.sourcePath).replace(/\\.gz$/i, "")
       return streamDefinition.pattern.test(filename)
     })
     .map((artifact) => {
@@ -784,7 +784,7 @@ function createEvidenceIntegrityFailureMessage(integrity) {
       stream: integrity.streams[definition.key],
       integrity,
     }))
-    .join("\n")
+    .join("\\n")
 }
 
 async function copySelectedLogs({
