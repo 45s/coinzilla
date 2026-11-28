@@ -338,15 +338,17 @@ test("still rejects an invalid recovery-facts checkpoint instead of publishing m
   )
 })
 
-test("refuses to archive while a Harvester process lock exists", async (t) => {
+test("collects a read-only debug snapshot while a Harvester process lock exists", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
     force: true
   }))
+  await mkdir(fixture.lockDirectory, { recursive: true })
   await writeFile(path.join(fixture.lockDirectory, ".harvester-trading-test.lock"), "active")
-  await assert.rejects(runHarvesterDebugArchive(archiveDependencies({ fixture })), /process lock exists/i, "Archive must refuse to run while a Harvester process lock exists")
-  await assert.rejects(readdir(path.join(fixture.packageDirectory, "archive-output")), { code: "ENOENT" }, "A rejected active-process preflight must not create archive output")
+  const result = await runHarvesterDebugArchive(archiveDependencies({ fixture }))
+  assert.equal(result.matchingTradingLogsAvailable, true, "An active process lock must not block collection of an independently verified runtime snapshot.")
+  assert.ok(result.localArchive, "Collection must retain the local archive while Harvester remains active.")
 })
 
 test("reclaims confirmed stale same-host locks before collecting the TESTNET debug archive", async (t) => {
