@@ -910,7 +910,7 @@ in [Journal Operations — Normal shutdown](./JOURNAL_OPERATIONS.md#strategy-own
 
 The process entry point in `src/index.js` composes process identity/logging, EventBus, the optional notifier, the Journal service, the broker-wide and Journal-directory process locks, runtime startup, signal handling and coordinated shutdown. Broker-connected startup requires the durable PREFLIGHT account audit before market subscriptions proceed. Detailed event payloads, Journal durability, lock acquisition/release, failure handling and shutdown ordering are maintained in [Journal Operations](./JOURNAL_OPERATIONS.md); do not duplicate those operational procedures here.
 
-## Client and broker order identity
+## Client order identity
 
 Harvester generates an opaque 32-character hexadecimal `clientOrderId` for each submission. It is a broker-supported correlation value used before acknowledgement and, where the provider supports it, to find an accepted order when the placement acknowledgement is lost. It is not the permanent order identity, and its spelling never establishes ownership. Preflight validation uses a local-only placeholder and does not allocate a broker client ID.
 
