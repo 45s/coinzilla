@@ -316,9 +316,9 @@ test("retains the machine-readable Journal error code in compact console output"
     },
   })
 
-  assert.match(written, /WARN \\[JOURNAL_DIRECTORY_LOCKED\\]/)
-  assert.match(written, /stage=JOURNAL_WRITER_ACQUISITION/)
-  assert.match(written, /action=Verify no active writer before removing only the stale lock\\./)
+  assert.ok(written.includes("WARN [JOURNAL_DIRECTORY_LOCKED]"))
+  assert.ok(written.includes("stage=JOURNAL_WRITER_ACQUISITION"))
+  assert.ok(written.includes("action=Verify no active writer before removing only the stale lock."))
   assert.ok(written.trim().split("\\n").every((line) => line.length <= 200))
   output.destroy()
 })
