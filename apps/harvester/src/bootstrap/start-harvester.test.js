@@ -97,7 +97,7 @@ async function createRsOnlyOperationalStateStore() {
   }
 }
 
-function createRsOnlyStartupBroker({ calls }) {
+function createRsOnlyStartupBroker({ calls, includeBitcoin = false }) {
   const broker = createBroker(calls)
   const { baseAsset: lineaBaseAsset, quoteAsset } = createMarketMetadata("LINEAUSDT").market
   const { baseAsset: bitcoinBaseAsset } = createMarketMetadata("BTCUSDT").market
@@ -263,7 +263,10 @@ force: true })
 test("retains CG and RS execution routes and subscriptions when process recovery is disabled", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []
-  const broker = createRsOnlyStartupBroker({ calls, includeBitcoin: true })
+  const broker = createRsOnlyStartupBroker({
+    calls,
+    includeBitcoin: true,
+  })
   try {
     const combinedConfig = createRsOnlyStartupConfig({ processRecoveryEnabled: false })
     combinedConfig.strategies.CG_coinGrabber = {
