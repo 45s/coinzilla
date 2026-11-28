@@ -609,7 +609,7 @@ and the merged [P3 implementation PR #1075](https://github.com/45s/coinzilla/pul
 Only order updates resolved to a registered order by its market-scoped broker
 order ID may mutate the order registry or accounting after acknowledgement.
 The client ID is used for pending-order correlation and as an integrity check;
-when both IDs are present they must resolve to the same registered order. TRADE events must contain a canonical
+when both IDs resolve to registered records, they must identify the same order. TRADE events must contain a canonical
 Fill and pass the durable execution-fact barrier before Portfolio/RecoveryLedger
 state is committed. A partial fill updates actual accounting but does not
 advance the strategy; the engine waits for the order's terminal state.
