@@ -751,7 +751,7 @@ function assertStrategyOrderLifecycleLines(written) {
     lines[0],
     "19:14:52 🟡 CG SUBMITTED #pending ZROUSDT SELL 4.98 @ 1.393 h-325e71ba16494aeb875e6e-3",
   )
-  assert.doesNotMatch(lines[0], /\\| Client:|Client order ID:/)
+  assert.doesNotMatch(lines[0], /\| Client:|Client order ID:/)
   assert.equal(
     lines[1],
     "19:14:53 🔴 RS CANCELLED #1341115 ADAUSDT SELL 49.90 @ 0.15410 | Executed: 20 | Cancelled: 29.90",
@@ -1021,7 +1021,7 @@ test("prints catalog code, exact stage, cause and remediation without cutting of
 })
 
 
-test("renders every catalogued startup and degraded failure in one bounded console line", () => {
+test("renders every catalogued startup and degraded failure in bounded console output", () => {
   const output = new PassThrough()
   let written = ""
   output.on("data", (chunk) => {
@@ -1053,7 +1053,7 @@ test("renders every catalogued startup and degraded failure in one bounded conso
     assert.ok(line.length <= 200, `Console output for ${entry.errorCode} must fit the configured line budget.`)
     assert.ok(line.includes(entry.failureStage), `Console output for ${entry.errorCode} must identify its failure stage.`)
     assert.ok(line.includes(entry.operatorAction), `Console output for ${entry.errorCode} must preserve operator remediation.`)
-    const firstCause = line.match(/cause=(.*?) \\| action=/)?.[1]
+    const firstCause = line.match(/cause=(.*?) \| action=/)?.[1]
     assert.ok(firstCause, `Console output for ${entry.errorCode} must preserve its concrete cause.`)
     const continuationLines = []
     for (let index = lineIndex + 1; index < lines.length && lines[index].includes("cause+"); index += 1) {
