@@ -2733,3 +2733,30 @@ test("does not construct or inject recovery storage when the master recovery com
   assert.equal(storeFactoryCalls, 0, "The disabled master switch must not construct the Operational State Store.")
   assert.equal(startupInput.operationalStateStore, undefined, "The disabled master switch must not inject an existing recovery store.")
 })
+
+
+test("keeps unknown native startup codes beside the catalogued startup wrapper", async () => {
+  const calls = []
+  const error = Object.assign(new Error("provider handshake failed"), {
+    code: "ERR_PROVIDER_HANDSHAKE",
+  })
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await runMain({
+      start: async () => { throw error },
+      logger: {
+        info() {},
+        debug() {},
+        error: (data) => calls.push(data),
+      },
+    })
+    const startupFailure = calls.find((call) => call.message === "startup failed.")
+    assert.ok(startupFailure, "A failed startup must produce the catalogued startup summary.")
+    assert.equal(startupFailure.errorCode, "HARVESTER_STARTUP_FAILED", "Unknown native codes must use the stable startup catalog entry.")
+    assert.equal(startupFailure.causeCode, "ERR_PROVIDER_HANDSHAKE", "The original native error code must remain visible beside the wrapper.")
+    assert.equal(startupFailure.errorMessage, error.message, "The startup summary must preserve the concrete originating message.")
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
