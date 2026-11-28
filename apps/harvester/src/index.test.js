@@ -2678,7 +2678,10 @@ test("does not initialize the optional trading-history API when its pre-launch c
     startTradingHistoryApi: async () => {
       apiStartCount += 1
       return {
-        close: async () => ({ ok: true, closed: true }),
+        close: async () => ({
+          ok: true,
+          closed: true,
+        }),
       }
     },
     logger: {
