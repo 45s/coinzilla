@@ -61,6 +61,37 @@ describe('Scenario Runner catalog explanations', () => {
     expect(guide?.steps.some((step) => step.kind === 'production-flow'), 'the helper-only candidate must not claim to execute the full strategy lifecycle').toBe(false);
   });
 
+  it('builds an inspection-only guide from Conservative scenario declarations without implying runtime execution', () => {
+    const guide = getScenarioGuide('CON-BUY-001', {
+      id: 'CON-BUY-001',
+      title: 'A completed BUY keeps BUY admission closed until the recovery cycle is fully reconciled',
+      description: 'Inspect the Conservative BUY lifecycle and its recovery-cycle admission boundary.',
+      preconditions: ['A BUY order is owned by this strategy.'],
+      initialState: { buyOrderStatus: 'FILLED', recoveryCycleStatus: 'OPEN' },
+      inputEvents: [
+        { type: 'BUY_FILLED', orderId: 'buy-1' },
+        { type: 'RECOVERY_SELL_FILLED', orderId: 'sell-1' },
+      ],
+      expectedState: { buyAdmission: 'CLOSED' },
+      expectedOrders: [{ side: 'SELL', purpose: 'recovery' }],
+      expectedAccounting: { basisReset: false },
+      expectedSideEffects: [],
+      invariants: ['A SELL acknowledgement alone does not reopen BUY admission.'],
+      coverageStatus: 'TEST-MAPPED',
+    });
+
+    expect(guide?.availability, 'Conservative domain records must remain inspect-only until an isolated production-flow adapter exists').toBe('INSPECTION_ONLY');
+    expect(guide?.steps.map((step) => step.label), 'the intent graph must preserve declared event order between initial and expected states').toEqual([
+      'Declared initial state',
+      'Declared event 1: BUY_FILLED',
+      'Declared event 2: RECOVERY_SELL_FILLED',
+      'Declared expected outcomes',
+    ]);
+    expect(guide?.steps.every((step) => step.kind !== 'production-flow'), 'declarative scenario metadata must never be represented as invoked production flow').toBe(true);
+    expect(guide?.expectedOutcome, 'the guide must expose the expected orders and accounting contract').toContain('"orders"');
+    expect(guide?.limitations.join(' '), 'the guide must distinguish mapped tests from actual Dashboard execution evidence').toContain('TEST-MAPPED');
+  });
+
   it('does not invent a strategy flow for unknown catalog entries', () => {
     expect(getScenarioGuide('RS-FUTURE-999'), 'unknown scenario IDs must remain explicitly unmapped').toBeNull();
     expect(getScenarioGuide(''), 'empty scenario IDs must not receive a generic scenario explanation').toBeNull();
