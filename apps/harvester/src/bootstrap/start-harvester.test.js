@@ -109,7 +109,7 @@ function createRsOnlyStartupBroker({ calls }) {
   broker.getAccountSnapshot = async () => ({
     ok: true,
     data: {
-      sourceTime: 1,
+      sourceTime: Date.now(),
       balances: accountAssets.map((asset) => new Balance({
         free: new Quantity({
           amount: "100000",
