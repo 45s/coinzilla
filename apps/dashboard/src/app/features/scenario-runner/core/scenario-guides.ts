@@ -141,7 +141,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     expectedOutcome: 'Keep the SELL unresolved and its reservation in place. Record STOP and block new BUY spending. Do not send a replacement SELL.',
     path: [
       { id: 'intent', kind: 'production-flow', label: 'Save the SELL request', detail: 'The required pre-broker intent is recorded.' },
-      { id: 'failure', kind: 'injected-failure', label: 'Sending the SELL returns an unknown result', detail: 'The simulated exchange call errors. The runner cannot know whether an order was accepted.' },
+      { id: 'failure', kind: 'injected-failure', label: 'Simulated broker placement throws', detail: 'The simulated exchange call errors. The runner cannot know whether an order was accepted.' },
       { id: 'unknown', kind: 'outcome', label: 'Keep the result unknown and block new BUY spending', detail: 'Latch STOP and retain the reservation; do not retry or relabel the unknown outcome as rejected.' },
     ],
   }),
