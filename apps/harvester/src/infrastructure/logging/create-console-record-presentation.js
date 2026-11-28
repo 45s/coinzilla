@@ -65,8 +65,11 @@ function summarizeOrderHistoryProjectionFailure({ data, message } = {}) {
 }
 
 function summarizeCataloguedFailure({ data } = {}) {
+  if (data.harvesterErrorCode !== "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED") {
+    return null
+  }
   const diagnostic = resolveHarvesterErrorDiagnostic({
-    errorCode: data.errorCode,
+    errorCode: data.harvesterErrorCode,
     stage: data.errorStage ?? data.stage,
     errorMessage: data.errorMessage,
   })
