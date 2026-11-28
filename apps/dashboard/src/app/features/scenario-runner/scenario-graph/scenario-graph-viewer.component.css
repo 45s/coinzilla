@@ -22,7 +22,7 @@
 .graph-legend span{display:flex;align-items:center;gap:5px}
 .graph-legend i{width:9px;height:9px;border:2px solid var(--line);border-radius:3px}
 .graph-legend i[data-kind="start"],.graph-legend i[data-kind="end"]{border-color:#3b9b70}
-.graph-legend i[data-kind="wait"]{border-color:#c49a43}
+.graph-legend i[data-kind="wait"],.graph-legend i[data-kind="decision"]{border-color:#c49a43}
 .graph-legend i[data-kind="block"]{border-color:#c36b57}
 .graph-limitations{border-top:1px solid var(--line);padding-top:9px;color:var(--muted);font-size:12px}
 .graph-limitations summary{cursor:pointer}
