@@ -2,6 +2,8 @@ import assert from "node:assert/strict"
 import nodeTest from "node:test"
 
 import { createLatestTransitionEvaluator } from "./create-latest-transition-evaluator.js"
+import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 
 const test = (...args) => {
@@ -135,6 +137,7 @@ test("keeps RS-owned active orders out of Conservative policy inputs", async () 
 
 test("evaluates RS-owned symbols through the shared transition when CG has no route", async () => {
   const dependencies = createDependencies()
+  dependencies.recoverySellerPairs = { RSUSDT: { enabled: true } }
   let recoverySellerCalls = 0
   dependencies.evaluateRecoverySellerTransition = async ({ symbol }) => {
     recoverySellerCalls += 1
@@ -153,6 +156,64 @@ test("evaluates RS-owned symbols through the shared transition when CG has no ro
   assert.equal(recoverySellerCalls, 1)
   assert.equal(result.ok, true)
   assert.equal(result.data?.submitted, true)
+})
+
+test("does not dispatch RS for a market without an RS execution route", async () => {
+  const dependencies = createDependencies()
+  dependencies.recoverySellerPairs = { OTHERUSDT: { enabled: true } }
+  let recoverySellerCalls = 0
+  dependencies.evaluateRecoverySellerTransition = async () => {
+    recoverySellerCalls += 1
+    return { ok: true, data: {} }
+  }
+  const evaluate = createLatestTransitionEvaluator(dependencies)
+
+  await evaluate({ symbol: "RSUSDT" })
+
+  assert.equal(recoverySellerCalls, 0,
+    "The shared engine must dispatch RS only for markets explicitly owned by RS.")
+})
+
+test("logs RS evaluation start and decisions with the RS strategy identity", async () => {
+  const dependencies = createDependencies()
+  dependencies.recoverySellerPairs = { RSUSDT: { enabled: true } }
+  const records = []
+  dependencies.recoverySellerLogger = createStrategyLogger({
+    logger: {
+      debug: (record) => records.push(record),
+    },
+    strategyId: StrategyId.RECOVERY_SELLER,
+  })
+  dependencies.evaluateRecoverySellerTransition = async () => ({
+    ok: true,
+    data: {
+      decision: {
+        outcome: "WAIT",
+        reasonCode: "TEST_WAIT",
+        explanation: "No eligible RS action.",
+      },
+    },
+  })
+  const evaluate = createLatestTransitionEvaluator(dependencies)
+
+  await evaluate({ symbol: "RSUSDT" })
+
+  assert.deepEqual(records.map(({ message, strategyId, symbol }) => ({
+    message,
+    strategyId,
+    symbol,
+  })), [
+    {
+      message: "Harvester Recovery Seller evaluation started",
+      strategyId: StrategyId.RECOVERY_SELLER,
+      symbol: "RSUSDT",
+    },
+    {
+      message: "Harvester Recovery Seller evaluation completed",
+      strategyId: StrategyId.RECOVERY_SELLER,
+      symbol: "RSUSDT",
+    },
+  ], "RS decision logs must be identifiable by the RS marker and exact market.")
 })
 
 test("does not evaluate RS while the shared engine performs a preflight", async () => {
