@@ -565,6 +565,35 @@ test("collects and marks the exact active runtime without stopping or clearing i
   assert.equal(manifest.evidenceIntegrity.validForPublication, true, "A uniquely identified active runtime snapshot is publishable.")
 })
 
+test("archives stable logs for a stopped runtime when legacy completion markers are absent", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  await prepareActiveRuntimeFixture({ fixture })
+  const result = await runHarvesterDebugArchive({
+    ...archiveDependencies({ fixture }),
+    isProcessAlive: () => false,
+    onArchiveCreatedFn: undefined,
+  })
+  const manifest = await readArchiveManifest(result.localArchive)
+  const session = manifest.sessionInventory.find(({ runtimeSessionId }) => runtimeSessionId === RUNTIME_SESSION_ID)
+  assert.equal(result.matchingTradingLogsAvailable, true, "Exact runtime identity plus a confirmed stopped PID must select the preserved logs.")
+  assert.equal(session.completionStatus, "stopped-unconfirmed", "A stopped process without completion metadata must not be mislabeled as cleanly completed.")
+  assert.equal(session.loggerCompletionStatus, "stopped-unconfirmed", "Missing logger-flush metadata must remain explicit.")
+  assert.equal(session.stoppedSnapshotPath, "logs/sessions/2026-11-24_testnet/stopped-process-snapshot.json")
+  const marker = JSON.parse(await readFile(path.join(result.localArchive, session.stoppedSnapshotPath), "utf8"))
+  assert.equal(marker.runtimeSessionId, RUNTIME_SESSION_ID)
+  assert.equal(marker.processId, process.pid)
+  assert.equal(marker.processAliveAtCapture, false)
+  assert.equal(marker.completionConfirmed, false)
+  assert.deepEqual(marker.streams, { harvesterLog: true, traceLog: true })
+  assert.equal(manifest.evidenceIntegrity.validForPublication, true, "A byte-stable, runtime-matched stopped-process snapshot is publishable as explicitly unconfirmed evidence.")
+  assert.ok(manifest.warnings.some(({ code }) => code === "SESSION_COMPLETION_RECORD_MISSING"))
+  assert.ok(manifest.warnings.some(({ code }) => code === "SESSION_LOGGER_COMPLETION_RECORD_MISSING"))
+})
+
 test("leaves stale process locks untouched while collecting the TESTNET debug archive", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
