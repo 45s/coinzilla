@@ -33,6 +33,8 @@ function createMatchingTestnetFixtureFiles() {
   return {
     "logs/sessions/2026-11-20_old/terminal.log": "old session",
     "logs/sessions/2026-11-24_testnet/terminal.log": "selected TESTNET session evidence",
+    "logs/sessions/2026-11-24_testnet/harvester.log": "matching debug stream",
+    "logs/sessions/2026-11-24_testnet/trace.log": "matching trace stream",
     "logs/sessions/2026-11-24_testnet/process-identity.json": JSON.stringify({
       formatVersion: 1,
       application: "harvester",
@@ -184,7 +186,7 @@ async function assertCollectedArchive({ directory, expectedIdentityStatus } = {}
   assert.deepEqual(manifest.logSelection, {
     cumulative: "excluded",
     sessions: "all-identified-TESTNET-sessions-preserved-independently; exact-runtime-id-match-required; gzip-compressed",
-    selectionReason: expectedIdentityStatus === "matched" ? "exact-runtime-id-match" : "no-exact-runtime-session",
+    selectionReason: expectedIdentityStatus === "matched" ? "exact-runtime-id-match" : expectedIdentityStatus,
   }, "Debug archive manifest must preserve TESTNET sessions independently and require an exact runtime identity match.")
   assert.equal(
     await readFile(path.join(directory, "data_commit_hash"), "utf8"),
@@ -443,6 +445,8 @@ async function writeTestnetSession({
   const sessionDirectory = path.join(fixture.packageDirectory, "logs/sessions", sessionName)
   await mkdir(sessionDirectory, { recursive: true })
   await writeFile(path.join(sessionDirectory, "terminal.log"), terminalContent, "utf8")
+  await writeFile(path.join(sessionDirectory, "harvester.log"), "debug stream for " + runtimeSessionId, "utf8")
+  await writeFile(path.join(sessionDirectory, "trace.log"), "trace stream for " + runtimeSessionId, "utf8")
   if (includeIdentity) {
     await writeFile(path.join(sessionDirectory, "process-identity.json"), JSON.stringify({
       formatVersion: 1,
