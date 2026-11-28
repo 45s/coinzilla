@@ -3,8 +3,16 @@ import { ConfigValidationError } from "../../domain/app-config.js"
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value)
 const fail = ({ path, expectation }) => { throw new ConfigValidationError(path, expectation) }
-const requireRecord = ({ value, path }) => { if (!isRecord(value)) fail({ path, expectation: "an object" }) }
-const requireBoolean = ({ value, path }) => { if (typeof value !== "boolean") fail({ path, expectation: "a boolean" }) }
+const requireRecord = ({ value, path }) => {
+  if (!isRecord(value)) {
+    fail({ path, expectation: "an object" })
+  }
+}
+const requireBoolean = ({ value, path }) => {
+  if (typeof value !== "boolean") {
+    fail({ path, expectation: "a boolean" })
+  }
+}
 const TELEGRAM_NOTIFICATION_PROFILES = Object.freeze(Object.values(NOTIFICATIONS_TG_PROFILES))
 export const TELEGRAM_NOTIFICATION_EVENT_KEYS = Object.freeze([
   "orderSubmitted", "orderCancelled", "orderFailed", "fillReceived", "pairPaused",
