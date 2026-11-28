@@ -459,6 +459,56 @@ function formatStartupConsoleMessage(message) {
   return message.replace(/Operational State Store/g, "OSS")
 }
 
+function writeCataloguedDiagnosticRecord({
+  output,
+  color,
+  timestamp,
+  level,
+  method,
+  diagnostic,
+} = {}) {
+  const time = new Date(timestamp).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+  const diagnosticLevel = String(diagnostic.severity ?? method ?? level).toLowerCase()
+  const levelLabel = `${String(diagnostic.severity ?? method ?? level).toUpperCase()} `
+  const prefix = `${time} ${levelLabel}[${diagnostic.diagnosticId}] stage=${diagnostic.stage}`
+  const action = `action=${diagnostic.operatorAction}`
+  const causePrefix = "cause="
+  const cause = String(diagnostic.cause ?? diagnostic.meaning).replace(/[\r\n]+/g, " ")
+  const causeBudget = Math.max(1, MAX_CONSOLE_LINE_LENGTH - prefix.length - causePrefix.length - action.length - 4)
+  const needsContinuation = cause.length > causeBudget
+  const firstCauseLength = needsContinuation ? Math.max(0, causeBudget - 3) : cause.length
+  const firstCause = needsContinuation
+    ? `${cause.slice(0, firstCauseLength)}...`
+    : cause
+  const line = `${prefix} ${causePrefix}${firstCause} | ${action}`
+  output.write(`${formatConsoleLine({
+    line,
+    level: diagnosticLevel,
+    method: diagnosticLevel,
+    color,
+  })}\n`)
+
+  if (needsContinuation) {
+    const continuationPrefix = `${time} ${levelLabel}cause+`
+    const continuationBudget = Math.max(1, MAX_CONSOLE_LINE_LENGTH - continuationPrefix.length)
+    const remainingCause = cause.slice(firstCauseLength)
+    for (let offset = 0; offset < remainingCause.length; offset += continuationBudget) {
+      const continuationLine = `${continuationPrefix}${remainingCause.slice(offset, offset + continuationBudget)}`
+      output.write(`${formatConsoleLine({
+        line: continuationLine,
+        level: diagnosticLevel,
+        method: diagnosticLevel,
+        color,
+      })}\n`)
+    }
+  }
+}
+
 function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary, strategyId } = {}) {
   const time = new Date(timestamp).toLocaleTimeString("en-GB", {
     hour: "2-digit",
@@ -540,6 +590,49 @@ function flushSuppressedConsoleRecords({ output, color, state } = {}) {
   state.suppressedCount = 0
 }
 
+function writeSpecialConsoleRecord({
+  presentation,
+  output,
+  color,
+  timestamp,
+  level,
+  method,
+  data,
+} = {}) {
+  if (presentation.shutdownPresentation) {
+    output.write(`${formatConsoleLine({
+      line: presentation.shutdownPresentation.line,
+      level,
+      method,
+      color,
+    })}\n`)
+    return true
+  }
+  if (presentation.isOrderLifecycle) {
+    writeOrderLifecycleRecord({
+      output,
+      color,
+      timestamp,
+      level,
+      method,
+      data,
+    })
+    return true
+  }
+  if (presentation.summary.diagnostic) {
+    writeCataloguedDiagnosticRecord({
+      output,
+      color,
+      timestamp,
+      level,
+      method,
+      diagnostic: presentation.summary.diagnostic,
+    })
+    return true
+  }
+  return false
+}
+
 function writeConsoleTransportEntry({ entry, output, color, state } = {}) {
   const {
     timestamp,
@@ -565,24 +658,15 @@ function writeConsoleTransportEntry({ entry, output, color, state } = {}) {
   })
   state.previousFingerprint = strategyFingerprint
   state.previousTimestamp = timestamp
-  if (presentation.shutdownPresentation) {
-    output.write(`${formatConsoleLine({
-      line: presentation.shutdownPresentation.line,
-      level,
-      method,
-      color,
-    })}\n`)
-    return
-  }
-  if (presentation.isOrderLifecycle) {
-    writeOrderLifecycleRecord({
-      output,
-      color,
-      timestamp,
-      level,
-      method,
-      data,
-    })
+  if (writeSpecialConsoleRecord({
+    presentation,
+    output,
+    color,
+    timestamp,
+    level,
+    method,
+    data,
+  })) {
     return
   }
   writeStandardConsoleRecord({

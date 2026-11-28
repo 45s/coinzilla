@@ -1,9 +1,11 @@
+import { SystemCustomError } from "@coinzilla/utils"
+
 /**
  * A configured market is blocked because one or more applicable exchange
  * constraints do not yet have a Harvester domain evaluator.
  */
-export class UnvalidatedMarketExchangeConstraintsError extends Error {
-  constructor({ symbol, constraints } = {}) {
+export class UnvalidatedMarketExchangeConstraintsError extends SystemCustomError {
+  constructor({ symbol, constraints, cause } = {}) {
     if (typeof symbol !== "string" || !symbol.trim()) {
       throw new TypeError("UnvalidatedMarketExchangeConstraintsError requires a market symbol")
     }
@@ -31,9 +33,17 @@ sourceFilterType })
       } cannot start because ${  normalizedConstraints.length 
       } exchange constraint(s) are not validated: ${  blockers.join(", ")  }.`
 
-    super(message)
-    this.name = "UnvalidatedMarketExchangeConstraintsError"
-    this.code = "HARVESTER_MARKET_UNVALIDATED_EXCHANGE_CONSTRAINTS"
+    super(message, {
+      code: "HARVESTER_MARKET_UNVALIDATED_EXCHANGE_CONSTRAINTS",
+      context: {
+        component: "market-readiness",
+        operation: "validate-market-trading-readiness",
+        stage: "MARKET_READINESS_VALIDATION",
+        symbol: normalizedSymbol,
+        constraintCount: normalizedConstraints.length,
+      },
+      ...(cause === undefined ? {} : { cause }),
+    })
     this.symbol = normalizedSymbol
     this.constraints = normalizedConstraints
     this.details = Object.freeze({

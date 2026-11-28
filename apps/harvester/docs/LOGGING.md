@@ -48,7 +48,20 @@ Non-interactive output remains plain text. The terminal is intentionally a
 summary, not a second diagnostic dump: it prints the event message plus a
 small allowlist of actionable fields (including the stable `diagnosticId`
 for catalogued startup failures), omits stacks/fingerprints/audit internals,
-and caps each line at 200 characters.
+and caps ordinary lines at 200 characters. Catalogued failures use a dedicated
+operator format: stable `diagnosticId`, exact failure `stage`, the concrete
+`cause`, and a short `action` are prioritized in that order. If the cause does not fit, continuation lines preserve it in bounded chunks while
+the first line retains the stable identity, stage and action. The complete
+original error and nested cause/stack remain in the DEBUG/TRACE session files.
+The catalog source is
+[`harvester-error-catalog.js`](../src/infrastructure/logging/harvester-error-catalog.js);
+its tests enforce unique codes, complete operator guidance, one-look output for
+every registered entry, bounded continuations, and synchronization with the
+[operator error vocabulary](./error-vocabulary.md). Relational
+history preparation reports a stable Harvester error code separately from
+the native SQLite `errorCode`, and identifies connection, migration, and
+backup stages. A persistence-projection failure does not authorize database
+deletion, reset, or repair.
 
 Order-history projection failures additionally show the safe validation `field`,
 market `symbol`, affected `clientOrderId`, and stable `errorCode`. Those fields
@@ -338,3 +351,10 @@ Startup's market-data connected summary reports only the subscription count
 (`Binance market-data stream connected; subscriptions: 5.`). Operator-facing
 console summaries abbreviate Operational State Store as `OSS`; full structured
 records and diagnostic files retain their diagnostic detail.
+
+Startup failure descriptions preserve the concrete error name, stable/native
+code, message, stack and nested cause chain. Credential-bearing fragments in
+those message/stack strings are redacted (bot tokens, labelled API keys,
+secrets, authorization values, passwords and URL userinfo); structured context
+continues through the shared logger's sensitive-field redaction. The original
+in-memory Error objects are not mutated.

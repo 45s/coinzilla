@@ -75,7 +75,7 @@ test('reports startup failure and sets a non-zero exit code', async (t) => {
   const startupLog = messages.find(([, entry]) => entry?.message === 'startup failed.');
   assert.ok(startupLog);
   assert.equal(startupLog[0], 'error');
-  assert.equal(startupLog[1].error, startupError);
+  assert.equal(startupLog[1].error, undefined, 'Raw Error objects must not bypass credential redaction.');
   assert.equal(startupLog[1].errorDetails.name, 'Error');
   assert.equal(startupLog[1].errorDetails.message, 'Invalid trading config');
   assert.match(startupLog[1].errorDetails.stack, /Invalid trading config/);

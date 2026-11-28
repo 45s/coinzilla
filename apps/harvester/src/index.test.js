@@ -8,6 +8,7 @@ import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { appConfig as defaultAppConfig } from "../config/index.js"
 import { main as startMain } from "./index.js"
+import { describeProcessError } from "./infrastructure/logging/describe-process-error.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { UnvalidatedMarketExchangeConstraintsError } from "./domain/market/errors/unvalidated-market-exchange-constraints-error.js"
 import { StrategyId } from "./domain/strategies/strategy-ids.js"
@@ -315,7 +316,7 @@ test("logs startup failures as one structured logger argument", async () => {
     const startupFailures = calls.filter((call) => call.data?.message === "startup failed.")
     assert.equal(startupFailures.length, 1)
     assert.equal(startupFailures[0].level, "error")
-    assert.equal(startupFailures[0].data.error, error)
+    assert.equal(startupFailures[0].data.error, undefined, "Raw Error objects must not bypass credential redaction.")
     assert.equal(startupFailures[0].data.errorDetails.name, "Error")
     assert.equal(startupFailures[0].data.errorDetails.message, "configuration failed")
     assert.match(startupFailures[0].data.errorDetails.stack, /configuration failed/)
@@ -2732,4 +2733,91 @@ test("does not construct or inject recovery storage when the master recovery com
 
   assert.equal(storeFactoryCalls, 0, "The disabled master switch must not construct the Operational State Store.")
   assert.equal(startupInput.operationalStateStore, undefined, "The disabled master switch must not inject an existing recovery store.")
+})
+
+
+test("keeps unknown native startup codes beside the catalogued startup wrapper", async () => {
+  const calls = []
+  const error = Object.assign(new Error("provider handshake failed"), {
+    code: "ERR_PROVIDER_HANDSHAKE",
+  })
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    await runMain({
+      start: async () => { throw error },
+      logger: {
+        info() {},
+        debug() {},
+        error: (data) => calls.push(data),
+      },
+    })
+    const startupFailure = calls.find((call) => call.message === "startup failed.")
+    assert.ok(startupFailure, "A failed startup must produce the catalogued startup summary.")
+    assert.equal(startupFailure.errorCode, "HARVESTER_STARTUP_FAILED", "Unknown native codes must use the stable startup catalog entry.")
+    assert.equal(startupFailure.causeCode, "ERR_PROVIDER_HANDSHAKE", "The original native error code must remain visible beside the wrapper.")
+    assert.equal(startupFailure.errorMessage, error.message, "The startup summary must preserve the concrete originating message.")
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+
+test("preserves nested process error identity while redacting credential-bearing text", () => {
+  const secretBotToken = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+  const nestedCause = Object.assign(
+    new Error("request failed with apiKey=api-secret-value and token=token-secret-value"),
+    { code: "ERR_PROVIDER_HANDSHAKE" },
+  )
+  const original = Object.assign(
+    new Error(`provider failed: bot${secretBotToken} authorization=Bearer bearer-secret-value https://alice:password-secret@private.example/path`, {
+      cause: nestedCause,
+    }),
+    {
+      code: "HARVESTER_PROVIDER_IDENTITY_INVALID",
+      context: {
+        component: "provider",
+        operation: "connect",
+      },
+    },
+  )
+
+  const diagnostic = describeProcessError(original)
+  const serialized = JSON.stringify(diagnostic)
+
+  assert.equal(diagnostic.name, "Error", "The original error name must be preserved.")
+  assert.equal(diagnostic.code, original.code, "The original stable code must be preserved.")
+  assert.deepEqual(diagnostic.context, original.context, "Safe typed error context must be preserved.")
+  assert.ok(diagnostic.message.includes("[REDACTED]"), "Credential-bearing message fragments must be masked.")
+  assert.equal(diagnostic.cause.name, "Error", "The nested cause name must be preserved.")
+  assert.equal(diagnostic.cause.code, nestedCause.code, "The nested native cause code must be preserved.")
+  assert.ok(diagnostic.cause.message.includes("[REDACTED]"), "Nested cause messages must also be sanitized.")
+  for (const secret of [
+    secretBotToken,
+    "api-secret-value",
+    "token-secret-value",
+    "bearer-secret-value",
+    "password-secret",
+  ]) {
+    assert.equal(serialized.includes(secret), false, `Serialized process diagnostics must not expose ${secret}.`)
+  }
+  assert.ok(diagnostic.stack.includes("[REDACTED]"), "The original stack must remain available with credential fragments masked.")
+})
+
+
+test("describes aggregate and non-Error startup failures", () => {
+  const aggregate = new AggregateError(
+    [new Error("provider A failed"), new Error("provider B failed")],
+    "all configured providers failed",
+  )
+  const diagnostic = describeProcessError(aggregate)
+
+  assert.equal(diagnostic.name, "AggregateError")
+  assert.equal(diagnostic.message, "all configured providers failed")
+  assert.equal(diagnostic.errors.length, 2)
+  assert.equal(diagnostic.errors[0].message, "provider A failed")
+  assert.deepEqual(
+    describeProcessError("startup rejected with a non-Error value"),
+    { message: "startup rejected with a non-Error value" },
+  )
 })

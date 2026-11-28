@@ -108,3 +108,31 @@ The structured observer diagnostic includes:
 The validation field is limited to an ASCII dotted identifier no longer than 128 characters. Raw order payloads and arbitrary exception messages are not logged. A projection failure is a history gap; it does not reverse a successful fill, mutate trading accounting, or authorize an exchange action.
 
 **Safe recovery:** inspect the reported field and event/market identity, compare the canonical order event with the owning order state, and fix the mapping/contract defect. Do not fabricate missing identity fields, edit exchange orders, or infer an invalid field from a historical log entry that did not preserve it. The 28 archived 2026-11-22 occurrences remain unattributed; the database dump has not been inspected.
+
+## Central Harvester failure catalog
+
+The table below is the operator-facing rendering of the source catalog in
+`src/infrastructure/logging/harvester-error-catalog.js`. The catalog tests
+validate every field in this block, so titles, ownership, stages, severity,
+stop behavior, meaning and remediation cannot silently drift from the source.
+
+<!-- BEGIN GENERATED HARVESTER ERROR CATALOG -->
+
+| Code | Title | Subsystem | Failure stage | Severity | Stop behavior | Meaning | Operator action |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED` | Relational order history unavailable | persistence | `RELATIONAL_PERSISTENCE_PREPARATION` | WARN | `TRADING_CONTINUES_WITH_LEGACY_HISTORY` | The optional relational trading-history projection could not be prepared. | Full cause: session DEBUG; do not reset DB. |
+| `HARVESTER_STARTUP_FAILED` | Harvester startup failed | process | `PROCESS_STARTUP` | ERROR | `PROCESS_STOPS` | A required startup operation failed; the originating error remains the primary cause. | Inspect DEBUG cause chain; do not retry blindly. |
+| `HARVESTER_MARKET_UNVALIDATED_EXCHANGE_CONSTRAINTS` | Market blocked by unvalidated exchange constraints | market-readiness | `MARKET_READINESS_VALIDATION` | ERROR | `AFFECTED_MARKET_BLOCKED` | The market has applicable exchange constraints without a validated domain evaluator. | Implement evaluators before enabling market. |
+| `HARVESTER_PROVIDER_IDENTITY_INVALID` | Provider identity configuration is invalid | provider-configuration | `PROVIDER_IDENTITY_VALIDATION` | ERROR | `PROCESS_STOPS` | An explicit provider or trading-environment identity is missing or invalid. | Correct provider identity configuration; do not infer environment. |
+| `HARVESTER_PROVIDER_REGISTRY_INVALID` | Provider registry is invalid | provider-registry | `PROVIDER_REGISTRY_COMPOSITION` | ERROR | `PROCESS_STOPS` | Configured provider instances are missing, duplicated or inconsistent. | Correct provider-instance definitions before startup. |
+| `HARVESTER_PROCESS_LOCK_EXISTS` | Harvester process ownership lock already exists | process-ownership | `PROCESS_LOCK_ACQUISITION` | ERROR | `PROCESS_STOPS` | Another process owns the same provider/account execution scope. | Verify the lock owner; never delete an active lock. |
+| `JOURNAL_DIRECTORY_LOCKED` | Journal directory is locked | journal | `JOURNAL_WRITER_ACQUISITION` | WARN | `CONTINUE_WITHOUT_OPTIONAL_JOURNAL` | The optional Journal writer could not acquire exclusive directory ownership. | Verify no active writer before removing only the stale lock. |
+| `HARVESTER_ACCOUNT_HISTORY_SYNC_FAILED` | Account history synchronization is incomplete | history-synchronization | `ACCOUNT_HISTORY_SYNCHRONIZATION` | WARN | `CONTINUE_DEGRADED_WITH_HISTORY_GAP` | One or more exchange history pages failed; affected cursors remain unadvanced. | Resolve the recorded page failure; never advance cursors manually. |
+
+<!-- END GENERATED HARVESTER ERROR CATALOG -->
+
+For relational persistence, `harvesterErrorCode` carries the Harvester
+classification while `errorCode` retains the native SQLite code. The console
+output shows the Harvester identifier, exact stage, concrete cause and action;
+long causes continue on bounded lines. Structured DEBUG/TRACE logs retain the
+original error and cause chain.

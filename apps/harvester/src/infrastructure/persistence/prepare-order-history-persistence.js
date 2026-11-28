@@ -25,14 +25,11 @@ function createPreparationFailureLogDetails({ error, relational } = {}) {
     error,
     errorName: error?.name ?? "Error",
     errorCode: error?.code ?? "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
+    harvesterErrorCode: "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
     errorMessage: error?.message ?? String(error),
   }
-  if (error?.context !== undefined) {
-    details.errorContext = error.context
-  }
-  if (error?.context?.stage !== undefined) {
-    details.errorStage = error.context.stage
-  }
+  details.errorContext = error?.context
+  details.errorStage = error?.stage ?? error?.context?.stage
   return details
 }
 
@@ -293,15 +290,27 @@ async function applyRelationalMigrations({ database, filename } = {}) {
     database,
     filename,
   })
-  await database.migrate(HARVESTER_RELATIONAL_MIGRATIONS.slice(0, 4))
-  const orderIdentityMigrationBackupFilename = await createVerifiedOrderIdentityMigrationBackup({
-    database,
-    filename,
-  })
+  try {
+    await database.migrate(HARVESTER_RELATIONAL_MIGRATIONS.slice(0, 4))
+  } catch (error) {
+    error.stage = "RELATIONAL_MIGRATION_V1_V4"
+    throw error
+  }
+  let orderIdentityMigrationBackupFilename
+  try {
+    orderIdentityMigrationBackupFilename = await createVerifiedOrderIdentityMigrationBackup({
+      database,
+      filename,
+    })
+  } catch (error) {
+    error.stage = "RELATIONAL_MIGRATION_V5_BACKUP"
+    throw error
+  }
   try {
     await database.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
   } catch (error) {
     Object.assign(error, {
+      stage: "RELATIONAL_MIGRATION_V5",
       migrationBackupFilename: legacyMigrationBackupFilename ?? orderIdentityMigrationBackupFilename,
       orderIdentityMigrationBackupFilename,
     })
@@ -360,7 +369,12 @@ async function prepareRelationalResources({
   let resources
   const partialResources = {}
   try {
-    await relationalDatabase.connect()
+    try {
+      await relationalDatabase.connect()
+    } catch (error) {
+      error.stage = "RELATIONAL_DATABASE_CONNECT"
+      throw error
+    }
     const migrationBackups = await applyRelationalMigrations({
       database: relationalDatabase,
       filename,
@@ -380,6 +394,7 @@ async function prepareRelationalResources({
       ...migrationBackups,
     }
   } catch (error) {
+    error.stage ??= "RELATIONAL_RESOURCE_PREPARATION"
     await closePartialRelationalResources({
       database: relationalDatabase,
       observers: [

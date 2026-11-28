@@ -1,4 +1,5 @@
 import { createShutdownPhaseConsolePresentation } from "./create-shutdown-phase-console-presentation.js"
+import { resolveHarvesterErrorDiagnostic } from "./harvester-error-catalog.js"
 
 const ORDER_HISTORY_FAILURE_DETAIL_LIMITS = Object.freeze({
   field: 64,
@@ -8,6 +9,9 @@ const ORDER_HISTORY_FAILURE_DETAIL_LIMITS = Object.freeze({
 })
 
 const CONSOLE_DETAIL_KEYS = Object.freeze([
+  "diagnosticId",
+  "stage",
+  "operatorAction",
   "correlationId",
   "interactionType",
   "action",
@@ -60,6 +64,49 @@ function summarizeOrderHistoryProjectionFailure({ data, message } = {}) {
   }
 }
 
+function summarizeCataloguedFailure({ data } = {}) {
+  let nativeCauseCode
+  if (data.harvesterErrorCode) {
+    if (data.errorCode !== data.harvesterErrorCode) {
+      nativeCauseCode = data.errorCode
+    }
+  } else if (data.causeCode !== data.errorCode) {
+    nativeCauseCode = data.causeCode
+  }
+  const messageAlreadyIdentifiesNativeCode = typeof data.errorMessage === "string" &&
+    data.errorMessage.startsWith(`${nativeCauseCode}:`)
+  const causeMessage = messageAlreadyIdentifiesNativeCode
+    ? data.errorMessage
+    : [
+      nativeCauseCode,
+      data.errorMessage,
+    ].filter((value) => typeof value === "string" && value.length > 0).join(": ")
+  const sourceFilterTypes = Array.isArray(data.sourceFilterTypes)
+    ? data.sourceFilterTypes.filter((value) => typeof value === "string" && value.length > 0)
+    : []
+  const errorMessage = sourceFilterTypes.length > 0
+    ? `${causeMessage}; source filters: ${sourceFilterTypes.join(", ")}`
+    : causeMessage
+  const diagnostic = resolveHarvesterErrorDiagnostic({
+    errorCode: data.harvesterErrorCode ?? data.errorCode,
+    stage: data.errorStage ?? data.stage,
+    errorMessage,
+  })
+  if (!diagnostic) {
+    return null
+  }
+  return {
+    message: diagnostic.title,
+    diagnostic,
+    details: {
+      diagnosticId: diagnostic.diagnosticId,
+      stage: diagnostic.stage,
+      cause: diagnostic.cause,
+      action: diagnostic.operatorAction,
+    },
+  }
+}
+
 function summarizeConsoleData({ data, shutdownPresentation } = {}) {
   if (shutdownPresentation) {
     return {
@@ -88,6 +135,10 @@ function summarizeConsoleData({ data, shutdownPresentation } = {}) {
       message: `recovery SELL cancellation requested: ${data.symbol}, reason ${data.reason}`,
       details: {},
     }
+  }
+  const cataloguedFailure = summarizeCataloguedFailure({ data })
+  if (cataloguedFailure) {
+    return cataloguedFailure
   }
   const details = Object.fromEntries(
     CONSOLE_DETAIL_KEYS
