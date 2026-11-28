@@ -992,7 +992,10 @@ test("prints catalog code, exact stage, cause and remediation without cutting of
   output.on("data", (chunk) => {
     written += chunk.toString()
   })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
 
   transport.write({
     timestamp: "2026-11-28T06:00:00.000Z",
