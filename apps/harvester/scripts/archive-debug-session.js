@@ -2015,6 +2015,7 @@ async function writeStoppedProcessSnapshotMarker({
     snapshotType: "stopped-harvester-process",
     runtimeSessionId: recoveryCheckpoint.runtimeSessionId,
     processId: session.processId,
+    processStartedAt: session.startedAt,
     processAliveAtCapture: false,
     activeProcessLockOwnerAtCapture: false,
     completionConfirmed: false,
