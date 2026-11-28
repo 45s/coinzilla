@@ -179,10 +179,16 @@ function assertRecoverySellerProviderRouting({ started }) {
     "The TESTNET provider must receive the enabled RS-only LINEAUSDT market-data subscription.")
   assert.equal(started[1].marketDataSymbols.includes("LINEAUSDT"), false,
     "The LIVE provider must never receive the TESTNET-only LINEAUSDT market-data subscription.")
-  assert.deepEqual(started[0].executionRoutes.filter(({ strategyId }) => strategyId === "RS_recoverySeller"), [{
-    strategyId: "RS_recoverySeller",
-    symbol: "LINEAUSDT",
-  }], "The TESTNET account must receive the explicitly routed LINEAUSDT RS execution route.")
+  assert.deepEqual(started[0].executionRoutes.filter(({ strategyId }) => strategyId === "RS_recoverySeller"), [
+    {
+      strategyId: "RS_recoverySeller",
+      symbol: "LINEAUSDT",
+    },
+    {
+      strategyId: "RS_recoverySeller",
+      symbol: "ARBUSDT",
+    },
+  ], "The TESTNET account must receive all explicitly routed TESTNET RS execution routes.")
   assert.deepEqual(started[1].executionRoutes.filter(({ strategyId }) => strategyId === "RS_recoverySeller"), [],
     "The LIVE account must not receive an RS route for TESTNET-only LINEAUSDT.")
 }

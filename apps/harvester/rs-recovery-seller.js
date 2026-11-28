@@ -1,5 +1,14 @@
 import { TRADING_ENVIRONMENTS } from "./src/domain/trading-environment.js";
 
+const commonRecoverySellerFields = {
+  enabled: true,
+  tradingEnvironment: TRADING_ENVIRONMENTS.TESTNET,
+  enableVolatilityProtection: false,
+  minProfit: 0.01,
+  makerPercent: 0.1,
+  takerPercent: 0.1,
+};
+
 /**
  * Operator-authorized Recovery Seller markets.
  *
@@ -8,9 +17,7 @@ import { TRADING_ENVIRONMENTS } from "./src/domain/trading-environment.js";
  */
 export const recoverySellerPairs = {
   LINEAUSDT: {
-    enabled: true,
-    tradingEnvironment: TRADING_ENVIRONMENTS.TESTNET,
-    enableVolatilityProtection: false,
+    ...commonRecoverySellerFields,
     legacyPosition: {
       invested: 400,
       quantity: 25000,
@@ -18,9 +25,17 @@ export const recoverySellerPairs = {
     sellQuantity: 10,
     investment: 100,
     orderQuantity: 7000,
-    minProfit: 0.01,
     priceStepPercent: 0.5,
-    makerPercent: 0.1,
-    takerPercent: 0.1,
+  },
+  ARBUSDT: {
+    ...commonRecoverySellerFields,
+    legacyPosition: {
+      invested: 231,
+      quantity: 400,
+    },
+    sellQuantity: 1,
+    investment: 100,
+    orderQuantity: 100,
+    priceStepPercent: 0.3,
   },
 };
