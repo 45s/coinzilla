@@ -48,7 +48,7 @@ export interface ScenarioGraphViewModel {
 }
 
 function wrapGraphText(value: string, maxCharacters: number): readonly string[] {
-  const words = value.trim().split(/\\s+/).filter(Boolean);
+  const words = value.trim().split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let line = '';
 
