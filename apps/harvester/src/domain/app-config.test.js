@@ -574,3 +574,52 @@ test("rejects malformed execution routes and non-boolean provider required flags
       error.expected === "a boolean",
   )
 })
+
+test("validates the pre-launch trading-history API component selection", () => {
+
+
+  assert.equal(
+    appConfig.components.tradingHistoryApi.enabled,
+    true,
+    "The optional local API must preserve its existing enabled-by-default behavior.",
+  )
+  const config = createAppConfig()
+  config.components = { tradingHistoryApi: { enabled: true } }
+  assert.equal(validateAppConfig(config), config, "An explicitly enabled local API component must be accepted.")
+  config.components.tradingHistoryApi.enabled = false
+  assert.equal(validateAppConfig(config), config, "An explicitly disabled local API component must be accepted.")
+  for (const invalidValue of [null, 0, 1, "false", "true"]) {
+    config.components.tradingHistoryApi.enabled = invalidValue
+    assert.throws(
+      () => validateAppConfig(config),
+      (error) => error instanceof ConfigValidationError &&
+        error.path === "components.tradingHistoryApi.enabled" &&
+        error.expected === "a boolean",
+      `The local API component switch must reject non-boolean values: ${JSON.stringify(invalidValue)}`,
+    )
+  }
+  config.components.tradingHistoryApi.enabled = true
+  config.components.extra = { enabled: true }
+  assert.throws(
+    () => validateAppConfig(config),
+    (error) => error instanceof ConfigValidationError &&
+      error.path === "components.extra" &&
+      error.expected === "a supported component",
+    "Unknown component selections must fail with a path-specific validation error.",
+  )
+})
+
+test("validates the master recovery component selection", () => {
+  const config = createAppConfig()
+  config.components = { recovery: { enabled: false } }
+  assert.equal(validateAppConfig(config), config, "The master recovery component must accept an explicit disabled setting.")
+
+  config.components.recovery.enabled = "false"
+  assert.throws(
+    () => validateAppConfig(config),
+    (error) => error instanceof ConfigValidationError &&
+      error.path === "components.recovery.enabled" &&
+      error.expected === "a boolean",
+    "The master recovery component must reject string booleans.",
+  )
+})

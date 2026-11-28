@@ -1,7 +1,7 @@
 # Harvester roadmap
 
 **Scope:** current Harvester priorities only. Issue threads own task details and status; domain specifications and ADRs own behavior.
-**Last reviewed:** 2026-11-27
+**Last reviewed:** 2026-11-28
 
 > Historical delivery notes and the pre-cleanup roadmap are preserved in [the consolidated roadmap archive](../../docs/archive/roadmap-history-2026-11-26.md#harvester-roadmap). Earlier extracted history remains in [the audit roadmap history](docs/audits/ROADMAP_HISTORY.md).
 
@@ -19,6 +19,7 @@ PR #1963 is merged and its process-namespace classifier is being simplified in t
 
 | Priority / area | Canonical issue | Current status |
 | --- | --- | --- |
+| Pre-launch component selection | [#1964](https://github.com/45s/coinzilla/issues/1964) | [PR #1966](https://github.com/45s/coinzilla/pull/1966) adds the validated startup-only local API flag and master `components.recovery.enabled: false` mode. The default runtime skips recovery-facts storage, startup history backfill, user-data reconnect reconciliation, Recovery Seller execution, and Telegram Command Center; current-session Conservative accounting, PREFLIGHT, Journal, process locks, and current-session persistence remain active. |
 | Local Dashboard API connectivity and degraded-history availability | [#1953](https://github.com/45s/coinzilla/issues/1953) | In progress in [PR #1961](https://github.com/45s/coinzilla/pull/1961): allow dynamic local Dashboard ports and keep runtime/operator/market/provider snapshots available when relational history persistence is unavailable; persisted-history routes return explicit HTTP 503. The exact database failure remains tracked separately in #1854. |
 | Conservative no-new-BUY-until-cycle-complete admission | [#1895](https://github.com/45s/coinzilla/issues/1895) | Implemented and merged in [PR #1899](https://github.com/45s/coinzilla/pull/1899), merge commit `95d9ab2d25aba6dee18f258ff1c8caac1312d865`; all six required workflows passed on exact PR head `6e903a822bbd3539e8f7168fab81278a0d4d7315`. |
 | 2026-11-26 Conservative TESTNET residual sell-through | [#1896](https://github.com/45s/coinzilla/issues/1896) | Implemented and merged in [PR #1909](https://github.com/45s/coinzilla/pull/1909), merge commit `8206fc346183d3da5efe7dc9e497ce2e4617fef1`; all seven reported workflows passed on exact head `e8505a7db7d676eb8f33daf831b4e6d4f7689dee`. The Journal write-only durability capability is merged via [PR #1911](https://github.com/45s/coinzilla/pull/1911), merge commit `106906176c63f7a1dbcffa665371b0c878c626d2`; all six reported workflows passed on exact head `2f970997f3c81862592321575b75c340b4f10e62`. Historical error/filter snapshot remains unavailable; no historical root cause is claimed. |
