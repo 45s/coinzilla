@@ -594,6 +594,7 @@ test("archives stable logs for a stopped runtime when legacy completion markers 
   assert.deepEqual(marker.streams, { harvesterLog: true, traceLog: true })
   assert.equal(manifest.evidenceIntegrity.validForPublication, true, "A byte-stable, runtime-matched stopped-process snapshot is publishable as explicitly unconfirmed evidence.")
   assert.ok(manifest.evidenceIntegrity.unverifiableSessions.includes("logs/sessions/2026-11-09_legacy-without-identity"), "Unidentified historical sessions must remain independent and must not block a proven exact-runtime snapshot.")
+  assert.ok(manifest.warnings.some(({ code }) => code === "STOPPED_RUNTIME_COMPLETION_UNCONFIRMED"), "The archive must make the unconfirmed process exit and logger flush visible.")
   assert.ok(manifest.warnings.some(({ code }) => code === "SESSION_COMPLETION_RECORD_MISSING"))
   assert.ok(manifest.warnings.some(({ code }) => code === "SESSION_LOGGER_COMPLETION_RECORD_MISSING"))
 })
