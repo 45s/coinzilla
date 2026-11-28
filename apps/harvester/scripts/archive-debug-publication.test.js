@@ -293,3 +293,46 @@ test("publisher can run without a trading mode and never invokes trading depende
   })
   assert.equal(publisherCalled, true, "Publication must work without TRADING_MODE or a running trading process")
 })
+
+
+test("rejects a mismatched runtime evidence manifest before invoking the publisher", async (t) => {
+  const fixture = await createFixture(t)
+  const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
+  manifest.runtimeIdentity = {
+    status: "mismatched",
+    correlation: "independent-evidence-do-not-correlate",
+  }
+  manifest.matchingTradingLogsAvailable = false
+  manifest.recoveryRuntimeSessionId = "4b827393-0738-4de0-a2a8-a3942e7b7bec"
+  manifest.logRuntimeSessionId = null
+  manifest.evidenceIntegrity = {
+    status: "mismatched",
+    validForPublication: false,
+    expectedRuntimeId: "4b827393-0738-4de0-a2a8-a3942e7b7bec",
+    streams: {
+      harvesterLog: { status: "mismatched", fileCount: 2 },
+      traceLog: { status: "mismatched", fileCount: 2 },
+    },
+    mismatches: [{
+      expectedRuntimeId: "4b827393-0738-4de0-a2a8-a3942e7b7bec",
+      actualRuntimeId: "9da4dfdf-d8d5-4087-b5cb-502e7606af44",
+      sourcePath: "logs/sessions/other-runtime",
+    }],
+  }
+  await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
+  let publisherCalled = false
+  await assert.rejects(
+    runHarvesterDebugArchivePublication({
+      archiveDirectory: fixture.archiveDirectory,
+      env: { HARVESTER_ARCHIVE_REMOTE: REMOTE },
+      publishArchiveFn: async () => {
+        publisherCalled = true
+        return { commit: "f".repeat(40), fileCount: 1 }
+      },
+    }),
+    /mismatched|integrity|runtime/i,
+    "The publisher must reject a runtime mismatch even when file hashes and inventory are valid",
+  )
+  assert.equal(publisherCalled, false, "Invalid evidence must be rejected before any Git publication operation")
+})

@@ -715,3 +715,60 @@ test("preserves incomplete failed-startup logs but does not count them as matchi
     },
   }))
 })
+
+
+test("retains a mismatched runtime archive only as diagnostic evidence and fails collection", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const factsPath = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
+  const facts = (await readFile(factsPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line))
+  facts.at(-1).runtimeSessionId = OTHER_SESSION_ID
+  await writeFile(factsPath, jsonLines(facts), "utf8")
+  let diagnosticDirectory
+
+  await assert.rejects(
+    runHarvesterDebugArchive({
+      ...archiveDependencies({ fixture }),
+      onArchiveCreatedFn: async ({ directory }) => {
+        diagnosticDirectory = directory
+        const manifest = await readArchiveManifest(directory)
+        assert.equal(manifest.evidenceIntegrity.status, "mismatched", "The diagnostic manifest must explicitly classify the runtime mismatch.")
+        assert.equal(manifest.evidenceIntegrity.validForPublication, false, "Mismatched evidence must never be marked publishable.")
+        assert.equal(manifest.evidenceIntegrity.expectedRuntimeId, OTHER_SESSION_ID, "The expected runtime must come from the recovery-facts checkpoint.")
+        assert.deepEqual(manifest.evidenceIntegrity.mismatches.map(({ actualRuntimeId }) => actualRuntimeId), [RUNTIME_SESSION_ID], "The manifest must identify the actual runtime owning the retained log files.")
+      },
+    }),
+    /TRACE LOG COLLECTION FAILED|runtime mismatch|evidence integrity/i,
+    "A runtime mismatch must produce a non-zero collection result after preserving a diagnostic archive",
+  )
+  assert.ok(diagnosticDirectory, "The failed collection must retain its local diagnostic archive.")
+  assert.equal(path.basename(diagnosticDirectory).endsWith("_debug"), true, "The diagnostic directory must remain distinguishable from an ordinary archive.")
+})
+
+test("reports missing required log streams as incomplete instead of accepting files from another stream", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  let diagnosticDirectory
+  await assert.rejects(
+    runHarvesterDebugArchive({
+      ...archiveDependencies({ fixture }),
+      onArchiveCreatedFn: async ({ directory }) => {
+        diagnosticDirectory = directory
+        const manifest = await readArchiveManifest(directory)
+        assert.equal(manifest.evidenceIntegrity.status, "incomplete", "Missing required streams must make the evidence incomplete.")
+        assert.equal(manifest.evidenceIntegrity.validForPublication, false, "Incomplete evidence must not be publishable.")
+        assert.equal(manifest.evidenceIntegrity.streams.harvesterLog.status, "missing", "A missing Harvester log must be explicit.")
+        assert.equal(manifest.evidenceIntegrity.streams.traceLog.status, "missing", "A missing trace log must be explicit.")
+      },
+    }),
+    /HARVESTER LOG COLLECTION FAILED|TRACE LOG COLLECTION FAILED|evidence integrity/i,
+    "A session containing only terminal output must not be accepted as complete trading evidence",
+  )
+  assert.ok(diagnosticDirectory, "An incomplete local diagnostic archive must be retained.")
+})
