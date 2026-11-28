@@ -33,6 +33,7 @@ export const describeProcessError = (error) => {
       name: error.name,
       code: error.code,
       symbol: error.symbol,
+      context: error.context,
       details: error.details,
       message: redactProcessErrorText(error.message),
       stack: typeof error.stack === "string" ? redactProcessErrorText(error.stack) : undefined,
