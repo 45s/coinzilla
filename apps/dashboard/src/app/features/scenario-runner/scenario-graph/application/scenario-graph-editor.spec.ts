@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createScenarioGraphEditor } from './scenario-graph-editor';
+import { createScenarioGraphEditor, createScenarioGraphIdGenerator } from './scenario-graph-editor';
 import { createScenarioGraph, type ScenarioGraph } from '../domain/scenario-graph';
 
 function createGraph(): ScenarioGraph {
@@ -16,6 +16,12 @@ function createGraph(): ScenarioGraph {
 }
 
 describe('scenario graph editor application', () => {
+  it('creates deterministic IDs while avoiding reserved node and edge identities', () => {
+    const createId = createScenarioGraphIdGenerator({ reservedIds: ['draft-1', 'draft-2'] });
+    expect(createId(), 'the application ID generator must skip reserved identities').toBe('draft-3');
+    expect(createId(), 'the application ID generator must advance deterministically').toBe('draft-4');
+  });
+
   it('adds nodes using an injected deterministic ID generator', () => {
     const editor = createScenarioGraphEditor({ createId: () => 'node-2' });
     const result = editor.addNode({

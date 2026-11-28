@@ -92,6 +92,22 @@ export function createScenarioGraphViewModel({ graph }: { readonly graph: Scenar
   return { width: maxX, height: maxY, nodes, edges };
 }
 
+export function createScenarioGraphIdGenerator({ reservedIds = [], prefix = 'draft' }: {
+  readonly reservedIds?: readonly string[];
+  readonly prefix?: string;
+} = {}): () => string {
+  let sequence = 1;
+  const reserved = new Set(reservedIds);
+  return () => {
+    let id = `${prefix}-${sequence++}`;
+    while (reserved.has(id)) {
+      id = `${prefix}-${sequence++}`;
+    }
+    reserved.add(id);
+    return id;
+  };
+}
+
 export function createScenarioGraphEditor({ createId }: {
   readonly createId: () => string;
 }) {

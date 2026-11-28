@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 import {
   createScenarioGraphEditor,
+  createScenarioGraphIdGenerator,
   type ScenarioGraphViewModel,
 } from './application/scenario-graph-editor';
 import { createRecoverySellerGraph } from './adapters/recovery-seller-graph';
@@ -20,13 +21,17 @@ interface ActiveDrag {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ScenarioGraphEditorComponent {
-  private nextId = 1;
   private activeDrag: ActiveDrag | null = null;
+  private readonly initialGraph = createRecoverySellerGraph();
+  readonly graph = signal(this.initialGraph);
   private readonly editor = createScenarioGraphEditor({
-    createId: () => `draft-node-${this.nextId++}`,
+    createId: createScenarioGraphIdGenerator({
+      reservedIds: [
+        ...this.initialGraph.nodes.map((node) => node.id),
+        ...this.initialGraph.edges.map((edge) => edge.id),
+      ],
+    }),
   });
-
-  readonly graph = signal(createRecoverySellerGraph());
   readonly selectedNodeId = signal<string | null>('start');
   readonly selectedEdgeId = signal<string | null>(null);
   readonly hoveredNodeId = signal<string | null>(null);
