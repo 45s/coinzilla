@@ -33,30 +33,43 @@ function validateManifestHeader(manifest) {
   }
 }
 
-function validateManifestFileEntry(entry, seenPaths) {
+function isSafeManifestPath(filePath) {
+  if (typeof filePath !== "string") {
+    return false
+  }
+  const pathSegments = filePath.split("/")
+  return pathSegments.length > 0
+    && !filePath.includes("\\")
+    && !path.posix.isAbsolute(filePath)
+    && pathSegments.every((segment) => segment !== "" && segment !== "." && segment !== "..")
+}
+
+function isAllowedManifestPath(filePath) {
+  return filePath.startsWith("logs/")
+    || filePath.startsWith("recovery-facts/")
+    || filePath === "data_commit_hash"
+}
+
+function validateManifestFileEntry({ entry, seenPaths } = {}) {
   if (entry === null || typeof entry !== "object") {
     throw new Error("Debug archive manifest contains a non-object file entry.")
   }
-  const pathSegments = typeof entry.path === "string" ? entry.path.split("/") : []
-  const safePath = pathSegments.length > 0
-    && !entry.path.includes("\\")
-    && !path.posix.isAbsolute(entry.path)
-    && pathSegments.every((segment) => segment !== "" && segment !== "." && segment !== "..")
-  const allowedPath = entry.path.startsWith("logs/")
-    || entry.path.startsWith("recovery-facts/")
-    || entry.path === "data_commit_hash"
-  const validDigest = typeof entry.sha256 === "string" && /^[a-f0-9]{64}$/.test(entry.sha256)
-  const validSize = Number.isSafeInteger(entry.size) && entry.size >= 0
-  if (!safePath || !allowedPath || !validDigest || !validSize || seenPaths.has(entry.path)) {
+  const validEntry = isSafeManifestPath(entry.path)
+    && isAllowedManifestPath(entry.path)
+    && typeof entry.sha256 === "string"
+    && /^[a-f0-9]{64}$/.test(entry.sha256)
+    && Number.isSafeInteger(entry.size)
+    && entry.size >= 0
+    && !seenPaths.has(entry.path)
+  if (!validEntry) {
     throw new Error("Debug archive manifest contains an invalid or duplicate file entry.")
   }
   seenPaths.add(entry.path)
 }
-
 function validateManifestFileEntries(manifest) {
   const seenPaths = new Set()
   for (const entry of manifest.files) {
-    validateManifestFileEntry(entry, seenPaths)
+    validateManifestFileEntry({\n      entry,\n      seenPaths,\n    })
   }
   return seenPaths
 }
@@ -138,7 +151,7 @@ export async function runHarvesterDebugArchivePublication({
     if (args.length !== 2 || args[0] !== "--archive") {
       throw new TypeError("Usage: archive:debug:publish [--archive <directory>]")
     }
-    selectedDirectory = args[1]
+    const [, archiveDirectoryArgument] = args\n    selectedDirectory = archiveDirectoryArgument
   }
   if (!selectedDirectory && env.HARVESTER_ARCHIVE_DIRECTORY) {
     selectedDirectory = env.HARVESTER_ARCHIVE_DIRECTORY
