@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { readFile } from "node:fs/promises"
 import test from "node:test"
 import {
   HARVESTER_ERROR_CATALOG,
@@ -37,4 +38,18 @@ test("returns no catalog guidance for unknown codes instead of misclassifying th
     errorCode: "UNKNOWN_PROVIDER_FAILURE",
     errorMessage: "provider rejected request",
   }), null)
+})
+
+
+test("operator error vocabulary documents every catalog entry", async () => {
+  const documentation = await readFile(
+    new URL("../../../docs/error-vocabulary.md", import.meta.url),
+    "utf8",
+  )
+  for (const { errorCode } of Object.values(HARVESTER_ERROR_CATALOG)) {
+    assert.ok(
+      documentation.includes(`\x60${errorCode}\x60`),
+      `Operator error vocabulary must document ${errorCode} from the central catalog.`,
+    )
+  }
 })
