@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ScenarioGraphEditorComponent } from './scenario-graph-editor.component';
 
 describe('ScenarioGraphEditorComponent', () => {
@@ -13,6 +13,46 @@ describe('ScenarioGraphEditorComponent', () => {
     expect(element.textContent, 'the editor must disclose that its graph is not executable').toContain('VISUAL-ONLY');
     expect(element.textContent, 'the editor must expose the source-derived sole SELL invariant').toContain('Submit the sole cycle SELL');
     expect(element.querySelector('button[aria-label="Run scenario"]'), 'the visual editor must not provide an execution action').toBeNull();
+  });
+
+  it('supports hover, selection and pointer-based node dragging', async () => {
+    await TestBed.configureTestingModule({ imports: [ScenarioGraphEditorComponent] }).compileComponents();
+    const fixture = TestBed.createComponent(ScenarioGraphEditorComponent);
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    const svg = fixture.nativeElement.querySelector('svg') as SVGSVGElement;
+    const view = component.viewModel();
+    Object.defineProperty(svg, 'getBoundingClientRect', {
+      value: () => ({ left: 0, top: 0, width: view.width, height: view.height }),
+    });
+    const nodeElement = fixture.nativeElement.querySelector('.graph-node[data-kind="action"]') as SVGGElement;
+    const node = component.graph().nodes.find((item) => item.type === 'action');
+    if (!node) {
+      throw new Error('The RS graph must contain an action node for the drag interaction test.');
+    }
+    nodeElement.dispatchEvent(new Event('pointerenter'));
+    expect(component.hoveredNodeId(), 'hovering a node must update the presentation hover state').toBe(node.id);
+    nodeElement.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(component.selectedNodeId(), 'clicking a node must select it for inspection').toBe(node.id);
+
+    nodeElement.dispatchEvent(new MouseEvent('pointerdown', {
+      bubbles: true,
+      button: 0,
+      clientX: node.position.x + 50,
+      clientY: node.position.y + 40,
+    }));
+    svg.dispatchEvent(new MouseEvent('pointermove', {
+      bubbles: true,
+      clientX: node.position.x + 100,
+      clientY: node.position.y + 100,
+    }));
+    svg.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
+
+    const moved = component.graph().nodes.find((item) => item.id === node.id);
+    expect(moved?.position, 'dragging a node must update its framework-neutral graph position').toEqual({
+      x: node.position.x + 50,
+      y: node.position.y + 60,
+    });
   });
 
   it('supports selecting and editing node properties through the inspector', async () => {
