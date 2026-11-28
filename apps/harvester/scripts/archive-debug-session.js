@@ -139,7 +139,7 @@ async function copyStableFile({ sourcePath, destinationPath } = {}) {
   try {
     await copyFile(sourcePath, temporaryPath)
     const after = await lstat(sourcePath)
-    sourceSha256After = await sha256File(sourcePath)
+    const sourceSha256After = await sha256File(sourcePath)
     const copiedSha256 = await sha256File(temporaryPath)
     if (
       after.isSymbolicLink()
@@ -236,7 +236,7 @@ async function copyCompressedFile({
       }),
     )
     const sourceAfter = await lstat(sourcePath)
-    const sourceSha256After = await sha256File(sourcePath)
+    sourceSha256After = await sha256File(sourcePath)
     const sourceChanged = sourceSha256Before !== sourceSha256After
       || sourceAfter.isSymbolicLink()
       || !sourceAfter.isFile()
