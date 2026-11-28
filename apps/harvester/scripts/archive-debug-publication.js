@@ -116,7 +116,12 @@ async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
     manifest,
     sourcePath: session.processIdentityPath,
   })
-  if (!isMatchingArchivedProcessIdentity({ identity, session, expectedRuntimeId, manifest })) {
+  if (!isMatchingArchivedProcessIdentity({
+    identity,
+    session,
+    expectedRuntimeId,
+    manifest,
+  })) {
     throw new Error(`Archived process identity does not prove runtime ${expectedRuntimeId}.`)
   }
   if (session.completionStatus === "active") {
@@ -156,12 +161,23 @@ async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
       sourcePath: session.loggerCompletionPath,
     }),
   ])
-  const lifecycleMatches = isMatchingArchivedProcessCompletion({ completion, expectedRuntimeId })
-    && isMatchingArchivedLoggerCompletion({ loggerCompletion, expectedRuntimeId })
+  const lifecycleMatches = isMatchingArchivedProcessCompletion({
+      completion,
+      expectedRuntimeId,
+    })
+    && isMatchingArchivedLoggerCompletion({
+      loggerCompletion,
+      expectedRuntimeId,
+    })
   if (!lifecycleMatches) {
     throw new Error(`Archived process completion metadata does not prove complete runtime ${expectedRuntimeId}: process completion=${completion.runtimeSessionId ?? "missing"}; logger completion=${loggerCompletion.runtimeSessionId ?? "missing"}.`)
   }
-  assertArchivedProcessId({ identity, completion, manifest, expectedRuntimeId })
+  assertArchivedProcessId({
+    identity,
+    completion,
+    manifest,
+    expectedRuntimeId,
+  })
 }
 
 function isInvalidStreamFile({ file, manifestFile, expectedRuntimeId } = {}) {
@@ -353,8 +369,14 @@ async function validateCompletedArchive(directory) {
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
   validateManifestHeader(manifest)
   const seenPaths = validateManifestFileEntries(manifest)
-  await validateRecoveryFactsRuntime({ directory, manifest })
-  await validateSessionLifecycleEvidence({ directory, manifest })
+  await validateRecoveryFactsRuntime({
+    directory,
+    manifest,
+  })
+  await validateSessionLifecycleEvidence({
+    directory,
+    manifest,
+  })
   validateEvidenceIntegrity(manifest)
   await verifyArchive({
     directory,
