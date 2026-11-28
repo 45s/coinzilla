@@ -623,3 +623,55 @@ test("rejects an archive with a missing required stream before invoking the publ
   )
   assert.equal(publisherCalled, false, "Missing streams must be rejected before Git publication")
 })
+test("publishes a verified active-process snapshot without requiring completion records", async (t) => {
+  const fixture = await createFixture(t)
+  const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
+  const session = manifest.sessionInventory[0]
+  session.completionStatus = "active"
+  session.loggerCompletionStatus = "active"
+  session.activeSnapshotPath = "logs/sessions/fixture/active-process-snapshot.json"
+  session.logStreamsComplete = false
+  session.loggerStreamsComplete = false
+
+  const completionPaths = [
+    "logs/sessions/fixture/process-completed.json.gz",
+    "logs/sessions/fixture/log-streams-completed.json.gz",
+  ]
+  for (const relativePath of completionPaths) {
+    await rm(path.join(fixture.archiveDirectory, relativePath))
+    manifest.files = manifest.files.filter((entry) => entry.path !== relativePath)
+  }
+
+  const marker = {
+    formatVersion: 1,
+    snapshotType: "active-harvester-process",
+    runtimeSessionId: manifest.recoveryRuntimeSessionId,
+    processId: session.processId,
+    hostname: os.hostname(),
+    lockStartedAt: session.startedAt,
+    capturedAt: new Date().toISOString(),
+    streams: { harvesterLog: true, traceLog: true },
+  }
+  const markerPath = path.join(fixture.archiveDirectory, session.activeSnapshotPath)
+  await writeFile(markerPath, `${JSON.stringify(marker, null, 2)}\\n`)
+  const markerBytes = await readFile(markerPath)
+  manifest.files.push({
+    path: session.activeSnapshotPath,
+    size: markerBytes.length,
+    sha256: createHash("sha256").update(markerBytes).digest("hex"),
+  })
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\\n`)
+
+  let publisherCalled = false
+  const result = await runHarvesterDebugArchivePublication({
+    archiveDirectory: fixture.archiveDirectory,
+    env: { HARVESTER_ARCHIVE_REMOTE: REMOTE },
+    publishArchiveFn: async () => {
+      publisherCalled = true
+      return { commit: "e".repeat(40), fileCount: manifest.files.length }
+    },
+  })
+  assert.equal(publisherCalled, true, "A verified active-process snapshot must be eligible for publication.")
+  assert.equal(result.archiveName, ARCHIVE_NAME, "The publisher must retain the original immutable archive identity.")
+})
