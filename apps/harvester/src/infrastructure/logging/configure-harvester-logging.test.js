@@ -1048,8 +1048,8 @@ test("prints catalog code, exact stage, cause and remediation without cutting of
     },
   })
 
-  const lines = written.trim().split("\n")
-  const line = lines[0]
+  const [line, ...continuationLines] = written.trim().split("\n")
+  const lines = [line, ...continuationLines]
   assert.ok(lines.every((candidate) => candidate.length <= 200), "Every operator diagnostic line must respect the terminal line budget.")
   assert.match(line, /HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED/)
   assert.match(line, /RELATIONAL_MIGRATION_V5/)
