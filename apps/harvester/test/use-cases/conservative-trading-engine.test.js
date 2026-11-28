@@ -766,33 +766,22 @@ asset: fixture.market.baseAsset }),
 })
 
 test("keeps unmatched IDs from the current process namespace fail-closed", async () => {
-  const marketFixture = createMarketFixture()
-  const registeredCurrentSessionOrder = new CanonicalOrder({
-    clientOrderId: "h-0123456789abcdef012345-6",
-    brokerOrderId: "current-session-order-6",
-    market: marketFixture.market,
-    side: "SELL",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "1.01",
-asset: marketFixture.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1",
-asset: marketFixture.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0",
-asset: marketFixture.market.baseAsset }),
-    status: "OPEN",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 1,
+  const fixture = createFixture()
+  await fixture.engine.processBookTicker(createScenarioBookTicker())
+  await fixture.engine.processBookTicker(createScenarioBookTicker())
+  await fixture.engine.processMarketPrice({
+    symbol: "ZROUSDT",
+    priceEvent: {
+      symbol: "ZROUSDT",
+      price: "1",
+      timestamp: 1,
+    },
   })
-  const currentSessionRegistry = new OrderRegistry({
-    orders: [registeredCurrentSessionOrder],
-  })
-  const fixture = createFixture({
-    initialOrderRegistry: currentSessionRegistry,
-  })
+  const [registeredIntent] = fixture.submittedIntents
+  assert.ok(registeredIntent, "The engine must create a real process-scoped client order ID before testing an unknown current-process event.")
   const unmatchedCurrentSessionOrder = new CanonicalOrder({
-    clientOrderId: "h-0123456789abcdef012345-7",
-    brokerOrderId: "current-session-order-7",
+    clientOrderId: registeredIntent.clientOrderId.replace(/-\\d+$/, "-unmatched"),
+    brokerOrderId: "current-session-order-unmatched",
     market: fixture.market,
     side: "SELL",
     type: "LIMIT_MAKER",
