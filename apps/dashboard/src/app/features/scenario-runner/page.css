@@ -64,3 +64,5 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:520px;overflow:auto}
 
 .order-card details,.decision-summary details,.outcome-card details,.cycle-history details{margin-top:6px;min-width:0}
 .order-card details pre,.decision-summary details pre,.cycle-history details pre{max-height:260px}
+
+.catalog-source-toggle{display:flex;align-items:center;gap:9px;color:var(--text);font-weight:600}.catalog-source-toggle input{width:18px;height:18px;accent-color:var(--accent)}

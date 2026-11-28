@@ -6,6 +6,7 @@ import type {
   ScenarioRunnerGateway,
 } from './application';
 import type { ScenarioRunRecord } from './core/run-contract';
+import { parseGitHubScenarioCatalog } from './core/parse-github-scenario-catalog';
 
 interface ScenarioRunnerEnvelope<T> {
   readonly ok: true;
@@ -17,6 +18,23 @@ export class ScenarioRunnerApi implements ScenarioRunnerGateway {
   private readonly http = inject(HttpClient);
   private readonly base = 'http://127.0.0.1:4201/api/v1/scenario-runner';
   private readonly wsUrl = 'ws://127.0.0.1:4201/api/v1/trading/events';
+
+  async loadDevelopCatalog(): Promise<{ readonly catalog: readonly ScenarioCatalogItem[]; readonly commitSha: string }> {
+    const ref = await firstValueFrom(this.http.get<{ readonly object: { readonly sha: string } }>('https://api.github.com/repos/45s/coinzilla/git/ref/heads/develop'));
+    const commitSha = ref.object.sha;
+    if (!/^[a-f0-9]{40}$/i.test(commitSha)) {
+      throw new TypeError('GitHub develop returned an invalid commit SHA.');
+    }
+    const sourcePaths = [
+      'apps/harvester/src/infrastructure/scenario-runner/rs-scenario-adapter.js',
+      'apps/harvester/src/infrastructure/scenario-runner/rs-runtime-scenario.js',
+    ];
+    const sources = await Promise.all(sourcePaths.map((path) => firstValueFrom(this.http.get(
+      `https://raw.githubusercontent.com/45s/coinzilla/${commitSha}/${path}`,
+      { responseType: 'text' },
+    ))));
+    return parseGitHubScenarioCatalog({ sources, commitSha });
+  }
 
   async loadCatalog(): Promise<readonly ScenarioCatalogItem[]> {
     const response = await firstValueFrom(this.http.get<ScenarioRunnerEnvelope<readonly ScenarioCatalogItem[]>>(`${this.base}/catalog`));

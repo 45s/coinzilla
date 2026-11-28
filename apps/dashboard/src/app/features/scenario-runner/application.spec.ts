@@ -47,6 +47,7 @@ const run = (overrides: Partial<ScenarioRunRecord> = {}): ScenarioRunRecord => (
 
 function createGateway() {
   const gateway: ScenarioRunnerGateway = {
+    loadDevelopCatalog: vi.fn().mockResolvedValue({ commitSha: 'a'.repeat(40), catalog: [{ strategyId: 'RS', strategyName: 'Recovery Seller', scenarios: [{ ...scenario, id: 'RS-REMOTE-001', executionStatus: 'BLOCKED' as const, executable: false }] }] }),
     loadCatalog: vi.fn().mockResolvedValue([{
       strategyId: 'RS',
       strategyName: 'Recovery Seller',
@@ -77,6 +78,15 @@ describe('framework-independent Scenario Runner application', () => {
     expect(gateway.loadHistory).toHaveBeenCalledOnce();
     expect(workspace.catalog[0].strategyId).toBe('RS');
     expect(workspace.history[0].runId).toBe('run-1');
+  });
+
+  it('loads and selects the read-only GitHub develop catalogue through the application port', async () => {
+    const remote = await application.loadDevelopCatalog();
+    expect(remote.commitSha).toBe('a'.repeat(40));
+    expect(remote.catalog[0].strategyId).toBe('RS');
+    expect(gateway.loadDevelopCatalog).toHaveBeenCalledOnce();
+    await expect(application.submitRun({ strategyId: 'RS', scenarioId: 'RS-REMOTE-001', inputJson: '{}' })).rejects.toThrow(/not executable/i);
+    expect(gateway.submit).not.toHaveBeenCalled();
   });
 
   it('keeps the scenario catalogue available when run history is temporarily unavailable', async () => {

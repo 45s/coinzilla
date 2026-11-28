@@ -35,6 +35,7 @@ export interface ScenarioCatalogItem {
 
 export interface ScenarioRunnerGateway {
   loadCatalog(): Promise<readonly ScenarioCatalogItem[]>;
+  loadDevelopCatalog(): Promise<{ readonly catalog: readonly ScenarioCatalogItem[]; readonly commitSha: string }>;
   loadHistory(): Promise<readonly ScenarioRunRecord[]>;
   submit(input: {
     readonly strategyId: string;
@@ -153,6 +154,13 @@ export function createScenarioRunnerApplication({ gateway }: {
       return {
         inputJson: JSON.stringify(selectedScenario?.defaultInput ?? {}, null, 2),
       };
+    },
+
+    async loadDevelopCatalog() {
+      const remote = await gateway.loadDevelopCatalog();
+      catalog = remote.catalog;
+      catalogLoaded = true;
+      return remote;
     },
 
     async loadWorkspace() {

@@ -41,6 +41,7 @@ describe('ScenarioRunnerComponent run details', () => {
     const socket = { close: vi.fn() } as unknown as WebSocket;
     const api = {
       loadCatalog: vi.fn().mockResolvedValue(catalog),
+      loadDevelopCatalog: vi.fn().mockResolvedValue({ catalog: [{ strategyId: 'RS', strategyName: 'Recovery Seller', scenarios: [{ id: 'RS-NEW-001', name: 'New remote scenario', layer: 'APPLICATION', status: 'PARTIAL', executionStatus: 'BLOCKED', executable: false }] }], commitSha: 'a'.repeat(40) }),
       loadHistory: vi.fn().mockResolvedValue([runRecord]),
       submit: vi.fn().mockResolvedValue(runRecord),
       getRun: vi.fn().mockResolvedValue(runRecord),
@@ -58,6 +59,17 @@ describe('ScenarioRunnerComponent run details', () => {
     await fixture.whenStable();
     await component.selectHistory(runRecord.runId);
     fixture.detectChanges();
+  });
+
+  it('exposes the GitHub develop checkbox and switches to a pinned read-only scenario snapshot', async () => {
+    const checkbox = nativeElement.querySelector<HTMLInputElement>('.catalog-source-toggle input');
+    expect(checkbox).not.toBeNull();
+    if (!checkbox) throw new Error('GitHub catalogue checkbox is missing');
+    checkbox.checked = true;
+    await component.setGitHubCatalogSource(true);
+    expect(component.catalog()[0].scenarios[0].id).toBe('RS-NEW-001');
+    expect(component.catalogSourceRevision()).toBe('a'.repeat(40));
+    expect(component.catalog()[0].scenarios[0].executable).toBe(false);
   });
 
   it('explains the fixture without conflating execution, partial order execution, cycle, safety or provenance', () => {

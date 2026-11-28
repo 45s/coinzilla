@@ -2,6 +2,12 @@
 
 **Tracking:** Issue #1836 · [PR #1837](https://github.com/45s/coinzilla/pull/1837) (merged foundation) · Initial adapter: RS · Strategy-neutral core
 
+## Current status — 2026-11-28
+
+### GitHub `develop` catalogue preview
+
+Dashboard issue [#1986](https://github.com/45s/coinzilla/issues/1986) adds an opt-in checkbox that reads the RS scenario declarations from two source files at a single pinned `develop` commit and displays their IDs, names, layer and mapping status without restarting Harvester. This is a metadata preview only: downloaded JavaScript is never evaluated, all remote entries are forced non-executable, and scenario submission remains disabled until the operator switches back to the live Harvester catalogue. The live `/catalog` endpoint remains authoritative for execution. A refresh failure preserves the previously displayed catalogue and reports the error.
+
 ## Current status — 2026-11-27
 
 The Scenario Runner foundation is merged. PR #1887 added the under-target fully FILLED SELL, STOP-persistence failure and BUY-only STOP admission runtime scenarios. PR #1913 adds six infrastructure-failure scenarios: SELL-intent persistence failure before broker placement, acknowledged-outcome persistence failure, combined outcome/STOP persistence failure, ambiguous broker placement classified as durable UNKNOWN with STOP/reservation retention, sole-SELL reservation callback failure, and terminal-reconciliation persistence failure that preserves the FILLED status/reservation while latching STOP.
