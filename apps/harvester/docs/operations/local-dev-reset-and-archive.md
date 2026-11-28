@@ -30,12 +30,12 @@ Run this after Harvester has stopped:
 pnpm run archive:push
 ```
 
-The command creates a uniquely named local snapshot in the ignored `archive-output/` directory, requires the selected completed testnet/live log session and latest recovery-facts checkpoint to have the same runtime session ID, verifies its inventory and SHA-256 checksums, publishes to the private archive repository, and verifies the remote commit and each file blob. If publication fails, the local snapshot remains for inspection/retry and source folders remain unchanged.
+The command creates a uniquely named local snapshot in the ignored `archive-output/` directory, requires the selected completed TESTNET log session and latest recovery-facts checkpoint to have the same runtime session ID, verifies its inventory and SHA-256 checksums, publishes to the private archive repository, and verifies the remote commit and each file blob. If publication fails, the local snapshot remains for inspection/retry and source folders remain unchanged.
 
 Each archive contains:
 
-- `logs/sessions/`: all identified testnet/live sessions are preserved separately; only the exact runtime-ID match is selected, and its files are gzip-compressed.
-- `logs/cumulative/`: the final 5% of structured records belonging to that selected runtime session. Shared `terminal.log` is deliberately excluded because it has no reliable per-record environment marker; the selected session's complete terminal log is included in the compressed session directory.
+- `logs/sessions/`: only the newest completed TESTNET session with a valid process identity; its files are gzip-compressed.
+- `logs/cumulative/`: the final 5% of structured records belonging to that selected TESTNET runtime session. Shared `terminal.log` is deliberately excluded because it has no reliable per-record environment marker; the selected session's complete terminal log is included in the compressed session directory.
 - `data/`: all regular files and directories except `data/production/`. The configured `HARVESTER_DATABASE_DIRECTORY` override is honored; only non-production entries are copied.
 - `recovery-facts/`: the complete Operational State Store, including facts and manifest streams.
 - `data_commit_hash` and `manifest.json`: the latest committed recovery-facts checkpoint identity, file inventory, byte sizes, and SHA-256 checksums.

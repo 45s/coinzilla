@@ -21,9 +21,10 @@ function validateArchiveName(archiveName) {
 }
 
 function validateManifestHeader(manifest) {
+  const runtimeTradingMode = manifest.runtimeTradingMode ?? manifest.commandTradingMode
   const hasExpectedFormat = manifest.formatVersion === 2
     && manifest.application === "harvester"
-    && ["testnet", "live"].includes(manifest.runtimeTradingMode)
+    && ["testnet", "live"].includes(runtimeTradingMode)
   const hasExpectedScope = JSON.stringify(manifest.includedDirectories) === JSON.stringify(REQUIRED_INCLUDED_DIRECTORIES)
     && JSON.stringify(manifest.excludedPaths) === JSON.stringify(REQUIRED_EXCLUSIONS)
   const hasCreationTime = typeof manifest.createdAt === "string"
@@ -78,7 +79,7 @@ function isMatchingArchivedProcessIdentity({ identity, session, expectedRuntimeI
   const expectedProcessId = manifest.tradingRuntime.processIdentity.processId
   return identity.application === "harvester"
     && ["testnet", "live"].includes(identity.environment)
-    && identity.environment === manifest.runtimeTradingMode
+    && identity.environment === (manifest.runtimeTradingMode ?? manifest.commandTradingMode)
     && identity.runtimeSessionId === expectedRuntimeId
     && identity.startedAt === session.startedAt
     && identity.startedAt === manifest.tradingRuntime.processIdentity.startedAt
