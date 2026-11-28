@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 describe('scenario graph core architecture', () => {
   it('keeps domain and application modules free of framework and browser dependencies', () => {
+    const sourcePath = (relativePath: string): string => decodeURIComponent(new URL(relativePath, import.meta.url).pathname)
+      .replace(/^\\/([A-Za-z]:\\/)/, '$1');
     const sources = [
-      readFileSync(fileURLToPath(new URL('../domain/scenario-graph.ts', import.meta.url)), 'utf8'),
-      readFileSync(fileURLToPath(new URL('./scenario-graph-editor.ts', import.meta.url)), 'utf8'),
+      readFileSync(sourcePath('../domain/scenario-graph.ts'), 'utf8'),
+      readFileSync(sourcePath('./scenario-graph-editor.ts'), 'utf8'),
     ];
     const combined = sources.join('\n');
 
