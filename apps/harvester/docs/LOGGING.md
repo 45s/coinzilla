@@ -50,12 +50,14 @@ small allowlist of actionable fields (including the stable `diagnosticId`
 for catalogued startup failures), omits stacks/fingerprints/audit internals,
 and caps ordinary lines at 200 characters. Catalogued failures use a dedicated
 operator format: stable `diagnosticId`, exact failure `stage`, the concrete
-`cause`, and a short `action` are prioritized in that order. The cause is
-bounded only to preserve the action within the line budget; the complete
+`cause`, and a short `action` are prioritized in that order. If the cause does not fit, continuation lines preserve it in bounded chunks while
+the first line retains the stable identity, stage and action. The complete
 original error and nested cause/stack remain in the DEBUG/TRACE session files.
 The catalog source is
 [`harvester-error-catalog.js`](../src/infrastructure/logging/harvester-error-catalog.js);
-its tests enforce unique codes and complete operator guidance. Relational
+its tests enforce unique codes, complete operator guidance, one-look output for
+every registered entry, bounded continuations, and synchronization with the
+[operator error vocabulary](./error-vocabulary.md). Relational
 history preparation reports a stable Harvester error code separately from
 the native SQLite `causeCode`, and identifies connection, migration, and
 backup stages. A persistence-projection failure does not authorize database
