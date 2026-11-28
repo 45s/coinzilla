@@ -449,7 +449,10 @@ async function evaluateRecoverySellerTransitionForMarket({
   }
   const { symbol } = options
   const logger = dependencies.recoverySellerLogger ?? dependencies.logger
-  logRecoverySellerEvaluationStarted({ logger, symbol })
+  logRecoverySellerEvaluationStarted({
+    logger,
+    symbol,
+  })
   try {
     const recoverySellerResult = await dependencies.evaluateRecoverySellerTransition({
       ...options,
@@ -477,16 +480,28 @@ async function evaluateRecoverySellerTransitionForMarket({
       logger,
     })
     if (recoverySellerResult?.ok !== true) {
-      logRecoverySellerEvaluationFailed({ logger, symbol, error: recoverySellerResult?.errors?.[0] })
+      logRecoverySellerEvaluationFailed({
+        logger,
+        symbol,
+        error: recoverySellerResult?.errors?.[0],
+      })
       return recoverySellerResult
     }
-    logRecoverySellerEvaluationCompleted({ logger, symbol, result: recoverySellerResult })
+    logRecoverySellerEvaluationCompleted({
+      logger,
+      symbol,
+      result: recoverySellerResult,
+    })
     return combineStrategyTransitionResults({
       conservativeResult,
       recoverySellerResult,
     })
   } catch (error) {
-    logRecoverySellerEvaluationFailed({ logger, symbol, error })
+    logRecoverySellerEvaluationFailed({
+      logger,
+      symbol,
+      error,
+    })
     return toResult({ error })
   }
 }
