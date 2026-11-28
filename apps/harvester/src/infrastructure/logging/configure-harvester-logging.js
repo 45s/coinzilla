@@ -501,8 +501,8 @@ function writeCataloguedDiagnosticRecord({
       const continuationLine = `${continuationPrefix}${remainingCause.slice(offset, offset + continuationBudget)}`
       output.write(`${formatConsoleLine({
         line: continuationLine,
-        level,
-        method,
+        level: diagnosticLevel,
+        method: diagnosticLevel,
         color,
       })}\n`)
     }
