@@ -368,6 +368,7 @@ test("ignores unmatched manual orders under the default external-order policy", 
     calls
   } = makeWorkflow({
     updateResult: { unknown: true },
+    currentProcessOrderIdNamespace: "currentprocessnamespace",
   })
 
   const result = await workflow.processUserDataEventTransition({
@@ -431,7 +432,10 @@ test("keeps an unmatched order from the current Harvester process fail-closed", 
   const {
     workflow,
     calls,
-  } = makeWorkflow({ registry })
+  } = makeWorkflow({
+    registry,
+    currentProcessOrderIdNamespace: "currentprocessnamespace",
+  })
 
   const result = await workflow.processUserDataEventTransition({
     event: {
