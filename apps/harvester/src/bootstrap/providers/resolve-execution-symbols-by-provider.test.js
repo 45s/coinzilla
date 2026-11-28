@@ -429,11 +429,17 @@ test("routes default LINEAUSDT Recovery Seller only to the TESTNET provider", ()
   assert.deepEqual(
     [...testnetRoutes.get("binance-testnet-primary")].filter(({ strategyId }) =>
       strategyId === StrategyId.RECOVERY_SELLER),
-    [{
-      strategyId: StrategyId.RECOVERY_SELLER,
-      symbol: "LINEAUSDT",
-    }],
-    "TESTNET must select the enabled LINEAUSDT RS market from the default app configuration.",
+    [
+      {
+        strategyId: StrategyId.RECOVERY_SELLER,
+        symbol: "LINEAUSDT",
+      },
+      {
+        strategyId: StrategyId.RECOVERY_SELLER,
+        symbol: "ARBUSDT",
+      },
+    ],
+    "TESTNET must select all enabled TESTNET RS markets from the default app configuration.",
   )
 
   const liveRoutes = resolveExecutionRoutesByProvider({
