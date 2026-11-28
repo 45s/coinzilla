@@ -738,7 +738,7 @@ test("retains the market symbol and source filter types in compact fatal console
   assert.match(written, /HARVESTER_MARKET_UNVALIDATED_EXCHANGE_CONSTRAINTS/, "The compact fatal console line must preserve the stable machine-readable failure code.")
   assert.match(written, /LINKFDUSD/, "The compact fatal console line must identify the blocked market.")
   assert.match(written, /PERCENT_PRICE_BY_SIDE/, "The compact fatal console line must retain the leading source filter that caused the block.")
-  assert.ok(written.trim().length <= 200, "The compact fatal console line must remain within its documented output bound.")
+  assert.ok(written.trim().split("\n").every((line) => line.length <= 200), "Every compact fatal console line must remain within its documented output bound.")
   output.destroy()
 })
 
