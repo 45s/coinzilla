@@ -385,10 +385,8 @@ function createConservativeLatestTransitionEvaluator(dependencies = {}) {
 function shouldEvaluateRecoverySellerTransition({
   dependencies,
   options,
-  conservativeResult,
 } = {}) {
-  return conservativeResult?.ok === true &&
-    typeof dependencies.evaluateRecoverySellerTransition === "function" &&
+  return typeof dependencies.evaluateRecoverySellerTransition === "function" &&
     Object.hasOwn(dependencies.recoverySellerPairs ?? {}, options.symbol) &&
     options.preflightOnly !== true &&
     options.shutdownRecoveryOnly !== true
@@ -424,7 +422,7 @@ function combineStrategyTransitionResults({ conservativeResult, recoverySellerRe
   if (recoverySellerResult.data?.skipped === true) {
     return conservativeResult
   }
-  if (conservativeResult.data?.skipped === true) {
+  if (conservativeResult?.ok !== true || conservativeResult.data?.skipped === true) {
     return recoverySellerResult
   }
   return toResult({
@@ -500,7 +498,6 @@ async function evaluateRecoverySellerTransitionForMarket({
   if (!shouldEvaluateRecoverySellerTransition({
     dependencies,
     options,
-    conservativeResult,
   })) {
     return conservativeResult
   }
