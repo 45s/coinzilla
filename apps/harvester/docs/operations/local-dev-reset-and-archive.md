@@ -5,8 +5,8 @@ This runbook covers the local TESTNET development workflow only. It does not aut
 ## Required environment
 
 - `TRADING_MODE=testnet` in `.env.development`.
-- `HARVESTER_ARCHIVE_REMOTE=https://github.com/45s/coinzilla-archive.git` in `.env.development`.
-- Git access to the private `45s/coinzilla-archive` repository.
+- `TRADING_MODE=testnet` is required for collection.
+- `HARVESTER_ARCHIVE_REMOTE=https://github.com/45s/coinzilla-archive.git` and Git access are required only for publication.
 - Run commands from `apps/harvester`.
 
 The archive command rejects LIVE or unspecified `TRADING_MODE`, validates the private destination, and refuses to run while any Harvester process lock exists.
