@@ -132,7 +132,10 @@ async function assertRealDirectory(directory) {
 async function sha256FileRange(filename, size) {
   const hash = createHash("sha256")
   if (size > 0) {
-    for await (const chunk of createReadStream(filename, { start: 0, end: size - 1 })) {
+    for await (const chunk of createReadStream(filename, {
+        start: 0,
+        end: size - 1,
+      })) {
       hash.update(chunk)
     }
   }
@@ -142,13 +145,23 @@ async function sha256FileRange(filename, size) {
 async function copyFileRange({ sourcePath, destinationPath, size, compressed = false } = {}) {
   if (size === 0) {
     if (compressed) {
-      await pipeline(Readable.from([]), createGzip({ level: 6 }), createWriteStream(destinationPath, { flags: "wx", mode: 0o600 }))
+      await pipeline(Readable.from([]), createGzip({ level: 6 }), createWriteStream(destinationPath, {
+        flags: "wx",
+        mode: 0o600,
+      }))
     } else {
-      await writeFile(destinationPath, "", { encoding: "utf8", flag: "wx", mode: 0o600 })
+      await writeFile(destinationPath, "", {
+        encoding: "utf8",
+        flag: "wx",
+        mode: 0o600,
+      })
     }
     return
   }
-  const source = createReadStream(sourcePath, { start: 0, end: size - 1 })
+  const source = createReadStream(sourcePath, {
+    start: 0,
+    end: size - 1,
+  })
   if (compressed) {
     await pipeline(source, createGzip({ level: 6 }), createWriteStream(destinationPath, { flags: "wx", mode: 0o600 }))
     return
@@ -164,7 +177,11 @@ async function copyStableFile({ sourcePath, destinationPath } = {}) {
   const sourceSha256Before = await sha256FileRange(sourcePath, before.size)
   const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
   try {
-    await copyFileRange({ sourcePath, destinationPath: temporaryPath, size: before.size })
+    await copyFileRange({
+      sourcePath,
+      destinationPath: temporaryPath,
+      size: before.size,
+    })
     const after = await lstat(sourcePath)
     const sourceSha256After = await sha256FileRange(sourcePath, before.size)
     const copiedSha256 = await sha256File(temporaryPath)
@@ -239,10 +256,19 @@ export async function copyRegularTree({
 
 async function writeCompressedTemporaryFile({ sourcePath, temporaryPath, sourceAlreadyCompressed, sourceSize } = {}) {
   if (sourceAlreadyCompressed) {
-    await copyFileRange({ sourcePath, destinationPath: temporaryPath, size: sourceSize })
+    await copyFileRange({
+      sourcePath,
+      destinationPath: temporaryPath,
+      size: sourceSize,
+    })
     return
   }
-  await copyFileRange({ sourcePath, destinationPath: temporaryPath, size: sourceSize, compressed: true })
+  await copyFileRange({
+    sourcePath,
+    destinationPath: temporaryPath,
+    size: sourceSize,
+    compressed: true,
+  })
 }
 
 async function assertSourceFileStable({ sourcePath, sourceBefore, sourceSha256Before } = {}) {
@@ -271,8 +297,17 @@ async function copyCompressedFile({ sourcePath, destinationPath, childRelative, 
   const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
   let sourceSha256After
   try {
-    await writeCompressedTemporaryFile({ sourcePath, temporaryPath, sourceAlreadyCompressed, sourceSize: sourceBefore.size })
-    sourceSha256After = await assertSourceFileStable({ sourcePath, sourceBefore, sourceSha256Before })
+    await writeCompressedTemporaryFile({
+      sourcePath,
+      temporaryPath,
+      sourceAlreadyCompressed,
+      sourceSize: sourceBefore.size,
+    })
+    sourceSha256After = await assertSourceFileStable({
+      sourcePath,
+      sourceBefore,
+      sourceSha256Before,
+    })
     await rename(temporaryPath, destinationPath)
   } catch (error) {
     await rm(temporaryPath, { force: true })
@@ -483,7 +518,13 @@ function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCom
   if (!isHarvesterTestnet) {
     return "non-testnet-or-invalid"
   }
-  if (hasCompleteProcessCompletion({ identity, completion }) && hasCompleteLoggerCompletion({ identity, loggerCompletion })) {
+  if (hasCompleteProcessCompletion({
+    identity,
+    completion,
+  }) && hasCompleteLoggerCompletion({
+    identity,
+    loggerCompletion,
+  })) {
     return "complete"
   }
   return Number.isSafeInteger(processId)
@@ -528,6 +569,12 @@ function resolveArchiveSessionEndTimestamp(completion) {
   return typeof completion?.endedAt === "string" ? completion.endedAt : null
 }
 
+function hasCompleteLoggerStreams(loggerCompletion) {
+  return loggerCompletion?.logStreamsComplete === true
+    && loggerCompletion?.streams?.harvesterLog === true
+    && loggerCompletion?.streams?.traceLog === true
+}
+
 function createArchiveSessionLifecycleFields({ sessionName, identity, completion, loggerCompletion } = {}) {
   return {
     relativePath: `logs/sessions/${sessionName}`,
@@ -537,9 +584,7 @@ function createArchiveSessionLifecycleFields({ sessionName, identity, completion
     completionRuntimeSessionId: completion?.runtimeSessionId ?? null,
     loggerCompletionRuntimeSessionId: loggerCompletion?.runtimeSessionId ?? null,
     logStreamsComplete: completion?.logStreamsComplete === true,
-    loggerStreamsComplete: loggerCompletion?.logStreamsComplete === true
-      && loggerCompletion?.streams?.harvesterLog === true
-      && loggerCompletion?.streams?.traceLog === true,
+    loggerStreamsComplete: hasCompleteLoggerStreams(loggerCompletion),
     startedAt: resolveArchiveSessionStartTimestamp(identity),
     endedAt: resolveArchiveSessionEndTimestamp(completion),
     loggerStreamsEndedAt: loggerCompletion?.endedAt ?? null,
@@ -593,7 +638,10 @@ function createArchiveSessionEvidenceRecord({
       completion,
       loggerCompletion,
     }),
-    ...createArchiveSessionIdentityFields({ identity, processId }),
+    ...createArchiveSessionIdentityFields({
+      identity,
+      processId,
+    }),
     completionStatus,
     loggerCompletionStatus,
     missingFieldWarnings,
@@ -848,8 +896,6 @@ function createSessionStreamFileInventory({ selection, artifactProvenance, strea
     status = selection.status === "ambiguous" ? "unverifiable" : "incomplete"
     reason = "runtime-session-completion-or-ownership-not-proven"
   }
-  // Array#reduce requires an accumulator and item parameter.
-  // eslint-disable-next-line max-params
   let totalBytes = 0
   for (const file of matchingFiles) {
     totalBytes += file.sourceSize
@@ -992,8 +1038,15 @@ async function copyIdentifiedSessionEvidence({ sourceDirectory, destinationDirec
         hostname: selection.activeProcessOwner.hostname,
         lockStartedAt: selection.activeProcessOwner.startedAt,
         capturedAt: new Date().toISOString(),
-        streams: { harvesterLog: true, traceLog: true },
-      }, null, 2)}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 })
+        streams: {
+          harvesterLog: true,
+          traceLog: true,
+        },
+      }, null, 2)}\n`, {
+        encoding: "utf8",
+        flag: "wx",
+        mode: 0o600,
+      })
     }
   }
   return artifactProvenance
@@ -1591,7 +1644,50 @@ function resolveArchiveSourcePaths({ packageDirectory, env } = {}) {
   ]
 }
 
-async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.hostname(), isProcessAlive = isHarvesterProcessAlive } = {}) {
+async function readHarvesterProcessLockOwner({ filename, hostname } = {}) {
+  const stats = await lstat(filename)
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    throw new Error(`Cannot snapshot Harvester: invalid lock file ${filename}.`)
+  }
+  let owner
+  try {
+    owner = JSON.parse(await readFile(filename, "utf8"))
+  } catch (error) {
+    throw new Error(`Cannot snapshot Harvester: unreadable lock metadata ${filename}.`, { cause: error })
+  }
+  const validOwner = Number.isSafeInteger(owner?.pid)
+    && owner.pid > 0
+    && typeof owner.hostname === "string"
+    && typeof owner.startedAt === "string"
+    && typeof owner.token === "string"
+    && owner.token.trim() !== ""
+  if (!validOwner) {
+    throw new Error(`Cannot snapshot Harvester: invalid lock metadata ${filename}.`)
+  }
+  if (owner.hostname.toLowerCase() !== hostname.toLowerCase()) {
+    throw new Error(`Cannot snapshot Harvester: lock belongs to another host (${owner.hostname}).`)
+  }
+  return {
+    pid: owner.pid,
+    hostname: owner.hostname,
+    startedAt: owner.startedAt,
+    token: owner.token,
+  }
+}
+
+function selectUniqueActiveHarvesterProcessOwner(owners) {
+  const uniqueOwners = [...new Map(owners.map((owner) => [owner.pid, owner])).values()]
+  if (uniqueOwners.length > 1) {
+    throw new Error(`Cannot snapshot Harvester: multiple active process owners: ${uniqueOwners.map((owner) => owner.pid).join(", ")}.`)
+  }
+  return uniqueOwners[0] ?? null
+}
+
+async function readActiveHarvesterProcessOwner({
+  lockDirectory,
+  hostname = os.hostname(),
+  isProcessAlive = isHarvesterProcessAlive,
+} = {}) {
   let entries
   try {
     entries = await readdir(lockDirectory, { withFileTypes: true })
@@ -1603,32 +1699,15 @@ async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.ho
   }
   const owners = []
   for (const entry of entries.filter((candidate) => candidate.name.endsWith(".lock"))) {
-    const filename = path.join(lockDirectory, entry.name)
-    const stats = await lstat(filename)
-    if (stats.isSymbolicLink() || !stats.isFile()) {
-      throw new Error(`Cannot snapshot Harvester: invalid lock file ${filename}.`)
-    }
-    let owner
-    try {
-      owner = JSON.parse(await readFile(filename, "utf8"))
-    } catch (error) {
-      throw new Error(`Cannot snapshot Harvester: unreadable lock metadata ${filename}.`, { cause: error })
-    }
-    if (!Number.isSafeInteger(owner?.pid) || owner.pid < 1 || typeof owner.hostname !== "string" || typeof owner.startedAt !== "string" || typeof owner.token !== "string" || !owner.token.trim()) {
-      throw new Error(`Cannot snapshot Harvester: invalid lock metadata ${filename}.`)
-    }
-    if (owner.hostname.toLowerCase() !== hostname.toLowerCase()) {
-      throw new Error(`Cannot snapshot Harvester: lock belongs to another host (${owner.hostname}).`)
-    }
+    const owner = await readHarvesterProcessLockOwner({
+      filename: path.join(lockDirectory, entry.name),
+      hostname,
+    })
     if (isProcessAlive(owner.pid)) {
-      owners.push({ pid: owner.pid, hostname: owner.hostname, startedAt: owner.startedAt, token: owner.token })
+      owners.push(owner)
     }
   }
-  const uniqueOwners = [...new Map(owners.map((owner) => [owner.pid, owner])).values()]
-  if (uniqueOwners.length > 1) {
-    throw new Error(`Cannot snapshot Harvester: multiple active process owners: ${uniqueOwners.map((owner) => owner.pid).join(", ")}.`)
-  }
-  return uniqueOwners[0] ?? null
+  return selectUniqueActiveHarvesterProcessOwner(owners)
 }
 
 async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive, activeProcessOwner, lockDirectory, onProgress } = {}) {
