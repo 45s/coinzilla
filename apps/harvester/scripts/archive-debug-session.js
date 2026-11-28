@@ -738,10 +738,12 @@ function createEvidenceIntegrity({ selection, artifactProvenance } = {}) {
     ? "missing"
     : selection.recoveryProcessIdentity.runtimeSessionId === selection.recoveryRuntimeSessionId ? "matched" : "mismatched"
   let status = selection.status
-  if (recoveryProcessIdentityStatus === "missing" || status === "ambiguous") {
+  if (status === "ambiguous") {
     status = "unverifiable"
-  } else if (recoveryProcessIdentityStatus === "mismatched") {
+  } else if (status === "mismatched" || recoveryProcessIdentityStatus === "mismatched") {
     status = "mismatched"
+  } else if (recoveryProcessIdentityStatus === "missing") {
+    status = "unverifiable"
   } else if (status === "matched") {
     status = Object.values(streams).every((stream) => stream.status === "matched") ? "matched" : "incomplete"
   } else if (status === "mismatched") {
