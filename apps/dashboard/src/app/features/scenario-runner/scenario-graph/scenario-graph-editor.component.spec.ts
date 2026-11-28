@@ -72,6 +72,19 @@ describe('ScenarioGraphEditorComponent', () => {
     expect(fixture.nativeElement.textContent, 'the updated label must render on the canvas').toContain('Submit one authorized SELL');
   });
 
+  it('offers terminal outcome nodes while preventing a second start node', async () => {
+    await TestBed.configureTestingModule({ imports: [ScenarioGraphEditorComponent] }).compileComponents();
+    const fixture = TestBed.createComponent(ScenarioGraphEditorComponent);
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    expect(component.canAddStart(), 'the sample graph already has its single start node').toBe(false);
+    component.setNodeType('start');
+    expect(component.addNodeType(), 'a second start node must not be selectable').toBe('action');
+    component.setNodeType('end');
+    component.addNode();
+    expect(component.selectedNode()?.type, 'additional terminal outcome nodes must be supported').toBe('end');
+  });
+
   it('edits typed node properties through the application boundary', async () => {
     await TestBed.configureTestingModule({ imports: [ScenarioGraphEditorComponent] }).compileComponents();
     const fixture = TestBed.createComponent(ScenarioGraphEditorComponent);

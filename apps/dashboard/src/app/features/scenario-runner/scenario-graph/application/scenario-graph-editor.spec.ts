@@ -31,6 +31,14 @@ describe('scenario graph editor application', () => {
     expect(result.nodes.some((node) => node.id === 'node-2'), 'the application must use its injected ID port').toBe(true);
   });
 
+  it('prevents adding a second start node', () => {
+    const editor = createScenarioGraphEditor({ createId: () => 'second-start' });
+    expect(() => editor.addNode({
+      graph: createGraph(),
+      node: { type: 'start', label: 'Another start', position: { x: 0, y: 100 }, properties: {} },
+    }), 'the graph must retain exactly one start node').toThrow('SCENARIO_GRAPH_START_COUNT_INVALID');
+  });
+
   it('returns a validated draft and never exposes an execution or persistence operation', () => {
     const editor = createScenarioGraphEditor({ createId: () => 'node-2' });
     const result = editor.validate({ graph: createGraph() });

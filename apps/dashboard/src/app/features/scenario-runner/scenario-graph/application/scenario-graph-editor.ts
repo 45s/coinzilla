@@ -118,8 +118,7 @@ export function createScenarioGraphEditor({ createId }: {
     },
 
     addNode({ graph, node }: { readonly graph: ScenarioGraph; readonly node: ScenarioGraphNodeDraft }): ScenarioGraph {
-      const id = createId();
-      if (graph.nodes.some((existing) => existing.id === id) || graph.edges.some((existing) => existing.id === id)) {
+      if (node.type === 'start' && graph.nodes.some((existing) => existing.type === 'start')) {\n        throw new Error('SCENARIO_GRAPH_START_COUNT_INVALID');\n      }\n      const id = createId();\n      if (graph.nodes.some((existing) => existing.id === id) || graph.edges.some((existing) => existing.id === id)) {
         throw new Error('SCENARIO_GRAPH_NODE_ID_DUPLICATE');
       }
       return createScenarioGraph({

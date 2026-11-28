@@ -36,7 +36,7 @@ export class ScenarioGraphEditorComponent {
   readonly selectedEdgeId = signal<string | null>(null);
   readonly hoveredNodeId = signal<string | null>(null);
   readonly pendingConnection = signal<{ readonly nodeId: string; readonly portId: string } | null>(null);
-  readonly addNodeType = signal<ScenarioGraphNodeType>('action');
+  readonly addNodeType = signal<ScenarioGraphNodeType>('action');\n  readonly canAddStart = computed(() => !this.graph().nodes.some((node) => node.type === 'start'));
   readonly error = signal<string | null>(null);
   readonly validation = computed(() => this.editor.validate({ graph: this.graph() }));
   readonly viewModel = computed<ScenarioGraphViewModel>(() => this.editor.viewModel({ graph: this.graph() }));
@@ -45,8 +45,8 @@ export class ScenarioGraphEditorComponent {
   readonly serializedGraph = computed(() => this.editor.serialize({ graph: this.graph() }));
 
   setNodeType(value: string): void {
-    const supported: readonly string[] = ['action', 'decision', 'wait', 'reconciliation', 'block'];
-    if (supported.includes(value)) {
+    const supported: readonly string[] = ['start', 'action', 'decision', 'wait', 'reconciliation', 'block', 'end'];
+    if (supported.includes(value) && (value !== 'start' || this.canAddStart())) {
       this.addNodeType.set(value as ScenarioGraphNodeType);
     }
   }
@@ -57,7 +57,7 @@ export class ScenarioGraphEditorComponent {
         graph: this.graph(),
         node: {
           type: this.addNodeType(),
-          label: this.addNodeType() === 'decision' ? 'New condition' : 'New step',
+          label: this.addNodeType() === 'decision' ? 'New condition' : this.addNodeType() === 'start' ? 'Start' : this.addNodeType() === 'end' ? 'New outcome' : 'New step',
           description: 'Draft node. Edit its description before using this graph as documentation.',
           position: this.editor.suggestNodePosition({ graph: this.graph() }),
           properties: {},
