@@ -248,7 +248,7 @@ test("collects a verified archive without requiring GitHub publication configura
   }))
   let collectionCompleted = false
   const result = await runHarvesterDebugArchive({
-    ...archiveDependencies({ fixture, overrides: { HARVESTER_ARCHIVE_REMOTE: undefined } }),
+    ...archiveDependencies({\n      fixture,\n      overrides: { HARVESTER_ARCHIVE_REMOTE: undefined },\n    }),
     onArchiveCreatedFn: async ({ directory }) => {
       const manifest = await readArchiveManifest(directory)
       assert.ok(manifest.files.length > 0, "Collection must finish writing the archive manifest before returning.")
