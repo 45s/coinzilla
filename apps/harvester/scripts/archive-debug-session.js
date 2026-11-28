@@ -560,6 +560,26 @@ function isMatchingActiveProcessOwner({ identity, processId, activeProcessOwner 
   })
 }
 
+function hasExactStoppedRuntimeIdentity({ identity, processId, recoveryCheckpoint } = {}) {
+  const durableIdentity = recoveryCheckpoint?.processIdentity
+  return identity?.runtimeSessionId === recoveryCheckpoint?.runtimeSessionId
+    && processId === durableIdentity?.processId
+    && identity?.startedAt === durableIdentity?.startedAt
+    && Number.isSafeInteger(processId)
+    && processId > 0
+}
+
+function confirmsStoppedRuntimeProcess({ processId, activeProcessOwner, isProcessAlive } = {}) {
+  return activeProcessOwner === null
+    && typeof isProcessAlive === "function"
+    && !isProcessAlive(processId)
+}
+
+function hasBothCompletionRecordsAbsent(missingFieldWarnings) {
+  return missingFieldWarnings.includes("COMPLETION_RECORD_MISSING")
+    && missingFieldWarnings.includes("LOGGER_COMPLETION_RECORD_MISSING")
+}
+
 function isEligibleStoppedRuntimeSnapshot({
   identity,
   processId,
@@ -568,20 +588,18 @@ function isEligibleStoppedRuntimeSnapshot({
   missingFieldWarnings,
   isProcessAlive,
 } = {}) {
-  const durableIdentity = recoveryCheckpoint?.processIdentity
-  const hasExactProcessIdentity = identity?.runtimeSessionId === recoveryCheckpoint?.runtimeSessionId
-    && processId === durableIdentity?.processId
-    && identity?.startedAt === durableIdentity?.startedAt
-    && Number.isSafeInteger(processId)
-    && processId > 0
-  const hasNoLiveOwner = activeProcessOwner === null
-    && typeof isProcessAlive === "function"
-    && !isProcessAlive(processId)
-  const hasOnlyAbsentCompletionRecords = missingFieldWarnings.includes("COMPLETION_RECORD_MISSING")
-    && missingFieldWarnings.includes("LOGGER_COMPLETION_RECORD_MISSING")
-  return hasExactProcessIdentity && hasNoLiveOwner && hasOnlyAbsentCompletionRecords
+  return hasExactStoppedRuntimeIdentity({
+    identity,
+    processId,
+    recoveryCheckpoint,
+  })
+    && confirmsStoppedRuntimeProcess({
+      processId,
+      activeProcessOwner,
+      isProcessAlive,
+    })
+    && hasBothCompletionRecordsAbsent(missingFieldWarnings)
 }
-
 function resolveArchiveSessionCompletionStatus({
   identity,
   completion,
