@@ -159,4 +159,17 @@ describe('createScenarioRunPresentation', () => {
     expect(presentation.outcomes.lifecycle.partiallyExecutedOrderCount, 'a partial terminal execution must be counted without misclassifying a full fill').toBe(1);
   });
 
+
+  it('preserves assertion names, actual values and expected values for operator review', () => {
+    const presentation = createScenarioRunPresentation(fixture);
+
+    expect(presentation.assertions, 'every source assertion must remain available in the presentation model').toHaveLength(16);
+    expect(presentation.assertions[0], 'assertion details must retain their actual and expected evidence').toEqual(expect.objectContaining({
+      label: 'production RS transition selects a SELL action',
+      passed: true,
+      actual: 'SUBMIT',
+      expected: 'SUBMIT',
+    }));
+  });
+
 });

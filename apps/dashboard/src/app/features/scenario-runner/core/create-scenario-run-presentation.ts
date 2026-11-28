@@ -56,6 +56,7 @@ export interface ScenarioRunPresentation {
   };
   readonly configuration: unknown;
   readonly configurationSummary: readonly { readonly key: string; readonly value: unknown }[];
+  readonly assertions: readonly { readonly key: string; readonly label: string | null; readonly passed: boolean | null; readonly expected: unknown; readonly actual: unknown; readonly sourceEvidence: unknown }[];
   readonly initialState: unknown;
   readonly steps: readonly ScenarioRunPresentationStep[];
   readonly edges: readonly {
@@ -478,6 +479,7 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
     },
     configuration: input,
     configurationSummary,
+    assertions: [],
     initialState: root?.['initialState'] ?? runtimeOutput?.['initialState'] ?? null,
     steps,
     edges: readEdges(root, runOutput),
