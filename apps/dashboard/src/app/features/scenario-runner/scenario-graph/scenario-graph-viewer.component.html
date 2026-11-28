@@ -43,10 +43,11 @@
           class="graph-node"
           [attr.transform]="'translate(' + node.position.x + ',' + node.position.y + ')'"
           [attr.data-kind]="node.type"
+          [attr.data-guide-kind]="node.properties['guideKind'] ?? node.type"
         >
           <title>{{ node.label }} — {{ node.description ?? '' }}</title>
           <rect class="node-card" [attr.width]="node.width" [attr.height]="node.height" rx="10" />
-          <text class="node-kind" x="14" y="22">{{ node.type }}</text>
+          <text class="node-kind" x="14" y="22">{{ node.properties['guideKind'] ?? node.type }}</text>
           <text class="node-label" x="14" y="47" textLength="162" lengthAdjust="spacingAndGlyphs">{{ node.label }}</text>
           <text class="node-description" x="14" y="66" textLength="162" lengthAdjust="spacingAndGlyphs">{{ node.description ?? '' }}</text>
         </g>
@@ -57,6 +58,7 @@
   <div class="graph-legend" aria-label="Graph legend">
     <span><i data-kind="start"></i> Start</span>
     <span><i data-kind="action"></i> Production flow</span>
+    <span><i data-kind="decision"></i> Decision point</span>
     <span><i data-kind="wait"></i> Condition</span>
     <span><i data-kind="block"></i> Injected failure</span>
     <span><i data-kind="end"></i> Outcome</span>
