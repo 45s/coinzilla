@@ -49,17 +49,6 @@ function requireText({ value, field, maxLength = 160 }) {
   return value.trim()
 }
 
-function requireNullableText({ value, field, maxLength }) {
-  if (value === null) {
-    return null
-  }
-  return requireText({
-    value,
-    field,
-    maxLength,
-  })
-}
-
 function requireTimestamp({ value, field }) {
   const timestamp = requireText({
     value,
