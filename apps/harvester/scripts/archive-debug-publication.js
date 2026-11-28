@@ -236,6 +236,58 @@ async function validateActiveSessionSnapshot({ directory, manifest, session, ide
   }
 }
 
+function hasNoArchivedCompletionRecords({ manifest, session } = {}) {
+  return !manifest.files.some((entry) => entry.sourcePath === session.processCompletionPath)
+    && !manifest.files.some((entry) => entry.sourcePath === session.loggerCompletionPath)
+}
+
+function matchesStoppedSnapshotIdentity({ marker, identity, manifest, expectedRuntimeId } = {}) {
+  return marker.runtimeSessionId === expectedRuntimeId
+    && marker.processId === identity.processId
+    && marker.processId === manifest.tradingRuntime.processIdentity.processId
+    && marker.recoveryDataCommitHash === manifest.dataCommitHash
+}
+
+function matchesStoppedSnapshotState(marker) {
+  return marker.formatVersion === 1
+    && marker.status === "stopped-unconfirmed"
+    && marker.snapshotType === "stopped-harvester-process"
+    && marker.processAliveAtCapture === false
+    && marker.activeProcessLockOwnerAtCapture === false
+    && marker.completionConfirmed === false
+    && marker.loggerFlushConfirmed === false
+}
+
+function matchesStoppedSnapshotCaptureTime({ marker, identity } = {}) {
+  const capturedAt = Date.parse(marker.capturedAt)
+  const startedAt = Date.parse(identity.startedAt)
+  return Number.isFinite(startedAt)
+    && Number.isFinite(capturedAt)
+    && capturedAt >= startedAt
+}
+
+function hasCompleteStoppedSnapshotStreams(marker) {
+  return marker.streams?.harvesterLog === true
+    && marker.streams?.traceLog === true
+}
+
+function isValidStoppedProcessSnapshotMarker({ marker, identity, manifest, expectedRuntimeId } = {}) {
+  return matchesStoppedSnapshotIdentity({
+    marker,
+    identity,
+    manifest,
+    expectedRuntimeId,
+  })
+    && matchesStoppedSnapshotState(marker)
+    && matchesStoppedSnapshotCaptureTime({
+      marker,
+      identity,
+    })
+    && hasCompleteStoppedSnapshotStreams(marker)
+    && Array.isArray(marker.limitations)
+    && marker.limitations.length >= 3
+}
+
 async function validateStoppedProcessSnapshot({
   directory,
   manifest,
@@ -248,34 +300,16 @@ async function validateStoppedProcessSnapshot({
   if (!markerEntry || typeof markerPath !== "string") {
     throw new Error(`Stopped runtime ${expectedRuntimeId} is missing its snapshot provenance marker.`)
   }
-  if (
-    manifest.files.some((entry) => entry.sourcePath === session.processCompletionPath)
-    || manifest.files.some((entry) => entry.sourcePath === session.loggerCompletionPath)
-  ) {
+  if (!hasNoArchivedCompletionRecords({ manifest, session })) {
     throw new Error(`Stopped runtime ${expectedRuntimeId} must not claim missing completion metadata is present.`)
   }
   const marker = JSON.parse(await readFile(path.join(directory, markerPath), "utf8"))
-  const capturedAt = Date.parse(marker.capturedAt)
-  const startedAt = Date.parse(identity.startedAt)
-  const valid = marker.formatVersion === 1
-    && marker.status === "stopped-unconfirmed"
-    && marker.snapshotType === "stopped-harvester-process"
-    && marker.runtimeSessionId === expectedRuntimeId
-    && marker.processId === identity.processId
-    && marker.processId === manifest.tradingRuntime.processIdentity.processId
-    && marker.processAliveAtCapture === false
-    && marker.activeProcessLockOwnerAtCapture === false
-    && marker.completionConfirmed === false
-    && marker.loggerFlushConfirmed === false
-    && Number.isFinite(startedAt)
-    && Number.isFinite(capturedAt)
-    && capturedAt >= startedAt
-    && marker.recoveryDataCommitHash === manifest.dataCommitHash
-    && marker.streams?.harvesterLog === true
-    && marker.streams?.traceLog === true
-    && Array.isArray(marker.limitations)
-    && marker.limitations.length >= 3
-  if (!valid) {
+  if (!isValidStoppedProcessSnapshotMarker({
+    marker,
+    identity,
+    manifest,
+    expectedRuntimeId,
+  })) {
     throw new Error(`Stopped-process snapshot provenance is invalid for runtime ${expectedRuntimeId}.`)
   }
 }
