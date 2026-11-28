@@ -564,3 +564,37 @@ The current branch is scaffolding, not the executable RS MVP described above. It
 ## Current implementation status — Windows local Scenario Runner (2026-11-27; supersedes older status snapshots)
 
 The Harvester runtime catalogue now contains twelve RS production-flow scenarios. On Windows, the API composes a dedicated Node child-process worker by default, and all twelve scenarios are locally executable through the real REST API using simulated broker/order and run-local state adapters. The Windows acceptance test checks catalogue discovery, submit, authoritative status, assertions, trace and replay remaining unverified. This is functional local simulation only: Node guards are not an OS security boundary, the scenarios remain PARTIAL, and exact replay remains blocked pending independent trusted artifact verification. Linux Bubblewrap/cgroup acceptance is optional OS hardening and does not gate local Windows development.
+
+
+## Run details: evidence-first lifecycle presentation
+
+The Scenario Runner run-details view is an evidence-first presentation of the authoritative run record. It is not an execution simulator and does not synthesize missing lifecycle events.
+
+### Presentation adapter
+
+- The framework-independent `createScenarioRunPresentation` adapter accepts the source run record or a versioned debug report and retains the original source object by reference.
+- Run identity, effective input, execution mode, trace, assertions, decisions, submitted orders, terminal order evidence, cycle state, safety facts and provenance are mapped only when supported by source fields.
+- Trace steps retain their source index and exact source evidence reference. Unknown kinds and incomplete steps remain visible; absent labels/IDs are represented as unavailable rather than invented lifecycle events.
+- Trace ordering supplies the ordered timeline. Diagram branch relationships are displayed only when the source explicitly supplies graph/trace edges; no causal edge is inferred from unrelated IDs.
+- Order submission and terminal evidence are joined only by matching client or broker order IDs. Submission acknowledgement is distinct from terminal order status and execution quantity.
+- Partial execution classification compares decimal quantity strings; no proceeds, fees, realized P/L, remaining inventory or cycle completion are calculated without source evidence.
+
+### Independent outcomes
+
+The run story presents execution status, assertion results, trading lifecycle, accounting/cycle status, safety admission facts and provenance independently. A completed runner status or passing assertions never promotes an unresolved cycle, catalog status or unverified replay provenance.
+
+### Technical investigation
+
+- Every visual step exposes its original source trace object.
+- The complete source run payload remains available as the raw object and a JSON serialization that preserves its data fields and values.
+- The technical panel provides a recursive expandable JSON tree, copy controls for individual values and branches, text search across serialized field names and values, copy-all and JSON download.
+- Unknown fields, explicit `null`, `false`, empty strings and empty arrays are not removed from the source object.
+- The existing generated/redacted AI debug-package action remains separate from the original source-payload inspection/export.
+
+### Responsive and accessible interaction
+
+Timeline steps are keyboard-operable buttons with `aria-pressed` state; the ordered list is the textual alternative to the visual flow. The outcome cards reflow on narrow screens. JSON tree branches use native `details` / `summary` disclosure controls.
+
+### Regression fixture
+
+The regression fixture `core/fixtures/rs-runtime-sell-partial-cancel.debug.json` is the supplied 2026-11-28 debug report for `RS-RUNTIME-SELL-PARTIAL-CANCEL-001`. Tests assert the simulation-only mode, 55 ZRO SELL submission, 2.5 ZRO executed before CANCELED, successful terminal reconciliation, UNRESOLVED cycle, STOP recorded, market paused, BUY blocked, SELL permitted, 16/16 assertions, PARTIAL catalog and unverified replay/build provenance. No realized profit/loss is inferred because the fixture does not provide the required fill price/commission evidence.

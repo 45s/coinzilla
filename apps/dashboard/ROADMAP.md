@@ -26,3 +26,12 @@
 - Current task state: linked GitHub issues and PRs
 
 Detailed prior roadmap, including completed design decisions and historical runner notes, is preserved in [ROADMAP_HISTORY_2026-11-26.md](../../docs/archive/roadmap-history-2026-11-26.md#dashboard-roadmap).
+
+
+## Scenario Runner run-detail presentation — 2026-11-28
+
+The Dashboard Scenario Runner now has an evidence-linked visual run story in PR [#1983](https://github.com/45s/coinzilla/pull/1983), tracked by [issue #1982](https://github.com/45s/coinzilla/issues/1982). The implementation extends the existing framework-independent Scenario Runner application and Angular presentation rather than adding a second runner.
+
+The view keeps execution, assertions, trading lifecycle, accounting/cycle, safety and provenance separate. It provides a selectable ordered trace, explicit source-declared branches, per-step source evidence, a recursive JSON tree, search, copy and export. The supplied RS partial-CANCELED fixture is a regression test; the view must not imply a completed cycle, blocked SELL admission, real exchange execution or verified provenance.
+
+PR #1983 targets develop and remains open for owner review. See the feature [Scenario Runner roadmap](./docs/features/gc-strategy-lab/RUNNER_ROADMAP.md) for implementation decisions and exact-head verification evidence.
