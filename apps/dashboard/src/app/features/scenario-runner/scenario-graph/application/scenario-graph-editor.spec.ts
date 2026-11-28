@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createScenarioGraphEditor, createScenarioGraphIdGenerator } from './scenario-graph-editor';
+import { createScenarioGraphEditor, createScenarioGraphIdGenerator, createScenarioGraphViewModel } from './scenario-graph-editor';
 import { createScenarioGraph, type ScenarioGraph } from '../domain/scenario-graph';
 
 function createGraph(): ScenarioGraph {
