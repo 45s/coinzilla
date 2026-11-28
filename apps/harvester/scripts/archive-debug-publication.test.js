@@ -813,7 +813,10 @@ test("publishes a stopped-runtime snapshot while preserving unconfirmed completi
     loggerFlushConfirmed: false,
     capturedAt: new Date().toISOString(),
     recoveryDataCommitHash: manifest.dataCommitHash,
-    streams: { harvesterLog: true, traceLog: true },
+    streams: {
+      harvesterLog: true,
+      traceLog: true,
+    },
     limitations: [
       "Process completion is unconfirmed.",
       "Logger flush is unconfirmed.",
