@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createScenarioGuideGraph } from './adapters/scenario-guide-graph';
 import { createScenarioGraphViewModel } from './application/scenario-graph-editor';
+import { validateScenarioGraph } from './domain/scenario-graph';
 import type { ScenarioGuide } from '../core/scenario-guides';
 
 const guide: ScenarioGuide = {
@@ -26,6 +27,7 @@ describe('scenario guide graph projection', () => {
     expect(graph.nodes.map((node) => node.label)).toEqual(['Seed state', 'Broker rejects SELL', 'Fail closed']);
     expect(graph.nodes.map((node) => node.type)).toEqual(['start', 'block', 'end']);
     expect(graph.edges).toHaveLength(2);
+    expect(validateScenarioGraph(graph)).toEqual([]);
     expect(view.nodes).toHaveLength(3);
     expect(graph.source.kind).toBe('scenario-guide');
   });
