@@ -192,7 +192,10 @@ async function assertCollectedArchive({ directory, expectedIdentityStatus, expec
     "data/** (all databases and backups)",
     "logs/cumulative/**",
   ], "Debug archives must declare databases and cumulative logs excluded")
-  assertArchiveRuntimeIdentity({ manifest, expectedIdentityStatus })
+  assertArchiveRuntimeIdentity({
+    manifest,
+    expectedIdentityStatus,
+  })
   assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "Archive manifest must preserve the latest committed recovery checkpoint digest")
   assert.deepEqual(manifest.logSelection, {
     cumulative: "excluded",
@@ -281,7 +284,10 @@ test("copies only bytes present at the snapshot boundary when an append-only log
 
 test("rejects a source file replaced after its snapshot identity was captured", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const sourcePath = path.join(fixture.packageDirectory, "replaced.log")
   const replacementPath = path.join(fixture.packageDirectory, "replacement.log")
   const originalBytes = Buffer.from("original-content")
@@ -301,14 +307,21 @@ test("rejects a source file replaced after its snapshot identity was captured", 
 
 test("rejects a source file truncated after its snapshot identity was captured", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const sourcePath = path.join(fixture.packageDirectory, "truncated.log")
   const originalBytes = Buffer.from("original-log-content")
   await writeFile(sourcePath, originalBytes)
   const sourceBefore = await lstat(sourcePath)
   const sourceSha256Before = createHash("sha256").update(originalBytes).digest("hex")
   await writeFile(sourcePath, Buffer.from("short"))
-  await assert.rejects(assertSourceFileStable({ sourcePath, sourceBefore, sourceSha256Before }), /replaced, truncated, or modified/i)
+  await assert.rejects(assertSourceFileStable({
+    sourcePath,
+    sourceBefore,
+    sourceSha256Before,
+  }), /replaced, truncated, or modified/i)
 })
 
 test("adds _debug to the existing timestamp and archive-ID directory name", () => {

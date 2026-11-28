@@ -275,7 +275,10 @@ function createArchiveManifest({ runtimeId, recovery, sourceFiles, files, runtim
       runtimeSessionId: runtimeId,
       processIdentity: recovery.processIdentity,
     },
-    sessionInventory: createSessionInventoryFixture({ runtimeId, runtimeTradingMode }),
+    sessionInventory: createSessionInventoryFixture({
+      runtimeId,
+      runtimeTradingMode,
+    }),
     evidenceIntegrity: createEvidenceIntegrityFixture({
       runtimeId,
       sourceFiles,
@@ -289,7 +292,10 @@ async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME, runtimeT
   await mkdir(path.join(archiveDirectory, "logs", "sessions", "fixture"), { recursive: true })
   await mkdir(path.join(archiveDirectory, "recovery-facts"), { recursive: true })
   const runtimeId = "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c"
-  const sourceFiles = [...createSourceFileEntries(), ...createLifecycleSourceFileEntries({ runtimeId, runtimeTradingMode })]
+  const sourceFiles = [...createSourceFileEntries(), ...createLifecycleSourceFileEntries({
+    runtimeId,
+    runtimeTradingMode,
+  })]
   const recovery = createRecoveryFixture(runtimeId)
   const files = []
   for (const item of sourceFiles) {
@@ -448,7 +454,10 @@ test("publishes with an active process lock, retries interrupted push, and is id
 })
 
 test("publication command accepts a completed LIVE runtime archive", async (t) => {
-  const fixture = await createFixture({ t, runtimeTradingMode: "live" })
+  const fixture = await createFixture({
+    t,
+    runtimeTradingMode: "live",
+  })
   const bareRemote = await createTemporaryArchiveRemote({ root: fixture.root })
   const runGitWithLocalRemote = async (...parameters) => {
     const [args, options = {}] = parameters
