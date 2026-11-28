@@ -22,8 +22,9 @@ function nodeType(kind: ScenarioGuide['steps'][number]['kind'], index: number, c
  * It deliberately does not invent decision branches: the guide contract has no
  * source-declared branch topology.
  */
-export function createScenarioGuideGraph({ scenarioId, guide }: {
+export function createScenarioGuideGraph({ scenarioId, scenarioName, guide }: {
   readonly scenarioId: string;
+  readonly scenarioName: string;
   readonly guide: ScenarioGuide;
 }) {
   const nodes = guide.steps.map((step, index) => ({
@@ -42,7 +43,7 @@ export function createScenarioGuideGraph({ scenarioId, guide }: {
 
   return createScenarioGraph({
     id: `scenario-guide-${scenarioId}`,
-    title: scenarioId,
+    title: scenarioName,
     description: guide.purpose,
     source: {
       kind: 'scenario-guide',
