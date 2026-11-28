@@ -4,6 +4,7 @@ import { resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { validateAppConfig } from "../../domain/app-config.js"
 import { resolvePairSpecifications } from "./token-specifications.js"
+import { validateTelegramApplicationConfig } from "./validate-telegram-config.js"
 
 const DEFAULT_CONFIG_URL = new URL("../../../config/index.js", import.meta.url)
 const DEFAULT_TOKEN_SPECIFICATIONS_PATH = fileURLToPath(new URL("../../../token-specification.json", import.meta.url))
@@ -119,7 +120,7 @@ export async function loadAppConfig(sourceOrOptions = {}) {
     sourceUrl,
   })
   const tokenSpecifications = await readTokenSpecifications(resolve(options.tokenSpecificationsPath))
-  return validateAppConfig({
+  const effectiveConfig = {
     ...rawConfig,
     strategies: resolveConfiguredStrategies({
       strategies: rawConfig?.strategies,
