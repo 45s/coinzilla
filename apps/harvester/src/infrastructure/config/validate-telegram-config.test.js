@@ -15,11 +15,26 @@ test("validates Telegram notification profiles, markets and event overrides", ()
     },
   }
   assert.equal(validateTelegramApplicationConfig(valid), valid)
-  assert.throws(() => validateTelegramApplicationConfig({ notifications: { telegram: { profile: "unknown" } } }), /profile/)
-  assert.throws(() => validateTelegramApplicationConfig({ notifications: { telegram: { events: { unknownEvent: true } } } }), /events/)
-  assert.throws(() => validateTelegramApplicationConfig({ notifications: { telegram: { events: { fillReceived: "yes" } } } }), /boolean/)
-  assert.throws(() => validateTelegramApplicationConfig({ notifications: { telegram: { markets: ["LINKUSDT", "LINKUSDT"] } } }), /markets/)
-  assert.throws(() => validateTelegramApplicationConfig({ notifications: { telegram: { markets: [""] } } }), /markets/)
+  assert.throws(
+    () => validateTelegramApplicationConfig({ notifications: { telegram: { profile: "unknown" } } }),
+    /profile/,
+  )
+  assert.throws(
+    () => validateTelegramApplicationConfig({ notifications: { telegram: { events: { unknownEvent: true } } } }),
+    /events/,
+  )
+  assert.throws(
+    () => validateTelegramApplicationConfig({ notifications: { telegram: { events: { fillReceived: "yes" } } } }),
+    /boolean/,
+  )
+  assert.throws(
+    () => validateTelegramApplicationConfig({ notifications: { telegram: { markets: ["LINKUSDT", "LINKUSDT"] } } }),
+    /markets/,
+  )
+  assert.throws(
+    () => validateTelegramApplicationConfig({ notifications: { telegram: { markets: [""] } } }),
+    /markets/,
+  )
 })
 
 test("validates Telegram operator-control allowlists and fields", () => {
