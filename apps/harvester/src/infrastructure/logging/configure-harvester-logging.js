@@ -318,7 +318,26 @@ async function registerHarvesterLogTransports({
   }
 }
 
-function createHarvesterLogCloseHandler({ logger } = {}) {
+async function writeHarvesterProcessCompletion({ sessionPaths, processIdentity } = {}) {
+  const completion = {
+    formatVersion: 1,
+    application: "harvester",
+    runtimeSessionId: processIdentity.runtimeSessionId,
+    startedAt: processIdentity.startedAt,
+    endedAt: new Date().toISOString(),
+    processId: process.pid,
+    exitCode: process.exitCode ?? 0,
+    signal: null,
+    logStreamsComplete: true,
+  }
+  await writeFile(
+    path.join(sessionPaths.sessionDirectory, "process-completed.json"),
+    `${JSON.stringify(completion, null, 2)}\n`,
+    { encoding: "utf8", flag: "wx", mode: 0o600 },
+  )
+}
+
+function createHarvesterLogCloseHandler({ logger, sessionPaths, processIdentity } = {}) {
   let closed = false
   return async () => {
     if (closed) {
@@ -336,6 +355,7 @@ function createHarvesterLogCloseHandler({ logger } = {}) {
     if (errors.length > 0) {
       throw new AggregateError(errors, "Failed to close Harvester log transports")
     }
+    await writeHarvesterProcessCompletion({ sessionPaths, processIdentity })
   }
 }
 
@@ -394,7 +414,7 @@ export async function configureHarvesterLogging({
     cumulativeDirectory,
     sessionPaths,
     errorBuffer,
-    close: createHarvesterLogCloseHandler({ logger }),
+    close: createHarvesterLogCloseHandler({ logger, sessionPaths, processIdentity }),
   })
 }
 
