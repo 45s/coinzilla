@@ -193,7 +193,10 @@ async function copyRegularTree({
         onFileCopied,
       })
     } else if (sourceStats.isFile()) {
-      const copiedSize = await copyStableFile({ sourcePath, destinationPath })
+      const copiedSize = await copyStableFile({
+        sourcePath,
+        destinationPath,
+      })
       await onFileCopied?.({
         relativePath: path.join(relative, entry.name).split(path.sep).join("/"),
         size: copiedSize,
@@ -204,14 +207,69 @@ async function copyRegularTree({
   }
 }
 
-async function copyCompressedTree({ sourceDirectory, destinationDirectory, relative = "", onFileCopied } = {}) {
+async function copyCompressedFile({
+  sourcePath,
+  destinationPath,
+  childRelative,
+  sourceDirectory,
+  onFileCopied,
+} = {}) {
+  const sourceBefore = await lstat(sourcePath)
+  if (sourceBefore.isSymbolicLink() || !sourceBefore.isFile()) {
+    throw new Error(`Refusing to compress a non-regular source file: ${sourcePath}`)
+  }
+  const compressedRelative = `${childRelative}.gz`
+  const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
+  try {
+    await pipeline(
+      createReadStream(sourcePath),
+      createGzip({ level: 6 }),
+      createWriteStream(temporaryPath, {
+        flags: "wx",
+        mode: 0o600,
+      }),
+    )
+    const sourceAfter = await lstat(sourcePath)
+    const sourceChanged = sourceAfter.isSymbolicLink()
+      || !sourceAfter.isFile()
+      || sourceBefore.dev !== sourceAfter.dev
+      || sourceBefore.ino !== sourceAfter.ino
+      || sourceBefore.size !== sourceAfter.size
+      || sourceBefore.mtimeMs !== sourceAfter.mtimeMs
+      || sourceBefore.ctimeMs !== sourceAfter.ctimeMs
+    if (sourceChanged) {
+      throw new Error(`Source file changed while the debug snapshot was being collected: ${sourcePath}`)
+    }
+    await rename(temporaryPath, destinationPath)
+  } catch (error) {
+    await rm(temporaryPath, { force: true })
+    throw error
+  }
+  const archiveStats = await stat(destinationPath)
+  await onFileCopied?.({
+    relativePath: compressedRelative.split(path.sep).join("/"),
+    sourceRelativePath: childRelative.split(path.sep).join("/"),
+    sourceSize: sourceBefore.size,
+    sourceSha256: await sha256File(sourcePath),
+    size: archiveStats.size,
+    archiveSha256: await sha256File(destinationPath),
+  })
+}
+
+async function copyCompressedTree({
+  sourceDirectory,
+  destinationDirectory,
+  relative = "",
+  onFileCopied,
+} = {}) {
   const source = relative ? path.join(sourceDirectory, relative) : sourceDirectory
   const destination = relative ? path.join(destinationDirectory, relative) : destinationDirectory
   await mkdir(destination, {
     recursive: true,
     mode: 0o700,
   })
-  for (const entry of await readdir(source, { withFileTypes: true })) {
+  const entries = await readdir(source, { withFileTypes: true })
+  for (const entry of entries) {
     const childRelative = relative ? path.join(relative, entry.name) : entry.name
     const sourcePath = path.join(sourceDirectory, childRelative)
     const sourceStats = await lstat(sourcePath)
@@ -226,47 +284,12 @@ async function copyCompressedTree({ sourceDirectory, destinationDirectory, relat
         onFileCopied,
       })
     } else if (sourceStats.isFile()) {
-      const compressedRelative = `${childRelative}.gz`
-      const destinationPath = path.join(destinationDirectory, compressedRelative)
-      const sourceBefore = await lstat(sourcePath)
-      if (sourceBefore.isSymbolicLink() || !sourceBefore.isFile()) {
-        throw new Error(`Refusing to compress a non-regular source file: ${sourcePath}`)
-      }
-      const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
-      try {
-        await pipeline(
-          createReadStream(sourcePath),
-          createGzip({ level: 6 }),
-          createWriteStream(temporaryPath, {
-            flags: "wx",
-            mode: 0o600,
-          }),
-        )
-        const sourceAfter = await lstat(sourcePath)
-        if (
-          sourceAfter.isSymbolicLink()
-          || !sourceAfter.isFile()
-          || sourceBefore.dev !== sourceAfter.dev
-          || sourceBefore.ino !== sourceAfter.ino
-          || sourceBefore.size !== sourceAfter.size
-          || sourceBefore.mtimeMs !== sourceAfter.mtimeMs
-          || sourceBefore.ctimeMs !== sourceAfter.ctimeMs
-        ) {
-          throw new Error(`Source file changed while the debug snapshot was being collected: ${sourcePath}`)
-        }
-        await rename(temporaryPath, destinationPath)
-      } catch (error) {
-        await rm(temporaryPath, { force: true })
-        throw error
-      }
-      const archiveStats = await stat(destinationPath)
-      await onFileCopied?.({
-        relativePath: compressedRelative.split(path.sep).join("/"),
-        sourceRelativePath: childRelative.split(path.sep).join("/"),
-        sourceSize: sourceStats.size,
-        sourceSha256: await sha256File(sourcePath),
-        size: archiveStats.size,
-        archiveSha256: await sha256File(destinationPath),
+      await copyCompressedFile({
+        sourcePath,
+        destinationPath: path.join(destinationDirectory, `${childRelative}.gz`),
+        childRelative,
+        sourceDirectory,
+        onFileCopied,
       })
     } else {
       throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
@@ -1327,7 +1350,10 @@ async function collectPreparedArchive({
       logSelection,
       onProgress,
     })
-    await onArchiveCreatedFn?.({ directory: localArchive, archiveName })
+    await onArchiveCreatedFn?.({
+      directory: localArchive,
+      archiveName,
+    })
     reportProgress(onProgress, "Local debug archive collected and verified.")
     return {
       archiveName,
