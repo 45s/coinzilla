@@ -132,7 +132,8 @@ test("publishes with an active process lock, retries interrupted push, and is id
     const [args, options = {}] = parameters
     if (args[0] === "push" && !interrupted) {
       interrupted = true
-      throw new Error("simulated connection loss during push")
+      await runGit(args, options)
+      throw new Error("simulated connection loss after remote accepted push")
     }
     return runGit(args, options)
   }
@@ -143,7 +144,7 @@ test("publishes with an active process lock, retries interrupted push, and is id
       remote: bareRemote,
       runGit: failFirstPush,
     }),
-    /simulated connection loss/,
+    /simulated connection loss after remote accepted push/,
     "An interrupted push must fail without modifying the source archive",
   )
   const retry = await publishArchive({
@@ -151,7 +152,7 @@ test("publishes with an active process lock, retries interrupted push, and is id
     archiveName: ARCHIVE_NAME,
     remote: bareRemote,
   })
-  assert.equal(retry.alreadyPublished, false, "Retry must create the archive commit")
+  assert.equal(retry.alreadyPublished, true, "Retry must verify the commit accepted before the connection was interrupted")
   assert.match(retry.commit, /^[a-f0-9]{40}$/, "Retry must return the published commit SHA")
   const repeated = await publishArchive({
     directory: fixture.archiveDirectory,
