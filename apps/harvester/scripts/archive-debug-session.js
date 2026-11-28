@@ -223,18 +223,23 @@ async function copyCompressedFile({
     throw new Error(`Refusing to compress a non-regular source file: ${sourcePath}`)
   }
   const sourceSha256Before = await sha256File(sourcePath)
-  const compressedRelative = `${childRelative}.gz`
+  const sourceAlreadyCompressed = /\\.gz$/i.test(childRelative)
+  const compressedRelative = sourceAlreadyCompressed ? childRelative : `${childRelative}.gz`
   const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
   let sourceSha256After
   try {
-    await pipeline(
-      createReadStream(sourcePath),
-      createGzip({ level: 6 }),
-      createWriteStream(temporaryPath, {
-        flags: "wx",
-        mode: 0o600,
-      }),
-    )
+    if (sourceAlreadyCompressed) {
+      await copyFile(sourcePath, temporaryPath)
+    } else {
+      await pipeline(
+        createReadStream(sourcePath),
+        createGzip({ level: 6 }),
+        createWriteStream(temporaryPath, {
+          flags: "wx",
+          mode: 0o600,
+        }),
+      )
+    }
     const sourceAfter = await lstat(sourcePath)
     sourceSha256After = await sha256File(sourcePath)
     const sourceChanged = sourceSha256Before !== sourceSha256After
@@ -261,6 +266,7 @@ async function copyCompressedFile({
     sourceSha256: sourceSha256After,
     size: archiveStats.size,
     archiveSha256: await sha256File(destinationPath),
+    compression: sourceAlreadyCompressed ? "source-gzip-preserved" : "gzip-created",
   })
 }
 
@@ -294,7 +300,7 @@ async function copyCompressedTree({
     } else if (sourceStats.isFile()) {
       await copyCompressedFile({
         sourcePath,
-        destinationPath: path.join(destinationDirectory, `${childRelative}.gz`),
+        destinationPath: path.join(destinationDirectory, /\\.gz$/i.test(childRelative) ? childRelative : `${childRelative}.gz`),
         childRelative,
         onFileCopied,
       })
@@ -653,6 +659,134 @@ async function findArchiveLogSessionSelection({ sessionsDirectory, recoveryCheck
 }
 
 
+const LOG_STREAM_DEFINITIONS = Object.freeze([
+  {
+    key: "harvesterLog",
+    label: "HARVESTER LOG",
+    pattern: /^harvester\\.log(?:\\.\\d+)*$/i,
+  },
+  {
+    key: "traceLog",
+    label: "TRACE LOG",
+    pattern: /^trace\\.log(?:\\.\\d+)*$/i,
+  },
+])
+
+function resolveLogRotationIndex(filename) {
+  const match = /\\.log(?:\\.(\\d+))?(?:\\.gz)?$/i.exec(filename)
+  return match?.[1] ? Number(match[1]) : 0
+}
+
+function createSessionStreamFileInventory({ selection, artifactProvenance, streamDefinition } = {}) {
+  const files = artifactProvenance
+    .filter((artifact) => {
+      const filename = path.posix.basename(artifact.sourcePath).replace(/\\.gz$/i, "")
+      return streamDefinition.pattern.test(filename)
+    })
+    .map((artifact) => {
+      const sessionName = artifact.sourcePath.split("/")[2]
+      const session = selection.sessions.find((candidate) => candidate.sessionName === sessionName)
+      const actualRuntimeId = session?.runtimeSessionId ?? null
+      return {
+        sourcePath: artifact.sourcePath,
+        archivePath: artifact.archivePath,
+        actualRuntimeId,
+        sourceSize: artifact.sourceSize,
+        archiveSize: artifact.archiveSize,
+        sourceSha256: artifact.sourceSha256,
+        archiveSha256: artifact.archiveSha256,
+        compression: artifact.compression,
+        rotationIndex: resolveLogRotationIndex(path.posix.basename(artifact.sourcePath)),
+        result: artifact.sourceSize > 0 ? "collected" : "empty",
+        reason: artifact.sourceSize > 0 ? null : "empty-log-file",
+      }
+    })
+    .sort((left, right) => right.rotationIndex - left.rotationIndex || left.sourcePath.localeCompare(right.sourcePath))
+  const expectedRuntimeId = selection.recoveryRuntimeSessionId
+  const matchingFiles = files.filter((file) => file.actualRuntimeId === expectedRuntimeId)
+  const mismatchedFiles = files.filter((file) => file.actualRuntimeId !== expectedRuntimeId)
+  let status = "matched"
+  let reason = null
+  if (matchingFiles.length === 0) {
+    status = mismatchedFiles.length > 0 ? "mismatched" : "missing"
+    reason = mismatchedFiles.length > 0 ? "only-unrelated-runtime-files-discovered" : "no-stream-files-discovered"
+  } else if (matchingFiles.some((file) => file.sourceSize === 0)) {
+    status = "incomplete"
+    reason = "one-or-more-stream-files-are-empty"
+  } else if (selection.status !== "matched") {
+    status = selection.status === "ambiguous" ? "unverifiable" : "incomplete"
+    reason = "runtime-session-completion-or-ownership-not-proven"
+  }
+  return {
+    status,
+    expectedRuntimeId,
+    actualRuntimeIds: [...new Set(files.map((file) => file.actualRuntimeId).filter(Boolean))].sort(),
+    sourcePaths: files.map((file) => file.sourcePath),
+    fileCount: matchingFiles.length,
+    totalBytes: matchingFiles.reduce((total, file) => total + file.sourceSize, 0),
+    files,
+    reason,
+  }
+}
+
+function createEvidenceIntegrity({ selection, artifactProvenance } = {}) {
+  const streams = Object.fromEntries(LOG_STREAM_DEFINITIONS.map((streamDefinition) => [
+    streamDefinition.key,
+    createSessionStreamFileInventory({
+      selection,
+      artifactProvenance,
+      streamDefinition,
+    }),
+  ]))
+  let status = selection.status
+  if (status === "ambiguous") {
+    status = "unverifiable"
+  }
+  if (status === "matched") {
+    status = Object.values(streams).every((stream) => stream.status === "matched")
+      ? "matched"
+      : "incomplete"
+  } else if (status === "mismatched") {
+    status = Object.values(streams).some((stream) => stream.status === "mismatched")
+      ? "mismatched"
+      : "missing"
+  }
+  const mismatches = Object.values(streams)
+    .flatMap((stream) => stream.files
+      .filter((file) => file.actualRuntimeId !== selection.recoveryRuntimeSessionId)
+      .map((file) => ({
+        expectedRuntimeId: selection.recoveryRuntimeSessionId,
+        actualRuntimeId: file.actualRuntimeId,
+        sourcePath: file.sourcePath,
+        streamStatus: stream.status,
+      })))
+  return {
+    status,
+    validForPublication: status === "matched",
+    expectedRuntimeId: selection.recoveryRuntimeSessionId,
+    streams,
+    mismatches,
+  }
+}
+
+function formatStreamCollectionFailure({ stream, integrity } = {}) {
+  const matchingFiles = stream.files.filter((file) => file.actualRuntimeId === integrity.expectedRuntimeId)
+  const mismatchedFiles = stream.files.filter((file) => file.actualRuntimeId !== integrity.expectedRuntimeId)
+  const discoveredRuntimeIds = [...new Set(mismatchedFiles.map((file) => file.actualRuntimeId).filter(Boolean))]
+  const missing = stream.status === "missing" ? "missing stream; " : ""
+  const sources = stream.files.map((file) => file.sourcePath).join(", ") || "no candidate source paths"
+  return `${stream.key === "traceLog" ? "TRACE LOG" : "HARVESTER LOG"} COLLECTION FAILED: expected runtime=${integrity.expectedRuntimeId}; discovered runtime=${discoveredRuntimeIds.join(",") || "none"}; matching files=${matchingFiles.length}; mismatched files=${mismatchedFiles.length}; ${missing}looked at: ${sources}; reason=${stream.reason ?? stream.status}`
+}
+
+function createEvidenceIntegrityFailureMessage(integrity) {
+  return LOG_STREAM_DEFINITIONS
+    .map((definition) => formatStreamCollectionFailure({
+      stream: integrity.streams[definition.key],
+      integrity,
+    }))
+    .join("\\n")
+}
+
 async function copySelectedLogs({
   sourceDirectory,
   destinationDirectory,
@@ -677,7 +811,7 @@ async function copySelectedLogs({
   }
   const sessionsEntry = entries.find((entry) => entry.name === "sessions")
   if (!sessionsEntry) {
-    throw new Error("The logs/sessions directory is missing; refusing to publish an archive without session evidence.")
+    throw new Error("The logs/sessions directory is missing; refusing to archive without session evidence.")
   }
   const selection = await findArchiveLogSessionSelection({
     sessionsDirectory: path.join(sourceDirectory, "sessions"),
@@ -697,18 +831,28 @@ async function copySelectedLogs({
           archivePath,
           sourceSize: artifact.sourceSize,
           sourceSha256: artifact.sourceSha256,
+          archiveSize: artifact.size,
           archiveSha256: artifact.archiveSha256,
+          compression: artifact.compression,
         })
         await onFileCopied?.(artifact)
       },
     })
   }
-  return {
+  const selectionWithRuntime = {
     ...selection,
+    recoveryRuntimeSessionId: recoveryCheckpoint.runtimeSessionId,
+  }
+  const evidenceIntegrity = createEvidenceIntegrity({
+    selection: selectionWithRuntime,
+    artifactProvenance,
+  })
+  return {
+    ...selectionWithRuntime,
+    evidenceIntegrity,
     artifactProvenance,
   }
 }
-
 
 export async function listRegularFiles({ directory, relative = "" } = {}) {
   const current = relative ? path.join(directory, relative) : directory
@@ -984,7 +1128,7 @@ async function createArchiveManifest({
     tradingRuntime: createTradingRuntimeManifestEntry({ recoveryCheckpoint }),
     sessionInventory: logSelection.sessions.map((session) => createArchiveSessionManifestEntry({ session })),
     warnings: logSelection.warnings,
-    duplicateArtifacts: createDuplicateArchiveArtifactGroups({ artifactProvenance }),
+    duplicateArtifacts: createDuplicateArchiveArtifactGroups({ artifactProvenance }),\n    evidenceIntegrity: logSelection.evidenceIntegrity,
     recoveryFactSequence: recoveryCheckpoint.sequence,
     files: entries,
   }
