@@ -24,8 +24,8 @@ function createPreparationFailureLogDetails({ error, relational } = {}) {
       : "Order history persistence is unavailable",
     error,
     errorName: error?.name ?? "Error",
-    errorCode: "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
-    causeCode: error?.code,
+    errorCode: error?.code ?? "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
+    harvesterErrorCode: "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
     errorMessage: error?.message ?? String(error),
   }
   details.errorContext = error?.context
