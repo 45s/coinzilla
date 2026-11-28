@@ -459,6 +459,33 @@ function formatStartupConsoleMessage(message) {
   return message.replace(/Operational State Store/g, "OSS")
 }
 
+function writeCataloguedDiagnosticRecord({
+  output,
+  color,
+  timestamp,
+  level,
+  method,
+  diagnostic,
+} = {}) {
+  const time = new Date(timestamp).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+  const levelLabel = `${String(method ?? level).toUpperCase()} `
+  const prefix = `${time} ${levelLabel}[${diagnostic.diagnosticId}] stage=${diagnostic.stage}`
+  const action = `action=${diagnostic.operatorAction}`
+  const causePrefix = "cause="
+  const causeBudget = Math.max(0, MAX_CONSOLE_LINE_LENGTH - prefix.length - causePrefix.length - action.length - 4)
+  const cause = String(diagnostic.cause ?? diagnostic.meaning).replace(/[\\r\\n]+/g, " ")
+  const boundedCause = cause.length > causeBudget && causeBudget > 3
+    ? `${cause.slice(0, causeBudget - 3)}...`
+    : cause.slice(0, causeBudget)
+  const line = `${prefix} ${causePrefix}${boundedCause} | ${action}`
+  output.write(`${formatConsoleLine({ line, level, method, color })}\\n`)
+}
+
 function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary, strategyId } = {}) {
   const time = new Date(timestamp).toLocaleTimeString("en-GB", {
     hour: "2-digit",
@@ -490,24 +517,14 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
   }
 
   if (summary.diagnostic) {
-    const diagnostic = summary.diagnostic
-    const diagnosticPrefix = `${time} ${levelLabel}[${diagnostic.diagnosticId}] stage=${diagnostic.stage}`
-    const action = `action=${diagnostic.operatorAction}`
-    const causePrefix = "cause="
-    const fixedLength = diagnosticPrefix.length + 1 + causePrefix.length + 3 + action.length
-    const causeBudget = Math.max(0, MAX_CONSOLE_LINE_LENGTH - fixedLength)
-    const cause = String(diagnostic.cause ?? diagnostic.meaning)
-      .replace(/[\r\n]+/g, " ")
-    const boundedCause = cause.length > causeBudget && causeBudget > 3
-      ? `${cause.slice(0, causeBudget - 3)}...`
-      : cause.slice(0, causeBudget)
-    const line = `${diagnosticPrefix} ${causePrefix}${boundedCause} | ${action}`
-    output.write(`${formatConsoleLine({
-      line,
+    writeCataloguedDiagnosticRecord({
+      output,
+      color,
+      timestamp,
       level,
       method,
-      color,
-    })}\n`)
+      diagnostic: summary.diagnostic,
+    })
     return
   }
 
