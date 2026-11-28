@@ -344,12 +344,7 @@ test("still rejects an invalid recovery-facts checkpoint instead of publishing m
   )
 })
 
-test("collects and marks the exact active runtime without stopping or clearing its process lock", async (t) => {
-  const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, {
-    recursive: true,
-    force: true
-  }))
+async function prepareActiveRuntimeFixture({ fixture } = {}) {
   const sessionDirectory = path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet")
   const identityPath = path.join(sessionDirectory, "process-identity.json")
   const identity = JSON.parse(await readFile(identityPath, "utf8"))
@@ -374,6 +369,16 @@ test("collects and marks the exact active runtime without stopping or clearing i
     ...lockOwner,
     token: "active-host-lock-token",
   }), "utf8")
+  return { lockPath, hostLockPath, lockOwner }
+}
+
+test("collects and marks the exact active runtime without stopping or clearing its process lock", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const { lockPath, hostLockPath, lockOwner } = await prepareActiveRuntimeFixture({ fixture })
   const result = await runHarvesterDebugArchive({
     ...archiveDependencies({ fixture }),
     onArchiveCreatedFn: undefined,
