@@ -397,3 +397,29 @@ test("rejects a mismatched runtime evidence manifest before invoking the publish
   )
   assert.equal(publisherCalled, false, "Invalid evidence must be rejected before any Git publication operation")
 })
+
+ 
+test("rejects an archive with a missing required stream before invoking the publisher", async (t) => {
+  const fixture = await createFixture(t)
+  const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
+  manifest.evidenceIntegrity.streams.traceLog.status = "missing"
+  manifest.evidenceIntegrity.streams.traceLog.fileCount = 0
+  manifest.evidenceIntegrity.streams.traceLog.totalBytes = 0
+  manifest.evidenceIntegrity.streams.traceLog.files = []
+  await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
+  let publisherCalled = false
+  await assert.rejects(
+    runHarvesterDebugArchivePublication({
+      archiveDirectory: fixture.archiveDirectory,
+      env: { HARVESTER_ARCHIVE_REMOTE: REMOTE },
+      publishArchiveFn: async () => {
+        publisherCalled = true
+        return { commit: "f".repeat(40), fileCount: 1 }
+      },
+    }),
+    /TRACE LOG evidence is not complete/i,
+    "The publisher must independently reject missing TRACE evidence",
+  )
+  assert.equal(publisherCalled, false, "Missing streams must be rejected before Git publication")
+})
