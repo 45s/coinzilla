@@ -588,7 +588,7 @@ function writeSpecialConsoleRecord({
       method,
       color,
     })}\n`)
-    return
+    return true
   }
   if (presentation.isOrderLifecycle) {
     writeOrderLifecycleRecord({
@@ -599,7 +599,7 @@ function writeSpecialConsoleRecord({
       method,
       data,
     })
-    return
+    return true
   }
   if (presentation.summary.diagnostic) {
     writeCataloguedDiagnosticRecord({
@@ -610,7 +610,7 @@ function writeSpecialConsoleRecord({
       method,
       diagnostic: presentation.summary.diagnostic,
     })
-    return
+    return true
   }
   return false
 }
