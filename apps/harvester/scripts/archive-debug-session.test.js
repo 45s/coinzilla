@@ -369,7 +369,11 @@ async function prepareActiveRuntimeFixture({ fixture } = {}) {
     ...lockOwner,
     token: "active-host-lock-token",
   }), "utf8")
-  return { lockPath, hostLockPath, lockOwner }
+  return {
+    lockPath,
+    hostLockPath,
+    lockOwner,
+  }
 }
 
 test("collects and marks the exact active runtime without stopping or clearing its process lock", async (t) => {
