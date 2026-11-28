@@ -46,10 +46,25 @@ test("operator error vocabulary documents every catalog entry", async () => {
     new URL("../../../docs/error-vocabulary.md", import.meta.url),
     "utf8",
   )
-  for (const { errorCode } of Object.values(HARVESTER_ERROR_CATALOG)) {
-    assert.ok(
-      documentation.includes(`\x60${errorCode}\x60`),
-      `Operator error vocabulary must document ${errorCode} from the central catalog.`,
-    )
+  const generatedStart = documentation.indexOf("<!-- BEGIN GENERATED HARVESTER ERROR CATALOG -->")
+  const generatedEnd = documentation.indexOf("<!-- END GENERATED HARVESTER ERROR CATALOG -->")
+  assert.ok(generatedStart >= 0 && generatedEnd > generatedStart, "The operator vocabulary must contain the generated catalog block.")
+  const generatedCatalog = documentation.slice(generatedStart, generatedEnd)
+  for (const entry of Object.values(HARVESTER_ERROR_CATALOG)) {
+    for (const field of [
+      entry.errorCode,
+      entry.title,
+      entry.subsystem,
+      entry.failureStage,
+      entry.severity,
+      entry.stopBehavior,
+      entry.meaning,
+      entry.operatorAction,
+    ]) {
+      assert.ok(
+        generatedCatalog.includes(field),
+        `Operator error vocabulary must document catalog field ${field} from ${entry.errorCode}.`,
+      )
+    }
   }
 })
