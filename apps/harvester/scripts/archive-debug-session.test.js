@@ -818,3 +818,24 @@ test("fails when only the TRACE stream is missing", async (t) => {
     "Missing TRACE evidence must have a stream-specific failure",
   )
 })
+
+ 
+test("rejects missing logger-flush metadata even when process completion exists", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  await rm(path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/log-streams-completed.json"))
+  await assert.rejects(
+    runHarvesterDebugArchive(archiveWithoutPublishing({
+      fixture,
+      inspectArchive: async ({ directory }) => {
+        const manifest = await readArchiveManifest(directory)
+        const session = manifest.sessionInventory.find(({ sessionName }) => sessionName === "2026-11-24_testnet")
+        assert.equal(session.completionStatus, "incomplete")
+        assert.equal(session.loggerCompletionStatus, "incomplete")
+        assert.ok(session.missingFieldWarnings.includes("LOGGER_COMPLETION_RECORD_MISSING"))
+      },
+    })),
+    /incomplete|COLLECTION FAILED/i,
+    "Process completion cannot substitute for proof that DEBUG and TRACE streams flushed",
+  )
+})
