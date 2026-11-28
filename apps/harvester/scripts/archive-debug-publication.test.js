@@ -18,6 +18,9 @@ async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME } = {}) {
   await mkdir(path.join(archiveDirectory, "logs", "sessions", "fixture"), {
     recursive: true,
   })
+  await mkdir(path.join(archiveDirectory, "recovery-facts"), {
+    recursive: true,
+  })
   const content = "immutable completed session evidence\n"
   await writeFile(path.join(archiveDirectory, "logs", "sessions", "fixture", "terminal.log.gz"), content)
   const files = [{
