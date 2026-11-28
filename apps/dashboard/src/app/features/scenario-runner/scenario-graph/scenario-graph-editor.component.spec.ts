@@ -88,6 +88,16 @@ describe('ScenarioGraphEditorComponent', () => {
     expect(component.graph().status, 'adding nodes must not make a draft executable').toBe('visual-only');
   });
 
+  it('supports keyboard selection of a connection', async () => {
+    await TestBed.configureTestingModule({ imports: [ScenarioGraphEditorComponent] }).compileComponents();
+    const fixture = TestBed.createComponent(ScenarioGraphEditorComponent);
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    component.onEdgeKeydown(new KeyboardEvent('keydown', { key: 'Enter' }), 'e-start-legacy');
+    expect(component.selectedEdgeId(), 'keyboard activation must select the focused graph connection').toBe('e-start-legacy');
+    expect(component.selectedNodeId(), 'selecting a connection must clear node selection').toBeNull();
+  });
+
   it('allows a selected connection to be removed without deleting its nodes', async () => {
     await TestBed.configureTestingModule({ imports: [ScenarioGraphEditorComponent] }).compileComponents();
     const fixture = TestBed.createComponent(ScenarioGraphEditorComponent);

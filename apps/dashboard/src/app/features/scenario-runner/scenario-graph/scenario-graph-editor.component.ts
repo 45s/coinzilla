@@ -78,6 +78,13 @@ export class ScenarioGraphEditorComponent {
     this.selectedEdgeId.set(null);
   }
 
+  onEdgeKeydown(event: KeyboardEvent, edgeId: string): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.selectEdge(edgeId);
+    }
+  }
+
   selectEdge(edgeId: string): void {
     this.selectedEdgeId.set(edgeId);
     this.selectedNodeId.set(null);

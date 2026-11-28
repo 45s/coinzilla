@@ -56,7 +56,7 @@
         <rect width="100%" height="100%" fill="url(#scenario-grid)" />
 
         @for (edge of viewModel().edges; track trackEdge($index, edge)) {
-          <g class="graph-edge" [attr.data-selected]="selectedEdgeId() === edge.id" role="button" tabindex="0" [attr.aria-label]="'Connection ' + edge.id" (click)="selectEdge(edge.id)">
+          <g class="graph-edge" [attr.data-selected]="selectedEdgeId() === edge.id" role="button" tabindex="0" [attr.aria-label]="'Connection ' + edge.id" (click)="selectEdge(edge.id)" (keydown)="onEdgeKeydown($event, edge.id)">
             <path [attr.d]="edge.path" marker-end="url(#scenario-arrow)" />
             @if (edge.label) {
               <text [attr.x]="edge.labelPosition.x" [attr.y]="edge.labelPosition.y">{{ edge.label }}</text>
