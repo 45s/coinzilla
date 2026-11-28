@@ -192,9 +192,9 @@ async function validateCompletedArchive(directory) {
   }
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
   validateManifestHeader(manifest)
+  const seenPaths = validateManifestFileEntries(manifest)
   await validateRecoveryFactsRuntime(directory, manifest)
   validateEvidenceIntegrity(manifest)
-  const seenPaths = validateManifestFileEntries(manifest)
   await verifyArchive({
     directory,
     manifest,

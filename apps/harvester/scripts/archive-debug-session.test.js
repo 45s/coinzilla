@@ -305,7 +305,7 @@ test("retains mismatched log and recovery evidence only as local diagnostic evid
   assert.equal(await readFile(filename, "utf8"), mismatchedFactsContent, "Collection must leave source recovery facts unchanged.")
 })
 
-test("still rejects an invalid recovery-facts checkpointtest("still rejects an invalid recovery-facts checkpoint instead of publishing mismatched evidence", async (t) => {
+test("still rejects an invalid recovery-facts checkpoint instead of publishing mismatched evidence", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
