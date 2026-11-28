@@ -47,6 +47,7 @@ pendingRecovery: false,
 safetyHaltRequired: false },
       processContinuity: { storeConfigured: true,
 previousProcessStarted: false,
+recoveryEnabled: false,
 restorationEnabled: false },
       markets: {
         BTCUSDT: { route: { expected: identity,
