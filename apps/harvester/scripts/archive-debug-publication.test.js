@@ -783,24 +783,7 @@ test("publishes a verified active-process snapshot without requiring completion 
 })
 
  
-test("publishes a stopped-runtime snapshot while preserving unconfirmed completion status", async (t) => {
-  const fixture = await createFixture({ t })
-  const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
-  const [session] = manifest.sessionInventory
-  const completionArchivePaths = [
-    "logs/sessions/fixture/process-completed.json.gz",
-    "logs/sessions/fixture/log-streams-completed.json.gz",
-  ]
-  for (const archivePath of completionArchivePaths) {
-    await rm(path.join(fixture.archiveDirectory, archivePath))
-  }
-  manifest.files = manifest.files.filter((entry) => !completionArchivePaths.includes(entry.path))
-  session.completionStatus = "stopped-unconfirmed"
-  session.loggerCompletionStatus = "stopped-unconfirmed"
-  session.stoppedSnapshotPath = "logs/sessions/fixture/stopped-process-snapshot.json"
-  session.logStreamsComplete = false
-  session.loggerStreamsComplete = false
+async function addStoppedSnapshotMarker({ archiveDirectory, manifest, session } = {}) {
   const marker = {
     formatVersion: 1,
     status: "stopped-unconfirmed",
@@ -824,12 +807,37 @@ test("publishes a stopped-runtime snapshot while preserving unconfirmed completi
       "Only byte-stable post-exit files are included.",
     ],
   }
-  const markerContent = `${JSON.stringify(marker, null, 2)}\n`
-  await writeFile(path.join(fixture.archiveDirectory, session.stoppedSnapshotPath), markerContent)
+  const markerContent = `${JSON.stringify(marker, null, 2)}\\n`
+  await writeFile(path.join(archiveDirectory, session.stoppedSnapshotPath), markerContent)
   manifest.files.push({
     path: session.stoppedSnapshotPath,
     size: Buffer.byteLength(markerContent),
     sha256: createHash("sha256").update(markerContent).digest("hex"),
+  })
+}
+
+test("publishes a stopped-runtime snapshot while preserving unconfirmed completion status", async (t) => {
+  const fixture = await createFixture({ t })
+  const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
+  const [session] = manifest.sessionInventory
+  const completionArchivePaths = [
+    "logs/sessions/fixture/process-completed.json.gz",
+    "logs/sessions/fixture/log-streams-completed.json.gz",
+  ]
+  for (const archivePath of completionArchivePaths) {
+    await rm(path.join(fixture.archiveDirectory, archivePath))
+  }
+  manifest.files = manifest.files.filter((entry) => !completionArchivePaths.includes(entry.path))
+  session.completionStatus = "stopped-unconfirmed"
+  session.loggerCompletionStatus = "stopped-unconfirmed"
+  session.stoppedSnapshotPath = "logs/sessions/fixture/stopped-process-snapshot.json"
+  session.logStreamsComplete = false
+  session.loggerStreamsComplete = false
+  await addStoppedSnapshotMarker({
+    archiveDirectory: fixture.archiveDirectory,
+    manifest,
+    session,
   })
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 
