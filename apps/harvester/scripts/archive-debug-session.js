@@ -1442,10 +1442,8 @@ async function createArchiveManifest({
 
 async function assertReadableGzipFile({ filename } = {}) {
   const discardStream = new Writable({
-    write(chunk, encoding, callback) {
-      void chunk
-      void encoding
-      callback()
+    write(...writeArguments) {
+      writeArguments.at(-1)()
     },
   })
   try {
@@ -1925,7 +1923,7 @@ async function writeIncompleteActiveSnapshotMarker({
   }
   await writeFile(
     path.join(localArchive, "collection-incomplete.json"),
-    JSON.stringify(marker, null, 2) + "\n",
+    `${JSON.stringify(marker, null, 2)}\n`,
     {
       encoding: "utf8",
       flag: "wx",
@@ -1980,13 +1978,8 @@ async function assertActiveSnapshotOwnershipStable({
 }
 
 async function copyArchiveEvidence({
-  sourcePaths,
-  packageDirectory,
-  localArchive,
-  activeProcessOwner,
-  lockDirectory,
-  isProcessAlive,
-  onProgress,
+  sourcePaths, packageDirectory, localArchive, activeProcessOwner,
+  lockDirectory, isProcessAlive, onProgress,
 } = {}) {
   const recoverySource = sourcePaths.find((source) => source.directoryName === "recovery-facts")
   const recoverySize = await getTreeSize(recoverySource.sourceDirectory)

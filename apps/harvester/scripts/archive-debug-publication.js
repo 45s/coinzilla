@@ -147,7 +147,7 @@ function getExpectedActiveSnapshotLockName(lockFile) {
 }
 
 
-function isValidActiveSnapshotLockFile(lockFile, processStartedAt) {
+function isValidActiveSnapshotLockFile({ lockFile, processStartedAt } = {}) {
   if (!lockFile || typeof lockFile !== "object") {
     return false
   }
@@ -183,7 +183,7 @@ function hasValidActiveSnapshotLockFiles(marker) {
   }
   const processStartedAt = Date.parse(marker.processStartedAt)
   return Number.isFinite(processStartedAt)
-    && marker.lockFiles.every((lockFile) => isValidActiveSnapshotLockFile(lockFile, processStartedAt))
+    && marker.lockFiles.every((lockFile) => isValidActiveSnapshotLockFile({ lockFile, processStartedAt }))
     && hasCompleteActiveSnapshotLockPairs(marker.lockFiles)
 }
 
