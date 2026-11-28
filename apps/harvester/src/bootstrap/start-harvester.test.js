@@ -322,6 +322,70 @@ test("retains CG and RS execution routes and subscriptions when process recovery
   }
 })
 
+test("starts a fresh current-process trading session when process recovery is disabled despite prior process history", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const config = createRsOnlyStartupConfig({ processRecoveryEnabled: false })
+  const baseline = await recordConfigurationBaseline({
+    operationalStateStore: store,
+    appConfig: config,
+  })
+  assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
+  const started = await recordProcessStarted({
+    operationalStateStore: store,
+    configurationFingerprint: baseline.data.fingerprint,
+    strategyName: baseline.data.strategyName,
+    markets: baseline.data.markets,
+    tradingEnabled: true,
+  })
+  assert.equal(started.ok, true, started.errors?.[0]?.message)
+
+  const restartStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "fresh-current-session-with-recovery-disabled",
+  })
+  const calls = []
+  const broker = createRsOnlyStartupBroker({ calls })
+  try {
+    const result = await startHarvesterForTest({
+      loadConfig: async () => config,
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      operationalStateStore: restartStore,
+      executionSymbols: ["LINEAUSDT"],
+      executionRoutes: [{
+        strategyId: StrategyId.RECOVERY_SELLER,
+        symbol: "LINEAUSDT",
+      }],
+      marketDataSymbols: ["LINEAUSDT"],
+      evaluateRecoverySellerTransition: async () => ({
+        ok: true,
+        data: { skipped: true },
+      }),
+      logger: {
+        info() {},
+        error() {},
+      },
+    })
+
+    assert.equal(result.tradingEnabled, true,
+      "A prior PROCESS_STARTED fact must not disable a fresh current-session strategy when process recovery is explicitly disabled.")
+    assert.equal(result.executionEnabled, true,
+      "The current process must retain its configured execution route without restoring prior-session trading state.")
+    assert.equal(result.userDataReady, true,
+      "Fresh current-session PREFLIGHT and user-data readiness must open the existing gate.")
+    assert.ok(calls.includes("subscribe:LINEAUSDT"),
+      "The new process must establish its own market-price subscription.")
+    assert.ok(calls.includes("subscribe:book:LINEAUSDT"),
+      "Trading mode must establish the required book stream instead of silently remaining in read-only intake.")
+    await result.stop()
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
 test("fails RS startup explicitly when its durable Operational State Store is missing", async () => {
   await assert.rejects(
     () => startHarvesterForTest({
