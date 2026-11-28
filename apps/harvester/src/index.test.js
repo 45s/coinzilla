@@ -139,10 +139,14 @@ function createStartupFailureCleanupOptions({
 }
 
 test("constructs and injects durable operational state for enabled RS while CG restart recovery is disabled", async () => {
+
+
   let storeCreated = false
   let startupInput
+  const configuredApp = createTestAppConfig()
+  configuredApp.components.recovery.enabled = true
   await runMain({
-    loadConfig: async () => createTestAppConfig(),
+    loadConfig: async () => configuredApp,
     createOperationalStateStore: () => {
       storeCreated = true
       return {
@@ -2662,4 +2666,70 @@ after(() => {
   // Tests exercise startup failures that intentionally set the process exit code.
   // Reset it after assertions; the test runner reports assertion failures independently.
   process.exitCode = 0
+})
+
+test("does not initialize the optional trading-history API when its pre-launch component flag is disabled", async () => {
+  const configuredApp = createTestAppConfig()
+  configuredApp.components = {
+    tradingHistoryApi: { enabled: false },
+  }
+  let apiStartCount = 0
+  await runMain({
+    loadConfig: async () => configuredApp,
+    start: async () => ({
+      stop: async () => ({ ok: true }),
+    }),
+    startTradingHistoryApi: async () => {
+      apiStartCount += 1
+      return {
+        close: async () => ({
+          ok: true,
+          closed: true,
+        }),
+      }
+    },
+    logger: {
+      info() {},
+      system() {},
+      warn() {},
+      error() {},
+    },
+  })
+  assert.equal(
+    apiStartCount,
+    0,
+    "A disabled optional local API must not bind HTTP/WebSocket listeners or construct its runtime service.",
+  )
+})
+
+test("does not construct or inject recovery storage when the master recovery component is disabled", async () => {
+  const configuredApp = createTestAppConfig()
+  configuredApp.components.recovery = { enabled: false }
+  let storeFactoryCalls = 0
+  let startupInput
+
+  await runMain({
+    loadConfig: async () => configuredApp,
+    createOperationalStateStore: () => {
+      storeFactoryCalls += 1
+      throw new Error("The master recovery switch must prevent store construction.")
+    },
+    start: async (input) => {
+      startupInput = input
+      return {
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "conservative",
+        subscriptions: [],
+      }
+    },
+    logger: {
+      info() {},
+      system() {},
+      error() {},
+    },
+  })
+
+  assert.equal(storeFactoryCalls, 0, "The disabled master switch must not construct the Operational State Store.")
+  assert.equal(startupInput.operationalStateStore, undefined, "The disabled master switch must not inject an existing recovery store.")
 })

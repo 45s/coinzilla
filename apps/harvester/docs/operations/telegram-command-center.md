@@ -4,7 +4,7 @@
 
 The Telegram Command Center is a thin inbound adapter over Harvester's operator-control application facade. It authenticates the operator, invokes an application query or command, and returns the actual result. It does not own trading rules, decide whether a command is safe, call the broker directly, or implement persistence.
 
-Inbound control is enabled by default when configured. The bot token remains environment-only in `TELEGRAM_BOT_TOKEN`; `TELEGRAM_USER_ID` seeds the private-chat allowlist. Startup fails closed when the token or a valid allowlisted user is missing. Set `operatorControl.telegram.enabled: false` only when inbound control should be disabled. This configuration is independent from `notifications.telegram`.
+The base operator-control setting is enabled by default, but runtime startup requires both `components.recovery.enabled: true` and `operatorControl.telegram.enabled: true`. The shipped Harvester recovery master switch is OFF, so the Command Center does not start. When enabled, the bot token remains environment-only in `TELEGRAM_BOT_TOKEN`; `TELEGRAM_USER_ID` seeds the private-chat allowlist. Startup fails closed when the token or a valid allowlisted user is missing. Outbound `notifications.telegram` remains separately configured.
 
 ## Authorization and safety
 

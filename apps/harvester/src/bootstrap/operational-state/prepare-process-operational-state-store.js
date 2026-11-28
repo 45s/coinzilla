@@ -120,6 +120,9 @@ function hasEnabledRecoverySellerMarket({ recoverySellerConfig } = {}) {
 }
 
 function requiresOperationalStateStore({ appConfig } = {}) {
+  if (appConfig?.components?.recovery?.enabled === false) {
+    return false
+  }
   const conservativeRecoveryEnabled =
     appConfig?.strategies?.[StrategyId.COIN_GRABBER]?.settings?.recovery?.enabled === true
   const recoverySellerEnabled = hasEnabledRecoverySellerMarket({
