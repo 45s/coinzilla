@@ -477,7 +477,7 @@ function writeCataloguedDiagnosticRecord({
   const prefix = `${time} ${levelLabel}[${diagnostic.diagnosticId}] stage=${diagnostic.stage}`
   const action = `action=${diagnostic.operatorAction}`
   const causePrefix = "cause="
-  const cause = String(diagnostic.cause ?? diagnostic.meaning).replace(/[\\r\\n]+/g, " ")
+  const cause = String(diagnostic.cause ?? diagnostic.meaning).replace(/[\r\n]+/g, " ")
   const causeBudget = Math.max(1, MAX_CONSOLE_LINE_LENGTH - prefix.length - causePrefix.length - action.length - 4)
   const needsContinuation = cause.length > causeBudget
   const firstCauseLength = needsContinuation ? Math.max(0, causeBudget - 3) : cause.length
@@ -490,7 +490,7 @@ function writeCataloguedDiagnosticRecord({
     level,
     method,
     color,
-  })}\\n`)
+  })}\n`)
 
   if (needsContinuation) {
     const continuationPrefix = `${time} ${levelLabel}cause+`
@@ -503,7 +503,7 @@ function writeCataloguedDiagnosticRecord({
         level,
         method,
         color,
-      })}\\n`)
+      })}\n`)
     }
   }
 }
