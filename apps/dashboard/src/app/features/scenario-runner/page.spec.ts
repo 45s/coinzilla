@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import fixtureData from './core/fixtures/rs-runtime-sell-partial-cancel.debug.json';
 import { ScenarioRunnerApi } from './api';
@@ -44,7 +44,7 @@ const catalog: readonly ScenarioCatalogItem[] = [{
 describe('ScenarioRunnerComponent run details', () => {
   let component: ScenarioRunnerComponent;
   let nativeElement: HTMLElement;
-  let fixture: ReturnType<typeof TestBed.createComponent<ScenarioRunnerComponent>>;
+  let fixture: ComponentFixture<ScenarioRunnerComponent>;
 
   beforeEach(async () => {
     const socket = { close: vi.fn() } as unknown as WebSocket;
