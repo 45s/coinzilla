@@ -119,7 +119,7 @@
         }
       </nav>
     }
-    <section class="page-content">
+    <section class="page-content" [class.page-content-wide]="activePage() === 'scenario-runner'">
       @if (activePage() === 'overview') {
         <app-overview />
       } @else if (activePage() === 'operator') {
