@@ -108,14 +108,20 @@ describe('ScenarioRunnerComponent run details', () => {
 
   it('renders the selected scenario guide instead of a static Recovery Seller graph', () => {
     expect(nativeElement.querySelector('app-scenario-graph-editor')).toBeNull();
+    expect(nativeElement.querySelector('app-scenario-graph-viewer')).not.toBeNull();
+    expect(nativeElement.querySelectorAll('.graph-node')).toHaveLength(6);
     expect(nativeElement.textContent).toContain('Partial fill, then terminal CANCELED');
 
     component.selectScenario('RS-RUNTIME-SELL-SUBMISSION-001');
     fixture.detectChanges();
 
     expect(nativeElement.textContent).toContain('Persist intent → broker ACK → persist outcome → reserve cycle');
+    expect(nativeElement.querySelector('app-scenario-graph-viewer')).not.toBeNull();
+    expect(nativeElement.querySelectorAll('.graph-node')).toHaveLength(4);
     expect(nativeElement.textContent).not.toContain('Partial fill, then terminal CANCELED');
     expect(nativeElement.textContent).toContain('not the currently selected scenario');
+    expect(nativeElement.querySelector('.editor-toolbar')).toBeNull();
+    expect(nativeElement.querySelector('.node-inspector')).toBeNull();
   });
 
   it('lets an operator select a source step and inspect its exact trace evidence', () => {
