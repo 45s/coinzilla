@@ -676,3 +676,53 @@ test("publishes a verified active-process snapshot without requiring completion 
   assert.equal(publisherCalled, true, "A verified active-process snapshot must be eligible for publication.")
   assert.equal(result.archiveName, ARCHIVE_NAME, "The publisher must retain the original immutable archive identity.")
 })
+
+ 
+test("publishes a verified active-runtime snapshot without process-completion files", async (t) => {
+  const fixture = await createFixture(t)
+  const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
+  const session = manifest.sessionInventory[0]
+  const activeSnapshotPath = "logs/sessions/fixture/active-process-snapshot.json"
+  const marker = {
+    formatVersion: 1,
+    snapshotType: "active-harvester-process",
+    runtimeSessionId: manifest.recoveryRuntimeSessionId,
+    processId: 24680,
+    hostname: "test-host",
+    lockStartedAt: "2026-11-28T11:00:00.000Z",
+    capturedAt: "2026-11-28T11:05:00.000Z",
+    recoveryDataCommitHash: manifest.dataCommitHash,
+    streams: {
+      harvesterLog: true,
+      traceLog: true,
+    },
+  }
+  const markerContent = JSON.stringify(marker, null, 2) + "\n"
+  await writeFile(path.join(fixture.archiveDirectory, activeSnapshotPath), markerContent)
+  manifest.files.push({
+    path: activeSnapshotPath,
+    size: Buffer.byteLength(markerContent),
+    sha256: createHash("sha256").update(markerContent).digest("hex"),
+  })
+  session.completionStatus = "active"
+  session.loggerCompletionStatus = "active"
+  session.activeSnapshotPath = activeSnapshotPath
+  session.logStreamsComplete = false
+  session.loggerStreamsComplete = false
+  await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
+  let publisherCalled = false
+  const result = await runHarvesterDebugArchivePublication({
+    archiveDirectory: fixture.archiveDirectory,
+    env: { HARVESTER_ARCHIVE_REMOTE: REMOTE },
+    publishArchiveFn: async () => {
+      publisherCalled = true
+      return {
+        commit: "f".repeat(40),
+        fileCount: manifest.files.length,
+      }
+    },
+  })
+  assert.equal(publisherCalled, true, "A verified immutable active snapshot must be publishable while the process remains active.")
+  assert.equal(result.commit, "f".repeat(40))
+})
