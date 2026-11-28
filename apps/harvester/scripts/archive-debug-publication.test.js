@@ -650,6 +650,7 @@ test("publishes a verified active-process snapshot without requiring completion 
     processId: session.processId,
     hostname: os.hostname(),
     lockStartedAt: session.startedAt,
+    recoveryDataCommitHash: manifest.dataCommitHash,
     capturedAt: new Date().toISOString(),
     streams: { harvesterLog: true, traceLog: true },
   }
