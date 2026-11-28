@@ -23,7 +23,7 @@ async function createArchiveFixture(root) {
     size: Buffer.byteLength(content),
     sha256: createHash("sha256").update(content).digest("hex"),
   }]
-  await writeFile(path.join(archiveDirectory, "manifest.json"), JSON.stringify({
+  await writeFile(path.join(archiveDirectory, "manifest.json"), `${JSON.stringify({
     formatVersion: 1,
     application: "harvester",
     commandTradingMode: "testnet",
@@ -31,13 +31,13 @@ async function createArchiveFixture(root) {
     includedDirectories: ["logs", "recovery-facts"],
     excludedPaths: ["data/** (all databases and backups)", "logs/cumulative/**"],
     files,
-  }, null, 2) + "\n")
+  }, null, 2)}\n`)
   return archiveDirectory
 }
 
 async function snapshotDirectory(directory) {
   const files = new Map()
-  async function visit(current, relative = "") {
+  async function visit({ current, relative = "" } = {}) {
     const { readdir, lstat } = await import("node:fs/promises")
     for (const name of await readdir(current)) {
       const child = relative ? path.join(relative, name) : name
@@ -45,25 +45,25 @@ async function snapshotDirectory(directory) {
       const stats = await lstat(filename)
       assert.equal(stats.isSymbolicLink(), false, "Archive fixture must not contain symlinks")
       if (stats.isDirectory()) {
-        await visit(filename, child)
+        await visit({ current: filename, relative: child })
       } else {
         files.set(child, await readFile(filename))
       }
     }
   }
-  await visit(directory)
+  await visit({ current: directory })
   return files
 }
 
 async function createFixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "harvester-archive-publication-"))
-  t.after(() => rm(root, { recursive: true, force: true }))
+  t.after(() => rm(root, {\n    recursive: true,\n    force: true,\n  }))
   const archiveDirectory = await createArchiveFixture(root)
   const lockDirectory = path.join(root, "process-locks")
   await mkdir(lockDirectory)
   const lockPath = path.join(lockDirectory, ".binance-harvester-trading-test.lock")
   await writeFile(lockPath, "active trading process lock")
-  return { root, archiveDirectory, lockPath }
+  return {\n    root,\n    archiveDirectory,\n    lockPath,\n  }
 }
 
 
@@ -84,7 +84,7 @@ test("publishes to a temporary Git remote, retries an interrupted push, and veri
 
   const sourceBefore = await snapshotDirectory(fixture.archiveDirectory)
   let interrupted = false
-  const failFirstPush = async (args, options = {}) => {
+  const failFirstPush = async (...parameters) => {\n    const [args, options = {}] = parameters
     if (args[0] === "push" && !interrupted) {
       interrupted = true
       throw new Error("simulated connection loss during push")
@@ -132,7 +132,7 @@ test("publishes a completed archive while a Harvester process lock exists", asyn
   const fixture = await createFixture(t)
   const result = await runHarvesterDebugArchivePublication({
     archiveDirectory: fixture.archiveDirectory,
-    env: { HARVESTER_ARCHIVE_REMOTE: REMOTE },
+    env: {\n      HARVESTER_ARCHIVE_REMOTE: REMOTE,\n    },
     publishArchiveFn: async ({ archiveName, directory, remote }) => {
       assert.equal(archiveName, ARCHIVE_NAME, "Publication must preserve the archive directory name")
       assert.equal(directory, fixture.archiveDirectory, "Publication must use the selected completed archive")
@@ -214,7 +214,7 @@ test("an interrupted publication can be retried and an already-published archive
     if (attempts === 1) {
       throw new Error("simulated network interruption")
     }
-    return { commit: "d".repeat(40), fileCount: 2, alreadyPublished: attempts > 2 }
+    return {\n      commit: "d".repeat(40),\n      fileCount: 2,\n      alreadyPublished: attempts > 2,\n    }
   }
   const options = {
     archiveDirectory: fixture.archiveDirectory,
