@@ -490,6 +490,51 @@ test("uses the durable PROCESS_STARTED PID to verify a matching active session w
   assert.equal(manifest.evidenceIntegrity.validForPublication, true, "A uniquely matched active runtime with durable identity and verified lock ownership must be publishable.")
 })
 
+test("does not replace an explicit session PID that conflicts with durable process identity", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  await prepareActiveRuntimeFixture({ fixture })
+  const identityPath = path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/process-identity.json")
+  const sessionIdentity = JSON.parse(await readFile(identityPath, "utf8"))
+  sessionIdentity.processId = process.pid + 1
+  await writeFile(identityPath, JSON.stringify(sessionIdentity), "utf8")
+
+  await assert.rejects(
+    runHarvesterDebugArchive({
+      ...archiveDependencies({ fixture }),
+      onArchiveCreatedFn: undefined,
+    }),
+    /evidence integrity failed|mismatched/i,
+    "An explicit session PID that conflicts with durable PROCESS_STARTED identity must remain an integrity failure.",
+  )
+})
+
+test("does not borrow a durable PID when the session start timestamp differs", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  await prepareActiveRuntimeFixture({ fixture })
+  const identityPath = path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/process-identity.json")
+  const sessionIdentity = JSON.parse(await readFile(identityPath, "utf8"))
+  delete sessionIdentity.processId
+  sessionIdentity.startedAt = "2026-11-24T18:21:00.000Z"
+  await writeFile(identityPath, JSON.stringify(sessionIdentity), "utf8")
+
+  await assert.rejects(
+    runHarvesterDebugArchive({
+      ...archiveDependencies({ fixture }),
+      onArchiveCreatedFn: undefined,
+    }),
+    /evidence integrity failed|incomplete/i,
+    "A durable PID must not be borrowed unless the session's original start timestamp also matches exactly.",
+  )
+})
+
 test("collects and marks the exact active runtime without stopping or clearing its process lock", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
