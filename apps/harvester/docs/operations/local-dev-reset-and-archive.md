@@ -56,9 +56,11 @@ Run this only after Harvester has stopped:
 pnpm run archive:debug
 ```
 
-Collection requires `TRADING_MODE=testnet` and refuses an active Harvester process lock. It reads the TESTNET session evidence and Operational State Store, rejects symlinks and unsupported filesystem entries, preserves the recovery-facts integrity checks, and creates a uniquely named completed snapshot in the ignored `archive-output/` directory. The command does not contact GitHub or publish anything.
+Collection requires `TRADING_MODE=testnet` and refuses an active Harvester process lock. It reads the TESTNET session inventory and Operational State Store, rejects symlinks and unsupported filesystem entries, and writes a uniquely named local archive directory. The command does not contact GitHub or publish anything.
 
-A collection is complete only after `manifest.json` and all SHA-256 checksums have been written and verified. An interrupted/incomplete directory is not eligible for publication.
+A publishable collection requires one unique process identity whose immutable runtime ID matches the latest committed recovery-facts runtime, a matching process-completion record with `logStreamsComplete=true`, and non-empty DEBUG (`harvester.log`) and TRACE (`trace.log`) streams. Every rotated generation is included; already-compressed `.gz` inputs are copied byte-for-byte, and uncompressed inputs are gzip-compressed. Original filenames, source paths, rotation generation, source/archive sizes and SHA-256 values are recorded per stream. Rotated files are ordered oldest-first, with the current file last.
+
+If identity is missing/ambiguous, either stream is missing/empty, completion is absent/incomplete, or any stream belongs to another runtime, the collector retains a local diagnostic archive with `evidenceIntegrity.validForPublication=false`, prints the expected runtime, discovered owners and paths, and exits non-zero. That directory is not a completed archive and must not be published. A warning is not an acceptable substitute for the non-zero failure.
 
 ### 2. Publish an existing completed snapshot
 
@@ -72,7 +74,7 @@ The publisher selects the latest valid completed archive. To publish a specific 
 pnpm run archive:debug:publish -- --archive ./archive-output/<archive-directory>
 ```
 
-Publication validates the manifest, exact file inventory, sizes and SHA-256 checksums before contacting the configured private destination. It copies the completed archive into a private temporary snapshot, validates that copy again, and publishes only the verified temporary copy to `https://github.com/45s/coinzilla-archive`. The temporary copy is removed after the attempt; the original archive is never changed. Publication then verifies the remote commit and every published file blob.
+Publication validates the version-2 manifest, the latest committed recovery-facts checkpoint and its unique `PROCESS_STARTED` identity, exact runtime correlation, both non-empty log-stream inventories, completion metadata, exact file inventory, sizes and SHA-256 checksums before contacting the configured private destination. It rejects `missing`, `mismatched`, `incomplete`, `unverifiable` and ambiguous evidence. It copies the completed archive into a private temporary snapshot, validates that copy again, and publishes only the verified temporary copy to `https://github.com/45s/coinzilla-archive`. The temporary copy is removed after the attempt; the original archive is never changed. Publication then verifies the remote commit and every published file blob.
 
 **Publication does not inspect the Harvester process, read or remove process locks, require `TRADING_MODE`, stop trading, access live operational directories, collect additional evidence, or modify the source archive.** It can therefore be retried while Harvester is actively trading. A retry of an already-published archive verifies the existing remote contents and does not create a duplicate archive.
 
@@ -96,9 +98,9 @@ flowchart TD
     M --> N
 ```
 
-The debug archive retains the existing timestamp/ID naming convention with the `_debug` suffix. Its manifest preserves the log-session and recovery-facts identities independently; a mismatch is explicitly reported and must not be interpreted as proof that the sources belong to one runtime. The archive contains only:
+The debug archive retains the existing timestamp/ID naming convention with the `_debug` suffix. Version-2 manifests distinguish `matched`, `missing`, `mismatched`, `incomplete` and `unverifiable` evidence. Other identified TESTNET sessions may be retained only as separately identified independent evidence; they are never used to satisfy the trading runtime DEBUG/TRACE streams. Only `matched` evidence is publishable. Older version-1 debug archives do not carry the required per-stream ownership/completeness proof and are rejected by the publisher; do not relabel or hand-edit them to bypass validation. The archive contains only:
 
-- `logs/sessions/`: identified TESTNET session evidence, gzip-compressed.
+- `logs/sessions/`: identified TESTNET session evidence, with DEBUG/TRACE rotation and compression provenance; unrelated runtimes remain in separate session directories.
 - `recovery-facts/`: complete Operational State Store facts and manifest.
 - `data_commit_hash` and `manifest.json`: checkpoint identity, file inventory, sizes, and SHA-256 checksums.
 
