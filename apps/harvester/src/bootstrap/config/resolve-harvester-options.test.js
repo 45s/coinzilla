@@ -208,7 +208,7 @@ test("resolves an RS-only provider account without creating a Conservative execu
   })
 
   assert.deepEqual(result.conservativePairs, {}, "An RS-only provider must not receive a synthetic Conservative market.")
-  assert.deepEqual(Object.keys(result.recoverySellerPairs), recoverySellerSymbols, "The RS provider must receive only its explicitly routed RS pair.")
+  assert.deepEqual(Object.keys(result.recoverySellerPairs), ["ETHUSDT"], "The RS provider must receive only its explicitly routed RS pair.")
   assert.deepEqual(Object.keys(result.pairs), ["ETHUSDT"], "The provider market map must contain the RS market without adding it to CG.")
   assert.deepEqual(result.executionSymbols, ["ETHUSDT"], "The RS route must remain executable on the selected provider.")
   assert.equal(result.tradingEnabled, true, "An enabled RS route must not be disabled merely because this account has no CG route.")
