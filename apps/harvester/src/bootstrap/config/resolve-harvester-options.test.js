@@ -533,7 +533,7 @@ test("resolves the configured default LINEA and ARB RS markets when CG process r
     "The exact RS strategy/market routes must be retained.")
   assert.deepEqual(result.executionSymbols, ["LINEAUSDT", "ARBUSDT"],
     "The resolved provider market set must retain both RS markets.")
-  assert.deepEqual(result.enabledSymbols, ["LINEAUSDT", "ARBUSDT"],
+  assert.deepEqual(result.enabledSymbols, ["ARBUSDT", "LINEAUSDT"],
     "Runtime configuration evidence must include both enabled RS markets.")
 })
 
