@@ -43,7 +43,10 @@ async function persistDevRunnerProcessCompletion({
   outputForwardingFailed,
   logStreamsClosed,
 } = {}) {
-  const loggerStreamsComplete = await readLoggerStreamsCompletion({ sessionDirectory, runtimeSessionId })
+  const loggerStreamsComplete = await readLoggerStreamsCompletion({
+    sessionDirectory,
+    runtimeSessionId,
+  })
   const terminalCaptureComplete = resolveTerminalCaptureComplete({
     childStarted,
     logStreamFailed,
@@ -320,7 +323,11 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
       completionPersistFailed = true
       process.stderr.write(`Failed to persist Harvester session completion: ${error.message}\n`)
     }
-    reportDroppedOutputChunks({ droppedChunks, logPath, sessionLogStream })
+    reportDroppedOutputChunks({
+      droppedChunks,
+      logPath,
+      sessionLogStream,
+    })
     resolveDevRunnerExitCode({
       code,
       signal,
