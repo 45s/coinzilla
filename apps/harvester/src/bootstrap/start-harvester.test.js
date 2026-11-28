@@ -99,12 +99,18 @@ async function createRsOnlyOperationalStateStore() {
 
 function createRsOnlyStartupBroker({ calls }) {
   const broker = createBroker(calls)
-  const { baseAsset, quoteAsset } = createMarketMetadata("LINEAUSDT").market
+  const { baseAsset: lineaBaseAsset, quoteAsset } = createMarketMetadata("LINEAUSDT").market
+  const { baseAsset: bitcoinBaseAsset } = createMarketMetadata("BTCUSDT").market
+  const accountAssets = [...new Map([
+    lineaBaseAsset,
+    bitcoinBaseAsset,
+    quoteAsset,
+  ].map((asset) => [asset.id, asset])).values()]
   broker.getAccountSnapshot = async () => ({
     ok: true,
     data: {
       sourceTime: 1,
-      balances: [baseAsset, quoteAsset].map((asset) => new Balance({
+      balances: accountAssets.map((asset) => new Balance({
         free: new Quantity({
           amount: "100000",
           asset,
@@ -239,6 +245,54 @@ force: true })
   }
 })
 
+
+test("retains CG and RS execution routes and subscriptions when process recovery is disabled", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const calls = []
+  const broker = createRsOnlyStartupBroker({ calls })
+  try {
+    const result = await startHarvesterForTest({
+      loadConfig: async () => createRsOnlyStartupConfig(),
+      env: binanceEnv,
+      operationalStateStore: store,
+      executionSymbols: ["BTCUSDT", "LINEAUSDT"],
+      executionRoutes: [
+        {
+          strategyId: StrategyId.COIN_GRABBER,
+          symbol: "BTCUSDT",
+        },
+        {
+          strategyId: StrategyId.RECOVERY_SELLER,
+          symbol: "LINEAUSDT",
+        },
+      ],
+      marketDataSymbols: ["BTCUSDT", "LINEAUSDT"],
+      brokerAdapterFactory: () => broker,
+      eventPublisher: shared.testEventPublisher,
+    })
+
+    assert.deepEqual(result.executionRoutes, [
+      {
+        strategyId: StrategyId.COIN_GRABBER,
+        symbol: "BTCUSDT",
+      },
+      {
+        strategyId: StrategyId.RECOVERY_SELLER,
+        symbol: "LINEAUSDT",
+      },
+    ], "The resolved provider runtime must retain both strategy-owned execution routes.")
+    assert.ok(calls.includes("subscribe:BTCUSDT"),
+      "The CG market-data subscription must remain active when RS is enabled.")
+    assert.ok(calls.includes("subscribe:LINEAUSDT"),
+      "The RS market-data subscription must be added without replacing the CG subscription.")
+    await result.stop()
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
 
 test("starts an RS-only provider account without a Conservative execution route", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
