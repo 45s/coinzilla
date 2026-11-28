@@ -1776,6 +1776,7 @@ async function writeActiveProcessSnapshotMarker({ localArchive, logSelection, ac
     processId: activeProcessOwner.pid,
     hostname: activeProcessOwner.hostname,
     lockStartedAt: activeProcessOwner.startedAt,
+    processStartedAt: session.startedAt,
     capturedAt: new Date().toISOString(),
     recoveryDataCommitHash: recoveryCheckpoint.dataCommitHash,
     streams: {
