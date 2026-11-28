@@ -507,7 +507,7 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
       level,
       method,
       color,
-    undefined`)
+    })}\n`)
     return
   }
 
