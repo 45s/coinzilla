@@ -8,7 +8,6 @@ The mapper accepts only the bounded provenance contract: application/version/pro
 
 The repository record remains schema version 1 with the same buildProvenance field shape. This responsibility move requires no database migration and does not change the observer's best-effort history role or trading-readiness authority. The application mapper unit tests and use-case persistence-port tests cover normalization, unavailable Git metadata, malformed input rejection before writes, and secret-field exclusion.
 
-
 ## Session-scoped runtime errors (#1650) — COMPLETE
 
 Merged [PR #1650](https://github.com/45s/coinzilla/pull/1650) adds the versioned Harvester-owned `runtime_errors` table, bounded pre-database ERROR buffering, a non-blocking structured error observer, allowlisted/redacted searchable fields, and a shutdown drain before SQLite closes. Rows are correlated by the existing `runtime_session_id`; this does not add a `sessions` table or make diagnostics trading/recovery authority. The complete stack/cause record remains in the session DEBUG/TRACE JSONL logs. The history-sync hardening in [PR #1659](https://github.com/45s/coinzilla/pull/1659) supplies record-level history diagnostics to this projection.
