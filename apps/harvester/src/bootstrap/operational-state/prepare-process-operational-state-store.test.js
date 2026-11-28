@@ -87,6 +87,8 @@ const store = () => ({
 })
 
 test("skips store creation when neither strategy requires durable operational state", async () => {
+
+
   let calls = 0
   assert.equal(await prepareProcessOperationalStateStore({
     appConfig: config({ operator: true }),
@@ -507,4 +509,22 @@ test("fails closed without verification when an existing partial ledger cannot b
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_INITIALIZATION_FAILED" && error.cause === cause,
   )
   assert.equal(verificationCalls, 0, "A partial ledger must fail before ordinary verification or runtime startup.")
+})
+
+test("skips all operational-state access when the master recovery component is disabled", async () => {
+  let calls = 0
+  const appConfig = config({ recoverySeller: true })
+  appConfig.components = { recovery: { enabled: false } }
+
+  const result = await prepareProcessOperationalStateStore({
+    appConfig,
+    runtimeSessionId: "session",
+    createOperationalStateStore: () => {
+      calls += 1
+      throw new Error("Recovery storage must not be constructed while the master switch is off.")
+    },
+  })
+
+  assert.equal(result, undefined, "Disabled recovery must not return an Operational State Store.")
+  assert.equal(calls, 0, "Disabled recovery must not create, initialize, or verify recovery-facts storage.")
 })

@@ -561,72 +561,118 @@ function createRecoveryContext({
   }
 }
 
-export function createUserDataRecoveryHandler({
-  state,
-  isStopped,
-  getUserDataSubscription,
-  getTradingEngine,
-  tradingEnabled,
-  broker,
-  drainUserDataEvents,
-  setCanonicalOwnershipReconciled,
-  refreshAccountSnapshot,
-  publishAccountSnapshot,
-  publishOpenOrdersSnapshot,
-  logger,
-} = {}) {
-  return function startUserDataRecovery() {
-    const userDataSubscription = getUserDataSubscription()
-    const tradingEngine = getTradingEngine()
-    if (isStopped()) {
+function createDisabledUserDataRecoveryHandler({ state, logger } = {}) {
+  let lastReportedGeneration
+  return function startDisabledUserDataRecovery() {
+    const generation = state?.recoveryGeneration ?? 0
+    if (lastReportedGeneration === generation) {
+      return
+    }
+    lastReportedGeneration = generation
+    if (state) {
       state.pendingRecovery = false
-      return
     }
-    if (!state.startupComplete) {
-      shouldDeferRecovery({ state })
-      return
-    }
-
-    state.pendingRecovery = false
-    if (isRecoveryAlreadyHandled({ state })) {
-      return
-    }
-    if (!hasRecoveryAcknowledgement({ userDataSubscription,
-logger })) {
-      return
-    }
-    const brokerRecoveryGeneration = state.recoveryBrokerGeneration
-    if (!hasValidBrokerRecoveryGeneration({
-      userDataSubscription,
-      brokerRecoveryGeneration,
-      logger,
-    })) {
-      return
-    }
-
-    state.pendingRecovery = false
-    state.retryableRecoveryFailure = null
-    const generation = state.recoveryGeneration
-    const context = createRecoveryContext({
-      state,
-      isStopped,
+    logger?.warn?.({
+      message: "User-data reconnect reconciliation is disabled; trading remains blocked until a fresh process startup PREFLIGHT",
+      reason: "USER_DATA_RECOVERY_DISABLED",
       generation,
-      userDataSubscription,
-      tradingEngine,
-      tradingEnabled,
-      broker,
-      drainUserDataEvents,
-      setCanonicalOwnershipReconciled,
-      refreshAccountSnapshot,
-      publishAccountSnapshot,
-      publishOpenOrdersSnapshot,
-      logger,
     })
-    const recoveryTask = executeRecoveryAttempt({ context }).finally(() => {
-      if (state.recoveryTask === recoveryTask) {
-        state.recoveryTask = null
-      }
-    })
-    state.recoveryTask = recoveryTask
   }
+}
+
+function createUserDataRecoveryContext({
+  options,
+  generation,
+  userDataSubscription,
+  tradingEngine,
+} = {}) {
+  const {
+    state,
+    isStopped,
+    tradingEnabled,
+    broker,
+    drainUserDataEvents,
+    setCanonicalOwnershipReconciled,
+    refreshAccountSnapshot,
+    publishAccountSnapshot,
+    publishOpenOrdersSnapshot,
+    logger,
+  } = options
+  return createRecoveryContext({
+    state,
+    isStopped,
+    generation,
+    userDataSubscription,
+    tradingEngine,
+    tradingEnabled,
+    broker,
+    drainUserDataEvents,
+    setCanonicalOwnershipReconciled,
+    refreshAccountSnapshot,
+    publishAccountSnapshot,
+    publishOpenOrdersSnapshot,
+    logger,
+  })
+}
+
+function startUserDataRecovery(options = {}) {
+  const {
+    state,
+    isStopped,
+    getUserDataSubscription,
+    getTradingEngine,
+    logger,
+  } = options
+  const userDataSubscription = getUserDataSubscription()
+  const tradingEngine = getTradingEngine()
+  if (isStopped()) {
+    state.pendingRecovery = false
+    return
+  }
+  if (!state.startupComplete) {
+    shouldDeferRecovery({ state })
+    return
+  }
+
+  state.pendingRecovery = false
+  if (isRecoveryAlreadyHandled({ state })) {
+    return
+  }
+  if (!hasRecoveryAcknowledgement({
+    userDataSubscription,
+    logger,
+  })) {
+    return
+  }
+  const brokerRecoveryGeneration = state.recoveryBrokerGeneration
+  if (!hasValidBrokerRecoveryGeneration({
+    userDataSubscription,
+    brokerRecoveryGeneration,
+    logger,
+  })) {
+    return
+  }
+
+  state.pendingRecovery = false
+  state.retryableRecoveryFailure = null
+  const generation = state.recoveryGeneration
+  const context = createUserDataRecoveryContext({
+    options,
+    generation,
+    userDataSubscription,
+    tradingEngine,
+  })
+  const recoveryTask = executeRecoveryAttempt({ context }).finally(() => {
+    if (state.recoveryTask === recoveryTask) {
+      state.recoveryTask = null
+    }
+  })
+  state.recoveryTask = recoveryTask
+}
+
+export function createUserDataRecoveryHandler(options = {}) {
+  if (options.enabled === false) {
+    return createDisabledUserDataRecoveryHandler(options)
+  }
+  return () => startUserDataRecovery(options)
 }
