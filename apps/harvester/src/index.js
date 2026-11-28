@@ -1159,17 +1159,17 @@ function resolveStartupFailureDiagnosticCode({ error } = {}) {
 
 function logStartupFailure({ error, logger } = {}) {
   try {
+    const errorDetails = describeProcessError(error)
     logger.error({
       message: "startup failed.",
-      error,
-      errorName: error?.name ?? "Error",
+      errorName: errorDetails.name ?? "Error",
       errorCode: resolveStartupFailureDiagnosticCode({ error }),
       causeCode: error?.code,
       errorStage: error?.stage ?? error?.context?.stage,
-      errorMessage: error?.message ?? String(error),
+      errorMessage: errorDetails.message,
       symbol: error?.symbol,
       sourceFilterTypes: error?.constraints?.map((constraint) => constraint.sourceFilterType),
-      errorDetails: describeProcessError(error),
+      errorDetails,
     })
   } catch {
     // Logging failure must not hide the original startup failure.
