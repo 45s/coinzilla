@@ -212,47 +212,48 @@ export async function copyRegularTree({
   }
 }
 
-async function copyCompressedFile({
-  sourcePath,
-  destinationPath,
-  childRelative,
-  onFileCopied,
-} = {}) {
+async function writeCompressedTemporaryFile({ sourcePath, temporaryPath, sourceAlreadyCompressed } = {}) {
+  if (sourceAlreadyCompressed) {
+    await copyFile(sourcePath, temporaryPath)
+    return
+  }
+  await pipeline(
+    createReadStream(sourcePath),
+    createGzip({ level: 6 }),
+    createWriteStream(temporaryPath, { flags: "wx", mode: 0o600 }),
+  )
+}
+
+async function assertSourceFileStable({ sourcePath, sourceBefore, sourceSha256Before } = {}) {
+  const sourceAfter = await lstat(sourcePath)
+  const sourceSha256After = await sha256File(sourcePath)
+  const sourceChanged = sourceSha256Before !== sourceSha256After
+    || sourceAfter.isSymbolicLink()
+    || !sourceAfter.isFile()
+    || sourceBefore.dev !== sourceAfter.dev
+    || sourceBefore.ino !== sourceAfter.ino
+    || sourceBefore.size !== sourceAfter.size
+    || sourceBefore.mtimeMs !== sourceAfter.mtimeMs
+    || sourceBefore.ctimeMs !== sourceAfter.ctimeMs
+  if (sourceChanged) {
+    throw new Error(`Source file changed while the debug snapshot was being collected: ${sourcePath}`)
+  }
+  return sourceSha256After
+}
+
+async function copyCompressedFile({ sourcePath, destinationPath, childRelative, onFileCopied } = {}) {
   const sourceBefore = await lstat(sourcePath)
   if (sourceBefore.isSymbolicLink() || !sourceBefore.isFile()) {
     throw new Error(`Refusing to compress a non-regular source file: ${sourcePath}`)
   }
   const sourceSha256Before = await sha256File(sourcePath)
-  const sourceAlreadyCompressed = /\\.gz$/i.test(childRelative)
+  const sourceAlreadyCompressed = /\.gz$/i.test(childRelative)
   const compressedRelative = sourceAlreadyCompressed ? childRelative : `${childRelative}.gz`
   const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
   let sourceSha256After
   try {
-    if (sourceAlreadyCompressed) {
-      await copyFile(sourcePath, temporaryPath)
-    } else {
-      await pipeline(
-        createReadStream(sourcePath),
-        createGzip({ level: 6 }),
-        createWriteStream(temporaryPath, {
-          flags: "wx",
-          mode: 0o600,
-        }),
-      )
-    }
-    const sourceAfter = await lstat(sourcePath)
-    sourceSha256After = await sha256File(sourcePath)
-    const sourceChanged = sourceSha256Before !== sourceSha256After
-      || sourceAfter.isSymbolicLink()
-      || !sourceAfter.isFile()
-      || sourceBefore.dev !== sourceAfter.dev
-      || sourceBefore.ino !== sourceAfter.ino
-      || sourceBefore.size !== sourceAfter.size
-      || sourceBefore.mtimeMs !== sourceAfter.mtimeMs
-      || sourceBefore.ctimeMs !== sourceAfter.ctimeMs
-    if (sourceChanged) {
-      throw new Error(`Source file changed while the debug snapshot was being collected: ${sourcePath}`)
-    }
+    await writeCompressedTemporaryFile({ sourcePath, temporaryPath, sourceAlreadyCompressed })
+    sourceSha256After = await assertSourceFileStable({ sourcePath, sourceBefore, sourceSha256Before })
     await rename(temporaryPath, destinationPath)
   } catch (error) {
     await rm(temporaryPath, { force: true })
@@ -681,6 +682,10 @@ function resolveLogRotationIndex(filename) {
   return match?.[1] ? Number(match[1]) : 0
 }
 
+function compareStreamFiles(left, right) {
+  return right.rotationIndex - left.rotationIndex || left.sourcePath.localeCompare(right.sourcePath)
+}
+
 function createSessionStreamFileInventory({ selection, artifactProvenance, streamDefinition } = {}) {
   const allFiles = artifactProvenance
     .filter((artifact) => {
@@ -688,7 +693,7 @@ function createSessionStreamFileInventory({ selection, artifactProvenance, strea
       return streamDefinition.pattern.test(filename)
     })
     .map((artifact) => {
-      const sessionName = artifact.sourcePath.split("/")[2]
+      const [,, sessionName] = artifact.sourcePath.split("/")
       const session = selection.sessions.find((candidate) => candidate.sessionName === sessionName)
       return {
         sourcePath: artifact.sourcePath,
@@ -704,7 +709,9 @@ function createSessionStreamFileInventory({ selection, artifactProvenance, strea
         reason: artifact.sourceSize > 0 ? null : "empty-log-file",
       }
     })
-    .sort((left, right) => right.rotationIndex - left.rotationIndex || left.sourcePath.localeCompare(right.sourcePath))
+  // Array#sort requires a two-argument comparator.
+  // eslint-disable-next-line max-params
+  allFiles.sort(compareStreamFiles)
   const expectedRuntimeId = selection.recoveryRuntimeSessionId
   const matchingFiles = allFiles.filter((file) => file.actualRuntimeId === expectedRuntimeId)
   const mismatchedFiles = allFiles.filter((file) => file.actualRuntimeId !== expectedRuntimeId)
@@ -721,6 +728,9 @@ function createSessionStreamFileInventory({ selection, artifactProvenance, strea
     status = selection.status === "ambiguous" ? "unverifiable" : "incomplete"
     reason = "runtime-session-completion-or-ownership-not-proven"
   }
+  // Array#reduce requires an accumulator and item parameter.
+  // eslint-disable-next-line max-params
+  const totalBytes = matchingFiles.reduce((total, file) => total + file.sourceSize, 0)
   return {
     status,
     expectedRuntimeId,
@@ -728,36 +738,57 @@ function createSessionStreamFileInventory({ selection, artifactProvenance, strea
     sourcePaths: selectedFiles.map((file) => file.sourcePath),
     searchedDirectories: selection.sessions.map((session) => session.relativePath),
     fileCount: matchingFiles.length,
-    totalBytes: matchingFiles.reduce((total, file) => total + file.sourceSize, 0),
+    totalBytes,
     files: selectedFiles,
     independentFiles: matchingFiles.length > 0 ? mismatchedFiles : [],
     reason,
   }
 }
 
+function resolveRecoveryProcessIdentityStatus(selection) {
+  if (!selection.recoveryProcessIdentity) {
+    return "missing"
+  }
+  return selection.recoveryProcessIdentity.runtimeSessionId === selection.recoveryRuntimeSessionId
+    ? "matched"
+    : "mismatched"
+}
+
+function resolveOverallEvidenceStatus({ selection, recoveryProcessIdentityStatus, unverifiableSessions, streams } = {}) {
+  if (selection.status === "ambiguous" || unverifiableSessions.length > 0) {
+    return "unverifiable"
+  }
+  if (selection.status === "mismatched" || recoveryProcessIdentityStatus === "mismatched") {
+    return "mismatched"
+  }
+  if (recoveryProcessIdentityStatus === "missing") {
+    return "unverifiable"
+  }
+  if (selection.status === "matched") {
+    return Object.values(streams).every((stream) => stream.status === "matched") ? "matched" : "incomplete"
+  }
+  return selection.status
+}
+
 function createEvidenceIntegrity({ selection, artifactProvenance } = {}) {
   const streams = Object.fromEntries(LOG_STREAM_DEFINITIONS.map((streamDefinition) => [
     streamDefinition.key,
-    createSessionStreamFileInventory({ selection, artifactProvenance, streamDefinition }),
+    createSessionStreamFileInventory({
+      selection,
+      artifactProvenance,
+      streamDefinition,
+    }),
   ]))
-  const recoveryProcessIdentityStatus = !selection.recoveryProcessIdentity
-    ? "missing"
-    : selection.recoveryProcessIdentity.runtimeSessionId === selection.recoveryRuntimeSessionId ? "matched" : "mismatched"
+  const recoveryProcessIdentityStatus = resolveRecoveryProcessIdentityStatus(selection)
   const unverifiableSessions = selection.sessions
     .filter((session) => session.completionStatus === "identity-missing")
     .map((session) => session.relativePath)
-  let status = selection.status
-  if (status === "ambiguous" || unverifiableSessions.length > 0) {
-    status = "unverifiable"
-  } else if (status === "mismatched" || recoveryProcessIdentityStatus === "mismatched") {
-    status = "mismatched"
-  } else if (recoveryProcessIdentityStatus === "missing") {
-    status = "unverifiable"
-  } else if (status === "matched") {
-    status = Object.values(streams).every((stream) => stream.status === "matched") ? "matched" : "incomplete"
-  } else if (status === "mismatched") {
-    status = Object.values(streams).some((stream) => stream.status === "mismatched") ? "mismatched" : "missing"
-  }
+  const status = resolveOverallEvidenceStatus({
+    selection,
+    recoveryProcessIdentityStatus,
+    unverifiableSessions,
+    streams,
+  })
   const mismatches = Object.values(streams).flatMap((stream) => stream.files
     .filter((file) => file.actualRuntimeId !== selection.recoveryRuntimeSessionId)
     .map((file) => ({
@@ -787,7 +818,7 @@ function formatStreamCollectionFailure({ stream, integrity } = {}) {
 }
 
 function createEvidenceIntegrityFailureMessage(integrity) {
-  const summary = "DEBUG ARCHIVE EVIDENCE INTEGRITY FAILED: expected runtime=" + integrity.expectedRuntimeId + "; status=" + integrity.status + "; recovery process identity=" + integrity.recoveryProcessIdentityStatus + "; unverifiable session paths=" + (integrity.unverifiableSessions.join(", ") || "none") + "."
+  const summary = `DEBUG ARCHIVE EVIDENCE INTEGRITY FAILED: expected runtime=${integrity.expectedRuntimeId}; status=${integrity.status}; recovery process identity=${integrity.recoveryProcessIdentityStatus}; unverifiable session paths=${integrity.unverifiableSessions.join(", ") || "none"}.`
   const streamReports = LOG_STREAM_DEFINITIONS.map((definition) => formatStreamCollectionFailure({
     stream: integrity.streams[definition.key],
     integrity,
@@ -795,36 +826,7 @@ function createEvidenceIntegrityFailureMessage(integrity) {
   return [summary, ...streamReports].join("\n")
 }
 
-async function copySelectedLogs({
-  sourceDirectory,
-  destinationDirectory,
-  recoveryCheckpoint,
-  onFileCopied,
-} = {}) {
-  await mkdir(destinationDirectory, {
-    recursive: true,
-    mode: 0o700,
-  })
-  const entries = await readdir(sourceDirectory, { withFileTypes: true })
-  const unsupportedEntries = entries.filter((entry) => !["sessions", "cumulative"].includes(entry.name))
-  if (unsupportedEntries.length > 0) {
-    throw new Error("The logs root contains unsupported entries; refusing to archive unclassified log data.")
-  }
-  for (const entry of entries) {
-    const entryPath = path.join(sourceDirectory, entry.name)
-    const entryStats = await lstat(entryPath)
-    if (entryStats.isSymbolicLink() || !entryStats.isDirectory()) {
-      throw new Error(`Expected logs/${entry.name} to be a real directory.`)
-    }
-  }
-  const sessionsEntry = entries.find((entry) => entry.name === "sessions")
-  if (!sessionsEntry) {
-    throw new Error("The logs/sessions directory is missing; refusing to archive without session evidence.")
-  }
-  const selection = await findArchiveLogSessionSelection({
-    sessionsDirectory: path.join(sourceDirectory, "sessions"),
-    recoveryCheckpoint,
-  })
+async function copyIdentifiedSessionEvidence({ sourceDirectory, destinationDirectory, selection, onFileCopied } = {}) {
   const artifactProvenance = []
   for (const session of selection.sessions.filter(({ include }) => include)) {
     await copyCompressedTree({
@@ -847,20 +849,51 @@ async function copySelectedLogs({
       },
     })
   }
+  return artifactProvenance
+}
+
+async function validateLogRootAndSelectSessions({ sourceDirectory, destinationDirectory, recoveryCheckpoint } = {}) {
+  await mkdir(destinationDirectory, { recursive: true, mode: 0o700 })
+  const entries = await readdir(sourceDirectory, { withFileTypes: true })
+  const unsupportedEntries = entries.filter((entry) => !["sessions", "cumulative"].includes(entry.name))
+  if (unsupportedEntries.length > 0) {
+    throw new Error("The logs root contains unsupported entries; refusing to archive unclassified log data.")
+  }
+  for (const entry of entries) {
+    const entryPath = path.join(sourceDirectory, entry.name)
+    const entryStats = await lstat(entryPath)
+    if (entryStats.isSymbolicLink() || !entryStats.isDirectory()) {
+      throw new Error(`Expected logs/${entry.name} to be a real directory.`)
+    }
+  }
+  if (!entries.some((entry) => entry.name === "sessions")) {
+    throw new Error("The logs/sessions directory is missing; refusing to archive without session evidence.")
+  }
+  return findArchiveLogSessionSelection({
+    sessionsDirectory: path.join(sourceDirectory, "sessions"),
+    recoveryCheckpoint,
+  })
+}
+
+async function copySelectedLogs({ sourceDirectory, destinationDirectory, recoveryCheckpoint, onFileCopied } = {}) {
+  const selection = await validateLogRootAndSelectSessions({
+    sourceDirectory,
+    destinationDirectory,
+    recoveryCheckpoint,
+  })
+  const artifactProvenance = await copyIdentifiedSessionEvidence({
+    sourceDirectory,
+    destinationDirectory,
+    selection,
+    onFileCopied,
+  })
   const selectionWithRuntime = {
     ...selection,
     recoveryRuntimeSessionId: recoveryCheckpoint.runtimeSessionId,
     recoveryProcessIdentity: recoveryCheckpoint.processIdentity,
   }
-  const evidenceIntegrity = createEvidenceIntegrity({
-    selection: selectionWithRuntime,
-    artifactProvenance,
-  })
-  return {
-    ...selectionWithRuntime,
-    evidenceIntegrity,
-    artifactProvenance,
-  }
+  const evidenceIntegrity = createEvidenceIntegrity({ selection: selectionWithRuntime, artifactProvenance })
+  return { ...selectionWithRuntime, evidenceIntegrity, artifactProvenance }
 }
 
 export async function listRegularFiles({ directory, relative = "" } = {}) {
