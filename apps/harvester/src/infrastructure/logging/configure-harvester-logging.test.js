@@ -6,6 +6,7 @@ import test from "node:test"
 import { PassThrough } from "node:stream"
 import { configureHarvesterLogging, createHarvesterConsoleTransport } from "./configure-harvester-logging.js"
 import { createHarvesterLogSessionPaths } from "./create-harvester-log-session-paths.js"
+import { HARVESTER_ERROR_CATALOG } from "./harvester-error-catalog.js"
 
 const ANSI_ESCAPE = String.fromCharCode(27)
 
@@ -32,6 +33,41 @@ function createLogger() {
 level })) }
     },
   }
+}
+
+function assertCataloguedConsoleEntry({ lines, entry } = {}) {
+  const lineIndex = lines.findIndex((candidate) => candidate.includes(entry.errorCode))
+  const line = lines[lineIndex]
+  assert.ok(line, `Console output must retain catalog identifier ${entry.errorCode}.`)
+  assert.ok(line.length <= 200, `Console output for ${entry.errorCode} must fit the configured line budget.`)
+  assert.ok(line.includes(`${entry.severity} [${entry.errorCode}]`), `Console output for ${entry.errorCode} must use catalog severity.`)
+  assert.ok(line.includes(entry.failureStage), `Console output for ${entry.errorCode} must identify its failure stage.`)
+  assert.ok(line.includes(entry.operatorAction), `Console output for ${entry.errorCode} must preserve operator remediation.`)
+  const firstCause = line.match(/cause=(.*?) \| action=/)?.[1]
+  assert.ok(firstCause, `Console output for ${entry.errorCode} must preserve its concrete cause.`)
+  const continuationLines = []
+  for (let index = lineIndex + 1; index < lines.length && lines[index].includes("cause+"); index += 1) {
+    continuationLines.push(lines[index])
+  }
+  for (const continuationLine of continuationLines) {
+    assert.ok(continuationLine.length <= 200, "Every cause continuation must respect the console line budget.")
+  }
+  const continuationCause = continuationLines
+    .map((continuationLine) => continuationLine.slice(continuationLine.indexOf("cause+") + 6))
+    .join("")
+  const initialCause = firstCause.endsWith("...") ? firstCause.slice(0, -3) : firstCause
+  let expectedCause = `concrete cause for ${entry.errorCode}`
+  if (entry.errorCode === "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED") {
+    expectedCause = `ERR_SQLITE_ERROR: concrete cause for ${entry.errorCode}`
+  }
+  if (entry.errorCode === "HARVESTER_STARTUP_FAILED") {
+    expectedCause = `ERR_PROVIDER_HANDSHAKE: concrete cause for ${entry.errorCode}`
+  }
+  assert.equal(
+    `${initialCause}${continuationCause}`,
+    expectedCause,
+    `Console output for ${entry.errorCode} must preserve the complete concrete cause.`,
+  )
 }
 
 test("configures independent DEBUG and TRACE JSONL files and INFO console threshold", async () => {
@@ -280,8 +316,10 @@ test("retains the machine-readable Journal error code in compact console output"
     },
   })
 
-  assert.match(written, /"errorCode":"JOURNAL_DIRECTORY_LOCKED"/)
-  assert.doesNotMatch(written, /diagnosticId/)
+  assert.ok(written.includes("WARN [JOURNAL_DIRECTORY_LOCKED]"))
+  assert.ok(written.includes("stage=JOURNAL_WRITER_ACQUISITION"))
+  assert.ok(written.includes("action=Verify no active writer before removing only the stale lock."))
+  assert.ok(written.trim().split("\n").every((line) => line.length <= 200), "Every continuation line must remain bounded.")
   output.destroy()
 })
 
@@ -700,7 +738,7 @@ test("retains the market symbol and source filter types in compact fatal console
   assert.match(written, /HARVESTER_MARKET_UNVALIDATED_EXCHANGE_CONSTRAINTS/, "The compact fatal console line must preserve the stable machine-readable failure code.")
   assert.match(written, /LINKFDUSD/, "The compact fatal console line must identify the blocked market.")
   assert.match(written, /PERCENT_PRICE_BY_SIDE/, "The compact fatal console line must retain the leading source filter that caused the block.")
-  assert.ok(written.trim().length <= 200, "The compact fatal console line must remain within its documented output bound.")
+  assert.ok(written.trim().split("\n").every((line) => line.length <= 200), "Every compact fatal console line must remain within its documented output bound.")
   output.destroy()
 })
 
@@ -750,7 +788,7 @@ function assertStrategyOrderLifecycleLines(written) {
     lines[0],
     "19:14:52 🟡 CG SUBMITTED #pending ZROUSDT SELL 4.98 @ 1.393 h-325e71ba16494aeb875e6e-3",
   )
-  assert.doesNotMatch(lines[0], /\\| Client:|Client order ID:/)
+  assert.doesNotMatch(lines[0], /\| Client:|Client order ID:/)
   assert.equal(
     lines[1],
     "19:14:53 🔴 RS CANCELLED #1341115 ADAUSDT SELL 49.90 @ 0.15410 | Executed: 20 | Cancelled: 29.90",
@@ -981,6 +1019,121 @@ test("abbreviates Operational State Store wording in the terminal", () => {
     written,
     /Operational State Store/,
     "The full store name must not consume terminal space in operator-facing summaries.",
+  )
+  output.destroy()
+})
+
+
+test("prints catalog code, exact stage, cause and remediation without cutting off the action", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+
+  transport.write({
+    timestamp: "2026-11-28T06:00:00.000Z",
+    level: "error",
+    method: "error",
+    data: {
+      message: "Relational trading history is unavailable; legacy order history remains active",
+      errorCode: "ERR_SQLITE_ERROR",
+      harvesterErrorCode: "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
+      errorStage: "RELATIONAL_MIGRATION_V5",
+      errorMessage: "SQLITE_ERROR: no such column: broker_order_id",
+    },
+  })
+
+  const [line, ...continuationLines] = written.trim().split("\n")
+  const lines = [line, ...continuationLines]
+  assert.ok(lines.every((candidate) => candidate.length <= 200), "Every operator diagnostic line must respect the terminal line budget.")
+  assert.match(line, /HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED/)
+  assert.match(line, /RELATIONAL_MIGRATION_V5/)
+  assert.match(line, /SQLITE_ERROR: no such column/)
+  assert.match(line, /do not reset DB/)
+  assert.ok(lines.length > 1, "A long concrete migration cause must be preserved on continuation lines.")
+  output.destroy()
+})
+
+
+test("renders every catalogued startup and degraded failure in bounded console output", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+  for (const entry of Object.values(HARVESTER_ERROR_CATALOG)) {
+    const isPersistenceFailure = entry.errorCode === "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED"
+    transport.write({
+      timestamp: "2026-11-28T06:00:00.000Z",
+      level: "error",
+      method: "error",
+      data: {
+        message: entry.errorCode === "HARVESTER_STARTUP_FAILED"
+          ? "startup failed."
+          : "catalogued failure",
+        errorCode: isPersistenceFailure ? "ERR_SQLITE_ERROR" : entry.errorCode,
+        harvesterErrorCode: isPersistenceFailure ? entry.errorCode : undefined,
+        causeCode: entry.errorCode === "HARVESTER_STARTUP_FAILED" ? "ERR_PROVIDER_HANDSHAKE" : undefined,
+        errorStage: entry.failureStage,
+        errorMessage: `concrete cause for ${entry.errorCode}`,
+      },
+    })
+  }
+  const lines = written.trim().split("\n")
+  for (const entry of Object.values(HARVESTER_ERROR_CATALOG)) {
+    assertCataloguedConsoleEntry({
+      lines,
+      entry,
+    })
+  }
+  output.destroy()
+})
+
+
+test("continues long catalogued causes without exceeding the per-line console budget", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
+  const cause = `SQLite migration failed: ${Array(20).fill("native constraint detail").join(" ")}`
+  transport.write({
+    timestamp: "2026-11-28T06:00:00.000Z",
+    level: "error",
+    method: "error",
+    data: {
+      message: "startup failed.",
+      errorCode: "HARVESTER_STARTUP_FAILED",
+      errorStage: "RELATIONAL_MIGRATION_V5",
+      errorMessage: cause,
+    },
+  })
+
+  const lines = written.trim().split("\n")
+  assert.ok(lines.length > 1, "A cause longer than the first-line budget must use continuation lines.")
+  for (const line of lines) {
+    assert.ok(line.length <= 200, "Every diagnostic and continuation line must respect the console line budget.")
+  }
+  const firstCause = lines[0].match(/cause=(.*?) \| action=/)?.[1]
+  assert.ok(firstCause?.endsWith("..."), "The first line must visibly signal that the cause continues.")
+  const continuationCause = lines.slice(1).map((line) => line.slice(line.indexOf("cause+") + 6)).join("")
+  assert.equal(
+    `${firstCause.slice(0, -3)}${continuationCause}`,
+    cause,
+    "Continuation lines must preserve the complete original cause without omission.",
   )
   output.destroy()
 })

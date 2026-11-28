@@ -42,7 +42,7 @@ Harvester-side retention of simulation-only run records, snapshots, lifecycle, e
 One-click complete, versioned JSON with scenario, overrides, effective config, revision, metadata, events, status, results, trace, assertions and diagnostics. Redact secrets; never silently truncate; provide complete export fallback.
 
 ## Phase 9 — Dashboard/end-to-end acceptance
-Framework-neutral client core and typed API/WS adapters; Angular presentation only. Setup, run, lifecycle, graph/trace inspection, history and copy/export. Test the Windows local Dashboard + Harvester workflow, simulation-only production-flow reuse, validation, cancellation, timeout, reconnect, report completeness and framework-swap invariance. Keep Linux OS-hardening acceptance separate and optional.
+Framework-neutral client core and typed API/WS adapters; Angular presentation only. Setup, run, evidence-linked visual lifecycle, independent outcomes, selected-step evidence inspection, history and complete source JSON tree/search/copy/export. Test the Windows local Dashboard + Harvester workflow, simulation-only production-flow reuse, validation, cancellation, timeout, reconnect, report completeness and framework-swap invariance. Keep Linux OS-hardening acceptance separate and optional.
 
 ## Phase 10 — Hardening/future adapters
 Security/resource/redaction/retention/race audit. Add GC Conservative/Aggressive, futures, grid or other adapters only when executable scenarios/contracts exist. Arbitrary event timeline, saving Playground changes, newer-version comparisons and remote/shared execution remain deferred.
@@ -141,3 +141,16 @@ The dedicated Linux sandbox E2E workflow is manual-dispatch only. It does not ru
 This section supersedes earlier checklist/history statements in this file that said no RS scenario was executable without a trusted OS sandbox. The Windows composition now uses a factory-created Node child-process worker and exposes all twelve current RS production-flow scenarios as executable for local simulation through simulated broker/order and run-local dependencies. All twelve were exercised through the real local Harvester HTTP API on Windows and passed on code-identical checkpoint `14f36a075ed4320b9f6f5fadb8b302db58c7651f`. This is functional acceptance only: scenarios remain PARTIAL, the Node guards are not OS isolation, and exact replay remains blocked pending independent trusted artifact verification.
 
 Dashboard gateway tests now cover catalogue, submit, history, run detail, cancel and replay HTTP methods/routes/payloads. Framework-independent application tests cover validation, authoritative status refresh, WebSocket update handling, cancellation, replay, trace graph, history and debug-package generation. The selectable debug JSON remains the fallback when clipboard access is unavailable. Exact-head CI is pending after these final test/documentation updates.
+
+## 2026-11-28 — Dashboard visual run details (#1982 / PR #1983)
+
+- Added a framework-independent, strategy-neutral presentation adapter over source run/debug evidence.
+- The Dashboard renders execution, assertions, trading lifecycle, accounting/cycle, safety and provenance as independent outcomes.
+- The ordered trace timeline is selectable; explicit source graph edges are shown as branches. Unknown event kinds and missing evidence remain inspectable.
+- Multiple submitted/terminal orders correlate by canonical broker or client order identity; multiple cycle states remain distinct, including an unresolved latest cycle.
+- Assertion records expose expected/actual values and original evidence. Provenance inspection includes source/tree/dependency/registry identities and artifact verification status.
+- Orders correlate submission and terminal evidence only by matching order identity. Partial CANCELED execution is displayed separately from run completion and cycle state.
+- Added expandable JSON tree inspection, per-value/branch copying, text search, full-source copy and JSON download; retained the separate generated AI debug-package action.
+- Added the complete supplied RS partial-CANCELED debug report as a regression fixture plus adapter, JSON-tree and run-details UI tests.
+- The fixture does not contain enough fill price/commission evidence to calculate realized P/L; the UI must show no invented financial result.
+- Implementation and exact-head verification state are tracked in issue #1982 and PR #1983. Do not treat this section as a production-readiness or replay-provenance attestation.

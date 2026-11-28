@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url"
-import { describeProcessError } from "./infrastructure/process/describe-process-error.js"
+import { describeProcessError } from "./infrastructure/logging/describe-process-error.js"
+import { resolveHarvesterErrorDiagnostic } from "./infrastructure/logging/harvester-error-catalog.js"
 import { createRuntimeShutdownHandler } from "./infrastructure/process/harvester-process-shutdown.js"
 import { createHarvesterProcessIdentity } from "./infrastructure/process/create-harvester-process-identity.js"
 import os from "node:os"
@@ -1150,17 +1151,25 @@ async function closeStartupTelegramNotifications({ notifications, logger } = {})
   return errors
 }
 
+function resolveStartupFailureDiagnosticCode({ error } = {}) {
+  return resolveHarvesterErrorDiagnostic({ errorCode: error?.code })
+    ? error.code
+    : "HARVESTER_STARTUP_FAILED"
+}
+
 function logStartupFailure({ error, logger } = {}) {
   try {
+    const errorDetails = describeProcessError(error)
     logger.error({
       message: "startup failed.",
-      error,
-      errorName: error?.name ?? "Error",
-      errorCode: error?.code ?? "HARVESTER_STARTUP_FAILED",
-      errorMessage: error?.message ?? String(error),
+      errorName: errorDetails.name ?? "Error",
+      errorCode: resolveStartupFailureDiagnosticCode({ error }),
+      causeCode: error?.code,
+      errorStage: error?.stage ?? error?.context?.stage,
+      errorMessage: errorDetails.message,
       symbol: error?.symbol,
       sourceFilterTypes: error?.constraints?.map((constraint) => constraint.sourceFilterType),
-      errorDetails: describeProcessError(error),
+      errorDetails,
     })
   } catch {
     // Logging failure must not hide the original startup failure.
