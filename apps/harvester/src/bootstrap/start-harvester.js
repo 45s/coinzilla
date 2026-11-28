@@ -109,7 +109,10 @@ function assertOperationalStateProjection({ existingProjection } = {}) {
 
 function assertNoUnresolvedAccountSafetyBlockers({ projection } = {}) {
   const blockers = (projection?.data?.stickySafetyBlockers ?? [])
-    .filter((blocker) => blocker.scope === "ACCOUNT")
+    .filter((blocker) =>
+      blocker.scope === "ACCOUNT" &&
+      !isRecoverySellerStopRestartBlocker(blocker)
+    )
   if (blockers.length === 0) {
     return
   }
@@ -403,10 +406,9 @@ function createHarvesterOperationalStateCallbacks({ operationalStateStore } = {}
 
 async function resolveStartupOptionsForProcessRecovery({ resolved,
   operationalStateStore,
-  logger,
-  recoverySellerEnabled = false } = {}) {
-  const recoveryEnabled = resolved.appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true ||
-    recoverySellerEnabled
+  logger } = {}) {
+  const recoveryEnabled = resolved.appConfig.components?.recovery?.enabled !== false &&
+    resolved.appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
   const operationalState = await verifyOperationalStateStore({
     operationalStateStore,
     recoveryEnabled,
@@ -475,13 +477,15 @@ async function prepareHarvesterOperatorControl({ dependencies, resolved } = {}) 
     logger,
   } = dependencies
   const recoveryComponentEnabled = resolved.appConfig.components?.recovery?.enabled !== false
+  const recoverySellerEnabled = Object.keys(resolved.recoverySellerPairs ?? {}).length > 0
+  const retainOperationalStateStore = recoveryComponentEnabled || recoverySellerEnabled
   const telegramConfig = recoveryComponentEnabled
     ? resolved.appConfig.operatorControl?.telegram
     : {
         enabled: false,
         allowedUserIds: [],
       }
-  const suppliedStore = recoveryComponentEnabled ? suppliedOperationalStateStore : undefined
+  const suppliedStore = retainOperationalStateStore ? suppliedOperationalStateStore : undefined
   const operatorControlLifecycle = await prepareTelegramOperatorControl({
     telegramConfig,
     env,
@@ -494,7 +498,7 @@ async function prepareHarvesterOperatorControl({ dependencies, resolved } = {}) 
   })
   return {
     operatorControlLifecycle,
-    operationalStateStore: recoveryComponentEnabled
+    operationalStateStore: retainOperationalStateStore
       ? suppliedStore ?? operatorControlLifecycle.operationalStateStore
       : undefined,
   }
@@ -516,12 +520,13 @@ export async function prepareHarvesterStartupState({ dependencies, resolved } = 
     resolved,
     operationalStateStore,
     logger: dependencies.logger,
-    recoverySellerEnabled,
   })
   let recoverySellerStopWorkflow
   if (recoverySellerEnabled) {
     if (!operationalStateStore) {
-      throw new Error("Configured Recovery Seller routes require a verified durable Operational State Store")
+      const error = new Error("Configured Recovery Seller routes require a verified durable Operational State Store")
+      error.code = "RECOVERY_SELLER_OPERATIONAL_STATE_STORE_REQUIRED"
+      throw error
     }
     const stopWorkflowResult = await createRecoverySellerStopWorkflow({
       operationalStateStore,
@@ -1611,6 +1616,7 @@ async function subscribeHarvesterMarketData({ startup, portfolio, resources, mar
   const pairs = resolveStrategyMarketDataPairs({
     pairs: marketDataPairs,
     strategyPolicy: conservativeStrategyPolicy,
+    executionRoutes: startup.executionRoutes,
     hasUnownedOpenOrdersForSymbol: startup.accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
     logger: startup.logger,
   })
@@ -2338,8 +2344,9 @@ export async function startHarvester(options = {}) {
 function resolveStrategyMarketDataPairs({
   pairs,
   strategyPolicy,
+  executionRoutes = [],
   hasUnownedOpenOrdersForSymbol,
-  logger
+  logger,
 } = {}) {
   const marketDataSubscriptionSymbols = new Set(
     strategyPolicy.getMarketDataSubscriptionSymbols({
@@ -2347,13 +2354,22 @@ function resolveStrategyMarketDataPairs({
       hasUnownedOpenOrdersForSymbol,
     }),
   )
+  const strategyIdsBySymbol = new Map()
+  for (const route of executionRoutes) {
+    const strategyIds = strategyIdsBySymbol.get(route.symbol) ?? new Set()
+    strategyIds.add(route.strategyId)
+    strategyIdsBySymbol.set(route.symbol, strategyIds)
+  }
   const strategyBlockedMarketSymbols = Object.entries(pairs)
     .filter(([symbol, pairConfig]) => pairConfig.enabled === true && !marketDataSubscriptionSymbols.has(symbol))
     .map(([symbol]) => symbol)
   if (logger && strategyBlockedMarketSymbols.length > 0) {
+    const strategyIds = [...new Set(strategyBlockedMarketSymbols.flatMap((symbol) => [
+      ...(strategyIdsBySymbol.get(symbol) ?? []),
+    ]))]
     logger.info?.({
       message: "Market data subscriptions skipped for strategy-blocked markets",
-      strategy: "CG_coinGrabber",
+      strategyIds: strategyIds.length > 0 ? strategyIds : [StrategyId.COIN_GRABBER],
       symbols: strategyBlockedMarketSymbols,
       reason: "EXTERNAL_ORDERS_POLICY_BLOCK",
     })

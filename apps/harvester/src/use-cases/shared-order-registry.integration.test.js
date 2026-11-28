@@ -13,6 +13,7 @@ import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { createRecoverySellerAccountingWorkflow } from "./create-recovery-seller-accounting-workflow.js"
+import { createRecoverySellerStopWorkflow } from "./create-recovery-seller-stop-workflow.js"
 import { createHarnessBroker } from "./conservative-trading-engine-harness.js"
 
 const baseAsset = new Asset({
@@ -117,28 +118,35 @@ function createSharedAccountState() {
   }).get("test-provider").state
 }
 
-function createEngine({ sharedAccountState, evaluateRecoverySellerTransition }) {
-  const brokerState = createHarnessBroker({
-    market,
-    baseAsset,
-    quoteAsset,
-    marketMetadata,
-    baseFreeBalance: "0",
-    quoteFreeBalance: "1000",
-    quoteCashFlowBaseline: "0",
-    portfolioBaseQuantityBaseline: "0",
-    additionalTrackedBaseQuantityBaseline: "0",
-    committedQuoteBalanceBaseline: "0",
-    committedBaseBalanceBaseline: "0",
-  })
-  const engine = makeConservativeTradingEngine({
-    broker: brokerState.broker,
+function createEngineOptions({
+  sharedAccountState,
+  brokerState,
+  evaluateRecoverySellerTransition,
+  recoverySellerPairs,
+  recoverySellerWorkflow,
+  recoverySellerStopWorkflow,
+} = {}) {
+  return {
+    broker: {
+      ...brokerState.broker,
+      providerInstanceId: "binance-primary",
+      providerType: "binance",
+      accountId: "test-account",
+    },
     strategyPolicy: conservativeStrategyPolicy,
     appConfig,
     getPortfolio: () => sharedAccountState.portfolio,
     getRecoveryLedger: () => RecoveryLedger.empty({ market }),
     getMarketMetadata: () => marketMetadata,
     getAccountSnapshot: () => brokerState.accountSnapshot,
+    onOperationalStateSubmissionIntent: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+    onOperationalStateSubmissionOutcome: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
     updateTradingAccounting: async () => ({
       ok: true,
       data: {
@@ -161,7 +169,40 @@ function createEngine({ sharedAccountState, evaluateRecoverySellerTransition }) 
     initialState: { orderRegistry: sharedAccountState.orderRegistry },
     sharedAccountState,
     evaluateRecoverySellerTransition,
+    recoverySellerPairs,
+    recoverySellerWorkflow,
+    recoverySellerStopWorkflow,
+  }
+}
+
+function createEngine({
+  sharedAccountState,
+  evaluateRecoverySellerTransition,
+  recoverySellerPairs = {},
+  recoverySellerWorkflow,
+  recoverySellerStopWorkflow,
+}) {
+  const brokerState = createHarnessBroker({
+    market,
+    baseAsset,
+    quoteAsset,
+    marketMetadata,
+    baseFreeBalance: "0",
+    quoteFreeBalance: "1000",
+    quoteCashFlowBaseline: "0",
+    portfolioBaseQuantityBaseline: "0",
+    additionalTrackedBaseQuantityBaseline: "0",
+    committedQuoteBalanceBaseline: "0",
+    committedBaseBalanceBaseline: "0",
   })
+  const engine = makeConservativeTradingEngine(createEngineOptions({
+    sharedAccountState,
+    brokerState,
+    evaluateRecoverySellerTransition,
+    recoverySellerPairs,
+    recoverySellerWorkflow,
+    recoverySellerStopWorkflow,
+  }))
   return {
     engine,
     brokerState,
@@ -215,22 +256,57 @@ test("Conservative engine and RS accounting workflow observe one live account Or
 })
 
 
+async function createRecoverySellerStopWorkflowForTest() {
+  const operationalStateStore = {
+    append: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+    readAll: async () => ({
+      ok: true,
+      data: { records: [] },
+    }),
+  }
+  const result = await createRecoverySellerStopWorkflow({
+    operationalStateStore,
+  })
+  assert.equal(result.ok, true)
+  return result.data
+}
+
+function createRecoverySellerTransitionStub({ evaluatedSymbols } = {}) {
+  return async ({ symbol }) => {
+    evaluatedSymbols.push(symbol)
+    return {
+      ok: true,
+      data: {
+        symbol,
+        skipped: true,
+        reason: "RS_POLICY_NOT_READY",
+      },
+    }
+  }
+}
+
 test("Conservative engine dispatches RS evaluation through the shared account transition", async () => {
   const sharedAccountState = createSharedAccountState()
+  const recoverySellerWorkflow = createRecoverySellerAccountingWorkflow({
+    sharedState: sharedAccountState,
+  })
+  const recoverySellerStopWorkflow = await createRecoverySellerStopWorkflowForTest()
   const evaluatedSymbols = []
   const { engine } = createEngine({
     sharedAccountState,
-    evaluateRecoverySellerTransition: async ({ symbol }) => {
-      evaluatedSymbols.push(symbol)
-      return {
-        ok: true,
-        data: {
-          symbol,
-          skipped: true,
-          reason: "RS_POLICY_NOT_READY",
-        },
-      }
+    recoverySellerWorkflow,
+    recoverySellerStopWorkflow,
+    recoverySellerPairs: {
+      DOGEUSDT: {
+        enabled: true,
+      },
     },
+    evaluateRecoverySellerTransition: createRecoverySellerTransitionStub({
+      evaluatedSymbols,
+    }),
   })
 
   await engine.processBookTicker({

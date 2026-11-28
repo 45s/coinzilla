@@ -675,6 +675,7 @@ test("continues Recovery Seller evaluation when the Conservative strategy is saf
   const evaluate = createLatestTransitionEvaluator({
     state,
     pairs: { DOGEUSDT: { enabled: true } },
+    recoverySellerPairs: { DOGEUSDT: { enabled: true } },
     hasBlockingOpenOrdersForSymbol: () => false,
     isStopping: () => false,
     canTrade: () => true,

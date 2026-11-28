@@ -120,20 +120,18 @@ function hasEnabledRecoverySellerMarket({ recoverySellerConfig } = {}) {
 }
 
 function requiresOperationalStateStore({ appConfig } = {}) {
-  if (appConfig?.components?.recovery?.enabled === false) {
-    return false
-  }
-  const conservativeRecoveryEnabled =
+  const processRecoveryEnabled =
+    appConfig?.components?.recovery?.enabled !== false &&
     appConfig?.strategies?.[StrategyId.COIN_GRABBER]?.settings?.recovery?.enabled === true
   const recoverySellerEnabled = hasEnabledRecoverySellerMarket({
     recoverySellerConfig: appConfig?.strategies?.[StrategyId.RECOVERY_SELLER],
   })
-  return conservativeRecoveryEnabled || recoverySellerEnabled
+  return processRecoveryEnabled || recoverySellerEnabled
 }
 
 /**
- * Prepare and verify the process-owned ADR-0001 store when CG restart recovery
- * or an enabled Recovery Seller market requires durable operational facts.
+ * Prepare and verify the process-owned ADR-0001 store when CG process recovery
+ * is enabled or an enabled Recovery Seller market requires durable STOP facts.
  *
  * Telegram-only operator control does not create or require this store.
  * Startup initializes only a missing or empty ledger directory, verifies an

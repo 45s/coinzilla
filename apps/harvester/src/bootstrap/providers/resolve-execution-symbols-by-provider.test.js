@@ -102,20 +102,23 @@ test("routes enabled RS markets through explicit provider assignments and dedupl
     },
   ]
   const result = resolveExecutionSymbolsByProvider({
-    appConfig: createAppConfig({
-      strategies: {
-        CG_coinGrabber: {
-          pairs,
+    appConfig: {
+      ...createAppConfig({
+        strategies: {
+          CG_coinGrabber: {
+            pairs,
+          },
+          RS_recoverySeller: {
+            enabled: true,
+            pairs: recoverySellerPairs,
+          },
         },
-        RS_recoverySeller: {
-          enabled: true,
-          pairs: recoverySellerPairs,
+        executionRouting: {
+          routes,
         },
-      },
-      executionRouting: {
-        routes,
-      },
-    }),
+      }),
+      components: { recovery: { enabled: false } },
+    },
     providers,
   })
 
