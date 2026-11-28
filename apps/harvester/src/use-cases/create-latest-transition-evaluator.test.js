@@ -184,7 +184,11 @@ test("does not dispatch RS for a market without an RS execution route", async ()
 
 test("logs RS evaluation start and decisions with the RS strategy identity", async () => {
   const dependencies = createDependencies()
-  dependencies.recoverySellerPairs = { RSUSDT: { enabled: true } }
+  dependencies.recoverySellerPairs = {
+    RSUSDT: {
+      enabled: true,
+    },
+  }
   const records = []
   dependencies.recoverySellerLogger = createStrategyLogger({
     logger: {
