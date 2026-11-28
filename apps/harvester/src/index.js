@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url"
 import { describeProcessError } from "./infrastructure/process/describe-process-error.js"
+import { resolveHarvesterErrorDiagnostic } from "./infrastructure/logging/harvester-error-catalog.js"
 import { createRuntimeShutdownHandler } from "./infrastructure/process/harvester-process-shutdown.js"
 import { createHarvesterProcessIdentity } from "./infrastructure/process/create-harvester-process-identity.js"
 import os from "node:os"
@@ -1151,7 +1152,7 @@ async function closeStartupTelegramNotifications({ notifications, logger } = {})
 }
 
 function resolveStartupFailureDiagnosticCode({ error } = {}) {
-  return typeof error?.code === "string" && error.code.length > 0
+  return resolveHarvesterErrorDiagnostic({ errorCode: error?.code })
     ? error.code
     : "HARVESTER_STARTUP_FAILED"
 }
