@@ -101,7 +101,7 @@ async function createCleanObservationOnlyHistory({ directory, config }) {
   assert.equal(stopped.ok, true)
 }
 
-test("keeps default Conservative restart observation-only when prior process history exists", async (t) => {
+test("starts fresh current-session trading after prior process history when recovery is disabled", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-default-restart-history-"))
   t.after(() => rm(directory, {
     recursive: true,
@@ -119,7 +119,6 @@ test("keeps default Conservative restart observation-only when prior process his
   const tracked = instrumentStoreReadAll(restartStore)
   const calls = []
   let brokerFactoryCalls = 0
-  let strategyEvaluationCount = 0
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
@@ -131,18 +130,16 @@ test("keeps default Conservative restart observation-only when prior process his
         calls,
       })({ config })
     },
-    evaluateStrategy: async () => {
-      strategyEvaluationCount += 1
-      return { ok: true }
-    },
+    evaluateStrategy: async () => ({ ok: true }),
     logger: {
       info() {},
       error() {},
     },
   })
 
-  assert.equal(runtime.tradingEnabled, false)
-  assert.equal(runtime.executionEnabled, false)
+  assert.equal(runtime.tradingEnabled, true, "Prior-session orders remain external; a fresh current-process session may trade without restoring prior state.")
+  assert.equal(runtime.executionEnabled, true)
+  assert.equal(runtime.userDataReady, true, "Fresh PREFLIGHT and current-process user-data readiness must open the gate.")
   assert.equal(brokerFactoryCalls, 1)
   await runtime.processMarketPrice({
     symbol: "BTCUSDT",
@@ -152,11 +149,10 @@ test("keeps default Conservative restart observation-only when prior process his
       timestamp: Date.now(),
     },
   })
-  assert.equal(strategyEvaluationCount, 0, "Prior process history must not resume Conservative strategy evaluation.")
   assert.equal(calls.some((call) => typeof call === "object" && call.side), false)
   const history = await restartStore.readAll()
   const starts = history.data.records.filter((record) => record.factType === "PROCESS_STARTED")
-  assert.equal(starts.at(-1).data.tradingEnabled, false, "The new durable process-start fact must record observation-only mode.")
+  assert.equal(starts.at(-1).data.tradingEnabled, true, "The new durable process-start fact must record current-session trading eligibility.")
   const stopped = await runtime.stop()
   assert.equal(stopped.ok, true)
 })

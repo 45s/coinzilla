@@ -99,8 +99,8 @@ test("loads a stable scenario inventory covering all Conservative behavior categ
   assert.equal(restartScenario.relatedExistingTests.length, 3, "Offline restart tests must prove the disabled-restoration boundary and cancellation/fill race.")
   const startupHistoryScenario = scenarios.find((scenario) => scenario.id === "CON-PERSIST-003")
   assert.equal(startupHistoryScenario.coverageStatus, "TEST-MAPPED", "Prior-session startup gates must have executable evidence.")
-  assert.equal(startupHistoryScenario.relatedExistingTests.length, 4, "Prior-session and account STOP-latch boundaries must have executable mappings.")
-  assert.match(startupHistoryScenario.coverageReason, /account-level RS STOP latch/i, "The durable account STOP boundary must remain explicit.")
+  assert.equal(startupHistoryScenario.relatedExistingTests.length, 8, "Prior-session restart policy, RS STOP scope, and account safety boundaries must have executable mappings.")
+  assert.match(startupHistoryScenario.coverageReason, /RS STOP stays strategy-scoped/i, "The durable RS STOP boundary must remain strategy-scoped.")
 
   const configScenario = scenarios.find((scenario) => scenario.id === "CON-CONFIG-001")
   const sellScenario = scenarios.find((scenario) => scenario.id === "CON-SELL-001")

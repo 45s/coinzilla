@@ -47,6 +47,7 @@ pendingRecovery: false,
 safetyHaltRequired: false },
       processContinuity: { storeConfigured: true,
 previousProcessStarted: false,
+recoveryEnabled: false,
 restorationEnabled: false },
       markets: {
         BTCUSDT: { route: { expected: identity,
@@ -266,16 +267,46 @@ requiredHistoryCount: 74 } } }
   assert.equal(market.checks.find(({ id }) => id === "market.volatility").status, "BLOCKED", "Unavailable required volatility history must fail closed.")
 })
 
-test("reports prior-process observation-only state and never claims restoration", () => {
+test("does not block a fresh current-process session when prior process recovery is disabled", () => {
   const inputs = createInputs()
-  inputs.readinessInputs.processContinuity = { storeConfigured: true,
-previousProcessStarted: true,
-restorationEnabled: false }
+  inputs.readinessInputs.processContinuity = {
+    storeConfigured: true,
+    previousProcessStarted: true,
+    restorationEnabled: false,
+    recoveryEnabled: false,
+  }
+  inputs.runtime.tradingEnabled = true
+  inputs.runtime.userData.ready = true
+  const report = createHarvesterReadinessReport(inputs)
+  const restoration = report.checks.find(({ id }) => id === "process.restoration")
+
+  assert.equal(report.status, "HEALTHY", "Disabled process restoration must not block a fresh current-session readiness report.")
+  assert.equal(restoration.status, "NOT_APPLICABLE", "Prior process history is not a restoration failure when restoration is disabled by configuration.")
+  assert.equal(restoration.code, "PROCESS_RESTART_RECOVERY_DISABLED", "The report must identify the explicit recovery configuration.")
+  assert.equal(restoration.blocksTrading, false, "A deliberately disabled restoration check must not gate current-session trading.")
+  assert.equal(report.tradingEnabled, true, "Fresh current-session trading remains eligible after its own readiness checks pass.")
+  assert.equal(report.tradingGateOpen, true, "The current-process PREFLIGHT/user-data gate must be open.")
+  assert.ok(report.checks.filter(({ id }) => id === "market.price").every(({ status }) => status === "PASS"),
+    "Fresh initial-price seeds must clear market.price health checks.")
+  assert.ok(report.checks.filter(({ id }) => id === "market.engine-safety").every(({ status }) => status === "PASS"),
+    "With current-session readiness established, market engine-safety checks must report their actual blockers.")
+})
+
+test("keeps prior-process trading blocked when process recovery is enabled but restoration is not accepted", () => {
+  const inputs = createInputs()
+  inputs.readinessInputs.processContinuity = {
+    storeConfigured: true,
+    previousProcessStarted: true,
+    restorationEnabled: false,
+    recoveryEnabled: true,
+  }
   inputs.runtime.tradingEnabled = false
   const report = createHarvesterReadinessReport(inputs)
-  assert.equal(report.status, "BLOCKED", "A prior process with restoration disabled must not be described as healthy.")
-  assert.equal(report.checks.find(({ id }) => id === "process.restoration").status, "BLOCKED", "Disabled restoration after a prior process must be explicit.")
-  assert.equal(report.tradingEnabled, false, "The existing observation-only restriction must remain authoritative.")
+  const restoration = report.checks.find(({ id }) => id === "process.restoration")
+
+  assert.equal(report.status, "BLOCKED", "An unrestored prior process must remain blocked when process recovery is enabled.")
+  assert.equal(restoration.status, "BLOCKED", "The readiness report must retain the existing fail-closed restoration gate.")
+  assert.equal(report.tradingEnabled, false, "The report must not enable trading before required restoration is accepted.")
 })
 
 test("does not claim a first process when continuity evidence is not configured and redacts private account identifiers", () => {

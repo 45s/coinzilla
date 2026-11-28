@@ -217,7 +217,7 @@ keepQuantity = 0 is permitted only after the complete workflow—including BUY, 
 
 Harvester runs on the owner's personal PC. 24/7 uptime is not required. Resting exchange orders may fill while the process is stopped; the stopped process cannot update in-memory state. This is expected, not a strategy defect.
 
-Do not retroactively change historical shutdown snapshots. Safe process-restart reconstruction and reconciliation before new trading are a separate workstream in [#654](https://github.com/45s/coinzilla), outside this implementation scope.
+Do not retroactively change historical shutdown snapshots. Safe process-restart reconstruction and reconciliation remain a separate workstream in [#654](https://github.com/45s/coinzilla); this specification does not implement Portfolio, RecoveryLedger, or OrderRegistry restoration. When process recovery is disabled, a new process starts a fresh current-process strategy session after its own account PREFLIGHT and current-process user-data readiness. Prior-process orders and fills remain external under ADR-0004 and the configured per-market policy; they are not adopted, cancelled, managed, or replayed. Unresolved ACCOUNT safety blockers and configured per-market BLOCK policy remain fail-closed. When process recovery is enabled, prior-session eligibility remains subject to the separate #654 acceptance gates.
 
 No TESTNET order, cancellation, restart, or other exchange action is authorized by this specification.
 

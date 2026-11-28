@@ -129,6 +129,30 @@ function createRsOnlyStartupBroker({ calls, includeBitcoin = false }) {
   return broker
 }
 
+function trackInitialPriceRequests(broker) {
+  const requests = []
+  const getPrices = broker.getPrices.bind(broker)
+  broker.getPrices = async (request) => {
+    requests.push(request.symbol)
+    return getPrices(request)
+  }
+  return requests
+}
+
+function assertFreshCurrentSessionTrading({ result, calls, startupLogs, initialPriceRequests }) {
+  assert.equal(result.tradingEnabled, true, "A prior process must not disable fresh current-session trading when recovery is disabled.")
+  assert.equal(result.executionEnabled, true, "The current process must retain its configured execution route.")
+  assert.equal(result.userDataReady, true, "Fresh PREFLIGHT and current-process user-data readiness must open the gate.")
+  assert.ok(calls.includes("subscribe:LINEAUSDT"), "The new process must establish its market-price subscription.")
+  assert.ok(initialPriceRequests.includes("LINEAUSDT"), "Trading readiness must seed an initial ticker price.")
+  assert.ok(calls.includes("subscribe:book:LINEAUSDT"), "Trading mode must establish its required book stream.")
+  assert.ok(startupLogs.some((record) =>
+    record.reason === "PROCESS_RESTART_RECOVERY_DISABLED" &&
+    record.previousProcessStarted === true &&
+    record.tradingEnabled === true
+  ), "Startup must report that prior process history remains external while current-session trading is enabled.")
+}
+
 function createRsOnlyStartupConfig({
   enableVolatilityProtection = false,
   processRecoveryEnabled = true,
@@ -313,6 +337,61 @@ test("retains CG and RS execution routes and subscriptions when process recovery
       "The CG market-data subscription must remain active when RS is enabled.")
     assert.ok(calls.includes("subscribe:LINEAUSDT"),
       "The RS market-data subscription must be added without replacing the CG subscription.")
+    await result.stop()
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+test("starts a fresh current-process trading session when process recovery is disabled despite prior process history", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-fresh-session-recovery-disabled-"))
+  const config = createRsOnlyStartupConfig({ processRecoveryEnabled: false })
+  await shared.createPriorProcessHistory({
+    directory,
+    runtimeSessionId: "prior-rs-only-session",
+    priorAppConfig: config,
+    clean: true,
+  })
+
+  const restartStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "fresh-current-session-with-recovery-disabled",
+  })
+  const calls = []
+  const startupLogs = []
+  const broker = createRsOnlyStartupBroker({ calls })
+  const initialPriceRequests = trackInitialPriceRequests(broker)
+  try {
+    const result = await startHarvesterForTest({
+      loadConfig: async () => config,
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      operationalStateStore: restartStore,
+      executionSymbols: ["LINEAUSDT"],
+      executionRoutes: [{
+        strategyId: StrategyId.RECOVERY_SELLER,
+        symbol: "LINEAUSDT",
+      }],
+      marketDataSymbols: ["LINEAUSDT"],
+      evaluateRecoverySellerTransition: async () => ({
+        ok: true,
+        data: { skipped: true },
+      }),
+      logger: {
+        info: (record) => startupLogs.push(record),
+        error() {},
+      },
+    })
+
+    assertFreshCurrentSessionTrading({
+      result,
+      calls,
+      startupLogs,
+      initialPriceRequests,
+    })
     await result.stop()
   } finally {
     await rm(directory, {
@@ -2113,8 +2192,12 @@ test("logs partial startup history diagnostics when an order cursor write fails"
 })
 
 
-async function createPersistedAccountStopForRestart({ directory, store } = {}) {
-  const config = createRsOnlyStartupConfig()
+async function createPersistedAccountStopForRestart({
+  directory,
+  store,
+  processRecoveryEnabled = true,
+} = {}) {
+  const config = createRsOnlyStartupConfig({ processRecoveryEnabled })
   const baseline = await recordConfigurationBaseline({
     operationalStateStore: store,
     appConfig: config,
@@ -2430,13 +2513,16 @@ async function startHarvesterAfterPersistedRecoverySellerStop({
   store,
   broker,
   onStrategyEvaluation,
+  processRecoveryEnabled = true,
 }) {
+  const config = createRsOnlyStartupConfig({ processRecoveryEnabled })
   const restartStore = await createPersistedAccountStopForRestart({
     directory,
     store,
+    processRecoveryEnabled,
   })
   const result = await startHarvesterForTest({
-    loadConfig: async () => createRsOnlyStartupConfig(),
+    loadConfig: async () => config,
     env: binanceEnv,
     brokerAdapterFactory: () => broker,
     operationalStateStore: restartStore,
@@ -2504,6 +2590,47 @@ test("restores a persisted RS STOP and keeps a restarted runtime observation-onl
       "An observation-only restart must prevent strategy evaluation until controlled restart acceptance.")
     assert.equal(calls.some((call) => typeof call === "object" && call.side), false,
       "An observation-only restart must not submit broker orders.")
+    await result.stop()
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+test("keeps persisted RS STOP strategy-scoped when CG process recovery is disabled", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const calls = []
+  const broker = createRsOnlyStartupBroker({ calls })
+  try {
+    const { restartStore, result } = await startHarvesterAfterPersistedRecoverySellerStop({
+      directory,
+      store,
+      broker,
+      processRecoveryEnabled: false,
+      onStrategyEvaluation: async () => ({
+        ok: true,
+        data: { skipped: true },
+      }),
+    })
+
+    assert.equal(result.tradingEnabled, true,
+      "Disabling CG process recovery must not globally disable a fresh current-process runtime.")
+    assert.equal(result.executionEnabled, true,
+      "A persisted RS STOP must not remove unrelated current-process execution routes.")
+    const restoredWorkflow = await createRecoverySellerStopWorkflow({
+      operationalStateStore: restartStore,
+    })
+    assert.equal(restoredWorkflow.ok, true, restoredWorkflow.errors?.[0]?.message)
+    assert.equal(restoredWorkflow.data.getStopState().status, "STOPPED",
+      "The durable RS STOP must still be restored from its required store.")
+    assert.equal(restoredWorkflow.data.isBuyAdmissionBlocked(), true,
+      "The RS investment BUY gate must remain active even though unrelated current-session trading is enabled.")
+    assert.equal(restoredWorkflow.data.isSellAdmissionBlocked(), false,
+      "The RS STOP remains investment-only and must not block recovery SELL admission.")
+    assert.equal(calls.some((call) => typeof call === "object" && call.side), false,
+      "A STOPPED RS strategy must not submit a new order during startup.")
     await result.stop()
   } finally {
     await rm(directory, {

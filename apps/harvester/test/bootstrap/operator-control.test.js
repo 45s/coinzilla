@@ -598,7 +598,8 @@ test("starts Telegram operator control without running process-restart recovery 
     })
     assert.equal(operatorAdapterStarted, true, "The Telegram adapter must start even when process-restart recovery is disabled.")
     assert.equal(runtime.connected, true, "Disabling process-restart recovery must not prevent the broker runtime from connecting.")
-    assert.equal(runtime.tradingEnabled, false, "A prior process session must not silently restore trading when restart recovery is disabled.")
+    assert.equal(runtime.tradingEnabled, true, "A prior process session must remain external; fresh current-session trading may proceed after PREFLIGHT when restart recovery is disabled.")
+    assert.equal(runtime.userDataReady, true, "Fresh current-process user-data readiness must open the trading gate without process-restart recovery.")
     await assertTelegramPauseCommandIsDurable({
       operator,
       operationalStateStore: currentStore,

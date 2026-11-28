@@ -340,6 +340,49 @@ function createBrokerCapabilitiesCheck({ inputs, runtime, observedAt } = {}) {
   })
 }
 
+function getProcessRestorationCheckState(processState) {
+  if (processState.storeConfigured !== true) {
+    return {
+      status: "NOT_APPLICABLE",
+      code: "PROCESS_CONTINUITY_STORE_NOT_CONFIGURED",
+      message: "No durable process-continuity store is configured; prior-process history is unknown.",
+      remediation: "Configure the approved durable operational-state store if process continuity is required.",
+    }
+  }
+  if (processState.recoveryEnabled === false) {
+    return {
+      status: "NOT_APPLICABLE",
+      code: "PROCESS_RESTART_RECOVERY_DISABLED",
+      message: processState.previousProcessStarted === true
+        ? "Prior process history exists, but process restoration is disabled; the current process starts fresh after its own PREFLIGHT and treats prior-session orders/fills as external."
+        : "Process-restart recovery is disabled by configuration.",
+      remediation: "Do not restore prior-session state. Verify fresh account PREFLIGHT, current-process user-data readiness and the configured per-market external-order policy; unresolved ACCOUNT safety blockers remain blocking.",
+    }
+  }
+  if (processState.previousProcessStarted === true && processState.restorationEnabled !== true) {
+    return {
+      status: "BLOCKED",
+      code: "PROCESS_RESTART_RESTORATION_DISABLED",
+      message: "A prior process session was detected. Runtime restoration remains disabled.",
+      remediation: "Complete the approved restart and reconciliation procedure; this report never restores trading state.",
+    }
+  }
+  if (processState.previousProcessStarted === false) {
+    return {
+      status: "NOT_APPLICABLE",
+      code: "NO_PRIOR_PROCESS_SESSION",
+      message: "The verified process ledger contains no prior process session.",
+      remediation: "No process-restoration action is required.",
+    }
+  }
+  return {
+    status: "BLOCKED",
+    code: "PROCESS_CONTINUITY_UNKNOWN",
+    message: "The durable process ledger did not provide a definitive prior-process result.",
+    remediation: "Inspect the durable process ledger and follow the approved recovery procedure.",
+  }
+}
+
 function createProcessRestorationCheck({ inputs, runtime, observedAt } = {}) {
   const continuity = inputs.processContinuity
   if (!continuity && runtime.startupBoundary !== true) {
@@ -356,38 +399,20 @@ function createProcessRestorationCheck({ inputs, runtime, observedAt } = {}) {
     })
   }
   const processState = continuity ?? {}
-  let status = "BLOCKED"
-  let code = "PROCESS_CONTINUITY_UNKNOWN"
-  let message = "The durable process ledger did not provide a definitive prior-process result."
-  let remediation = "Inspect the durable process ledger and follow the approved recovery procedure."
-  if (processState.storeConfigured !== true) {
-    status = "NOT_APPLICABLE"
-    code = "PROCESS_CONTINUITY_STORE_NOT_CONFIGURED"
-    message = "No durable process-continuity store is configured; prior-process history is unknown."
-    remediation = "Configure the approved durable operational-state store if process continuity is required."
-  } else if (processState.previousProcessStarted === true && processState.restorationEnabled !== true) {
-    code = "PROCESS_RESTART_RESTORATION_DISABLED"
-    message = "A prior process session was detected. Runtime restoration remains disabled."
-    remediation = "Complete the approved restart and reconciliation procedure; this report never restores trading state."
-  } else if (processState.previousProcessStarted === false) {
-    status = "NOT_APPLICABLE"
-    code = "NO_PRIOR_PROCESS_SESSION"
-    message = "The verified process ledger contains no prior process session."
-    remediation = "No process-restoration action is required."
-  }
+  const restorationState = getProcessRestorationCheckState(processState)
   return createCheck({
     id: "process.restoration",
     scope: "ACCOUNT",
-    status,
-    code,
-    message,
-    expected: "No unresolved prior process session; automatic restoration remains disabled.",
-    remediation,
+    ...restorationState,
+    expected: "When process recovery is disabled, a fresh process uses its own PREFLIGHT and current-process readiness; when recovery is enabled, prior process state must be accepted before trading.",
     observedAt,
     details: {
       storeConfigured: processState.storeConfigured === true,
       previousProcessStarted: processState.storeConfigured === true
         ? processState.previousProcessStarted ?? null
+        : null,
+      recoveryEnabled: typeof processState.recoveryEnabled === "boolean"
+        ? processState.recoveryEnabled
         : null,
       restorationEnabled: processState.restorationEnabled === true,
     },

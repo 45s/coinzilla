@@ -426,7 +426,7 @@ The scenario-definition and reporting workstream is tracked in [#1797](https://g
 - Reports: `reports/conservative-scenarios/` (inventory, results and coverage JSON).
 - CI: the existing Harvester Targeted Tests workflow conditionally runs the scenario suite when related paths change and uploads the generated reports.
 
-The initial inventory has 15 TEST-MAPPED, one PARTIAL, one MISSING (CON-PERSIST-003) and one UNSUPPORTED (runtime restoration) scenario. TEST-MAPPED and PARTIAL are not VERIFIED. Unmapped-test reporting is scoped to the named test set in the critical behavior registry, not every Harvester test file.
+The current inventory has 17 TEST-MAPPED and one PARTIAL scenario. CON-PERSIST-002 keeps runtime restoration explicitly unsupported while remaining test-mapped as a boundary; CON-PERSIST-003 covers fresh current-session trading after prior process history when recovery is disabled, plus the strict recovery-enabled gate. TEST-MAPPED and PARTIAL are not VERIFIED. Unmapped-test reporting is scoped to the named test set in the critical behavior registry, not every Harvester test file.
 
 ### Recovery Seller non-FILLED terminal SELL STOP regression
 
