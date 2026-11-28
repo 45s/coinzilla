@@ -1616,7 +1616,6 @@ async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.ho
 async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive, activeProcessOwner, onProgress } = {}) {
   const recoverySource = sourcePaths.find((source) => source.directoryName === "recovery-facts")
   const recoverySize = await getTreeSize(recoverySource.sourceDirectory)
-  const recoveryCheckpoint = await readLatestRecoveryCheckpoint(recoverySource.sourceDirectory)
   let retainedFiles = 0
   let copiedBytes = 0
   const onFileCopied = ({ size }) => {
@@ -1624,7 +1623,16 @@ async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive
     copiedBytes += size
     reportProgress(onProgress, `  retained/copied ${retainedFiles} files — ${formatBytes(copiedBytes)}`)
   }
-  reportProgress(onProgress, "Archive: matching TESTNET process sessions to the latest durable recovery runtime; cumulative logs are excluded...")
+
+  reportProgress(onProgress, `Snapshotting committed recovery-facts/ (${recoverySize.files.length} files, ${formatBytes(recoverySize.totalBytes)})...`)
+  await copyRegularTree({
+    sourceDirectory: recoverySource.sourceDirectory,
+    destinationDirectory: path.join(localArchive, "recovery-facts"),
+    onFileCopied,
+  })
+  const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(localArchive, "recovery-facts"))
+
+  reportProgress(onProgress, "Archive: matching TESTNET process sessions to the archived committed recovery runtime; cumulative logs are excluded...")
   const logSelection = await copySelectedLogs({
     sourceDirectory: path.join(packageDirectory, "logs"),
     destinationDirectory: path.join(localArchive, "logs"),
@@ -1638,18 +1646,12 @@ async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive
       `WARNING: matchingTradingLogsAvailable=false for recovery runtime ${logSelection.unmatchedRuntimeSessionId}; unrelated sessions are retained only as independent evidence.`,
     )
   }
-  reportProgress(onProgress, `Copying complete recovery-facts/ (${recoverySize.files.length} files, ${formatBytes(recoverySize.totalBytes)})...`)
-  await copyRegularTree({
-    sourceDirectory: recoverySource.sourceDirectory,
-    destinationDirectory: path.join(localArchive, "recovery-facts"),
-    onFileCopied,
-  })
-  // The copied append-only fact and manifest files are validated from the archive itself.
-  // This captures a committed prefix while the live process continues appending.
-  reportProgress(onProgress, `Evidence copy complete: ${retainedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
+  if (activeProcessOwner && !isHarvesterProcessAlive(activeProcessOwner.pid)) {
+    throw new Error(`The active Harvester process ${activeProcessOwner.pid} exited during archive collection; the snapshot was retained only as incomplete local evidence.`)
+  }
+  reportProgress(onProgress, `Evidence snapshot complete: ${retainedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
   return logSelection
 }
-
 
 async function writeAndVerifyLocalArchive({
   localArchive,
