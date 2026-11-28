@@ -11,6 +11,8 @@
 
 **This is the only active P0.** Fix the currently failing trading runtime before starting or advancing any secondary workstream. The immediate incident is [#1962](https://github.com/45s/coinzilla/issues/1962): accepted SELLs followed by rejected/unknown execution events. Establish the exact order/event identity and lifecycle failure, add a deterministic regression that fails before the fix, implement the smallest correct change, and verify the exact PR head.
 
+PR #1963 is merged and its process-namespace classifier is being simplified in the current follow-up: client IDs become opaque submission-correlation values, current-process ownership is explicit runtime metadata, and the broker's native order ID is authoritative after acknowledgement. This refactor does not close the incident: the exact identities of the historical accepted ZRO/DOGE SELL reports are still not established.
+
 **Secondary / deferred while trading is broken:** process-restart recovery (#654), durable facts/ledger expansion, SQLite and relational trading-history persistence (#1854), history APIs/projections, account-wide audit/reporting expansion, observability, architecture, multi-provider backlog, volatility calibration, scenario-lab work, and roadmap/maintainability cleanup. Existing safeguards remain; do not weaken order ownership or fill accounting to make tests pass. Do not start secondary tasks or describe them as progress until the trading P0 is resolved.
 
 ### Secondary backlog — not current execution priority
