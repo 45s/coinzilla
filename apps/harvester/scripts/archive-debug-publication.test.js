@@ -6,6 +6,7 @@ import { promisify } from "node:util"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
+import { gzipSync } from "node:zlib"
 import { publishArchive } from "./archive-debug-session.js"
 import { runHarvesterDebugArchivePublication } from "./archive-debug-publication.js"
 
@@ -119,16 +120,19 @@ function createRecoveryFixture(runtimeId) {
 }
 
 function createStreamEvidence(item, runtimeId) {
-  const sourceSize = Buffer.byteLength(item.content)
-  const sourceSha256 = createHash("sha256").update(item.content).digest("hex")
+  const sourceBytes = Buffer.from(item.content)
+  const archiveBytes = gzipSync(sourceBytes)
+  const sourceSize = sourceBytes.length
+  const sourceSha256 = createHash("sha256").update(sourceBytes).digest("hex")
+  const archiveSha256 = createHash("sha256").update(archiveBytes).digest("hex")
   return {
     sourcePath: item.sourcePath,
     archivePath: item.archivePath,
     actualRuntimeId: runtimeId,
     sourceSize,
-    archiveSize: sourceSize,
+    archiveSize: archiveBytes.length,
     sourceSha256,
-    archiveSha256: sourceSha256,
+    archiveSha256,
     compression: "source-gzip-preserved",
     rotationIndex: 0,
     result: "collected",
@@ -137,12 +141,14 @@ function createStreamEvidence(item, runtimeId) {
 }
 
 async function appendFixtureFile({ archiveDirectory, files, relativePath, sourcePath = relativePath, content } = {}) {
-  await writeFile(path.join(archiveDirectory, relativePath), content)
+  const sourceBytes = Buffer.from(content)
+  const archiveBytes = relativePath.endsWith(".gz") ? gzipSync(sourceBytes) : sourceBytes
+  await writeFile(path.join(archiveDirectory, relativePath), archiveBytes)
   files.push({
     path: relativePath,
     sourcePath,
-    size: Buffer.byteLength(content),
-    sha256: createHash("sha256").update(content).digest("hex"),
+    size: archiveBytes.length,
+    sha256: createHash("sha256").update(archiveBytes).digest("hex"),
   })
 }
 
