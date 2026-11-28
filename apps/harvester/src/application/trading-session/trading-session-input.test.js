@@ -57,73 +57,74 @@ test("accepts null git identity when provenance is unavailable", () => {
   assert.equal(mapped.buildProvenance.source.metadataSource, "unavailable", "Unavailable metadata must remain an explicit normalized source.")
 })
 
+const invalidProvenanceCases = [
+  {
+    label: "commit SHA",
+    value: {
+      ...provenance,
+      source: {
+        ...provenance.source,
+        commit: "bad",
+      },
+    },
+    expected: /hexadecimal Git SHA/,
+  },
+  {
+    label: "short SHA",
+    value: {
+      ...provenance,
+      source: {
+        ...provenance.source,
+        shortCommit: "bbbbbbbb",
+      },
+    },
+    expected: /match the full Git SHA/,
+  },
+  {
+    label: "commit date",
+    value: {
+      ...provenance,
+      source: {
+        ...provenance.source,
+        commitDate: "yesterday",
+      },
+    },
+    expected: /canonical UTC ISO-8601/,
+  },
+  {
+    label: "working-tree state",
+    value: {
+      ...provenance,
+      source: {
+        ...provenance.source,
+        workingTree: "modified",
+      },
+    },
+    expected: /workingTree must be/,
+  },
+  {
+    label: "metadata source",
+    value: {
+      ...provenance,
+      source: {
+        ...provenance.source,
+        metadataSource: "other",
+      },
+    },
+    expected: /metadataSource must be/,
+  },
+  {
+    label: "process id",
+    value: {
+      ...provenance,
+      processId: 0,
+    },
+    expected: /positive safe integer/,
+  },
+]
+
 test("rejects malformed build provenance at the application boundary", () => {
-  const invalid = [
-    {
-      label: "commit SHA",
-      value: {
-        ...provenance,
-        source: {
-          ...provenance.source,
-          commit: "bad",
-        },
-      },
-      expected: /hexadecimal Git SHA/,
-    },
-    {
-      label: "short SHA",
-      value: {
-        ...provenance,
-        source: {
-          ...provenance.source,
-          shortCommit: "bbbbbbbb",
-        },
-      },
-      expected: /match the full Git SHA/,
-    },
-    {
-      label: "commit date",
-      value: {
-        ...provenance,
-        source: {
-          ...provenance.source,
-          commitDate: "yesterday",
-        },
-      },
-      expected: /canonical UTC ISO-8601/,
-    },
-    {
-      label: "working-tree state",
-      value: {
-        ...provenance,
-        source: {
-          ...provenance.source,
-          workingTree: "modified",
-        },
-      },
-      expected: /workingTree must be/,
-    },
-    {
-      label: "metadata source",
-      value: {
-        ...provenance,
-        source: {
-          ...provenance.source,
-          metadataSource: "other",
-        },
-      },
-      expected: /metadataSource must be/,
-    },
-    {
-      label: "process id",
-      value: {
-        ...provenance,
-        processId: 0,
-      },
-      expected: /positive safe integer/,
-    },
-  ]
-  for (const entry of invalid) {
+  for (const entry of invalidProvenanceCases) {
     assert.throws(
       () => mapTradingSessionInput({
         buildProvenance: entry.value,
