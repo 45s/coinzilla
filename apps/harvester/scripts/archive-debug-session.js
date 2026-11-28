@@ -1705,7 +1705,7 @@ async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.ho
   const owners = []
   const lockEntries = entries
     .filter((candidate) => candidate.name.endsWith(".lock"))
-    .sort((...entries) => entries[0].name.localeCompare(entries[1].name))
+    .sort((...sortArguments) => sortArguments[0].name.localeCompare(sortArguments[1].name))
   for (const entry of lockEntries) {
     const filename = path.join(lockDirectory, entry.name)
     const owner = await readHarvesterProcessLockOwner({
