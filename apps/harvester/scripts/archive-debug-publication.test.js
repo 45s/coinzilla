@@ -165,26 +165,39 @@ test("publishes with an active process lock, retries interrupted push, and is id
   assert.equal(await readFile(fixture.lockPath, "utf8"), "active trading process lock", "Publication must not modify the active process lock")
 })
 
-test("publication command accepts a completed archive while a process lock exists", async (t) => {
+test("publication command publishes to a temporary Git remote while a process lock exists", async (t) => {
   const fixture = await createFixture(t)
+  const bareRemote = await createTemporaryArchiveRemote({
+    root: fixture.root,
+  })
+  const sourceBefore = await snapshotDirectory(fixture.archiveDirectory)
+  const runGitWithLocalRemote = async (...parameters) => {
+    const [args, options = {}] = parameters
+    const mappedArgs = [...args]
+    if (mappedArgs[0] === "clone" && mappedArgs[4] === REMOTE) {
+      mappedArgs[4] = bareRemote
+    }
+    if (mappedArgs[0] === "ls-remote" && mappedArgs[1] === REMOTE) {
+      mappedArgs[1] = bareRemote
+    }
+    return runGit(mappedArgs, options)
+  }
   const result = await runHarvesterDebugArchivePublication({
     archiveDirectory: fixture.archiveDirectory,
     env: {
       HARVESTER_ARCHIVE_REMOTE: REMOTE,
     },
-    publishArchiveFn: async ({ archiveName, directory, remote }) => {
-      assert.equal(archiveName, ARCHIVE_NAME, "Publication must preserve the archive directory name")
-      assert.equal(directory, fixture.archiveDirectory, "Publication must use the selected completed archive")
-      assert.equal(remote, REMOTE, "Publication must target the configured archive repository")
-      return {
-        commit: "a".repeat(40),
-        fileCount: 2,
-        alreadyPublished: false,
-      }
-    },
+    runGit: runGitWithLocalRemote,
   })
-  assert.equal(result.remoteCommit, "a".repeat(40), "Publication must return its verified remote commit")
-  assert.equal(await readFile(fixture.lockPath, "utf8"), "active trading process lock", "Publication must leave the active process lock untouched")
+  assert.match(result.remoteCommit, /^[a-f0-9]{40}$/, "The command must return its verified remote commit")
+  assert.equal(result.archiveName, ARCHIVE_NAME, "The command must preserve the archive naming convention")
+  assert.equal(result.alreadyPublished, false, "The first publication must create the remote archive")
+  assert.deepEqual(await snapshotDirectory(fixture.archiveDirectory), sourceBefore, "The command must leave source archive files unchanged")
+  assert.equal(
+    await readFile(fixture.lockPath, "utf8"),
+    "active trading process lock",
+    "The command must leave the active Harvester process lock untouched",
+  )
 })
 
 test("publication leaves source archive bytes unchanged", async (t) => {
