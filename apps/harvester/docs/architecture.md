@@ -613,7 +613,7 @@ when both IDs are present they must resolve to the same registered order. TRADE 
 Fill and pass the durable execution-fact barrier before Portfolio/RecoveryLedger
 state is committed. A partial fill updates actual accounting but does not
 advance the strategy; the engine waits for the order's terminal state.
-Unmatched reports are classified using the current process's generated order-ID namespace, not the generic `h-` prefix. Prior-session and manual/external reports follow the configured external-order policy (diagnostic-only under the default `ignore` policy); an unmatched ID in the current process namespace and malformed/conflicting identities remain fail-closed. A fully
+Unmatched reports are classified using explicit current-process client-ID membership recorded by the submission use case, never by parsing the ID. Prior-session and manual/external reports follow the configured external-order policy (diagnostic-only under the default `ignore` policy); an unmatched ID recorded by the current process remains fail-closed. A fully
 filled order triggers immediate strategy reevaluation from the latest known
 price.
 
