@@ -13,6 +13,7 @@ import {
 } from "node:fs/promises"
 import { spawn } from "node:child_process"
 import { createReadStream, createWriteStream } from "node:fs"
+import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { createGzip } from "node:zlib"
 import path from "node:path"
@@ -129,37 +130,62 @@ async function assertRealDirectory(directory) {
   }
 }
 
+async function sha256FileRange(filename, size) {
+  const hash = createHash("sha256")
+  if (size > 0) {
+    for await (const chunk of createReadStream(filename, { start: 0, end: size - 1 })) {
+      hash.update(chunk)
+    }
+  }
+  return hash.digest("hex")
+}
+
+async function copyFileRange({ sourcePath, destinationPath, size, compressed = false } = {}) {
+  if (size === 0) {
+    if (compressed) {
+      await pipeline(Readable.from([]), createGzip({ level: 6 }), createWriteStream(destinationPath, { flags: "wx", mode: 0o600 }))
+    } else {
+      await writeFile(destinationPath, "", { encoding: "utf8", flag: "wx", mode: 0o600 })
+    }
+    return
+  }
+  const source = createReadStream(sourcePath, { start: 0, end: size - 1 })
+  if (compressed) {
+    await pipeline(source, createGzip({ level: 6 }), createWriteStream(destinationPath, { flags: "wx", mode: 0o600 }))
+    return
+  }
+  await pipeline(source, createWriteStream(destinationPath, { flags: "wx", mode: 0o600 }))
+}
+
 async function copyStableFile({ sourcePath, destinationPath } = {}) {
   const before = await lstat(sourcePath)
   if (before.isSymbolicLink() || !before.isFile()) {
     throw new Error(`Refusing to snapshot a non-regular file: ${sourcePath}`)
   }
-  const sourceSha256Before = await sha256File(sourcePath)
+  const sourceSha256Before = await sha256FileRange(sourcePath, before.size)
   const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
   try {
-    await copyFile(sourcePath, temporaryPath)
+    await copyFileRange({ sourcePath, destinationPath: temporaryPath, size: before.size })
     const after = await lstat(sourcePath)
-    const sourceSha256After = await sha256File(sourcePath)
+    const sourceSha256After = await sha256FileRange(sourcePath, before.size)
     const copiedSha256 = await sha256File(temporaryPath)
     if (
       after.isSymbolicLink()
       || !after.isFile()
       || before.dev !== after.dev
       || before.ino !== after.ino
-      || before.size !== after.size
-      || before.mtimeMs !== after.mtimeMs
-      || before.ctimeMs !== after.ctimeMs
+      || after.size < before.size
       || sourceSha256Before !== sourceSha256After
       || sourceSha256Before !== copiedSha256
     ) {
-      throw new Error(`Source file changed while the debug snapshot was being collected: ${sourcePath}`)
+      throw new Error(`Source file was replaced, truncated, or modified before the snapshot boundary: ${sourcePath}`)
     }
     const copied = await lstat(temporaryPath)
-    if (copied.size !== after.size) {
+    if (copied.size !== before.size) {
       throw new Error(`Snapshot copy size changed while collecting: ${sourcePath}`)
     }
     await rename(temporaryPath, destinationPath)
-    return after.size
+    return before.size
   } catch (error) {
     await rm(temporaryPath, { force: true })
     throw error
@@ -212,31 +238,25 @@ export async function copyRegularTree({
   }
 }
 
-async function writeCompressedTemporaryFile({ sourcePath, temporaryPath, sourceAlreadyCompressed } = {}) {
+async function writeCompressedTemporaryFile({ sourcePath, temporaryPath, sourceAlreadyCompressed, sourceSize } = {}) {
   if (sourceAlreadyCompressed) {
-    await copyFile(sourcePath, temporaryPath)
+    await copyFileRange({ sourcePath, destinationPath: temporaryPath, size: sourceSize })
     return
   }
-  await pipeline(
-    createReadStream(sourcePath),
-    createGzip({ level: 6 }),
-    createWriteStream(temporaryPath, { flags: "wx", mode: 0o600 }),
-  )
+  await copyFileRange({ sourcePath, destinationPath: temporaryPath, size: sourceSize, compressed: true })
 }
 
 async function assertSourceFileStable({ sourcePath, sourceBefore, sourceSha256Before } = {}) {
   const sourceAfter = await lstat(sourcePath)
-  const sourceSha256After = await sha256File(sourcePath)
+  const sourceSha256After = await sha256FileRange(sourcePath, sourceBefore.size)
   const sourceChanged = sourceSha256Before !== sourceSha256After
     || sourceAfter.isSymbolicLink()
     || !sourceAfter.isFile()
     || sourceBefore.dev !== sourceAfter.dev
     || sourceBefore.ino !== sourceAfter.ino
-    || sourceBefore.size !== sourceAfter.size
-    || sourceBefore.mtimeMs !== sourceAfter.mtimeMs
-    || sourceBefore.ctimeMs !== sourceAfter.ctimeMs
+    || sourceAfter.size < sourceBefore.size
   if (sourceChanged) {
-    throw new Error(`Source file changed while the debug snapshot was being collected: ${sourcePath}`)
+    throw new Error(`Source file was replaced, truncated, or modified before the snapshot boundary: ${sourcePath}`)
   }
   return sourceSha256After
 }
@@ -246,13 +266,13 @@ async function copyCompressedFile({ sourcePath, destinationPath, childRelative, 
   if (sourceBefore.isSymbolicLink() || !sourceBefore.isFile()) {
     throw new Error(`Refusing to compress a non-regular source file: ${sourcePath}`)
   }
-  const sourceSha256Before = await sha256File(sourcePath)
+  const sourceSha256Before = await sha256FileRange(sourcePath, sourceBefore.size)
   const sourceAlreadyCompressed = /\.gz$/i.test(childRelative)
   const compressedRelative = sourceAlreadyCompressed ? childRelative : `${childRelative}.gz`
   const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
   let sourceSha256After
   try {
-    await writeCompressedTemporaryFile({ sourcePath, temporaryPath, sourceAlreadyCompressed })
+    await writeCompressedTemporaryFile({ sourcePath, temporaryPath, sourceAlreadyCompressed, sourceSize: sourceBefore.size })
     sourceSha256After = await assertSourceFileStable({ sourcePath, sourceBefore, sourceSha256Before })
     await rename(temporaryPath, destinationPath)
   } catch (error) {
@@ -1564,14 +1584,8 @@ async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive
     destinationDirectory: path.join(localArchive, "recovery-facts"),
     onFileCopied,
   })
-  const recoveryCheckpointAfterCopy = await readLatestRecoveryCheckpoint(recoverySource.sourceDirectory)
-  if (
-    recoveryCheckpointAfterCopy.sequence !== recoveryCheckpoint.sequence
-    || recoveryCheckpointAfterCopy.dataCommitHash !== recoveryCheckpoint.dataCommitHash
-    || recoveryCheckpointAfterCopy.runtimeSessionId !== recoveryCheckpoint.runtimeSessionId
-  ) {
-    throw new Error("Operational State Store changed while the debug snapshot was being collected; refusing to create a mixed-time archive.")
-  }
+  // The copied append-only fact and manifest files are validated from the archive itself.
+  // This captures a committed prefix while the live process continues appending.
   reportProgress(onProgress, `Evidence copy complete: ${retainedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
   return logSelection
 }
