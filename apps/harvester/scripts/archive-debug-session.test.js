@@ -589,6 +589,7 @@ test("archives stable logs for a stopped runtime when legacy completion markers 
   const marker = JSON.parse(await readFile(path.join(result.localArchive, session.stoppedSnapshotPath), "utf8"))
   assert.equal(marker.runtimeSessionId, RUNTIME_SESSION_ID)
   assert.equal(marker.processId, process.pid)
+  assert.equal(marker.processStartedAt, session.startedAt)
   assert.equal(marker.processAliveAtCapture, false)
   assert.equal(marker.completionConfirmed, false)
   assert.deepEqual(marker.streams, {
