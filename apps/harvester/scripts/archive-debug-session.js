@@ -1732,7 +1732,10 @@ async function writeActiveProcessSnapshotMarker({ localArchive, logSelection, ac
   const session = logSelection.sessions.find((candidate) =>
     candidate.runtimeSessionId === recoveryCheckpoint.runtimeSessionId && candidate.completionStatus === "active"
   )
-  const { streams } = logSelection.evidenceIntegrity
+  if (!session?.activeSnapshotPath) {
+    throw new Error(`Cannot create an active snapshot marker without one uniquely matched active session for ${recoveryCheckpoint.runtimeSessionId}.`)
+  }
+  const streams = logSelection.evidenceIntegrity?.streams
   const marker = {
     formatVersion: 1,
     snapshotType: "active-harvester-process",
@@ -1744,8 +1747,8 @@ async function writeActiveProcessSnapshotMarker({ localArchive, logSelection, ac
     capturedAt: new Date().toISOString(),
     recoveryDataCommitHash: recoveryCheckpoint.dataCommitHash,
     streams: {
-      harvesterLog: streams.harvesterLog.status === "matched" && streams.harvesterLog.fileCount > 0,
-      traceLog: streams.traceLog.status === "matched" && streams.traceLog.fileCount > 0,
+      harvesterLog: streams?.harvesterLog?.status === "matched" && streams.harvesterLog.fileCount > 0,
+      traceLog: streams?.traceLog?.status === "matched" && streams.traceLog.fileCount > 0,
     },
   }
   if (!session?.activeSnapshotPath || !marker.streams.harvesterLog || !marker.streams.traceLog) {
