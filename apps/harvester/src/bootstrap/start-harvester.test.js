@@ -294,6 +294,29 @@ test("retains CG and RS execution routes and subscriptions when process recovery
   }
 })
 
+test("fails RS startup explicitly when its durable Operational State Store is missing", async () => {
+  await assert.rejects(
+    () => startHarvesterForTest({
+      loadConfig: async () => createRsOnlyStartupConfig(),
+      env: binanceEnv,
+      executionSymbols: ["LINEAUSDT"],
+      executionRoutes: [{
+        strategyId: StrategyId.RECOVERY_SELLER,
+        symbol: "LINEAUSDT",
+      }],
+      marketDataSymbols: ["LINEAUSDT"],
+      eventPublisher: shared.testEventPublisher,
+    }),
+    (error) => {
+      assert.equal(error.code, "RECOVERY_SELLER_OPERATIONAL_STATE_STORE_REQUIRED",
+        "Missing RS STOP storage must have a stable startup error code.")
+      assert.match(error.message, /verified durable Operational State Store/,
+        "The startup error must explain the exact missing RS dependency.")
+      return true
+    },
+  )
+})
+
 test("starts an RS-only provider account without a Conservative execution route", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []
