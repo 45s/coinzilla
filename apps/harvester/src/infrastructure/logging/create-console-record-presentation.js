@@ -65,9 +65,13 @@ function summarizeOrderHistoryProjectionFailure({ data, message } = {}) {
 }
 
 function summarizeCataloguedFailure({ data } = {}) {
-  const nativeCauseCode = data.causeCode ?? (
+  const candidateCauseCode = data.causeCode ?? (
     data.harvesterErrorCode ? data.errorCode : undefined
   )
+  const nativeCauseCode = candidateCauseCode !== data.errorCode &&
+    candidateCauseCode !== data.harvesterErrorCode
+    ? candidateCauseCode
+    : undefined
   const messageAlreadyIdentifiesNativeCode = typeof data.errorMessage === "string" && (
     data.errorMessage.startsWith(`${nativeCauseCode}:`) ||
     (nativeCauseCode === "ERR_SQLITE_ERROR" && data.errorMessage.startsWith("SQLITE_ERROR:"))
