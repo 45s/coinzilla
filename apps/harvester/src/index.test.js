@@ -2773,7 +2773,10 @@ test("preserves nested process error identity while redacting credential-bearing
     new Error(`provider failed: bot${secretBotToken} authorization=Bearer bearer-secret-value https://alice:password-secret@private.example/path`, {
       cause: nestedCause,
     }),
-    { code: "HARVESTER_PROVIDER_IDENTITY_INVALID" },
+    {
+      code: "HARVESTER_PROVIDER_IDENTITY_INVALID",
+      context: { component: "provider", operation: "connect" },
+    },
   )
 
   const diagnostic = describeProcessError(original)
@@ -2781,6 +2784,7 @@ test("preserves nested process error identity while redacting credential-bearing
 
   assert.equal(diagnostic.name, "Error", "The original error name must be preserved.")
   assert.equal(diagnostic.code, original.code, "The original stable code must be preserved.")
+  assert.deepEqual(diagnostic.context, original.context, "Safe typed error context must be preserved.")
   assert.ok(diagnostic.message.includes("[REDACTED]"), "Credential-bearing message fragments must be masked.")
   assert.equal(diagnostic.cause.name, "Error", "The nested cause name must be preserved.")
   assert.equal(diagnostic.cause.code, nestedCause.code, "The nested native cause code must be preserved.")
