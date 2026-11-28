@@ -150,6 +150,13 @@ function createRsOnlyStartupConfig({
     components: { recovery: { enabled: processRecoveryEnabled } },
     strategies: {
       ...appConfig.strategies,
+      CG_coinGrabber: {
+        ...appConfig.strategies.CG_coinGrabber,
+        settings: {
+          ...appConfig.strategies.CG_coinGrabber.settings,
+          recovery: { enabled: processRecoveryEnabled },
+        },
+      },
       RS_recoverySeller: {
         enabled: true,
         pairs: {
