@@ -56,11 +56,11 @@ function assertManifestRuntimeCorrelation({ manifest, integrity, expectedRuntime
 function assertUniqueCompletedRuntimeSession({ manifest, expectedRuntimeId } = {}) {
   const matchingSessions = (manifest.sessionInventory ?? []).filter((session) =>
     session.runtimeSessionId === expectedRuntimeId
-      && session.completionStatus === "complete"
-      && session.loggerCompletionStatus === "complete"
+      && ["complete", "active"].includes(session.completionStatus)
+      && ["complete", "active"].includes(session.loggerCompletionStatus)
   )
   if (matchingSessions.length !== 1) {
-    throw new Error(`Debug archive runtime ownership is ambiguous or incomplete: expected exactly one completed process identity for runtime ${expectedRuntimeId}; found ${matchingSessions.length}.`)
+    throw new Error(`Debug archive runtime ownership is ambiguous or incomplete: expected exactly one completed or verified active process identity for runtime ${expectedRuntimeId}; found ${matchingSessions.length}.`)
   }
 }
 
@@ -105,18 +105,43 @@ async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
   const expectedRuntimeId = manifest.recoveryRuntimeSessionId
   const [session] = manifest.sessionInventory.filter((candidate) =>
     candidate.runtimeSessionId === expectedRuntimeId
-      && candidate.completionStatus === "complete"
-      && candidate.loggerCompletionStatus === "complete"
+      && ["complete", "active"].includes(candidate.completionStatus)
+      && ["complete", "active"].includes(candidate.loggerCompletionStatus)
   )
   if (!session) {
-    throw new Error(`Debug archive has no unique completed process/logger session for runtime ${expectedRuntimeId}.`)
+    throw new Error(`Debug archive has no unique completed or active process snapshot for runtime ${expectedRuntimeId}.`)
   }
-  const [identity, completion, loggerCompletion] = await Promise.all([
-    readArchivedSessionJson({
-      directory,
-      manifest,
-      sourcePath: session.processIdentityPath,
-    }),
+  const identity = await readArchivedSessionJson({
+    directory,
+    manifest,
+    sourcePath: session.processIdentityPath,
+  })
+  if (!isMatchingArchivedProcessIdentity({ identity, session, expectedRuntimeId, manifest })) {
+    throw new Error(`Archived process identity does not prove runtime ${expectedRuntimeId}.`)
+  }
+  if (session.completionStatus === "active") {
+    const markerPath = session.activeSnapshotPath
+    const markerEntry = manifest.files.find((entry) => entry.path === markerPath)
+    if (!markerEntry || typeof markerPath !== "string") {
+      throw new Error(`Active runtime ${expectedRuntimeId} is missing its snapshot provenance marker.`)
+    }
+    const marker = JSON.parse(await readFile(path.join(directory, markerPath), "utf8"))
+    const activeSnapshotMatches = marker.formatVersion === 1
+      && marker.snapshotType === "active-harvester-process"
+      && marker.runtimeSessionId === expectedRuntimeId
+      && marker.processId === identity.processId
+      && marker.processId === manifest.tradingRuntime.processIdentity.processId
+      && typeof marker.hostname === "string"
+      && typeof marker.lockStartedAt === "string"
+      && !Number.isNaN(Date.parse(marker.capturedAt))
+      && marker.streams?.harvesterLog === true
+      && marker.streams?.traceLog === true
+    if (!activeSnapshotMatches) {
+      throw new Error(`Active process snapshot provenance is invalid for runtime ${expectedRuntimeId}.`)
+    }
+    return
+  }
+  const [completion, loggerCompletion] = await Promise.all([
     readArchivedSessionJson({
       directory,
       manifest,
@@ -128,11 +153,10 @@ async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
       sourcePath: session.loggerCompletionPath,
     }),
   ])
-  const lifecycleMatches = isMatchingArchivedProcessIdentity({ identity, session, expectedRuntimeId, manifest })
-    && isMatchingArchivedProcessCompletion({ completion, expectedRuntimeId })
+  const lifecycleMatches = isMatchingArchivedProcessCompletion({ completion, expectedRuntimeId })
     && isMatchingArchivedLoggerCompletion({ loggerCompletion, expectedRuntimeId })
   if (!lifecycleMatches) {
-    throw new Error(`Archived process identity/completion metadata does not prove one complete runtime ${expectedRuntimeId}: identity=${identity.runtimeSessionId ?? "missing"}; process completion=${completion.runtimeSessionId ?? "missing"}; logger completion=${loggerCompletion.runtimeSessionId ?? "missing"}.`)
+    throw new Error(`Archived process completion metadata does not prove complete runtime ${expectedRuntimeId}: process completion=${completion.runtimeSessionId ?? "missing"}; logger completion=${loggerCompletion.runtimeSessionId ?? "missing"}.`)
   }
   assertArchivedProcessId({ identity, completion, manifest, expectedRuntimeId })
 }
