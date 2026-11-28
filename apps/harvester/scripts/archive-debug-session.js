@@ -2011,6 +2011,71 @@ async function writeStoppedProcessSnapshotMarker({
   })
 }
 
+async function assertStoppedProcessSnapshotStillStopped({ processId, lockDirectory, isProcessAlive } = {}) {
+  const activeProcessOwner = await readActiveHarvesterProcessOwner({
+    lockDirectory,
+    isProcessAlive,
+  })
+  if (activeProcessOwner || isProcessAlive(processId)) {
+    throw new Error(
+      `Cannot publish stopped-process snapshot: PID ${processId} or another Harvester process is active during collection.`,
+    )
+  }
+}
+
+async function writeStoppedProcessSnapshotMarker({
+  localArchive,
+  session,
+  logSelection,
+  recoveryCheckpoint,
+  lockDirectory,
+  isProcessAlive,
+} = {}) {
+  await assertStoppedProcessSnapshotStillStopped({
+    processId: session.processId,
+    lockDirectory,
+    isProcessAlive,
+  })
+  const streams = logSelection.evidenceIntegrity?.streams
+  const marker = {
+    formatVersion: 1,
+    status: "stopped-unconfirmed",
+    snapshotType: "stopped-harvester-process",
+    runtimeSessionId: recoveryCheckpoint.runtimeSessionId,
+    processId: session.processId,
+    processAliveAtCapture: false,
+    activeProcessLockOwnerAtCapture: false,
+    completionConfirmed: false,
+    loggerFlushConfirmed: false,
+    capturedAt: new Date().toISOString(),
+    recoveryDataCommitHash: recoveryCheckpoint.dataCommitHash,
+    streams: {
+      harvesterLog: streams?.harvesterLog?.status === "matched" && streams.harvesterLog.fileCount > 0,
+      traceLog: streams?.traceLog?.status === "matched" && streams.traceLog.fileCount > 0,
+    },
+    limitations: [
+      "The process completion record is missing; its exit code and termination reason are unknown.",
+      "The logger completion record is missing; a clean logger flush cannot be confirmed.",
+      "Only byte-stable files observed after the process was no longer alive are included.",
+    ],
+  }
+  if (!marker.streams.harvesterLog || !marker.streams.traceLog) {
+    throw new Error(
+      `Cannot create stopped-process snapshot marker without both runtime-matched log streams for ${recoveryCheckpoint.runtimeSessionId}.`,
+    )
+  }
+  const markerPath = path.join(localArchive, session.stoppedSnapshotPath)
+  await mkdir(path.dirname(markerPath), {
+    recursive: true,
+    mode: 0o700,
+  })
+  await writeFile(markerPath, `${JSON.stringify(marker, null, 2)}\\n`, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o600,
+  })
+}
+
 function areActiveProcessLockOwnersUnchanged({ initialOwner, currentOwner } = {}) {
   if (
     currentOwner?.pid !== initialOwner?.pid
