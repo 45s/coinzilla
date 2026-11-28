@@ -1244,6 +1244,7 @@ async function collectPreparedArchive({
   archiveName,
   createdAt,
   onProgress,
+  onArchiveCreatedFn,
 }) {
   try {
     await mkdir(localArchive, {
@@ -1262,6 +1263,7 @@ async function collectPreparedArchive({
       logSelection,
       onProgress,
     })
+    await onArchiveCreatedFn?.({ directory: localArchive, archiveName })
     reportProgress(onProgress, "Local debug archive collected and verified.")
     return {
       archiveName,
@@ -1286,6 +1288,7 @@ export async function runHarvesterDebugArchive({
   packageDirectory = PACKAGE_DIRECTORY,
   now = () => new Date(),
   createArchiveId = randomUUID,
+  onArchiveCreatedFn,
   onProgress = (message) => process.stdout.write(`${message}\\n`),
   lockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
 } = {}) {
@@ -1317,6 +1320,7 @@ export async function runHarvesterDebugArchive({
     archiveName,
     createdAt,
     onProgress,
+    onArchiveCreatedFn,
   })
 }
 
