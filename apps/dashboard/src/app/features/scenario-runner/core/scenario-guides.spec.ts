@@ -54,6 +54,17 @@ describe('Scenario Runner catalog explanations', () => {
     }
   });
 
+  it('publishes concise business titles for every Recovery Seller scenario', () => {
+    const titles = runtimeScenarioIds.map((scenarioId) => {
+      const guide = getScenarioGuide(scenarioId);
+      expect(guide?.title, `${scenarioId} must have a business-readable title`).toBeTruthy();
+      expect(guide?.title, `${scenarioId} title must not expose its technical identifier`).not.toContain(scenarioId);
+      return guide?.title;
+    });
+
+    expect(new Set(titles).size, 'each scenario must be distinguishable in the selector').toBe(runtimeScenarioIds.length);
+  });
+
   it('marks the helper-only profitability candidate as preliminary and non-executable', () => {
     const guide = getScenarioGuide('RS-004-011');
 

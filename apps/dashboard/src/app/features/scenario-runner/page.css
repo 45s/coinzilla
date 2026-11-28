@@ -237,3 +237,12 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:520px;overflow:auto}
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+
+.scenario-id {
+  color: var(--muted);
+}
+
+.scenario-id code {
+  overflow-wrap: anywhere;
+}
