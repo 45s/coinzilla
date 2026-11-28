@@ -65,10 +65,17 @@ function summarizeOrderHistoryProjectionFailure({ data, message } = {}) {
 }
 
 function summarizeCataloguedFailure({ data } = {}) {
+  const nativeCauseCode = data.causeCode ?? (
+    data.harvesterErrorCode ? data.errorCode : undefined
+  )
+  const errorMessage = [
+    nativeCauseCode,
+    data.errorMessage,
+  ].filter((value) => typeof value === "string" && value.length > 0).join(": ")
   const diagnostic = resolveHarvesterErrorDiagnostic({
     errorCode: data.harvesterErrorCode ?? data.errorCode,
     stage: data.errorStage ?? data.stage,
-    errorMessage: data.errorMessage,
+    errorMessage,
   })
   if (!diagnostic) {
     return null
