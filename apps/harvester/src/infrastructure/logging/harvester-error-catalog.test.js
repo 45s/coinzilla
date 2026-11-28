@@ -29,7 +29,7 @@ test("resolves a catalog entry without losing the concrete cause or observed sta
   assert.equal(diagnostic.diagnosticId, "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED")
   assert.equal(diagnostic.stage, "RELATIONAL_MIGRATION_V5")
   assert.equal(diagnostic.cause, "SQLITE_ERROR: no such column: broker_order_id")
-  assert.match(diagnostic.operatorAction, /do not delete or reset/)
+  assert.match(diagnostic.operatorAction, /never delete/reset/)
 })
 
 test("returns no catalog guidance for unknown codes instead of misclassifying them", () => {
