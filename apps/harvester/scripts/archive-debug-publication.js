@@ -91,6 +91,7 @@ async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
     && identity.environment === "testnet"
     && identity.runtimeSessionId === expectedRuntimeId
     && identity.startedAt === session.startedAt
+    && identity.startedAt === manifest.tradingRuntime.processIdentity.startedAt
   const processCompletionMatches = completion.runtimeSessionId === expectedRuntimeId
     && completion.logStreamsComplete === true
     && completion.loggerStreamsComplete !== false
@@ -101,7 +102,8 @@ async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
   if (!identityMatches || !processCompletionMatches || !loggerCompletionMatches) {
     throw new Error(`Archived process identity/completion metadata does not prove one complete runtime ${expectedRuntimeId}: identity=${identity.runtimeSessionId ?? "missing"}; process completion=${completion.runtimeSessionId ?? "missing"}; logger completion=${loggerCompletion.runtimeSessionId ?? "missing"}.`)
   }
-  if (identity.processId && completion.processId && identity.processId !== completion.processId) {
+  const expectedProcessId = manifest.tradingRuntime.processIdentity.processId
+  if (expectedProcessId && completion.processId !== expectedProcessId) {
     throw new Error(`Process ID mismatch in lifecycle evidence for runtime ${expectedRuntimeId}: identity=${identity.processId}; completion=${completion.processId}.`)
   }
 }

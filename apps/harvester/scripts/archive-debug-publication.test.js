@@ -136,10 +136,11 @@ function createStreamEvidence(item, runtimeId) {
   }
 }
 
-async function appendFixtureFile({ archiveDirectory, files, relativePath, content } = {}) {
+async function appendFixtureFile({ archiveDirectory, files, relativePath, sourcePath = relativePath, content } = {}) {
   await writeFile(path.join(archiveDirectory, relativePath), content)
   files.push({
     path: relativePath,
+    sourcePath,
     size: Buffer.byteLength(content),
     sha256: createHash("sha256").update(content).digest("hex"),
   })
@@ -218,7 +219,7 @@ async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME } = {}) {
   const recovery = createRecoveryFixture(runtimeId)
   const files = []
   for (const item of sourceFiles) {
-    await appendFixtureFile({ archiveDirectory, files, relativePath: item.archivePath, content: item.content })
+    await appendFixtureFile({ archiveDirectory, files, relativePath: item.archivePath, sourcePath: item.sourcePath, content: item.content })
   }
   for (const item of recovery.files) {
     await appendFixtureFile({ archiveDirectory, files, relativePath: item.path, content: item.content })
