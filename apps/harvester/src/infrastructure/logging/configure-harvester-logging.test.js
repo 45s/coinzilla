@@ -1004,6 +1004,7 @@ test("prints catalog code, exact stage, cause and remediation without cutting of
     data: {
       message: "Relational trading history is unavailable; legacy order history remains active",
       errorCode: "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
+      harvesterErrorCode: "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
       errorStage: "RELATIONAL_MIGRATION_V5",
       errorMessage: "SQLITE_ERROR: no such column: broker_order_id",
     },
