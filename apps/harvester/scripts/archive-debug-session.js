@@ -1046,6 +1046,7 @@ async function copyIdentifiedSessionEvidence({ sourceDirectory, destinationDirec
         processId: session.processId,
         hostname: selection.activeProcessOwner.hostname,
         lockStartedAt: selection.activeProcessOwner.startedAt,
+        recoveryDataCommitHash: selection.recoveryDataCommitHash,
         capturedAt: new Date().toISOString(),
         streams: {
           harvesterLog: true,
@@ -1105,6 +1106,7 @@ async function copySelectedLogs({ sourceDirectory, destinationDirectory, recover
     ...selection,
     recoveryRuntimeSessionId: recoveryCheckpoint.runtimeSessionId,
     recoveryProcessIdentity: recoveryCheckpoint.processIdentity,
+    recoveryDataCommitHash: recoveryCheckpoint.dataCommitHash,
   }
   const evidenceIntegrity = createEvidenceIntegrity({
     selection: selectionWithRuntime,
