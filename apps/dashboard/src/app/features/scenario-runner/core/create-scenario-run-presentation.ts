@@ -64,7 +64,7 @@ export interface ScenarioRunPresentation {
     readonly to: string;
     readonly label?: string;
   }[];
-  readonly decision: { readonly outcome: string | null; readonly explanation: string | null; readonly reasonCode: string | null } | null;
+  readonly decision: { readonly outcome: string | null; readonly explanation: string | null; readonly reasonCode: string | null; readonly sourceEvidence: unknown } | null;
   readonly action: unknown;
   readonly orders: readonly ScenarioRunPresentationOrder[];
   readonly cycle: ScenarioRunPresentationCycle;
@@ -525,6 +525,7 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
       outcome: readString(decisionSource, 'outcome'),
       explanation: readString(decisionSource, 'explanation'),
       reasonCode: readString(decisionSource, 'reasonCode'),
+      sourceEvidence: decisionSource,
     } : null,
     action: runtimeOutput?.['action'] ?? null,
     orders,

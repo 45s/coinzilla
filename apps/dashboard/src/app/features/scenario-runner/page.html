@@ -116,6 +116,10 @@
           <strong>{{ view.outcomes.accounting.cycleStatus }}</strong>
           <small>{{ view.outcomes.accounting.complete === true ? 'Cycle completed' : view.outcomes.accounting.complete === false ? 'Cycle is not complete' : 'Completion not established' }}</small>
           <small>Cycle ID: {{ view.cycle.id ?? 'unavailable' }} · Position ID: {{ view.cycle.positionId ?? 'unavailable' }}</small>
+          <details>
+            <summary>Inspect current cycle evidence</summary>
+            <pre>{{ view.cycle.sourceEvidence | json }}</pre>
+          </details>
         </article>
         <article class="outcome-card">
           <h3>Safety</h3>
@@ -171,6 +175,10 @@
           <h3>Strategy decision</h3>
           <p><strong>{{ view.decision.outcome ?? 'Decision recorded' }}</strong> · {{ view.decision.explanation ?? 'No human-readable explanation supplied' }}</p>
           <p>Reason code: <code>{{ view.decision.reasonCode ?? 'not supplied' }}</code></p>
+          <details>
+            <summary>Inspect decision calculations and original evidence</summary>
+            <pre>{{ view.decision.sourceEvidence | json }}</pre>
+          </details>
         </section>
       }
 
@@ -213,6 +221,10 @@
               } @else if (order.terminalReconciled === false) {
                 <small>Terminal reconciliation failed</small>
               }
+              <details>
+                <summary>Inspect exact submission and lifecycle evidence</summary>
+                <pre>{{ order.sourceEvidence | json }}</pre>
+              </details>
             </article>
           }
         </section>
@@ -223,7 +235,10 @@
           <h3>Cycle history</h3>
           <ol>
             @for (cycle of view.cycles; track cycle.id ?? $index) {
-              <li><strong>{{ cycle.id ?? 'Cycle identity unavailable' }}</strong> · {{ cycle.status }} · Position {{ cycle.positionId ?? 'unavailable' }}</li>
+              <li>
+                <strong>{{ cycle.id ?? 'Cycle identity unavailable' }}</strong> · {{ cycle.status }} · Position {{ cycle.positionId ?? 'unavailable' }}
+                <details><summary>Inspect cycle evidence</summary><pre>{{ cycle.sourceEvidence | json }}</pre></details>
+              </li>
             }
           </ol>
         </section>

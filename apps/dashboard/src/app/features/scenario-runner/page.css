@@ -61,3 +61,6 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:520px;overflow:auto}
 .assertion-card{border:1px solid var(--line);border-radius:9px;padding:10px;display:grid;gap:5px}
 .assertion-card p,.provenance-details p{margin:3px 0;overflow-wrap:anywhere}
 .provenance-details{margin-top:6px}
+
+.order-card details,.decision-summary details,.outcome-card details,.cycle-history details{margin-top:6px;min-width:0}
+.order-card details pre,.decision-summary details pre,.cycle-history details pre{max-height:260px}
