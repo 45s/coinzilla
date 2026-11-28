@@ -174,8 +174,8 @@ test("publication command publishes to a temporary Git remote while a process lo
   const runGitWithLocalRemote = async (...parameters) => {
     const [args, options = {}] = parameters
     const mappedArgs = [...args]
-    if (mappedArgs[0] === "clone" && mappedArgs[4] === REMOTE) {
-      mappedArgs[4] = bareRemote
+    if (mappedArgs[0] === "clone" && mappedArgs[5] === REMOTE) {
+      mappedArgs[5] = bareRemote
     }
     if (mappedArgs[0] === "ls-remote" && mappedArgs[1] === REMOTE) {
       mappedArgs[1] = bareRemote
