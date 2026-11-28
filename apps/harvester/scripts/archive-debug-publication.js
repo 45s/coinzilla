@@ -101,6 +101,28 @@ function assertArchivedProcessId({ identity, completion, manifest, expectedRunti
   }
 }
 
+function isValidActiveSnapshotMarker({ marker, identity, manifest, expectedRuntimeId } = {}) {
+  return marker.formatVersion === 1
+    && marker.snapshotType === "active-harvester-process"
+    && marker.runtimeSessionId === expectedRuntimeId
+    && marker.processId === identity.processId
+    && marker.processId === manifest.tradingRuntime.processIdentity.processId
+    && typeof marker.hostname === "string"
+    && marker.processStartedAt === identity.startedAt
+    && Number.isFinite(Date.parse(marker.lockStartedAt))
+    && marker.recoveryDataCommitHash === manifest.dataCommitHash
+    && Number.isFinite(Date.parse(marker.capturedAt))
+    && Date.parse(marker.capturedAt) >= Date.parse(marker.lockStartedAt)
+    && marker.streams?.harvesterLog === true
+    && marker.streams?.traceLog === true
+}
+
+function assertNoRuntimeMismatches({ integrity, expectedRuntimeId } = {}) {
+  assertNoRuntimeMismatches({
+    integrity,
+    expectedRuntimeId,
+  })
+}
 async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
   const expectedRuntimeId = manifest.recoveryRuntimeSessionId
   const [session] = manifest.sessionInventory.filter((candidate) =>
@@ -131,20 +153,12 @@ async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
       throw new Error(`Active runtime ${expectedRuntimeId} is missing its snapshot provenance marker.`)
     }
     const marker = JSON.parse(await readFile(path.join(directory, markerPath), "utf8"))
-    const activeSnapshotMatches = marker.formatVersion === 1
-      && marker.snapshotType === "active-harvester-process"
-      && marker.runtimeSessionId === expectedRuntimeId
-      && marker.processId === identity.processId
-      && marker.processId === manifest.tradingRuntime.processIdentity.processId
-      && typeof marker.hostname === "string"
-      && Number.isFinite(Date.parse(marker.lockStartedAt))
-      && Math.abs(Date.parse(marker.lockStartedAt) - Date.parse(identity.startedAt)) <= 30_000
-      && marker.recoveryDataCommitHash === manifest.dataCommitHash
-      && !Number.isNaN(Date.parse(marker.capturedAt))
-      && Date.parse(marker.capturedAt) >= Date.parse(identity.startedAt)
-      && marker.streams?.harvesterLog === true
-      && marker.streams?.traceLog === true
-    if (!activeSnapshotMatches) {
+    if (!isValidActiveSnapshotMarker({
+      marker,
+      identity,
+      manifest,
+      expectedRuntimeId,
+    })) {
       throw new Error(`Active process snapshot provenance is invalid for runtime ${expectedRuntimeId}.`)
     }
     return
