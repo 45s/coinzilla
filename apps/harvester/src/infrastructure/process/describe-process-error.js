@@ -1,7 +1,7 @@
-const SENSITIVE_ASSIGNMENT_PATTERN = /((?:token|api[_-]?key|secret|signature|authorization|password|passphrase|credential)\\s*[:=]\\s*["']?)[^"'&\\s,;]+/gi
-const BEARER_ASSIGNMENT_PATTERN = /(authorization\\s*[:=]\\s*Bearer\\s+)[^\\s,;]+/gi
-const BOT_TOKEN_PATTERN = /\\b(?:bot)?\\d{5,}:[A-Za-z0-9_-]{20,}\\b/g
-const URL_USERINFO_PATTERN = /(\\bhttps?:\\/\\/)[^/@\\s]+@/gi
+const SENSITIVE_ASSIGNMENT_PATTERN = /((?:token|api[_-]?key|secret|signature|authorization|password|passphrase|credential)\s*[:=]\s*["']?)[^"'&\s,;]+/gi
+const BEARER_ASSIGNMENT_PATTERN = /(authorization\s*[:=]\s*Bearer\s+)[^\s,;]+/gi
+const BOT_TOKEN_PATTERN = /\b(?:bot)?\d{5,}:[A-Za-z0-9_-]{20,}\b/g
+const URL_USERINFO_PATTERN = /(\bhttps?:\/\/)[^/@\s]+@/gi
 
 function redactProcessErrorText(value) {
   return value
@@ -13,7 +13,7 @@ function redactProcessErrorText(value) {
 
 /**
  * Convert process errors into a recursively serializable, credential-redacted
- * diagnostic description while retaining the original names, codes, messages,
+ * diagnostic description while retaining original names, codes, messages,
  * stacks and nested cause relationships.
  *
  * @param {unknown} error - The value caught at a process boundary.
@@ -24,7 +24,7 @@ export const describeProcessError = (error) => {
     return {
       name: error.name,
       message: redactProcessErrorText(error.message),
-      stack: redactProcessErrorText(error.stack),
+      stack: typeof error.stack === "string" ? redactProcessErrorText(error.stack) : undefined,
       errors: [...error.errors].map(describeProcessError),
     }
   }
@@ -34,8 +34,8 @@ export const describeProcessError = (error) => {
       code: error.code,
       symbol: error.symbol,
       details: error.details,
-      message: error.message,
-      stack: error.stack,
+      message: redactProcessErrorText(error.message),
+      stack: typeof error.stack === "string" ? redactProcessErrorText(error.stack) : undefined,
       cause: error.cause ? describeProcessError(error.cause) : undefined,
     }
   }
