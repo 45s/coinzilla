@@ -561,20 +561,40 @@ function createRecoveryContext({
   }
 }
 
-export function createUserDataRecoveryHandler({
-  state,
-  isStopped,
-  getUserDataSubscription,
-  getTradingEngine,
-  tradingEnabled,
-  broker,
-  drainUserDataEvents,
-  setCanonicalOwnershipReconciled,
-  refreshAccountSnapshot,
-  publishAccountSnapshot,
-  publishOpenOrdersSnapshot,
-  logger,
-} = {}) {
+export function createUserDataRecoveryHandler(options = {}) {
+  if (options.enabled === false) {
+    const { state, logger } = options
+    let lastReportedGeneration
+    return function startDisabledUserDataRecovery() {
+      const generation = state?.recoveryGeneration ?? 0
+      if (lastReportedGeneration === generation) {
+        return
+      }
+      lastReportedGeneration = generation
+      if (state) {
+        state.pendingRecovery = false
+      }
+      logger?.warn?.({
+        message: "User-data reconnect reconciliation is disabled; trading remains blocked until a fresh process startup PREFLIGHT",
+        reason: "USER_DATA_RECOVERY_DISABLED",
+        generation,
+      })
+    }
+  }
+  const {
+    state,
+    isStopped,
+    getUserDataSubscription,
+    getTradingEngine,
+    tradingEnabled,
+    broker,
+    drainUserDataEvents,
+    setCanonicalOwnershipReconciled,
+    refreshAccountSnapshot,
+    publishAccountSnapshot,
+    publishOpenOrdersSnapshot,
+    logger,
+  } = options
   return function startUserDataRecovery() {
     const userDataSubscription = getUserDataSubscription()
     const tradingEngine = getTradingEngine()

@@ -2,7 +2,7 @@
 
 ## Pre-launch component configuration
 
-Harvester's startup-only component settings and the audited safety/dependency matrix are documented in the [pre-launch component configuration matrix](./docs/architecture/COMPONENT_CONFIGURATION_MATRIX.md). Configure components in the named `appConfig` in `config/index.js`; changes apply on the next launch. This is not a runtime feature-toggle or kill-switch API.
+Harvester's startup-only component settings and the audited safety/dependency matrix are documented in the [pre-launch component configuration matrix](./docs/architecture/COMPONENT_CONFIGURATION_MATRIX.md). Configure components in the named `appConfig` in `config/index.js`; changes apply on the next launch. The shipped `components.recovery.enabled: false` master switch disables Operational State Store reads/writes, startup account-history backfill, user-data reconnect reconciliation, Recovery Seller execution, and Telegram Command Center. It leaves current-session Conservative accounting, initial account/open-order PREFLIGHT, Journal durability, process locks, and new order/fill persistence active. After a user-data disconnect, readiness stays blocked until a new process performs a fresh PREFLIGHT. Existing recovery-facts files are left untouched and ignored. This is not a runtime feature-toggle or kill-switch API.
 
 > **Documentation:** Start with the [Harvester documentation index](./docs/README.md). Repository-wide documentation lifecycle and AI-agent maintenance requirements are defined in [Documentation Governance](../../docs/DOCUMENTATION_GOVERNANCE.md). The [documentation migration plan](./docs/plans/DOCUMENTATION_MIGRATION.md) tracks the staged reorganization; historical evidence must be preserved.
 

@@ -474,17 +474,24 @@ export async function prepareHarvesterStartupState({ dependencies, resolved } = 
     telegramOperatorFetchImpl,
     logger,
   } = dependencies
+  const recoveryComponentEnabled = resolved.appConfig.components?.recovery?.enabled !== false
+  const telegramConfig = recoveryComponentEnabled
+    ? resolved.appConfig.operatorControl?.telegram
+    : { enabled: false, allowedUserIds: [] }
+  const suppliedStore = recoveryComponentEnabled ? suppliedOperationalStateStore : undefined
   const operatorControlLifecycle = await prepareTelegramOperatorControl({
-    telegramConfig: resolved.appConfig.operatorControl?.telegram,
+    telegramConfig,
     env,
     runtimeSessionId,
-    operationalStateStore: suppliedOperationalStateStore,
+    operationalStateStore: suppliedStore,
     createOperationalStateStore,
     createAdapter: createTelegramOperatorAdapterFactory,
     fetchImpl: telegramOperatorFetchImpl,
     logger,
   })
-  const operationalStateStore = suppliedOperationalStateStore ?? operatorControlLifecycle.operationalStateStore
+  const operationalStateStore = recoveryComponentEnabled
+    ? suppliedStore ?? operatorControlLifecycle.operationalStateStore
+    : undefined
   const recoverySellerEnabled = Object.keys(resolved.recoverySellerPairs ?? {}).length > 0
   const {
     startupOptions,
@@ -1057,6 +1064,7 @@ function createHarvesterUserDataRecoveryRuntime({ startup,
   userDataEvents } = {}) {
   const { userDataState } = resources
   const startUserDataRecovery = createUserDataRecoveryHandler({
+    enabled: startup.appConfig.components?.recovery?.enabled !== false,
     state: userDataState,
     isStopped: () => userDataState.stopped || userDataState.shutdownRequested,
     getUserDataSubscription: () => resources.userDataSubscription,
@@ -1355,6 +1363,14 @@ function logHistorySyncSuccess({ startup, identity, result } = {}) {
 }
 
 async function synchronizeStartupExchangeHistory({ startup, portfolio, resources } = {}) {
+  if (startup.appConfig.components?.recovery?.enabled === false) {
+    startup.logger.info?.({
+      message: "Startup exchange history synchronization skipped because the recovery component is disabled",
+      component: "synchronize-account-history",
+      reason: "RECOVERY_COMPONENT_DISABLED",
+    })
+    return
+  }
   const identity = startup.providerIdentity ?? portfolio.accountRuntime.identity
   const persistence = startup.orderHistoryPersistence
   if (!shouldSynchronizeStartupHistory({

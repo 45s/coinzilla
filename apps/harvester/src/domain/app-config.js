@@ -151,7 +151,7 @@ function validateComponentConfig(config) {
     path,
   })
   for (const [componentName, componentConfig] of Object.entries(config.components)) {
-    if (componentName !== "tradingHistoryApi") {
+    if (!["tradingHistoryApi", "recovery"].includes(componentName)) {
       fail({
         path: `${path}.${componentName}`,
         expectation: "a supported component",

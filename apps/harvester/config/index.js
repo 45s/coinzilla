@@ -9,6 +9,9 @@ export const appConfig = {
     tradingHistoryApi: {
       enabled: true,
     },
+    recovery: {
+      enabled: false,
+    },
   },
   notifications: {
     telegram: {
