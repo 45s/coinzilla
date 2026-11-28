@@ -69,7 +69,10 @@ function validateManifestFileEntry({ entry, seenPaths } = {}) {
 function validateManifestFileEntries(manifest) {
   const seenPaths = new Set()
   for (const entry of manifest.files) {
-    validateManifestFileEntry({\n      entry,\n      seenPaths,\n    })
+    validateManifestFileEntry({
+      entry,
+      seenPaths,
+    })
   }
   return seenPaths
 }
@@ -151,7 +154,8 @@ export async function runHarvesterDebugArchivePublication({
     if (args.length !== 2 || args[0] !== "--archive") {
       throw new TypeError("Usage: archive:debug:publish [--archive <directory>]")
     }
-    const [, archiveDirectoryArgument] = args\n    selectedDirectory = archiveDirectoryArgument
+    const [, archiveDirectoryArgument] = args
+    selectedDirectory = archiveDirectoryArgument
   }
   if (!selectedDirectory && env.HARVESTER_ARCHIVE_DIRECTORY) {
     selectedDirectory = env.HARVESTER_ARCHIVE_DIRECTORY
