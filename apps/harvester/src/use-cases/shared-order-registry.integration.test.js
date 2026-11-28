@@ -125,7 +125,12 @@ function createEngineOptions({
   recoverySellerWorkflow,
 } = {}) {
   return {
-    broker: brokerState.broker,
+    broker: {
+      ...brokerState.broker,
+      providerInstanceId: "binance-primary",
+      providerType: "binance",
+      accountId: "test-account",
+    },
     strategyPolicy: conservativeStrategyPolicy,
     appConfig,
     getPortfolio: () => sharedAccountState.portfolio,
