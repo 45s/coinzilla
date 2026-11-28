@@ -142,7 +142,6 @@ This section supersedes earlier checklist/history statements in this file that s
 
 Dashboard gateway tests now cover catalogue, submit, history, run detail, cancel and replay HTTP methods/routes/payloads. Framework-independent application tests cover validation, authoritative status refresh, WebSocket update handling, cancellation, replay, trace graph, history and debug-package generation. The selectable debug JSON remains the fallback when clipboard access is unavailable. Exact-head CI is pending after these final test/documentation updates.
 
-
 ## 2026-11-28 — Dashboard visual run details (#1982 / PR #1983)
 
 - Added a framework-independent, strategy-neutral presentation adapter over source run/debug evidence.

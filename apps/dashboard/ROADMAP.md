@@ -27,7 +27,6 @@
 
 Detailed prior roadmap, including completed design decisions and historical runner notes, is preserved in [ROADMAP_HISTORY_2026-11-26.md](../../docs/archive/roadmap-history-2026-11-26.md#dashboard-roadmap).
 
-
 ## Scenario Runner run-detail presentation — 2026-11-28
 
 The Dashboard Scenario Runner now has an evidence-linked visual run story in PR [#1983](https://github.com/45s/coinzilla/pull/1983), tracked by [issue #1982](https://github.com/45s/coinzilla/issues/1982). The implementation extends the existing framework-independent Scenario Runner application and Angular presentation rather than adding a second runner.

@@ -565,7 +565,6 @@ The current branch is scaffolding, not the executable RS MVP described above. It
 
 The Harvester runtime catalogue now contains twelve RS production-flow scenarios. On Windows, the API composes a dedicated Node child-process worker by default, and all twelve scenarios are locally executable through the real REST API using simulated broker/order and run-local state adapters. The Windows acceptance test checks catalogue discovery, submit, authoritative status, assertions, trace and replay remaining unverified. This is functional local simulation only: Node guards are not an OS security boundary, the scenarios remain PARTIAL, and exact replay remains blocked pending independent trusted artifact verification. Linux Bubblewrap/cgroup acceptance is optional OS hardening and does not gate local Windows development.
 
-
 ## Run details: evidence-first lifecycle presentation
 
 The Scenario Runner run-details view is an evidence-first presentation of the authoritative run record. It is not an execution simulator and does not synthesize missing lifecycle events.
