@@ -924,6 +924,24 @@ test("collects every rotated and pre-compressed DEBUG and TRACE file for the exa
   }))
 })
 
+test("rejects source log names that collide after gzip archive naming", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const sessionDirectory = path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet")
+  await writeFile(
+    path.join(sessionDirectory, "harvester.log.gz"),
+    gzipSync(Buffer.from("a separately rotated compressed DEBUG generation")),
+  )
+  await assert.rejects(
+    runHarvesterDebugArchive(archiveDependencies({ fixture })),
+    /archive path collision|duplicate archive path|already exists/i,
+    "The collector must reject two source files that map to one archive path instead of silently overwriting forensic evidence.",
+  )
+})
+
 test("rejects an unreadable pre-compressed rotated log instead of archiving corrupt gzip bytes", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
