@@ -783,6 +783,68 @@ test("publishes a verified active-process snapshot without requiring completion 
 })
 
  
+test("publishes a stopped-runtime snapshot while preserving unconfirmed completion status", async (t) => {
+  const fixture = await createFixture({ t })
+  const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
+  const [session] = manifest.sessionInventory
+  const completionArchivePaths = [
+    "logs/sessions/fixture/process-completed.json.gz",
+    "logs/sessions/fixture/log-streams-completed.json.gz",
+  ]
+  for (const archivePath of completionArchivePaths) {
+    await rm(path.join(fixture.archiveDirectory, archivePath))
+  }
+  manifest.files = manifest.files.filter((entry) => !completionArchivePaths.includes(entry.path))
+  session.completionStatus = "stopped-unconfirmed"
+  session.loggerCompletionStatus = "stopped-unconfirmed"
+  session.stoppedSnapshotPath = "logs/sessions/fixture/stopped-process-snapshot.json"
+  session.logStreamsComplete = false
+  session.loggerStreamsComplete = false
+  const marker = {
+    formatVersion: 1,
+    status: "stopped-unconfirmed",
+    snapshotType: "stopped-harvester-process",
+    runtimeSessionId: manifest.recoveryRuntimeSessionId,
+    processId: session.processId,
+    processAliveAtCapture: false,
+    activeProcessLockOwnerAtCapture: false,
+    completionConfirmed: false,
+    loggerFlushConfirmed: false,
+    capturedAt: new Date().toISOString(),
+    recoveryDataCommitHash: manifest.dataCommitHash,
+    streams: { harvesterLog: true, traceLog: true },
+    limitations: [
+      "Process completion is unconfirmed.",
+      "Logger flush is unconfirmed.",
+      "Only byte-stable post-exit files are included.",
+    ],
+  }
+  const markerContent = `${JSON.stringify(marker, null, 2)}\\n`
+  await writeFile(path.join(fixture.archiveDirectory, session.stoppedSnapshotPath), markerContent)
+  manifest.files.push({
+    path: session.stoppedSnapshotPath,
+    size: Buffer.byteLength(markerContent),
+    sha256: createHash("sha256").update(markerContent).digest("hex"),
+  })
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\\n`)
+
+  let publisherCalled = false
+  const result = await runHarvesterDebugArchivePublication({
+    archiveDirectory: fixture.archiveDirectory,
+    env: { HARVESTER_ARCHIVE_REMOTE: REMOTE },
+    publishArchiveFn: async () => {
+      publisherCalled = true
+      return {
+        commit: "d".repeat(40),
+        fileCount: manifest.files.length,
+      }
+    },
+  })
+  assert.equal(publisherCalled, true, "A verified stopped-process snapshot must be eligible for publication.")
+  assert.equal(result.remoteCommit, "d".repeat(40))
+})
+
 test("publishes a verified active-runtime snapshot without process-completion files", async (t) => {
   const fixture = await createFixture({ t })
   const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
