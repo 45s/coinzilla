@@ -17,6 +17,47 @@ function validateArchiveName(archiveName) {
   }
 }
 
+function validateManifestHeader(manifest) {
+  const hasExpectedFormat = manifest.formatVersion === 1
+    && manifest.application === "harvester"
+    && manifest.commandTradingMode === "testnet"
+  const hasExpectedScope = JSON.stringify(manifest.includedDirectories) === JSON.stringify(REQUIRED_INCLUDED_DIRECTORIES)
+    && JSON.stringify(manifest.excludedPaths) === JSON.stringify(REQUIRED_EXCLUSIONS)
+  const hasCreationTime = typeof manifest.createdAt === "string"
+    && !Number.isNaN(Date.parse(manifest.createdAt))
+  if (!hasExpectedFormat || !hasExpectedScope || !hasCreationTime) {
+    throw new Error("Debug archive manifest is invalid or incomplete.")
+  }
+  if (!Array.isArray(manifest.files) || manifest.files.length === 0) {
+    throw new Error("Debug archive manifest must contain a non-empty file inventory.")
+  }
+}
+
+function validateManifestFileEntry(entry, seenPaths) {
+  const pathSegments = typeof entry.path === "string" ? entry.path.split("/") : []
+  const safePath = pathSegments.length > 0
+    && !entry.path.includes("\\")
+    && !path.posix.isAbsolute(entry.path)
+    && pathSegments.every((segment) => segment !== "" && segment !== "." && segment !== "..")
+  const allowedPath = entry.path?.startsWith("logs/")
+    || entry.path?.startsWith("recovery-facts/")
+    || entry.path === "data_commit_hash"
+  const validDigest = typeof entry.sha256 === "string" && /^[a-f0-9]{64}$/.test(entry.sha256)
+  const validSize = Number.isSafeInteger(entry.size) && entry.size >= 0
+  if (!safePath || !allowedPath || !validDigest || !validSize || seenPaths.has(entry.path)) {
+    throw new Error("Debug archive manifest contains an invalid or duplicate file entry.")
+  }
+  seenPaths.add(entry.path)
+}
+
+function validateManifestFileEntries(manifest) {
+  const seenPaths = new Set()
+  for (const entry of manifest.files) {
+    validateManifestFileEntry(entry, seenPaths)
+  }
+  return seenPaths
+}
+
 async function validateCompletedArchive(directory) {
   const directoryStats = await lstat(directory)
   if (directoryStats.isSymbolicLink() || !directoryStats.isDirectory()) {
@@ -30,44 +71,21 @@ async function validateCompletedArchive(directory) {
     throw new Error("Debug archive manifest must be a regular file.")
   }
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
-  if (
-    manifest.formatVersion !== 1
-    || manifest.application !== "harvester"
-    || manifest.commandTradingMode !== "testnet"
-    || typeof manifest.createdAt !== "string"
-    || Number.isNaN(Date.parse(manifest.createdAt))
-    || JSON.stringify(manifest.includedDirectories) !== JSON.stringify(REQUIRED_INCLUDED_DIRECTORIES)
-    || JSON.stringify(manifest.excludedPaths) !== JSON.stringify(REQUIRED_EXCLUSIONS)
-    || !Array.isArray(manifest.files)
-    || manifest.files.length === 0
-  ) {
-    throw new Error("Debug archive manifest is invalid or incomplete.")
-  }
-  const seenPaths = new Set()
-  for (const entry of manifest.files) {
-    if (
-      typeof entry.path !== "string"
-      || entry.path.length === 0
-      || entry.path.includes("\\")
-      || path.posix.isAbsolute(entry.path)
-      || entry.path.split("/").some((segment) => segment === "" || segment === "." || segment === "..")
-      || !(entry.path.startsWith("logs/") || entry.path.startsWith("recovery-facts/") || entry.path === "data_commit_hash")
-      || !Number.isSafeInteger(entry.size)
-      || entry.size < 0
-      || !/^[a-f0-9]{64}$/.test(entry.sha256)
-      || seenPaths.has(entry.path)
-    ) {
-      throw new Error("Debug archive manifest contains an invalid or duplicate file entry.")
-    }
-    seenPaths.add(entry.path)
-  }
-  await verifyArchive({ directory, manifest })
+  validateManifestHeader(manifest)
+  const seenPaths = validateManifestFileEntries(manifest)
+  await verifyArchive({
+    directory,
+    manifest,
+  })
   const actualFiles = await listRegularFiles({ directory })
   const expectedFiles = [...seenPaths, "manifest.json"].sort()
   if (JSON.stringify(actualFiles) !== JSON.stringify(expectedFiles)) {
     throw new Error("Debug archive manifest inventory does not include exactly the archive's regular files.")
   }
-  return { archiveName, manifest }
+  return {
+    archiveName,
+    manifest,
+  }
 }
 
 async function selectLatestCompletedArchive({ packageDirectory } = {}) {
@@ -76,9 +94,10 @@ async function selectLatestCompletedArchive({ packageDirectory } = {}) {
   if (outputStats.isSymbolicLink() || !outputStats.isDirectory()) {
     throw new Error("Debug archive output must be a real directory.")
   }
-  const candidates = (await readdir(archiveOutput, { withFileTypes: true }))
+  const entries = await readdir(archiveOutput, { withFileTypes: true })
+  const candidates = entries
     .filter((entry) => entry.isDirectory() && ARCHIVE_NAME_PATTERN.test(entry.name))
-    .map((entry) => entry.name)
+    .map(({ name }) => name)
     .sort()
     .reverse()
   for (const archiveName of candidates) {
