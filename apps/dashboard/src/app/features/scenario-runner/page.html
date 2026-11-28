@@ -19,7 +19,7 @@
     <label class="scenario-control">Scenario
       <select [value]="scenarioId()" (change)="selectScenario($any($event.target).value)">
         @for (item of scenarios; track item.id) {
-          <option [value]="item.id">{{ item.id }} · {{ item.name }}</option>
+          <option [value]="item.id">{{ scenarioTitle(item.id, item.name) }}</option>
         }
       </select>
     </label>
@@ -27,6 +27,7 @@
   <div class="scenario-meta">
     <p class="scenario-status">Source mapping: {{ selectedScenario?.status ?? 'UNAVAILABLE' }}</p>
     <p class="scenario-status">Execution status: {{ selectedScenario?.executionStatus ?? 'UNAVAILABLE' }}</p>
+    <p class="scenario-status scenario-id">Scenario ID: <code>{{ selectedScenario?.id ?? 'UNAVAILABLE' }}</code></p>
   </div>
   @if (selectedScenarioGuide; as guide) {
     <section class="scenario-guide" aria-labelledby="scenario-guide-title">
