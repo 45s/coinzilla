@@ -190,3 +190,50 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:520px;overflow:auto}
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Compact catalogue selection and keep the scenario identifier prominent. */
+.catalog-source-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  min-width: 0;
+}
+
+.catalog-source-toggle {
+  flex: 0 0 auto;
+  font-size: 13px;
+}
+
+.catalog-source-revision {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.controls {
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.controls label {
+  min-width: 0;
+  font-size: 13px;
+}
+
+.controls select {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.scenario-control {
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

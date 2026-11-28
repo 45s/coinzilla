@@ -1,43 +1,29 @@
 <div class="app-shell">
-  <aside class="sidebar">
-    <a class="brand" href="#overview" aria-label="Coinzilla dashboard home" (click)="selectSection('overview')">
-      <span class="brand-mark">C</span>
-      <span class="brand-copy">
-        <strong>coinzilla</strong>
-        <small>CONTROL ROOM</small>
-      </span>
-    </a>
-
-    <div class="workspace-label">WORKSPACE</div>
-    <nav class="primary-nav" aria-label="Main navigation">
-      @for (item of navigationItems; track item.section) {
-        <button
-          type="button"
-          class="nav-item"
-          [class.active]="activeSection() === item.section"
-          [attr.aria-current]="activeSection() === item.section ? 'page' : null"
-          (click)="selectSection(item.section)"
-        >
-          <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
-          <span>{{ item.label }}</span>
-        </button>
-      }
-    </nav>
-
-    <div class="sidebar-spacer"></div>
-
-    <div class="sidebar-status">
-      <span class="status-dot muted"></span>
-      <div>
-        <strong>Harvester API</strong>
-        <small>Live status is shown on Overview</small>
-      </div>
-    </div>
-    <div class="sidebar-footer">COINZILLA <span>•</span> DASHBOARD</div>
-  </aside>
-
   <main class="main-panel" id="overview">
     <header class="topbar">
+      <a class="brand" href="#overview" aria-label="Coinzilla dashboard home" (click)="selectSection('overview')">
+        <span class="brand-mark">C</span>
+        <span class="brand-copy">
+          <strong>coinzilla</strong>
+          <small>CONTROL ROOM</small>
+        </span>
+      </a>
+
+      <nav class="primary-nav" aria-label="Main navigation">
+        @for (item of navigationItems; track item.section) {
+          <button
+            type="button"
+            class="nav-item"
+            [class.active]="activeSection() === item.section"
+            [attr.aria-current]="activeSection() === item.section ? 'page' : null"
+            (click)="selectSection(item.section)"
+          >
+            <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
+            <span>{{ item.label }}</span>
+          </button>
+        }
+      </nav>
+
       <div class="breadcrumb">
         <span>Workspace</span>
         <span class="breadcrumb-separator">/</span>

@@ -1,4 +1,6 @@
+import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
+import { ScenarioGraphViewerComponent } from './scenario-graph-viewer.component';
 import { createScenarioGuideGraph } from './adapters/scenario-guide-graph';
 import { createScenarioGraphViewModel } from './application/scenario-graph-editor';
 import { validateScenarioGraph } from './domain/scenario-graph';
@@ -31,6 +33,20 @@ describe('scenario guide graph projection', () => {
     expect(validateScenarioGraph(graph)).toEqual([]);
     expect(view.nodes).toHaveLength(3);
     expect(graph.source.kind).toBe('scenario-guide');
+  });
+
+  it('renders the complete calculated graph height without an internal scroll viewport', async () => {
+    const graph = createScenarioGuideGraph({ scenarioId: 'RS-EXAMPLE-001', scenarioName: 'Example recovery scenario', guide });
+    await TestBed.configureTestingModule({ imports: [ScenarioGraphViewerComponent] }).compileComponents();
+    const fixture = TestBed.createComponent(ScenarioGraphViewerComponent);
+    fixture.componentRef.setInput('graph', graph);
+    fixture.detectChanges();
+
+    const svg = fixture.nativeElement.querySelector('svg') as SVGSVGElement;
+    const expectedHeight = createScenarioGraphViewModel({ graph, orientation: 'vertical' }).height;
+    expect(Number(svg.getAttribute('height')), 'the SVG must expose the full calculated graph height so every node remains in document flow').toBe(expectedHeight);
+    expect(fixture.nativeElement.querySelector('.graph-scroll'), 'the graph must not be wrapped in a nested scroll container').toBeNull();
+    fixture.destroy();
   });
 
   it('does not invent decision branches when the guide publishes ordered steps only', () => {

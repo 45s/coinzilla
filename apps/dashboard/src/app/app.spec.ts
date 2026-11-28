@@ -103,8 +103,12 @@ describe('AppComponent', () => {
       .flush({ ok: true, data: createBotsSnapshot().data.status.data });
     await fixture.whenStable();
 
-    const renderedText = fixture.nativeElement.textContent as string;
+    const renderedRoot = fixture.nativeElement as HTMLElement;
+    const renderedText = renderedRoot.textContent as string;
 
+    expect(renderedRoot.querySelector('.sidebar'), 'the dashboard must not reserve a fixed left sidebar for primary navigation').toBeNull();
+    expect(renderedRoot.querySelector('.topbar .primary-nav'), 'primary workspace navigation must live in the horizontal top bar').not.toBeNull();
+    expect(renderedRoot.querySelector('.topbar .breadcrumb'), 'horizontal navigation must preserve the workspace breadcrumb').not.toBeNull();
     expect(renderedText, 'The dashboard shell must retain its product identity.').toContain('coinzilla');
     expect(renderedText, 'The primary navigation must retain Overview.').toContain('Overview');
     expect(renderedText, 'The dashboard shell must identify the Overview as a live Harvester view.').toContain('LIVE SYSTEM VIEW');

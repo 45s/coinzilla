@@ -1,5 +1,4 @@
 <section class="graph-viewer" aria-label="Selected scenario graph">
-  <div class="graph-scroll">
     <svg
       class="graph-canvas"
       [attr.viewBox]="'0 0 ' + viewModel().width + ' ' + viewModel().height"
@@ -50,8 +49,6 @@
         </g>
       }
     </svg>
-  </div>
-
   <div class="graph-legend" aria-label="Graph legend">
     <span><i data-kind="start"></i> Start</span>
     <span><i data-kind="action"></i> Production flow</span>
