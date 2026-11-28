@@ -65,23 +65,25 @@ function summarizeOrderHistoryProjectionFailure({ data, message } = {}) {
 }
 
 function summarizeCataloguedFailure({ data } = {}) {
-  const candidateCauseCode = data.causeCode ?? (
-    data.harvesterErrorCode ? data.errorCode : undefined
-  )
-  const nativeCauseCode = candidateCauseCode !== data.errorCode &&
-    candidateCauseCode !== data.harvesterErrorCode
-    ? candidateCauseCode
-    : undefined
+  const nativeCauseCode = data.harvesterErrorCode
+    ? (data.errorCode !== data.harvesterErrorCode ? data.errorCode : undefined)
+    : (data.causeCode !== data.errorCode ? data.causeCode : undefined)
   const messageAlreadyIdentifiesNativeCode = typeof data.errorMessage === "string" && (
     data.errorMessage.startsWith(`${nativeCauseCode}:`) ||
     (nativeCauseCode === "ERR_SQLITE_ERROR" && data.errorMessage.startsWith("SQLITE_ERROR:"))
   )
-  const errorMessage = messageAlreadyIdentifiesNativeCode
+  const causeMessage = messageAlreadyIdentifiesNativeCode
     ? data.errorMessage
     : [
       nativeCauseCode,
       data.errorMessage,
     ].filter((value) => typeof value === "string" && value.length > 0).join(": ")
+  const sourceFilterTypes = Array.isArray(data.sourceFilterTypes)
+    ? data.sourceFilterTypes.filter((value) => typeof value === "string" && value.length > 0)
+    : []
+  const errorMessage = sourceFilterTypes.length > 0
+    ? `${causeMessage}; source filters: ${sourceFilterTypes.join(", ")}`
+    : causeMessage
   const diagnostic = resolveHarvesterErrorDiagnostic({
     errorCode: data.harvesterErrorCode ?? data.errorCode,
     stage: data.errorStage ?? data.stage,
