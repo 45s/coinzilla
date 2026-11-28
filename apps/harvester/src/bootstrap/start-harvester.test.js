@@ -2381,7 +2381,11 @@ test("skips startup account-history synchronization when the master recovery com
     },
     orderHistoryPersistence: fixture.orderHistoryPersistence,
     brokerAdapterFactory: () => fixture.broker,
-    logger: { info() {}, warn() {}, error() {} },
+    logger: {
+      info() {},
+      warn() {},
+      error() {},
+    },
   })
 
   try {

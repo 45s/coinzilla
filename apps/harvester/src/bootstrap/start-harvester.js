@@ -464,7 +464,7 @@ async function persistHarvesterProcessStartFromStartup({
   })
 }
 
-export async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
+async function prepareHarvesterOperatorControl({ dependencies, resolved } = {}) {
   const {
     env,
     runtimeSessionId,
@@ -477,7 +477,10 @@ export async function prepareHarvesterStartupState({ dependencies, resolved } = 
   const recoveryComponentEnabled = resolved.appConfig.components?.recovery?.enabled !== false
   const telegramConfig = recoveryComponentEnabled
     ? resolved.appConfig.operatorControl?.telegram
-    : { enabled: false, allowedUserIds: [] }
+    : {
+        enabled: false,
+        allowedUserIds: [],
+      }
   const suppliedStore = recoveryComponentEnabled ? suppliedOperationalStateStore : undefined
   const operatorControlLifecycle = await prepareTelegramOperatorControl({
     telegramConfig,
@@ -489,9 +492,22 @@ export async function prepareHarvesterStartupState({ dependencies, resolved } = 
     fetchImpl: telegramOperatorFetchImpl,
     logger,
   })
-  const operationalStateStore = recoveryComponentEnabled
-    ? suppliedStore ?? operatorControlLifecycle.operationalStateStore
-    : undefined
+  return {
+    operatorControlLifecycle,
+    operationalStateStore: recoveryComponentEnabled
+      ? suppliedStore ?? operatorControlLifecycle.operationalStateStore
+      : undefined,
+  }
+}
+
+export async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
+  const {
+    operatorControlLifecycle,
+    operationalStateStore,
+  } = await prepareHarvesterOperatorControl({
+    dependencies,
+    resolved,
+  })
   const recoverySellerEnabled = Object.keys(resolved.recoverySellerPairs ?? {}).length > 0
   const {
     startupOptions,

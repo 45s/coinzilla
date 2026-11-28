@@ -353,11 +353,14 @@ function createResolvedHarvesterRuntime({
   })
   const recoveryComponentEnabled = configuredAppConfig.components?.recovery?.enabled !== false
   const configuredRecoverySellerStrategyConfig = configuredAppConfig.strategies?.RS_recoverySeller
-  const recoverySellerStrategyConfig = recoveryComponentEnabled
-    ? configuredRecoverySellerStrategyConfig
-    : configuredRecoverySellerStrategyConfig
-      ? { ...configuredRecoverySellerStrategyConfig, enabled: false, pairs: {} }
-      : undefined
+  let recoverySellerStrategyConfig = configuredRecoverySellerStrategyConfig
+  if (!recoveryComponentEnabled && configuredRecoverySellerStrategyConfig) {
+    recoverySellerStrategyConfig = {
+      ...configuredRecoverySellerStrategyConfig,
+      enabled: false,
+      pairs: {},
+    }
+  }
   if (recoveryComponentEnabled && recoverySellerStrategyConfig?.enabled === true && executionRoutes === undefined) {
     throw new Error("Enabled RS markets require explicit strategy/market execution routes")
   }

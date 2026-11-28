@@ -2716,9 +2716,18 @@ test("does not construct or inject recovery storage when the master recovery com
     },
     start: async (input) => {
       startupInput = input
-      return { connected: false, tradingEnabled: false, strategyMode: "conservative", subscriptions: [] }
+      return {
+        connected: false,
+        tradingEnabled: false,
+        strategyMode: "conservative",
+        subscriptions: [],
+      }
     },
-    logger: { info() {}, system() {}, error() {} },
+    logger: {
+      info() {},
+      system() {},
+      error() {},
+    },
   })
 
   assert.equal(storeFactoryCalls, 0, "The disabled master switch must not construct the Operational State Store.")
