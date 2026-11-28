@@ -53,12 +53,58 @@ function validateExecutionSymbolList({ executionSymbols, routeSymbols } = {}) {
   }
 }
 
+function resolveEffectiveExecutionInputs({
+  configuredAppConfig,
+  executionSymbols,
+  executionRoutes,
+} = {}) {
+  if (configuredAppConfig.components?.recovery?.enabled !== false) {
+    return { executionSymbols, executionRoutes };
+  }
+
+  const recoverySellerSymbols = new Set(
+    Object.keys(configuredAppConfig.strategies?.RS_recoverySeller?.pairs ?? {}),
+  );
+  const conservativeSymbols = new Set(
+    Object.keys(configuredAppConfig.strategies?.CG_coinGrabber?.pairs ?? {}),
+  );
+  const disabledRecoveryOnlySymbols = new Set(
+    [...recoverySellerSymbols].filter((symbol) => !conservativeSymbols.has(symbol)),
+  );
+
+  const filteredRoutes = Array.isArray(executionRoutes)
+    ? executionRoutes.filter((route) => route?.strategyId !== StrategyId.RECOVERY_SELLER)
+    : executionRoutes;
+  const routedConservativeSymbols = new Set(
+    (Array.isArray(filteredRoutes) ? filteredRoutes : [])
+      .filter((route) => route?.strategyId === StrategyId.COIN_GRABBER)
+      .map((route) => route.symbol),
+  );
+  const removedRouteSymbols = new Set(
+    (Array.isArray(executionRoutes) ? executionRoutes : [])
+      .filter((route) => route?.strategyId === StrategyId.RECOVERY_SELLER)
+      .map((route) => route.symbol)
+      .filter((symbol) => !routedConservativeSymbols.has(symbol)),
+  );
+  for (const symbol of removedRouteSymbols) {
+    disabledRecoveryOnlySymbols.add(symbol);
+  }
+
+  return {
+    executionRoutes: filteredRoutes,
+    executionSymbols: executionSymbols === undefined
+      ? undefined
+      : executionSymbols.filter((symbol) => !disabledRecoveryOnlySymbols.has(symbol)),
+  };
+}
+
 function resolveExecutionRouteSymbols({ executionRoutes, executionSymbols } = {}) {
   if (executionRoutes === undefined) {
     return {
       conservativeExecutionSymbols: executionSymbols,
       recoverySellerExecutionSymbols: undefined,
       executionSymbols,
+      executionRoutes: undefined,
     }
   }
   if (!Array.isArray(executionRoutes)) {
@@ -100,6 +146,7 @@ function resolveExecutionRouteSymbols({ executionRoutes, executionSymbols } = {}
     conservativeExecutionSymbols,
     recoverySellerExecutionSymbols,
     executionSymbols: routeSymbols,
+    executionRoutes,
   }
 }
 
@@ -241,6 +288,7 @@ function resolveConservativeRuntimePairs({
     recoverySellerPairs,
     marketPairs,
     executionSymbols: routes.executionSymbols ?? Object.keys(marketPairs),
+    executionRoutes: routes.executionRoutes,
   }
 }
 
@@ -364,12 +412,17 @@ function createResolvedHarvesterRuntime({
   if (recoveryComponentEnabled && recoverySellerStrategyConfig?.enabled === true && executionRoutes === undefined) {
     throw new Error("Enabled RS markets require explicit strategy/market execution routes")
   }
+  const effectiveExecutionInputs = resolveEffectiveExecutionInputs({
+    configuredAppConfig,
+    executionSymbols,
+    executionRoutes,
+  })
   const resolvedPairs = resolveConservativeRuntimePairs({
     strategyConfig,
     recoverySellerStrategyConfig,
     tradingMode: runtime.tradingMode,
-    executionSymbols,
-    executionRoutes,
+    executionSymbols: effectiveExecutionInputs.executionSymbols,
+    executionRoutes: effectiveExecutionInputs.executionRoutes,
   })
   const appConfig = createEffectiveAppConfig({
     configuredAppConfig,
@@ -429,7 +482,7 @@ function createResolvedHarvesterOptions({ resolved, eventPublisher, logger, exec
     brokerName: resolved.runtime.brokerName,
     tradingMode: resolved.runtime.tradingMode,
     tradingEnabled: resolved.runtime.tradingEnabled && resolved.evidence.enabledSymbols.length > 0,
-    executionRoutes: Object.freeze([...(executionRoutes ?? [])]),
+    executionRoutes: Object.freeze([...(resolved.resolvedPairs.executionRoutes ?? executionRoutes ?? [])]),
     marketPriceStrategyIds: resolveMarketPriceStrategyIds({
       marketPairs: resolved.resolvedPairs.marketPairs,
       conservativePairs: resolved.resolvedPairs.conservativePairs,
@@ -463,6 +516,6 @@ export async function resolveHarvesterOptions({
     resolved,
     eventPublisher,
     logger,
-    executionRoutes,
+    executionRoutes: resolved.resolvedPairs.executionRoutes,
   })
 }
