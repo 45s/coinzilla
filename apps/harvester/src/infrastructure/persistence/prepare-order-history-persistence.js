@@ -28,12 +28,8 @@ function createPreparationFailureLogDetails({ error, relational } = {}) {
     causeCode: error?.code,
     errorMessage: error?.message ?? String(error),
   }
-  if (error?.context !== undefined) {
-    details.errorContext = error.context
-  }
-  if (error?.stage !== undefined || error?.context?.stage !== undefined) {
-    details.errorStage = error.stage ?? error.context.stage
-  }
+  details.errorContext = error?.context
+  details.errorStage = error?.stage ?? error?.context?.stage
   return details
 }
 
