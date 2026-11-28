@@ -59,7 +59,7 @@ its tests enforce unique codes, complete operator guidance, one-look output for
 every registered entry, bounded continuations, and synchronization with the
 [operator error vocabulary](./error-vocabulary.md). Relational
 history preparation reports a stable Harvester error code separately from
-the native SQLite `causeCode`, and identifies connection, migration, and
+the native SQLite `errorCode`, and identifies connection, migration, and
 backup stages. A persistence-projection failure does not authorize database
 deletion, reset, or repair.
 
