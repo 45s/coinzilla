@@ -2,6 +2,28 @@
 
 **Tracking:** Dashboard Issue #1836 / PR #1837.
 
+## Conservative strategy inspection catalogue — issue #2007
+
+The Harvester catalogue exposes the eighteen existing Conservative domain scenario definitions under the strategy ID `CG-conservative`. The ID is deliberately distinct from the future `GC-aggressive` strategy. The Dashboard receives their declared preconditions, initial states, ordered input-event descriptions, expected states/orders/accounting/side effects, invariants, requirements, source links and current test-mapping status.
+
+These are **inspection records**, not executable Dashboard run scripts. Their existing `TEST-MAPPED` status denotes a linked domain test, not verified coverage or a run performed by the Scenario Runner. Every CG entry is therefore published with `executionStatus: BLOCKED` and `executable: false`; no CG process worker or broker adapter is registered. A scenario can become runnable only after a fixed simulation-only worker reuses the actual Conservative production flow and provides an executable input schema, with isolation and trace/assertion evidence verified independently.
+
+The production Harvester catalogue owns a safe source projection; it does not import the test-only registry or test helpers. A regression test compares all eighteen projected scenario IDs, names, metadata and coverage classifications against the existing test inventory. Strategy registration remains generic so a later `GC-aggressive` integration does not require a second RS/CG-specific host path.
+
+```mermaid
+flowchart TD
+  A[Conservative test scenario inventory] --> B[Reviewed source projection in Harvester]
+  B --> C[CG-conservative strategy registration]
+  C --> D[Harvester /catalog]
+  D --> E[Dashboard strategy and scenario selectors]
+  E --> F[Inspect declared contract and intent diagram]
+  C --> G[No CG simulation adapter registered]
+  G --> H[Run remains BLOCKED]
+  H --> I[Future: isolated production-flow adapter and executable input schema]
+```
+
+The diagram distinguishes metadata discovery from execution. Dashboard intent diagrams show only declared event order and expected outcomes; they are not execution traces and do not infer decision branches. RS submission, history, trace, cancellation and replay remain unchanged.
+
 The Runner is strategy-neutral application orchestration. Strategy adapters bind declared scenarios to strategy-owned production operations. The Runner core does not contain strategy rules.
 
 ## Architecture and isolation

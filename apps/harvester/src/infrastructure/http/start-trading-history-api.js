@@ -10,6 +10,8 @@ import { createUnavailableScenarioAdapter } from "../scenario-runner/create-unav
 import { createProcessScenarioAdapter } from "../scenario-runner/create-process-scenario-adapter.js"
 import { createLinuxBubblewrapSandboxLauncher } from "../scenario-runner/create-linux-bubblewrap-sandbox-launcher.js"
 import { createNodeGuardedSimulationLauncher } from "../scenario-runner/create-node-guarded-simulation-launcher.js"
+import { getRecoverySellerRunnerCatalog } from "../scenario-runner/rs-scenario-adapter.js"
+import { getCgConservativeScenarioRegistration } from "../scenario-runner/cg-conservative-scenario-catalog.js"
 
 const DEFAULT_API_HOST = "127.0.0.1"
 const DEFAULT_API_PORT = 4201
@@ -246,6 +248,14 @@ export async function startTradingHistoryApi({
       env,
       platform,
     })],
+    strategyRegistrations: [
+      {
+        strategyId: "RS",
+        strategyName: "Recovery Seller",
+        scenarios: getRecoverySellerRunnerCatalog(),
+      },
+      getCgConservativeScenarioRegistration(),
+    ],
     sourceRevision: resolveScenarioRunnerSourceRevision({ env }),
   })
   const server = await openApiServer({
