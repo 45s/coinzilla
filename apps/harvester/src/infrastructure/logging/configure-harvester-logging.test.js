@@ -40,6 +40,7 @@ function assertCataloguedConsoleEntry({ lines, entry } = {}) {
   const line = lines[lineIndex]
   assert.ok(line, `Console output must retain catalog identifier ${entry.errorCode}.`)
   assert.ok(line.length <= 200, `Console output for ${entry.errorCode} must fit the configured line budget.`)
+  assert.ok(line.includes(`${entry.severity} [${entry.errorCode}]`), `Console output for ${entry.errorCode} must use catalog severity.`)
   assert.ok(line.includes(entry.failureStage), `Console output for ${entry.errorCode} must identify its failure stage.`)
   assert.ok(line.includes(entry.operatorAction), `Console output for ${entry.errorCode} must preserve operator remediation.`)
   const firstCause = line.match(/cause=(.*?) \| action=/)?.[1]
