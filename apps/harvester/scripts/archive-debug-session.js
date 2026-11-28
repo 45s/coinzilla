@@ -893,6 +893,14 @@ function createArchiveLogSelectionWarnings({ sessions, recoveryCheckpoint, statu
     })
   }
   for (const session of sessions) {
+    if (session.completionStatus === "stopped-unconfirmed") {
+      warnings.push({
+        code: "STOPPED_RUNTIME_COMPLETION_UNCONFIRMED",
+        sessionName: session.sessionName,
+        runtimeSessionId: session.runtimeSessionId,
+        message: "The exact runtime PID is no longer alive and both log streams were captured, but process exit and logger flush are unconfirmed because both completion records are absent.",
+      })
+    }
     for (const warningCode of session.missingFieldWarnings) {
       warnings.push({
         code: `SESSION_${warningCode}`,
@@ -2220,6 +2228,12 @@ async function copyArchiveEvidence({
     reportProgress(
       onProgress,
       `WARNING: matchingTradingLogsAvailable=false for recovery runtime ${logSelection.unmatchedRuntimeSessionId}; unrelated sessions are retained only as independent evidence.`,
+    )
+  }
+  if (logSelection.sessions.some((session) => session.completionStatus === "stopped-unconfirmed")) {
+    reportProgress(
+      onProgress,
+      "WARNING: matching runtime logs are preserved, but process exit reason and logger flush are unconfirmed; the archive marks this as stopped-unconfirmed evidence.",
     )
   }
   if (activeProcessOwner) {
