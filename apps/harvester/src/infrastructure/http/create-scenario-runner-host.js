@@ -253,18 +253,22 @@ function createStrategyCatalogEntry({ registration, adapters }) {
     scenarios: Object.freeze(registration.scenarios.map((scenario) => {
       const inputSchema = cloneAndFreeze(scenario.inputSchema)
       const defaultInput = scenario.input === undefined ? undefined : cloneAndFreeze(scenario.input)
-      const schemaValid = isValidScenarioInputSchema({
+      const hasInputSchema = inputSchema !== undefined
+      const schemaValid = hasInputSchema && isValidScenarioInputSchema({
         schema: inputSchema,
       })
-      const executable = scenario.executable === true &&
-        scenario.executionStatus === "EXECUTABLE" &&
+      const scenarioRequestsExecution = scenario.executable === true &&
+        scenario.executionStatus === "EXECUTABLE"
+      const executable = scenarioRequestsExecution &&
         schemaValid &&
         adapterReadiness.executable
       const readinessReasons = [...(scenario.readinessReasons ?? [])]
       if (adapterReadiness.reason) {
         readinessReasons.push(adapterReadiness.reason)
       }
-      if (!schemaValid) {
+      if (scenarioRequestsExecution && !hasInputSchema) {
+        readinessReasons.push("Executable scenarios require an input schema.")
+      } else if (scenarioRequestsExecution && !schemaValid) {
         readinessReasons.push("Scenario input schema is invalid.")
       }
       return Object.freeze({
@@ -279,6 +283,7 @@ function createStrategyCatalogEntry({ registration, adapters }) {
         executable,
         inputSchema,
         defaultInput,
+        details: scenario.details === undefined ? undefined : cloneAndFreeze(scenario.details),
         readinessReasons: Object.freeze(readinessReasons),
       })
     })),

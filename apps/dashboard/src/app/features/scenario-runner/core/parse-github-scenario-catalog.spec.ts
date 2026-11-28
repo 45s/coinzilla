@@ -13,6 +13,50 @@ describe('parseGitHubScenarioCatalog', () => {
     })]);
   });
 
+  it('extracts a CG-conservative catalogue from four static JSON metadata parts and keeps entries blocked', () => {
+    const scenario = {
+      id: 'CON-BUY-001',
+      title: 'Conservative BUY lifecycle',
+      category: 'buy-lifecycle',
+      priority: 'P0',
+      description: 'Inspect the BUY admission contract.',
+      coverageStatus: 'TEST-MAPPED',
+      coverageReason: 'Linked policy tests remain partial evidence.',
+      inputEvents: [{ type: 'BUY_FILLED', sequence: 1 }],
+    };
+    const sources = [
+      'export const CG_CONSERVATIVE_SCENARIO_DETAILS_PART_ONE = ' + JSON.stringify([scenario]),
+      'export const CG_CONSERVATIVE_SCENARIO_DETAILS_PART_TWO = []',
+      'export const CG_CONSERVATIVE_SCENARIO_DETAILS_PART_THREE = []',
+      'export const CG_CONSERVATIVE_SCENARIO_DETAILS_PART_FOUR = []',
+    ];
+    const result = parseGitHubScenarioCatalog({ sources, commitSha: 'b'.repeat(40) });
+    const conservative = result.catalog.find((strategy) => strategy.strategyId === 'CG-conservative');
+
+    expect(conservative?.strategyName).toBe('Conservative');
+    expect(conservative?.scenarios).toHaveLength(1);
+    expect(conservative?.scenarios[0]).toMatchObject({
+      id: 'CON-BUY-001',
+      name: 'Conservative BUY lifecycle',
+      status: 'TEST-MAPPED',
+      executionStatus: 'BLOCKED',
+      executable: false,
+      details: {
+        category: 'buy-lifecycle',
+        inputEvents: [{ type: 'BUY_FILLED', sequence: 1 }],
+        expectedAccounting: {},
+      },
+    });
+  });
+
+  it('rejects an incomplete Conservative metadata snapshot', () => {
+    const sources = [
+      'export const CG_CONSERVATIVE_SCENARIO_DETAILS_PART_ONE = []',
+      'export const CG_CONSERVATIVE_SCENARIO_DETAILS_PART_TWO = []',
+    ];
+    expect(() => parseGitHubScenarioCatalog({ sources, commitSha: 'c'.repeat(40) })).toThrow(/missing one or more metadata parts/i);
+  });
+
   it('rejects invalid commit identity and unrecognized source', () => {
     expect(() => parseGitHubScenarioCatalog({ sources: ['no scenario records'], commitSha: 'develop' })).toThrow(/full commit SHA/);
     expect(() => parseGitHubScenarioCatalog({ sources: ['no scenario records'], commitSha: 'a'.repeat(40) })).toThrow(/did not contain/);
