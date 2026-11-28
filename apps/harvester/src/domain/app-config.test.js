@@ -9,7 +9,8 @@ import { EXTERNAL_ORDERS_POLICIES } from "./external-orders-policy.js"
 import { TRADING_ENVIRONMENTS } from "./trading-environment.js"
 import { OPERATOR_CONTROL_CONFIG } from "../../config/operator-control.js"
 import { appConfig } from "../../config/index.js"
-import { loadAppConfig } from "../infrastructure/config/load-app-config.js"\nimport { validateTelegramApplicationConfig } from "../infrastructure/config/validate-telegram-config.js"
+import { loadAppConfig } from "../infrastructure/config/load-app-config.js"
+import { validateTelegramApplicationConfig } from "../infrastructure/config/validate-telegram-config.js"
 
 const createAppConfig = () => ({
   strategies: {
