@@ -353,7 +353,7 @@ async function prepareActiveRuntimeFixture({ fixture } = {}) {
   await rm(path.join(sessionDirectory, "process-completed.json"))
   await rm(path.join(sessionDirectory, "log-streams-completed.json"))
   const factsPath = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
-  const facts = (await readFile(factsPath, "utf8")).trim().split("\\n").map((line) => JSON.parse(line))
+  const facts = (await readFile(factsPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line))
   facts[0].data.processIdentity.processId = process.pid
   await writeFile(factsPath, jsonLines(facts), "utf8")
   const lockOwner = {
