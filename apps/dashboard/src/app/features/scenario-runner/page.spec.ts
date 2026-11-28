@@ -115,6 +115,7 @@ describe('ScenarioRunnerComponent run details', () => {
 
     expect(nativeElement.textContent).toContain('Persist intent → broker ACK → persist outcome → reserve cycle');
     expect(nativeElement.textContent).not.toContain('Partial fill, then terminal CANCELED');
+    expect(nativeElement.textContent).toContain('not the currently selected scenario');
   });
 
   it('lets an operator select a source step and inspect its exact trace evidence', () => {
