@@ -4,6 +4,9 @@ import { assertTradingSessionRepository } from "../application/ports/trading-ses
 
 export async function createTradingSession({ repository, session } = {}) {
   assertTradingSessionRepository({ repository })
-  const record = createTradingSessionRecord({ ...session, ...mapTradingSessionInput(session) })
+  const record = createTradingSessionRecord({
+    ...session,
+    ...mapTradingSessionInput(session),
+  })
   return repository.create(record)
 }
