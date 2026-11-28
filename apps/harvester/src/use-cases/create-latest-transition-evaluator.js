@@ -394,14 +394,14 @@ function shouldEvaluateRecoverySellerTransition({
     options.shutdownRecoveryOnly !== true
 }
 
-function logRecoverySellerEvaluationStarted(logger, symbol) {
+function logRecoverySellerEvaluationStarted({ logger, symbol } = {}) {
   logger?.debug?.({
     message: "Harvester Recovery Seller evaluation started",
     symbol,
   })
 }
 
-function logRecoverySellerEvaluationCompleted(logger, symbol, result) {
+function logRecoverySellerEvaluationCompleted({ logger, symbol, result } = {}) {
   const decision = result.data?.decision
   logger?.debug?.({
     message: "Harvester Recovery Seller evaluation completed",
@@ -412,7 +412,7 @@ function logRecoverySellerEvaluationCompleted(logger, symbol, result) {
   })
 }
 
-function logRecoverySellerEvaluationFailed(logger, symbol, error) {
+function logRecoverySellerEvaluationFailed({ logger, symbol, error } = {}) {
   logger?.error?.({
     message: "Harvester Recovery Seller evaluation failed",
     symbol,
@@ -447,9 +447,9 @@ async function evaluateRecoverySellerTransitionForMarket({
   })) {
     return conservativeResult
   }
-  const symbol = options.symbol
+  const { symbol } = options
   const logger = dependencies.recoverySellerLogger ?? dependencies.logger
-  logRecoverySellerEvaluationStarted(logger, symbol)
+  logRecoverySellerEvaluationStarted({ logger, symbol })
   try {
     const recoverySellerResult = await dependencies.evaluateRecoverySellerTransition({
       ...options,
@@ -477,16 +477,16 @@ async function evaluateRecoverySellerTransitionForMarket({
       logger,
     })
     if (recoverySellerResult?.ok !== true) {
-      logRecoverySellerEvaluationFailed(logger, symbol, recoverySellerResult?.errors?.[0])
+      logRecoverySellerEvaluationFailed({ logger, symbol, error: recoverySellerResult?.errors?.[0] })
       return recoverySellerResult
     }
-    logRecoverySellerEvaluationCompleted(logger, symbol, recoverySellerResult)
+    logRecoverySellerEvaluationCompleted({ logger, symbol, result: recoverySellerResult })
     return combineStrategyTransitionResults({
       conservativeResult,
       recoverySellerResult,
     })
   } catch (error) {
-    logRecoverySellerEvaluationFailed(logger, symbol, error)
+    logRecoverySellerEvaluationFailed({ logger, symbol, error })
     return toResult({ error })
   }
 }
