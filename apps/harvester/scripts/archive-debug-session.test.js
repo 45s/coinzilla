@@ -62,7 +62,10 @@ function createMatchingTestnetFixtureFiles() {
       runtimeSessionId: RUNTIME_SESSION_ID,
       endedAt: "2026-11-24T18:29:00.000Z",
       logStreamsComplete: true,
-      streams: { harvesterLog: true, traceLog: true },
+      streams: {
+        harvesterLog: true,
+        traceLog: true,
+      },
     }),
   }
 }
@@ -287,7 +290,10 @@ test("preserves TESTNET session inventory and recovery facts without changing so
 
 test("retains mismatched log and recovery evidence only as local diagnostic evidence", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const filename = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
   const facts = (await readFile(filename, "utf8")).trim().split("\n").map((line) => JSON.parse(line))
   facts.at(-1).runtimeSessionId = OTHER_SESSION_ID
@@ -364,8 +370,14 @@ test("collects and marks the exact active runtime without stopping or clearing i
   const lockPath = path.join(fixture.lockDirectory, ".harvester-trading-test.lock")
   const hostLockPath = path.join(fixture.lockDirectory, ".binance-harvester-trading-test.lock")
   await writeFile(lockPath, JSON.stringify(lockOwner), "utf8")
-  await writeFile(hostLockPath, JSON.stringify({ ...lockOwner, token: "active-host-lock-token" }), "utf8")
-  const result = await runHarvesterDebugArchive({ ...archiveDependencies({ fixture }), onArchiveCreatedFn: undefined })
+  await writeFile(hostLockPath, JSON.stringify({
+    ...lockOwner,
+    token: "active-host-lock-token",
+  }), "utf8")
+  const result = await runHarvesterDebugArchive({
+    ...archiveDependencies({ fixture }),
+    onArchiveCreatedFn: undefined,
+  })
   const manifest = await readArchiveManifest(result.localArchive)
   const matchingSession = manifest.sessionInventory.find(({ runtimeSessionId }) => runtimeSessionId === RUNTIME_SESSION_ID)
   assert.equal(result.matchingTradingLogsAvailable, true, "An active process must not block collection when its process lock and durable runtime identity match.")
@@ -376,7 +388,10 @@ test("collects and marks the exact active runtime without stopping or clearing i
   assert.equal(snapshotMarker.runtimeSessionId, RUNTIME_SESSION_ID, "The active snapshot marker must identify the recovery runtime.")
   assert.equal(snapshotMarker.processId, process.pid, "The active snapshot marker must identify the locked process.")
   assert.equal(snapshotMarker.recoveryDataCommitHash, DATA_COMMIT_HASH, "The active snapshot marker must bind to the copied recovery checkpoint.")
-  assert.deepEqual(snapshotMarker.streams, { harvesterLog: true, traceLog: true }, "The active snapshot marker must confirm both runtime-owned streams.")
+  assert.deepEqual(snapshotMarker.streams, {
+    harvesterLog: true,
+    traceLog: true,
+  }, "The active snapshot marker must confirm both runtime-owned streams.")
   assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, lockOwner.token, "Collection must not modify or remove the Journal process lock.")
   assert.equal(JSON.parse(await readFile(hostLockPath, "utf8")).token, "active-host-lock-token", "Collection must not modify or remove the host process lock.")
   assert.equal(manifest.evidenceIntegrity.validForPublication, true, "A uniquely identified active runtime snapshot is publishable.")
@@ -475,13 +490,16 @@ async function writeTestnetSession({
   const sessionDirectory = path.join(fixture.packageDirectory, "logs/sessions", sessionName)
   await mkdir(sessionDirectory, { recursive: true })
   await writeFile(path.join(sessionDirectory, "terminal.log"), terminalContent, "utf8")
-  await writeFile(path.join(sessionDirectory, "harvester.log"), "debug stream for " + runtimeSessionId, "utf8")
-  await writeFile(path.join(sessionDirectory, "trace.log"), "trace stream for " + runtimeSessionId, "utf8")
+  await writeFile(path.join(sessionDirectory, "harvester.log"), `debug stream for ${runtimeSessionId}`, "utf8")
+  await writeFile(path.join(sessionDirectory, "trace.log"), `trace stream for ${runtimeSessionId}`, "utf8")
   await writeFile(path.join(sessionDirectory, "log-streams-completed.json"), JSON.stringify({
     runtimeSessionId,
     endedAt: "2026-11-25T18:29:00.000Z",
     logStreamsComplete: true,
-    streams: { harvesterLog: true, traceLog: true },
+    streams: {
+        harvesterLog: true,
+        traceLog: true,
+      },
   }), "utf8")
   if (includeIdentity) {
     await writeFile(path.join(sessionDirectory, "process-identity.json"), JSON.stringify({
@@ -564,7 +582,10 @@ test("selects the exact trading-runtime session instead of a newer unrelated TES
 
 test("fails collection when only an unrelated runtime's log streams are available", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const factsPath = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
   const facts = (await readFile(factsPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line))
   facts.at(-1).runtimeSessionId = OTHER_SESSION_ID
@@ -586,8 +607,15 @@ test("fails collection when only an unrelated runtime's log streams are availabl
 
 test("fails closed when two session directories claim the same runtime identity", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
-  await writeTestnetSession({ fixture, sessionName: "2026-11-25_duplicate-runtime", runtimeSessionId: RUNTIME_SESSION_ID })
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  await writeTestnetSession({
+    fixture,
+    sessionName: "2026-11-25_duplicate-runtime",
+    runtimeSessionId: RUNTIME_SESSION_ID,
+  })
   await assert.rejects(
     runHarvesterDebugArchive(archiveWithoutPublishing({
       fixture,
@@ -642,7 +670,10 @@ test("detects identical source log content while retaining every source path", a
 
 test("reports missing durable process identity as unverifiable diagnostic evidence", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const factsPath = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
   const facts = (await readFile(factsPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line))
   delete facts[0].data.processIdentity
@@ -663,7 +694,10 @@ test("reports missing durable process identity as unverifiable diagnostic eviden
 
 test("retains incomplete failed-startup logs only in a non-publishable diagnostic archive", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const completionPath = path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/process-completed.json")
   await writeFile(completionPath, JSON.stringify({
     runtimeSessionId: RUNTIME_SESSION_ID,
@@ -750,7 +784,10 @@ test("reports missing required log streams as incomplete instead of accepting fi
  
 test("collects every rotated and pre-compressed DEBUG and TRACE file for the exact runtime", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const sessionDirectory = path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet")
   const rotatedDebug = "older rotated debug evidence"
   const rotatedTrace = Buffer.from("pre-compressed trace evidence")
@@ -774,7 +811,10 @@ test("collects every rotated and pre-compressed DEBUG and TRACE file for the exa
 
 test("rejects empty TRACE streams and records the empty source file", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   await writeFile(path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/trace.log"), "")
   await assert.rejects(
     runHarvesterDebugArchive(archiveWithoutPublishing({
@@ -794,7 +834,10 @@ test("rejects empty TRACE streams and records the empty source file", async (t) 
 
 test("rejects missing process-completion metadata even when both log files exist", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   await rm(path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/process-completed.json"))
   await assert.rejects(
     runHarvesterDebugArchive(archiveWithoutPublishing({
@@ -814,7 +857,10 @@ test("rejects missing process-completion metadata even when both log files exist
  
 test("fails when only the Harvester DEBUG stream is missing", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   await rm(path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/harvester.log"))
   await assert.rejects(
     runHarvesterDebugArchive(archiveWithoutPublishing({
@@ -832,7 +878,10 @@ test("fails when only the Harvester DEBUG stream is missing", async (t) => {
 
 test("fails when only the TRACE stream is missing", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   await rm(path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/trace.log"))
   await assert.rejects(
     runHarvesterDebugArchive(archiveWithoutPublishing({
@@ -851,7 +900,10 @@ test("fails when only the TRACE stream is missing", async (t) => {
  
 test("rejects missing logger-flush metadata even when process completion exists", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   await rm(path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/log-streams-completed.json"))
   await assert.rejects(
     runHarvesterDebugArchive(archiveWithoutPublishing({
