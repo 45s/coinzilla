@@ -10,6 +10,23 @@ import { HARVESTER_ERROR_CATALOG } from "./harvester-error-catalog.js"
 
 const ANSI_ESCAPE = String.fromCharCode(27)
 
+async function assertCompletedSessionEvidence({ sessionDebugPath } = {}) {
+  const sessionDirectory = path.dirname(sessionDebugPath)
+  const identity = JSON.parse(await readFile(path.join(sessionDirectory, "process-identity.json"), "utf8"))
+  const loggerCompletion = JSON.parse(await readFile(path.join(sessionDirectory, "log-streams-completed.json"), "utf8"))
+  assert.equal(identity.runtimeSessionId, "session-one", "Direct starts must persist their immutable process identity.")
+  assert.equal(loggerCompletion.runtimeSessionId, "session-one", "Logger flush metadata must retain the same runtime identity.")
+  assert.deepEqual(loggerCompletion.streams, {
+    harvesterLog: true,
+    traceLog: true,
+  }, "Both structured streams must be confirmed flushed.")
+  const completion = JSON.parse(await readFile(path.join(sessionDirectory, "process-completed.json"), "utf8"))
+  assert.equal(completion.runtimeSessionId, "session-one", "Completion metadata must retain the immutable process identity.")
+  assert.equal(completion.logStreamsComplete, true, "Completion is written only after both DEBUG and TRACE transports flush successfully.")
+  assert.equal(completion.processId, process.pid, "The completion record must identify the owning process.")
+  assert.ok(Date.parse(completion.endedAt) >= Date.parse(completion.startedAt), "The completion record must retain its lifecycle end time.")
+}
+
 function createLogger() {
   const transports = new Map()
   const levels = []
@@ -105,17 +122,7 @@ level: "trace" })
     assert.equal(JSON.parse((await readFile(sessionTracePath, "utf8")).trim()).level, "trace", "each run must receive a matching timestamped TRACE session file")
 
     await logging.close()
-    const sessionDirectory = path.dirname(sessionDebugPath)
-    const identity = JSON.parse(await readFile(path.join(sessionDirectory, "process-identity.json"), "utf8"))
-    const loggerCompletion = JSON.parse(await readFile(path.join(sessionDirectory, "log-streams-completed.json"), "utf8"))
-    assert.equal(identity.runtimeSessionId, "session-one", "Direct starts must persist their immutable process identity.")
-    assert.equal(loggerCompletion.runtimeSessionId, "session-one", "Logger flush metadata must retain the same runtime identity.")
-    assert.deepEqual(loggerCompletion.streams, { harvesterLog: true, traceLog: true }, "Both structured streams must be confirmed flushed.")
-    const completion = JSON.parse(await readFile(path.join(sessionDirectory, "process-completed.json"), "utf8"))
-    assert.equal(completion.runtimeSessionId, "session-one", "Completion metadata must retain the immutable process identity.")
-    assert.equal(completion.logStreamsComplete, true, "Completion is written only after both DEBUG and TRACE transports flush successfully.")
-    assert.equal(completion.processId, process.pid, "The completion record must identify the owning process.")
-    assert.ok(Date.parse(completion.endedAt) >= Date.parse(completion.startedAt), "The completion record must retain its lifecycle end time.")
+    await assertCompletedSessionEvidence({ sessionDebugPath })
     assert.deepEqual(
       (await readdir(directory)).sort(),
       ["cumulative", "sessions"],

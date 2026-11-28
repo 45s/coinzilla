@@ -347,7 +347,7 @@ async function persistHarvesterSessionIdentity({ sessionPaths, processIdentity }
       || existing.startedAt !== processIdentity.startedAt
       || existing.environment !== identity.environment
     ) {
-      throw new Error(`Existing process identity does not match the active runtime: ${identityPath}`)
+      throw new Error(`Existing process identity does not match the active runtime: ${identityPath}`, { cause: error })
     }
   }
 }
