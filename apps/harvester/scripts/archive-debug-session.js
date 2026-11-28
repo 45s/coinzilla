@@ -663,17 +663,17 @@ const LOG_STREAM_DEFINITIONS = Object.freeze([
   {
     key: "harvesterLog",
     label: "HARVESTER LOG",
-    pattern: /^harvester\.log(?:\.\\d+)*$/i,
+    pattern: /^harvester\.log(?:\.\d+)*$/i,
   },
   {
     key: "traceLog",
     label: "TRACE LOG",
-    pattern: /^trace\.log(?:\.\\d+)*$/i,
+    pattern: /^trace\.log(?:\.\d+)*$/i,
   },
 ])
 
 function resolveLogRotationIndex(filename) {
-  const match = /\.log(?:\.(\\d+))?(?:\.gz)?$/i.exec(filename)
+  const match = /\.log(?:\.(\d+))?(?:\.gz)?$/i.exec(filename)
   return match?.[1] ? Number(match[1]) : 0
 }
 
