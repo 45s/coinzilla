@@ -3,7 +3,6 @@ import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { getOrderLifecycleStatus, logOrderLifecycle } from "../application/logging/order-lifecycle-log.js"
 import { compareDecimal, toResult } from "@coinzilla/utils"
 import { EXTERNAL_ORDERS_POLICIES } from "../domain/external-orders-policy.js"
-import { isHarvesterClientOrderId } from "../application/orders/is-harvester-client-order-id.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import {
   mapBrokerExecutionReportData,
@@ -130,8 +129,8 @@ async function handleUnownedOrderEvent({ dependencies, event, order, symbol } = 
     eventName: HARVESTER_EVENT_NAMES.EXECUTION_UNOWNED_ORDER,
     dataResult: mapExecutionUnownedOrderData({ order }),
   })
-  const hasCurrentSessionIdentity = hasCurrentSessionHarvesterIdentity({
-    currentProcessOrderIdNamespace: dependencies.currentProcessOrderIdNamespace,
+  const hasCurrentSessionIdentity = hasCurrentProcessOrderIdentity({
+    isCurrentProcessClientOrderId: dependencies.isCurrentProcessClientOrderId,
     order,
     event,
   })
