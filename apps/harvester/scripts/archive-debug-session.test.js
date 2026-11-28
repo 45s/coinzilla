@@ -38,7 +38,7 @@ function jsonLines(records) {
 function createMatchingTestnetFixtureFiles() {
   return {
     "logs/sessions/2026-11-20_old/terminal.log": "old session",
-    "logs/sessions/2026-11-24_testnet/terminal.log": "selected TESTNET session evidence",
+    "logs/sessions/2026-11-24_testnet/terminal.log": "selected runtime session evidence",
     "logs/sessions/2026-11-24_testnet/harvester.log": "matching debug stream",
     "logs/sessions/2026-11-24_testnet/trace.log": "matching trace stream",
     "logs/sessions/2026-11-24_testnet/process-identity.json": JSON.stringify({
@@ -77,9 +77,9 @@ function createMatchingTestnetFixtureFiles() {
   }
 }
 
-function createExcludedSessionFixtureFiles() {
+function createIndependentSessionFixtureFiles() {
   return {
-    "logs/sessions/2026-11-25_live/terminal.log": "LIVE session must not be included",
+    "logs/sessions/2026-11-25_live/terminal.log": "independent LIVE session evidence",
     "logs/sessions/2026-11-25_live/process-identity.json": JSON.stringify({
       formatVersion: 1,
       application: "harvester",
@@ -146,7 +146,7 @@ function createRecoveryFactsFixtureFiles() {
 function createFixtureFiles() {
   return {
     ...createMatchingTestnetFixtureFiles(),
-    ...createExcludedSessionFixtureFiles(),
+    ...createIndependentSessionFixtureFiles(),
     ...createRecoveryFactsFixtureFiles(),
   }
 }
@@ -168,8 +168,9 @@ async function createFixture() {
   }
 }
 
-async function assertCollectedArchive({ directory, expectedIdentityStatus } = {}) {
+async function assertCollectedArchive({ directory, expectedIdentityStatus, expectedTradingMode = "testnet" } = {}) {
   const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
+  assert.equal(manifest.runtimeTradingMode, expectedTradingMode, "Runtime trading mode must be inferred from the exact matched session identity.")
   assert.deepEqual(manifest.includedDirectories, ["logs", "recovery-facts"], "Debug archives must contain only logs and recovery facts")
   assert.deepEqual(manifest.excludedPaths, [
     "data/** (all databases and backups)",
@@ -201,9 +202,9 @@ async function assertCollectedArchive({ directory, expectedIdentityStatus } = {}
   assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "Archive manifest must preserve the latest committed recovery checkpoint digest")
   assert.deepEqual(manifest.logSelection, {
     cumulative: "excluded",
-    sessions: "all-identified-TESTNET-sessions-preserved-independently; exact-runtime-id-match-required; completed sessions or active-process snapshots; gzip-compressed",
+    sessions: "all-identified-Harvester-sessions-preserved-independently; exact-runtime-id-match-required; completed sessions or active-process snapshots; gzip-compressed",
     selectionReason: expectedIdentityStatus === "matched" ? "exact-runtime-id-match" : expectedIdentityStatus,
-  }, "Debug archive manifest must preserve TESTNET sessions independently and require an exact runtime identity match.")
+  }, "Debug archive manifest must preserve testnet and live sessions independently and require an exact runtime identity match.")
   assert.equal(
     await readFile(path.join(directory, "data_commit_hash"), "utf8"),
     `${DATA_COMMIT_HASH}\n`,
@@ -215,7 +216,11 @@ async function assertCollectedArchive({ directory, expectedIdentityStatus } = {}
     "Selected completed TESTNET log must be preserved in gzip form",
   )
   await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-20_old")), { code: "ENOENT" }, "Older sessions must not be copied into the debug archive")
-  await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-25_live")), { code: "ENOENT" }, "LIVE session evidence must never enter a TESTNET debug archive")
+  assert.equal(
+    gunzipSync(await readFile(path.join(directory, "logs/sessions/2026-11-25_live/terminal.log.gz"))).toString("utf8"),
+    "independent LIVE session evidence",
+    "An unrelated live session must be preserved separately and never substituted for the selected runtime.",
+  )
   await assert.rejects(readdir(path.join(directory, "logs/cumulative")), { code: "ENOENT" }, "Cumulative logs must be excluded from the debug archive")
   await assert.rejects(readdir(path.join(directory, "data")), { code: "ENOENT" }, "Database and backup data must be excluded from the debug archive")
   return {
@@ -224,7 +229,7 @@ async function assertCollectedArchive({ directory, expectedIdentityStatus } = {}
   }
 }
 
-function archiveDependencies({ fixture, overrides = {}, expectedIdentityStatus = "matched" } = {}) {
+function archiveDependencies({ fixture, overrides = {}, expectedIdentityStatus = "matched", expectedTradingMode = "testnet" } = {}) {
   return {
     packageDirectory: fixture.packageDirectory,
     lockDirectory: fixture.lockDirectory,
@@ -239,6 +244,7 @@ function archiveDependencies({ fixture, overrides = {}, expectedIdentityStatus =
     onArchiveCreatedFn: ({ directory }) => assertCollectedArchive({
       directory,
       expectedIdentityStatus,
+      expectedTradingMode,
     }),
   }
 }
@@ -524,23 +530,31 @@ test("collection rejects symbolic links instead of archiving their targets", asy
   )
 })
 
-test("rejects LIVE mode before creating an archive", async (t) => {
+test("collects a LIVE runtime without requiring TRADING_MODE", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
     force: true
   }))
-  await assert.rejects(
-    runHarvesterDebugArchive(archiveDependencies({
-      fixture,
-      overrides: {
-        TRADING_MODE: "live",
-      },
-    })),
-    /TRADING_MODE=testnet/,
-    "Debug archive command must fail closed unless trading mode is explicitly TESTNET",
-  )
-  await assert.rejects(readdir(path.join(fixture.packageDirectory, "archive-output")), { code: "ENOENT" }, "LIVE mode rejection must happen before archive output is created")
+  const sessionsDirectory = path.join(fixture.packageDirectory, "logs", "sessions")
+  const testnetSessionDirectory = path.join(sessionsDirectory, "2026-11-24_testnet")
+  const liveSessionDirectory = path.join(sessionsDirectory, "2026-11-24_live")
+  await rm(liveSessionDirectory, { recursive: true, force: true })
+  await rename(testnetSessionDirectory, liveSessionDirectory)
+  const identityPath = path.join(liveSessionDirectory, "process-identity.json")
+  const identity = JSON.parse(await readFile(identityPath, "utf8"))
+  identity.environment = "live"
+  await writeFile(identityPath, `${JSON.stringify(identity, null, 2)}\n`)
+  const dependencies = archiveDependencies({
+    fixture,
+    expectedTradingMode: "live",
+    overrides: { TRADING_MODE: undefined },
+  })
+  const result = await runHarvesterDebugArchive(dependencies)
+  const manifest = JSON.parse(await readFile(path.join(result.localArchive, "manifest.json"), "utf8"))
+  assert.equal(manifest.runtimeTradingMode, "live")
+  assert.equal(manifest.logRuntimeSessionId, RUNTIME_SESSION_ID)
+  assert.equal(manifest.evidenceIntegrity.validForPublication, true)
 })
 
 async function writeTestnetSession({

@@ -53,7 +53,7 @@ function createSourceFileEntries() {
   ]
 }
 
-function createLifecycleSourceFileEntries(runtimeId) {
+function createLifecycleSourceFileEntries(runtimeId, runtimeTradingMode = "testnet") {
   return [
     {
       sourcePath: "logs/sessions/fixture/process-identity.json",
@@ -61,7 +61,7 @@ function createLifecycleSourceFileEntries(runtimeId) {
       content: `${JSON.stringify({
         formatVersion: 1,
         application: "harvester",
-        environment: "testnet",
+        environment: runtimeTradingMode,
         runtimeSessionId: runtimeId,
         startedAt: "2026-11-28T11:00:00.000Z",
         processId: 24680,
@@ -202,7 +202,7 @@ async function appendFixtureFile({
   })
 }
 
-function createSessionInventoryFixture(runtimeId) {
+function createSessionInventoryFixture(runtimeId, runtimeTradingMode = "testnet") {
   return [{
     sessionName: "fixture",
     relativePath: "logs/sessions/fixture",
@@ -210,6 +210,7 @@ function createSessionInventoryFixture(runtimeId) {
     processCompletionPath: "logs/sessions/fixture/process-completed.json",
     loggerCompletionPath: "logs/sessions/fixture/log-streams-completed.json",
     runtimeSessionId: runtimeId,
+    environment: runtimeTradingMode,
     completionStatus: "complete",
     loggerCompletionStatus: "complete",
     startedAt: "2026-11-28T11:00:00.000Z",
@@ -254,11 +255,11 @@ function createEvidenceIntegrityFixture({ runtimeId, sourceFiles } = {}) {
   }
 }
 
-function createArchiveManifest({ runtimeId, recovery, sourceFiles, files } = {}) {
+function createArchiveManifest({ runtimeId, recovery, sourceFiles, files, runtimeTradingMode = "testnet" } = {}) {
   return {
     formatVersion: 2,
     application: "harvester",
-    commandTradingMode: "testnet",
+    runtimeTradingMode,
     createdAt: "2026-11-28T12:00:00.000Z",
     includedDirectories: ["logs", "recovery-facts"],
     excludedPaths: ["data/** (all databases and backups)", "logs/cumulative/**"],
@@ -274,7 +275,7 @@ function createArchiveManifest({ runtimeId, recovery, sourceFiles, files } = {})
       runtimeSessionId: runtimeId,
       processIdentity: recovery.processIdentity,
     },
-    sessionInventory: createSessionInventoryFixture(runtimeId),
+    sessionInventory: createSessionInventoryFixture(runtimeId, runtimeTradingMode),
     evidenceIntegrity: createEvidenceIntegrityFixture({
       runtimeId,
       sourceFiles,
@@ -283,12 +284,12 @@ function createArchiveManifest({ runtimeId, recovery, sourceFiles, files } = {})
   }
 }
 
-async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME } = {}) {
+async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME, runtimeTradingMode = "testnet" } = {}) {
   const archiveDirectory = path.join(root, "archive-output", archiveName)
   await mkdir(path.join(archiveDirectory, "logs", "sessions", "fixture"), { recursive: true })
   await mkdir(path.join(archiveDirectory, "recovery-facts"), { recursive: true })
   const runtimeId = "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c"
-  const sourceFiles = [...createSourceFileEntries(), ...createLifecycleSourceFileEntries(runtimeId)]
+  const sourceFiles = [...createSourceFileEntries(), ...createLifecycleSourceFileEntries(runtimeId, runtimeTradingMode)]
   const recovery = createRecoveryFixture(runtimeId)
   const files = []
   for (const item of sourceFiles) {
@@ -313,6 +314,7 @@ async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME } = {}) {
     recovery,
     sourceFiles,
     files,
+    runtimeTradingMode,
   })
   await writeFile(path.join(archiveDirectory, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`)
   return archiveDirectory
@@ -342,13 +344,13 @@ async function snapshotDirectory(directory) {
   return files
 }
 
-async function createFixture(t) {
+async function createFixture(t, { runtimeTradingMode = "testnet" } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "harvester-archive-publication-"))
   t.after(() => rm(root, {
     recursive: true,
     force: true,
   }))
-  const archiveDirectory = await createArchiveFixture({ root })
+  const archiveDirectory = await createArchiveFixture({ root, runtimeTradingMode })
   const lockDirectory = path.join(root, "process-locks")
   await mkdir(lockDirectory)
   const lockPath = path.join(lockDirectory, ".binance-harvester-trading-test.lock")
@@ -440,6 +442,27 @@ test("publishes with an active process lock, retries interrupted push, and is id
   assert.equal(repeated.commit, retry.commit, "Idempotent publication must return the same commit")
   assert.deepEqual(await snapshotDirectory(fixture.archiveDirectory), sourceBefore, "Publication must not modify source archive files")
   assert.equal(await readFile(fixture.lockPath, "utf8"), "active trading process lock", "Publication must not modify the active process lock")
+})
+
+test("publication command accepts a completed LIVE runtime archive", async (t) => {
+  const fixture = await createFixture(t, { runtimeTradingMode: "live" })
+  const bareRemote = await createTemporaryArchiveRemote({ root: fixture.root })
+  const runGitWithLocalRemote = async (...parameters) => {
+    const [args, options = {}] = parameters
+    const mappedArgs = [...args]
+    const remoteIndex = mappedArgs.indexOf(REMOTE)
+    if (remoteIndex >= 0) {
+      mappedArgs[remoteIndex] = bareRemote
+    }
+    return runGit(mappedArgs, options)
+  }
+  const result = await runHarvesterDebugArchivePublication({
+    args: ["--archive", fixture.archiveDirectory],
+    env: { HARVESTER_ARCHIVE_REMOTE: REMOTE },
+    runGit: runGitWithLocalRemote,
+  })
+  assert.match(result.remoteCommit, /^[a-f0-9]{40}$/)
+  assert.equal(result.archiveName, ARCHIVE_NAME)
 })
 
 test("publication command publishes to a temporary Git remote while a process lock exists", async (t) => {
