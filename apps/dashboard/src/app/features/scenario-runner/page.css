@@ -91,3 +91,6 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:520px;overflow:auto}
 .guide-limitations li{line-height:1.45}
 .scenario-guide-unavailable{border-style:dashed}
 @media(max-width:600px){.scenario-guide{padding:12px}.scenario-guide-heading{flex-direction:column}.guide-context{grid-template-columns:1fr}}
+
+.guide-flow-caption{margin:0;color:var(--muted);font-size:13px;line-height:1.45}
+.scenario-flow-evidence{margin:0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;color:var(--muted);font-size:13px;line-height:1.45}
