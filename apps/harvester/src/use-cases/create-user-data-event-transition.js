@@ -15,7 +15,7 @@ import { publishLifecycleEvent } from "../application/events/publish-lifecycle-e
 import { failureResult, withFailure } from "./recovery-failure.js"
 
 
-const HARVESTER_GENERATED_CLIENT_ORDER_ID_PATTERN = /^h-[a-f0-9]{22}-(?:\\d+|preflight-\\d+)$/i
+const HARVESTER_GENERATED_CLIENT_ORDER_ID_PATTERN = /^h-[a-f0-9]{22}-(?:\d+|preflight-\d+)$/i
 
 function hasCurrentSessionHarvesterIdentity({
   currentProcessOrderIdNamespace,
