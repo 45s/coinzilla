@@ -108,3 +108,16 @@ The structured observer diagnostic includes:
 The validation field is limited to an ASCII dotted identifier no longer than 128 characters. Raw order payloads and arbitrary exception messages are not logged. A projection failure is a history gap; it does not reverse a successful fill, mutate trading accounting, or authorize an exchange action.
 
 **Safe recovery:** inspect the reported field and event/market identity, compare the canonical order event with the owning order state, and fix the mapping/contract defect. Do not fabricate missing identity fields, edit exchange orders, or infer an invalid field from a historical log entry that did not preserve it. The 28 archived 2026-11-22 occurrences remain unattributed; the database dump has not been inspected.
+
+
+## Central Harvester failure catalog
+
+The following entries are defined in `src/infrastructure/logging/harvester-error-catalog.js`. The catalog completeness test validates that every registered code appears in this operator reference; the console contract test verifies one-line output for every entry.
+
+| Code | Subsystem / stage | Severity and behavior | Meaning | Required action |
+| --- | --- | --- | --- | --- |
+| `HARVESTER_STARTUP_FAILED` | process / `PROCESS_STARTUP` | ERROR; process stops | A required startup operation failed and no more specific registered code was available. | Inspect the originating error and full cause chain in session DEBUG; do not retry blindly. |
+| `HARVESTER_MARKET_UNVALIDATED_EXCHANGE_CONSTRAINTS` | market-readiness / `MARKET_READINESS_VALIDATION` | ERROR; affected market is blocked | One or more applicable exchange constraints have no validated domain evaluator. | Implement and test evaluators before enabling the market. |
+| `HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED` | persistence / exact relational preparation stage | WARN; trading continues with legacy history | Optional relational trading-history preparation failed; the native SQLite error code and cause remain separately visible. | Do not reset the database; inspect the concrete migration cause and session DEBUG details. |
+
+The catalog's stable identifier is distinct from a native lower-level `errorCode`. For relational persistence, `harvesterErrorCode` carries the Harvester classification while `errorCode` retains the native SQLite code. The console line shows the Harvester identifier, exact stage, concrete cause and action; structured DEBUG/TRACE logs retain the original error and cause chain.
