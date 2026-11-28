@@ -119,4 +119,44 @@ describe('createScenarioRunPresentation', () => {
     expect(presentation.outcomes.assertions, 'missing assertions must be unavailable rather than treated as zero failures').toBeNull();
     expect(presentation.rawPayload, 'the full incomplete source payload must remain inspectable').toBe(source);
   });
+
+  it('correlates multiple terminal orders by identity and preserves repeated cycle states', () => {
+    const source = {
+      run: {
+        runId: 'multi-cycle-run',
+        strategyId: 'GENERIC',
+        scenarioId: 'multi-cycle-case',
+        status: 'Completed',
+        input: { symbol: 'ABCUSDT', venue: 'simulation' },
+        output: {
+          submittedOrders: [
+            { clientOrderId: 'buy-client', brokerOrderId: 'buy-broker', side: 'BUY', quantity: '2', price: '10', status: 'OPEN' },
+            { clientOrderId: 'sell-client', brokerOrderId: 'sell-broker', side: 'SELL', quantity: '3', price: '12', status: 'OPEN' },
+          ],
+          terminalOrders: [
+            { clientOrderId: 'sell-client', brokerOrderId: 'sell-broker', orderStatus: 'CANCELED', executedQuantity: '1', terminalReconciled: true },
+            { clientOrderId: 'buy-client', brokerOrderId: 'buy-broker', orderStatus: 'FILLED', executedQuantity: '2', terminalReconciled: true },
+          ],
+          cycleStates: [
+            { cycleId: 'cycle-1', positionId: 'position-1', status: 'COMPLETED' },
+            { cycleId: 'cycle-2', positionId: 'position-2', status: 'UNRESOLVED' },
+          ],
+        },
+      },
+      trace: [],
+    };
+    const presentation = createScenarioRunPresentation(source);
+
+    expect(presentation.orders.map((order) => [order.clientOrderId, order.terminalStatus, order.executedQuantity]), 'terminal order events must match by identity rather than array position').toEqual([
+      ['buy-client', 'FILLED', '2'],
+      ['sell-client', 'CANCELED', '1'],
+    ]);
+    expect(presentation.cycles.map((cycle) => [cycle.id, cycle.status]), 'all source cycle states must remain visible in source order').toEqual([
+      ['cycle-1', 'COMPLETED'],
+      ['cycle-2', 'UNRESOLVED'],
+    ]);
+    expect(presentation.cycle.status, 'the current cycle must not be presented as completed when the latest source cycle is unresolved').toBe('UNRESOLVED');
+    expect(presentation.outcomes.lifecycle.partiallyExecutedOrderCount, 'a partial terminal execution must be counted without misclassifying a full fill').toBe(1);
+  });
+
 });

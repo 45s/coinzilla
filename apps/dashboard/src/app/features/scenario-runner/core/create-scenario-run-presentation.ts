@@ -56,6 +56,7 @@ export interface ScenarioRunPresentation {
     readonly status: string;
     readonly sourceEvidence: unknown;
   };
+  readonly cycles: readonly { readonly id: string | null; readonly positionId: string | null; readonly status: string; readonly sourceEvidence: unknown }[];
   readonly outcomes: {
     readonly execution: {
       readonly status: string | null;
