@@ -1053,27 +1053,7 @@ async function copyIdentifiedSessionEvidence({ sourceDirectory, destinationDirec
         await onFileCopied?.(artifact)
       },
     })
-    if (session.completionStatus === "active") {
-      const markerPath = path.join(destinationDirectory, "sessions", session.sessionName, "active-process-snapshot.json")
-      await writeFile(markerPath, `${JSON.stringify({
-        formatVersion: 1,
-        snapshotType: "active-harvester-process",
-        runtimeSessionId: session.runtimeSessionId,
-        processId: session.processId,
-        hostname: selection.activeProcessOwner.hostname,
-        lockStartedAt: selection.activeProcessOwner.startedAt,
-        recoveryDataCommitHash: selection.recoveryDataCommitHash,
-        capturedAt: new Date().toISOString(),
-        streams: {
-          harvesterLog: true,
-          traceLog: true,
-        },
-      }, null, 2)}\n`, {
-        encoding: "utf8",
-        flag: "wx",
-        mode: 0o600,
-      })
-    }
+
   }
   return artifactProvenance
 }
@@ -1669,45 +1649,6 @@ function resolveArchiveSourcePaths({ packageDirectory, env } = {}) {
       sourceDirectory: recoveryFactsDirectory,
     },
   ]
-}
-
-async function readHarvesterProcessLockOwner({ filename, hostname } = {}) {
-  const stats = await lstat(filename)
-  if (stats.isSymbolicLink() || !stats.isFile()) {
-    throw new Error(`Cannot snapshot Harvester: invalid lock file ${filename}.`)
-  }
-  let owner
-  try {
-    owner = JSON.parse(await readFile(filename, "utf8"))
-  } catch (error) {
-    throw new Error(`Cannot snapshot Harvester: unreadable lock metadata ${filename}.`, { cause: error })
-  }
-  const validOwner = Number.isSafeInteger(owner?.pid)
-    && owner.pid > 0
-    && typeof owner.hostname === "string"
-    && typeof owner.startedAt === "string"
-    && typeof owner.token === "string"
-    && owner.token.trim() !== ""
-  if (!validOwner) {
-    throw new Error(`Cannot snapshot Harvester: invalid lock metadata ${filename}.`)
-  }
-  if (owner.hostname.toLowerCase() !== hostname.toLowerCase()) {
-    throw new Error(`Cannot snapshot Harvester: lock belongs to another host (${owner.hostname}).`)
-  }
-  return {
-    pid: owner.pid,
-    hostname: owner.hostname,
-    startedAt: owner.startedAt,
-    token: owner.token,
-  }
-}
-
-function selectUniqueActiveHarvesterProcessOwner(owners) {
-  const uniqueOwners = [...new Map(owners.map((owner) => [owner.pid, owner])).values()]
-  if (uniqueOwners.length > 1) {
-    throw new Error(`Cannot snapshot Harvester: multiple active process owners: ${uniqueOwners.map((owner) => owner.pid).join(", ")}.`)
-  }
-  return uniqueOwners[0] ?? null
 }
 
 async function readHarvesterProcessLockEntries({ lockDirectory } = {}) {
