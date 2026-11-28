@@ -49,16 +49,38 @@ test("validates Telegram operator-control allowlists and fields", () => {
   assert.equal(validateTelegramApplicationConfig(valid), valid)
   for (const invalid of [["0"], ["01"], ["-1"], ["bad"], [12345], ["12345", "12345"]]) {
     assert.throws(
-      () => validateTelegramApplicationConfig({ operatorControl: { telegram: { enabled: false, allowedUserIds: invalid } } }),
+      () => validateTelegramApplicationConfig({
+        operatorControl: {
+          telegram: {
+            enabled: false,
+            allowedUserIds: invalid,
+          },
+        },
+      }),
       (error) => error instanceof ConfigValidationError && error.path === "operatorControl.telegram.allowedUserIds",
     )
   }
   assert.throws(
-    () => validateTelegramApplicationConfig({ operatorControl: { telegram: { enabled: "true", allowedUserIds: [] } } }),
+    () => validateTelegramApplicationConfig({
+      operatorControl: {
+        telegram: {
+          enabled: "true",
+          allowedUserIds: [],
+        },
+      },
+    }),
     (error) => error.path === "operatorControl.telegram.enabled",
   )
   assert.throws(
-    () => validateTelegramApplicationConfig({ operatorControl: { telegram: { enabled: false, allowedUserIds: [], chatId: "x" } } }),
+    () => validateTelegramApplicationConfig({
+      operatorControl: {
+        telegram: {
+          enabled: false,
+          allowedUserIds: [],
+          chatId: "x",
+        },
+      },
+    }),
     (error) => error.path === "operatorControl.telegram.chatId",
   )
 })
