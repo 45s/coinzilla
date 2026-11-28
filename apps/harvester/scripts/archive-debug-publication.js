@@ -282,9 +282,10 @@ function validateEvidenceIntegrity(manifest) {
     expectedRuntimeId,
     manifestFiles,
   })
-  if ((integrity.mismatches ?? []).length > 0) {
-    throw new Error(`Debug archive contains mismatched runtime log files for expected runtime ${expectedRuntimeId}; refusing publication.`)
-  }
+  assertNoRuntimeMismatches({
+    integrity,
+    expectedRuntimeId,
+  })
 }
 
 async function readArchiveRecoveryFacts({ directory } = {}) {
