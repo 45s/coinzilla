@@ -166,7 +166,7 @@ async function copyStableFile({ sourcePath, destinationPath } = {}) {
   }
 }
 
-async function copyRegularTree({
+export async function copyRegularTree({
   sourceDirectory,
   destinationDirectory,
   relative = "",
