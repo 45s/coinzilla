@@ -158,6 +158,7 @@ async function copyFileRange({ sourcePath, destinationPath, size, compressed = f
     }
     return
   }
+  // Read only the prefix observed before copying so a live append-only writer can continue safely.
   const source = createReadStream(sourcePath, {
     start: 0,
     end: size - 1,
