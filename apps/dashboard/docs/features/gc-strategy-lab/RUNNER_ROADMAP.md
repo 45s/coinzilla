@@ -155,7 +155,6 @@ Dashboard gateway tests now cover catalogue, submit, history, run detail, cancel
 - The fixture does not contain enough fill price/commission evidence to calculate realized P/L; the UI must show no invented financial result.
 - Implementation and exact-head verification state are tracked in issue #1982 and PR #1983. Do not treat this section as a production-readiness or replay-provenance attestation.
 
-
 ## 2026-11-28 — Pre-run scenario intent diagrams (#1984 / PR #1985)
 
 The Scenario Runner catalogue now needs a source-reviewed explanation before execution, not only an ID/name and raw JSON input. The Dashboard guide model maps each published RS runtime scenario to its business question, seeded starting state, deliberate condition/failure, expected result, limitations and ordered intent-flow nodes.

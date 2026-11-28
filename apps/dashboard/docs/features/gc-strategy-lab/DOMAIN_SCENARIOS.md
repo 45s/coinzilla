@@ -408,7 +408,6 @@ The runner executes the original package against that exact production revision.
 
 **Then** the client copies one complete, versioned JSON package containing scenario identity/definition, original configuration, temporary overrides, validated effective configuration, exact executed revision, market metadata, initial state, ordered events, run status, outputs, assertions, trace, diagnostics and provenance. Secrets are excluded/redacted. If the full package cannot be copied, the UI reports that no complete copy was made and offers a complete export/fallback; it never silently truncates.
 
-
 ## Published RS runtime catalogue — what each scenario actually does
 
 This section describes the **currently published Harvester runtime catalogue**, not the older future/exploratory cases above. The Dashboard shows the selected entry as a pre-run flow diagram. These are scenario-intent diagrams: they explain the seeded setup and deliberate condition before execution. After a run, the separate Run Story shows only the trace and evidence actually returned by that run.

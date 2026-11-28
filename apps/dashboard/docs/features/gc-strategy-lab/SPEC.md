@@ -601,7 +601,6 @@ Timeline steps are keyboard-operable buttons with `aria-pressed` state; the orde
 
 The regression fixture `core/fixtures/rs-runtime-sell-partial-cancel.debug.json` is the supplied 2026-11-28 debug report for `RS-RUNTIME-SELL-PARTIAL-CANCEL-001`. Tests assert the simulation-only mode, 55 ZRO SELL submission, 2.5 ZRO executed before CANCELED, successful terminal reconciliation, UNRESOLVED cycle, STOP recorded, market paused, BUY blocked, SELL permitted, 16/16 assertions, PARTIAL catalog and unverified replay/build provenance. No realized profit/loss is inferred because the fixture does not provide the required fill price/commission evidence.
 
-
 ## Scenario catalogue intent diagrams — 2026-11-28
 
 The Scenario Runner presents a source-reviewed explanation for the selected catalogue entry **before** execution. The explanation contains:

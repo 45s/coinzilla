@@ -35,7 +35,6 @@ The view keeps execution, assertions, trading lifecycle, accounting/cycle, safet
 
 PR #1983 was merged into develop (merge commit `719260822dbde2a3be88fc7a264ad945c6b0fba7`). See the feature [Scenario Runner roadmap](./docs/features/gc-strategy-lab/RUNNER_ROADMAP.md) for implementation decisions and exact-head verification evidence.
 
-
 ## Scenario Runner pre-run intent diagrams — 2026-11-28
 
 Issue [#1984](https://github.com/45s/coinzilla/issues/1984) / PR [#1985](https://github.com/45s/coinzilla/pull/1985) adds a source-reviewed explanation for every currently published RS runtime scenario and the preliminary RS-004-011 candidate. The selected scenario now shows its purpose, seeded starting state, deliberate condition/failure, expected flow, expected outcome and limitations before the user runs it. Unknown scenarios remain explicitly unmapped. These intent diagrams are separate from the post-run evidence-linked Run Story and do not change Harvester execution behavior.
