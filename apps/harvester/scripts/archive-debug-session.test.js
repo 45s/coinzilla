@@ -338,17 +338,40 @@ test("still rejects an invalid recovery-facts checkpoint instead of publishing m
   )
 })
 
-test("collects a read-only debug snapshot while a Harvester process lock exists", async (t) => {
+test("collects and marks the exact active runtime without stopping or clearing its process lock", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
     force: true
   }))
-  await mkdir(fixture.lockDirectory, { recursive: true })
-  await writeFile(path.join(fixture.lockDirectory, ".harvester-trading-test.lock"), "active")
+  const sessionDirectory = path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet")
+  const identityPath = path.join(sessionDirectory, "process-identity.json")
+  const identity = JSON.parse(await readFile(identityPath, "utf8"))
+  identity.processId = process.pid
+  await writeFile(identityPath, JSON.stringify(identity), "utf8")
+  await rm(path.join(sessionDirectory, "process-completed.json"))
+  await rm(path.join(sessionDirectory, "log-streams-completed.json"))
+  const factsPath = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
+  const facts = (await readFile(factsPath, "utf8")).trim().split("\\n").map((line) => JSON.parse(line))
+  facts[0].data.processIdentity.processId = process.pid
+  await writeFile(factsPath, jsonLines(facts), "utf8")
+  const lockOwner = {
+    pid: process.pid,
+    hostname: os.hostname(),
+    startedAt: identity.startedAt,
+    token: "active-test-lock-token",
+  }
+  const lockPath = path.join(fixture.lockDirectory, ".harvester-trading-test.lock")
+  await writeFile(lockPath, JSON.stringify(lockOwner), "utf8")
   const result = await runHarvesterDebugArchive(archiveDependencies({ fixture }))
-  assert.equal(result.matchingTradingLogsAvailable, true, "An active process lock must not block collection of an independently verified runtime snapshot.")
-  assert.ok(result.localArchive, "Collection must retain the local archive while Harvester remains active.")
+  const manifest = await readArchiveManifest(result.localArchive)
+  const matchingSession = manifest.sessionInventory.find(({ runtimeSessionId }) => runtimeSessionId === RUNTIME_SESSION_ID)
+  assert.equal(result.matchingTradingLogsAvailable, true, "An active process must not block collection when its process lock and durable runtime identity match.")
+  assert.equal(matchingSession.completionStatus, "active", "The archive must distinguish a live snapshot from a completed process.")
+  assert.equal(matchingSession.loggerCompletionStatus, "active", "The archive must not invent logger completion for a running process.")
+  assert.equal(matchingSession.activeSnapshotPath, "logs/sessions/2026-11-24_testnet/active-process-snapshot.json", "The archive must record the active snapshot provenance path.")
+  assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, lockOwner.token, "Collection must not modify or remove the running process lock.")
+  assert.equal(manifest.evidenceIntegrity.validForPublication, true, "A uniquely identified active runtime snapshot is publishable.")
 })
 
 test("reclaims confirmed stale same-host locks before collecting the TESTNET debug archive", async (t) => {
