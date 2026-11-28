@@ -397,6 +397,7 @@ test("ignores unmatched orders from a prior Harvester process under the default 
     calls,
   } = makeWorkflow({
     updateResult: { unknown: true },
+    currentProcessOrderIdNamespace: "currentprocessnamespace",
   })
 
   const result = await workflow.processUserDataEventTransition({
