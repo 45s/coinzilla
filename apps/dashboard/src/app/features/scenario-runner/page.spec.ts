@@ -162,4 +162,16 @@ describe('ScenarioRunnerComponent run details', () => {
     expect(JSON.parse(component.rawJson), 'export source must preserve the complete run record data').toEqual(runRecord);
     expect(nativeElement.querySelector('.raw-json'), 'the full JSON fallback must remain available').not.toBeNull();
   });
+  it('shows a plain-language scenario title while keeping the stable ID separately visible', () => {
+    const selector = nativeElement.querySelector<HTMLSelectElement>('.scenario-control select');
+    const selectedOption = selector?.selectedOptions[0];
+
+    expect(selectedOption?.textContent?.trim(), 'the selector must explain the business behavior instead of exposing an opaque ID and implementation-heavy registry name').toBe(
+      'SELL partly fills, then is cancelled',
+    );
+    expect(nativeElement.querySelector('.scenario-id')?.textContent, 'the stable scenario ID must remain available for test and issue traceability').toContain(
+      'RS-RUNTIME-SELL-PARTIAL-CANCEL-001',
+    );
+  });
+
 });
