@@ -245,6 +245,7 @@ function matchesStoppedSnapshotIdentity({ marker, identity, manifest, expectedRu
   return marker.runtimeSessionId === expectedRuntimeId
     && marker.processId === identity.processId
     && marker.processId === manifest.tradingRuntime.processIdentity.processId
+    && marker.processStartedAt === identity.startedAt
     && marker.recoveryDataCommitHash === manifest.dataCommitHash
 }
 
@@ -296,8 +297,9 @@ async function validateStoppedProcessSnapshot({
   expectedRuntimeId,
 } = {}) {
   const markerPath = session.stoppedSnapshotPath
+  const expectedMarkerPath = `logs/sessions/${session.sessionName}/stopped-process-snapshot.json`
   const markerEntry = manifest.files.find((entry) => entry.path === markerPath)
-  if (!markerEntry || typeof markerPath !== "string") {
+  if (markerPath !== expectedMarkerPath || !markerEntry) {
     throw new Error(`Stopped runtime ${expectedRuntimeId} is missing its snapshot provenance marker.`)
   }
   if (!hasNoArchivedCompletionRecords({
