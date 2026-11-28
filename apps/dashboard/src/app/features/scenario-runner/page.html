@@ -1,8 +1,4 @@
 <section class="runner">
-  <header class="runner-header">
-    <h1>Strategy Scenario Runner</h1>
-    <p>Explore real scenario execution evidence, decisions, order lifecycle and results. Technical source data remains available for investigation.</p>
-  </header>
   @if (error()) {
     <p class="error" role="alert">{{ error() }}</p>
   }
@@ -26,8 +22,10 @@
       </select>
     </label>
   </div>
-  <p class="scenario-status">Source mapping: {{ selectedScenario?.status ?? 'UNAVAILABLE' }}</p>
-  <p class="scenario-status">Execution status: {{ selectedScenario?.executionStatus ?? 'UNAVAILABLE' }}</p>
+  <div class="scenario-meta">
+    <p class="scenario-status">Source mapping: {{ selectedScenario?.status ?? 'UNAVAILABLE' }}</p>
+    <p class="scenario-status">Execution status: {{ selectedScenario?.executionStatus ?? 'UNAVAILABLE' }}</p>
+  </div>
   @if (selectedScenario?.readinessReasons?.length) {
     <section class="readiness">
       <h2>Readiness and limitations</h2>
@@ -59,8 +57,6 @@
         </section>
       </div>
       <section class="guide-diagram" aria-label="Scenario intent flow diagram">
-        <h3>Scenario flow</h3>
-        <p class="guide-flow-caption">Source-reviewed steps for the selected scenario, in documented order. This is scenario intent, not a fabricated execution trace or an editable graph.</p>
         @if (selectedScenarioGraph; as graph) {
           <app-scenario-graph-viewer [graph]="graph" />
         }

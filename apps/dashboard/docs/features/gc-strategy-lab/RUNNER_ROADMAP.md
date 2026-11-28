@@ -176,3 +176,7 @@ The Scenario Runner catalogue now needs a source-reviewed explanation before exe
 - No Harvester trading behavior or runner API execution contract changes are made by this Dashboard presentation increment.
 - Source audit: `apps/harvester/src/infrastructure/scenario-runner/rs-runtime-scenario.js` and the helper-only `RS-004-011` adapter in `apps/harvester/src/infrastructure/scenario-runner/rs-scenario-adapter.js`.
 - Tracking: [issue #1984](https://github.com/45s/coinzilla/issues/1984), [PR #1988](https://github.com/45s/coinzilla/pull/1988).
+
+## Dashboard Scenario Runner compact layout — 2026-11-28
+
+Issue [#2001](https://github.com/45s/coinzilla/issues/2001) / PR [#2002](https://github.com/45s/coinzilla/pull/2002) removes the redundant page heading/subtitle in favor of the existing breadcrumb, expands the runner to the available Dashboard width, and places guide context beside the vertical expected-flow graph on desktop. Graph typography and node geometry are reduced modestly from the initial readability pass. Mobile remains single-column. This changes presentation only; scenario intent, source mapping, readiness, limitations, and actual run evidence remain separate and unchanged.

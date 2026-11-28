@@ -87,3 +87,106 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:520px;overflow:auto}
 
 .guide-flow-caption{margin:0;color:var(--muted);font-size:13px;line-height:1.45}
 .scenario-flow-evidence{margin:0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;color:var(--muted);font-size:13px;line-height:1.45}
+
+
+/* Scenario Runner uses a compact two-column workspace on desktop. */
+.runner {
+  gap: 12px;
+}
+
+.controls {
+  gap: 8px;
+}
+
+.scenario-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.scenario-status {
+  margin: 0;
+  font-size: 13px;
+}
+
+.scenario-guide {
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.4fr);
+  gap: 10px 16px;
+  padding: 12px;
+}
+
+.scenario-guide-heading,
+.guide-purpose {
+  grid-column: 1 / -1;
+}
+
+.guide-context {
+  grid-column: 1;
+  grid-row: 3;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  align-content: start;
+}
+
+.guide-diagram {
+  grid-column: 2;
+  grid-row: 3 / span 4;
+  min-width: 0;
+}
+
+.scenario-flow-evidence,
+.guide-result,
+.guide-limitations {
+  grid-column: 1;
+}
+
+.guide-context section,
+.guide-result,
+.guide-limitations {
+  padding: 9px;
+}
+
+.guide-purpose {
+  font-size: 14px;
+}
+
+.readiness {
+  padding: 10px 12px;
+}
+
+.readiness h2 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.readiness ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+@media (max-width: 900px) {
+  .scenario-guide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scenario-guide-heading,
+  .guide-purpose,
+  .guide-context,
+  .guide-diagram,
+  .scenario-flow-evidence,
+  .guide-result,
+  .guide-limitations {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .guide-context {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .guide-context {
+    grid-template-columns: 1fr;
+  }
+}
