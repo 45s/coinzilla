@@ -63,6 +63,11 @@ describe('ScenarioRunnerComponent run details', () => {
   it('explains the fixture without conflating execution, partial order execution, cycle, safety or provenance', () => {
     const text = nativeElement.textContent ?? '';
 
+    expect(text, 'scenario intent must be explained before the run trace').toContain('What this scenario does');
+    expect(text, 'the selected partial-cancel scenario purpose must be readable').toContain('partially executed SELL which later becomes CANCELED');
+    expect(text, 'the deliberate partial-fill condition must be visible in the diagram').toContain('Partial fill, then terminal CANCELED');
+    expect(text, 'scenario intent must be distinguished from observed execution evidence').toContain('NOT EXECUTION EVIDENCE');
+    expect(text, 'scenario limitations must distinguish simulation from production proof').toContain('does not prove real exchange behavior');
     expect(text, 'simulation-only execution must be explicit').toContain('SIMULATION ONLY');
     expect(text, 'all passing assertions must be shown as a separate outcome').toContain('16 / 16 passed');
     expect(text, 'the canceled order state must remain visible').toContain('CANCELED');

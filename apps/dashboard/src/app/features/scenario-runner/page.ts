@@ -2,6 +2,7 @@ import { JsonPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { ScenarioRunnerApi } from './api';
 import { JsonTreeComponent } from './json-tree.component';
+import { getScenarioGuide, type ScenarioGuide } from './core/scenario-guides';
 import { createScenarioRunnerApplication, type ScenarioCatalogItem, type ScenarioRunSnapshot } from './application';
 import { createScenarioRunPresentation, type ScenarioRunPresentation, type ScenarioRunPresentationStep } from './core/create-scenario-run-presentation';
 import type { ScenarioRunRecord, ScenarioTraceStep } from './core/run-contract';
@@ -341,6 +342,10 @@ export class ScenarioRunnerComponent {
 
   get selectedScenario(): ScenarioCatalogItem['scenarios'][number] | undefined {
     return this.scenarios.find((item) => item.id === this.scenarioId());
+  }
+
+  get selectedScenarioGuide(): ScenarioGuide | null {
+    return this.selectedScenario ? getScenarioGuide(this.selectedScenario.id) : null;
   }
 
   get scenarios(): ScenarioCatalogItem['scenarios'] {
