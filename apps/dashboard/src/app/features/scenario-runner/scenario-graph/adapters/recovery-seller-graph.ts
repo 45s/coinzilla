@@ -9,6 +9,11 @@ export function createRecoverySellerGraph() {
       kind: 'rs-domain-specification',
       reference: 'apps/harvester/docs/domain/recovery-seller-domain-specification.md',
     },
+    limitations: [
+      'Visual explanation only; this graph is not part of the executable Harvester scenario catalogue.',
+      'Restart/replay and third-asset commission valuation are outside the current RS runtime acceptance scope.',
+      'A terminal non-FILLED SELL or failed profitability gate leaves the cycle unresolved; no retry or replacement policy is implied.',
+    ],
     nodes: [
       { id: 'start', type: 'start', label: 'Start recovery cycle', description: 'Create a stable cycleId and recovery position identity.', position: { x: 30, y: 210 }, properties: {} },
       { id: 'legacy', type: 'action', label: 'Load authorized legacy basis', description: 'Use explicit original quote investment and base quantity; do not infer ownership from wallet balances.', position: { x: 270, y: 210 }, properties: { authority: 'Explicit operator authorization' } },
@@ -17,7 +22,7 @@ export function createRecoverySellerGraph() {
       { id: 'buy', type: 'action', label: 'Submit recovery BUY', description: 'A new BUY lifecycle may start only when the preceding BUY is terminal and reconciled.', position: { x: 790, y: 380 }, properties: {} },
       { id: 'buy-reconcile', type: 'reconciliation', label: 'Reconcile BUY fills and fees', description: 'Apply canonical fills and actual commissions exactly once.', position: { x: 1040, y: 380 }, properties: {} },
       { id: 'sell-gates', type: 'decision', label: 'All SELL gates pass?', description: 'Recovery, applicable legacy and combined-cycle profitability plus ownership, custody, reservation and exchange filters.', position: { x: 1300, y: 380 }, properties: {} },
-      { id: 'blocked', type: 'block', label: 'BLOCK / STOP', description: 'Do not invent a retry, replacement SELL or additional BUY policy.', position: { x: 1570, y: 40 }, properties: {} },
+      { id: 'blocked', type: 'block', label: 'BLOCK / STOP', description: 'Known policy limits may BLOCK without STOP. Global STOP blocks additional BUY spending only; it does not itself prohibit an independently valid first SELL.', position: { x: 1570, y: 40 }, properties: {} },
       { id: 'sell', type: 'action', label: 'Submit the sole cycle SELL', description: 'One SELL order lifecycle per recovery cycle; recovery quantity plus configured legacy sellQuantity.', position: { x: 1570, y: 520 }, properties: { invariant: 'Exactly one SELL lifecycle per cycle' } },
       { id: 'sell-reconcile', type: 'reconciliation', label: 'Reconcile complete SELL fills', description: 'Reconcile terminal order history and canonical fills before publishing accounting or releasing the reservation.', position: { x: 1830, y: 520 }, properties: {} },
       { id: 'terminal', type: 'decision', label: 'Filled, reconciled and profitable?', description: 'A cycle closes only when the sole SELL is FILLED, accounting is committed and every required profitability gate passes.', position: { x: 2090, y: 520 }, properties: {} },

@@ -47,6 +47,7 @@ export interface ScenarioGraph {
   readonly title: string;
   readonly description?: string;
   readonly source: ScenarioGraphSource;
+  readonly limitations: readonly string[];
   readonly nodes: readonly ScenarioGraphNode[];
   readonly edges: readonly ScenarioGraphEdge[];
 }
@@ -82,6 +83,7 @@ function freezeGraph(graph: ScenarioGraph): ScenarioGraph {
     Object.freeze(edge);
   }
   Object.freeze(graph.source);
+  Object.freeze(graph.limitations);
   Object.freeze(graph.nodes);
   Object.freeze(graph.edges);
   return Object.freeze(graph);
@@ -105,12 +107,14 @@ function assertGraphShape(value: unknown): asserts value is ScenarioGraph {
   if (!isRecord(value) || value['schemaVersion'] !== SCENARIO_GRAPH_SCHEMA_VERSION) {
     throw new Error('SCENARIO_GRAPH_SCHEMA_VERSION_UNSUPPORTED');
   }
-  assertAllowedKeys(value, ['schemaVersion', 'status', 'id', 'title', 'description', 'source', 'nodes', 'edges'], 'SCENARIO_GRAPH_DOCUMENT_INVALID');
+  assertAllowedKeys(value, ['schemaVersion', 'status', 'id', 'title', 'description', 'source', 'limitations', 'nodes', 'edges'], 'SCENARIO_GRAPH_DOCUMENT_INVALID');
   if (
     value['status'] !== 'visual-only'
     || typeof value['id'] !== 'string'
     || typeof value['title'] !== 'string'
     || !isRecord(value['source'])
+    || !Array.isArray(value['limitations'])
+    || value['limitations'].some((item) => typeof item !== 'string')
     || !Array.isArray(value['nodes'])
     || !Array.isArray(value['edges'])
   ) {
@@ -170,6 +174,7 @@ export function createScenarioGraph(input: {
   readonly title: string;
   readonly description?: string;
   readonly source: ScenarioGraphSource;
+  readonly limitations?: readonly string[];
   readonly nodes: readonly ScenarioGraphNode[];
   readonly edges: readonly ScenarioGraphEdge[];
 }): ScenarioGraph {
@@ -188,6 +193,7 @@ export function createScenarioGraph(input: {
       to: { ...edge.to },
     })),
     source: { ...input.source },
+    limitations: [...(input.limitations ?? [])],
   });
 }
 
