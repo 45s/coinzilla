@@ -576,7 +576,7 @@ test("fails collection when only an unrelated runtime's log streams are availabl
   )
 })
 
-test("marks multiple exact runtime candidates ambiguoustest("fails closed when two session directories claim the same runtime identity", async (t) => {
+test("fails closed when two session directories claim the same runtime identity", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
   await writeTestnetSession({ fixture, sessionName: "2026-11-25_duplicate-runtime", runtimeSessionId: RUNTIME_SESSION_ID })
@@ -594,7 +594,7 @@ test("marks multiple exact runtime candidates ambiguoustest("fails closed when t
   )
 })
 
-test("detects identical source log contenttest("detects identical source log content while retaining every source path", async (t) => {
+test("detects identical source log content while retaining every source path", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
