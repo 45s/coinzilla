@@ -572,6 +572,9 @@ test("archives stable logs for a stopped runtime when legacy completion markers 
     force: true,
   }))
   await prepareActiveRuntimeFixture({ fixture })
+  const legacySessionDirectory = path.join(fixture.packageDirectory, "logs/sessions/2026-11-09_legacy-without-identity")
+  await mkdir(legacySessionDirectory, { recursive: true })
+  await writeFile(path.join(legacySessionDirectory, "harvester.log"), "unrelated legacy evidence", "utf8")
   const result = await runHarvesterDebugArchive({
     ...archiveDependencies({ fixture }),
     isProcessAlive: () => false,
@@ -590,8 +593,28 @@ test("archives stable logs for a stopped runtime when legacy completion markers 
   assert.equal(marker.completionConfirmed, false)
   assert.deepEqual(marker.streams, { harvesterLog: true, traceLog: true })
   assert.equal(manifest.evidenceIntegrity.validForPublication, true, "A byte-stable, runtime-matched stopped-process snapshot is publishable as explicitly unconfirmed evidence.")
+  assert.ok(manifest.evidenceIntegrity.unverifiableSessions.includes("logs/sessions/2026-11-09_legacy-without-identity"), "Unidentified historical sessions must remain independent and must not block a proven exact-runtime snapshot.")
   assert.ok(manifest.warnings.some(({ code }) => code === "SESSION_COMPLETION_RECORD_MISSING"))
   assert.ok(manifest.warnings.some(({ code }) => code === "SESSION_LOGGER_COMPLETION_RECORD_MISSING"))
+})
+
+test("does not classify a PID as stopped when it remains alive without its process locks", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const { lockPath, hostLockPath } = await prepareActiveRuntimeFixture({ fixture })
+  await Promise.all([rm(lockPath), rm(hostLockPath)])
+  await assert.rejects(
+    runHarvesterDebugArchive({
+      ...archiveDependencies({ fixture }),
+      isProcessAlive: () => true,
+      onArchiveCreatedFn: undefined,
+    }),
+    /incomplete|evidence integrity|COLLECTION FAILED/i,
+    "A missing lock pair must not turn a still-live PID into a stopped-process snapshot.",
+  )
 })
 
 test("leaves stale process locks untouched while collecting the TESTNET debug archive", async (t) => {
