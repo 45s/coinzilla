@@ -208,10 +208,15 @@ test("publication leaves source archive bytes unchanged", async (t) => {
     env: {
       HARVESTER_ARCHIVE_REMOTE: REMOTE,
     },
-    publishArchiveFn: async () => ({
-      commit: "b".repeat(40),
-      fileCount: 2,
-    }),
+    publishArchiveFn: async ({ directory }) => {
+      assert.notEqual(directory, fixture.archiveDirectory, "Publication must operate on its own immutable snapshot copy.")
+      assert.equal(path.basename(directory), ARCHIVE_NAME, "The publication snapshot must preserve the archive name.")
+      assert.deepEqual(await snapshotDirectory(directory), before, "The publication snapshot must match the completed source archive.")
+      return {
+        commit: "b".repeat(40),
+        fileCount: 2,
+      }
+    },
   })
   assert.deepEqual(await snapshotDirectory(fixture.archiveDirectory), before, "Publication must not modify any source archive file")
 })
