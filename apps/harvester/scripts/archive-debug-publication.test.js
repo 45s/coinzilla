@@ -33,6 +33,32 @@ async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME } = {}) {
       sha256: createHash("sha256").update(item.content).digest("hex"),
     })
   }
+  const processIdentity = {
+    application: "harvester",
+    version: "1.0.001",
+    runtimeSessionId: runtimeId,
+    processId: 24680,
+    startedAt: "2026-11-28T11:00:00.000Z",
+    source: { branch: "develop", commit: "a".repeat(40), workingTree: "clean" },
+  }
+  const recoveryDigest = "a".repeat(64)
+  const factsContent = [
+    JSON.stringify({ sequence: "0", digest: "0".repeat(64), factType: "PROCESS_STARTED", runtimeSessionId: runtimeId, data: { processIdentity } }),
+    JSON.stringify({ sequence: "1", digest: recoveryDigest, runtimeSessionId: runtimeId, factType: "CHECKPOINT" }),
+  ].join("\n") + "\n"
+  const recoveryManifestContent = [
+    JSON.stringify({ sequence: "0", recordCount: "1", lastCommittedDigest: "0".repeat(64) }),
+    JSON.stringify({ sequence: "1", recordCount: "2", lastCommittedDigest: recoveryDigest }),
+  ].join("\n") + "\n"
+  const checkpointFileContent = recoveryDigest + "\n"
+  for (const [relativePath, content] of [
+    ["recovery-facts/facts.jsonl", factsContent],
+    ["recovery-facts/manifest.jsonl", recoveryManifestContent],
+    ["data_commit_hash", checkpointFileContent],
+  ]) {
+    await writeFile(path.join(archiveDirectory, relativePath), content)
+    files.push({ path: relativePath, size: Buffer.byteLength(content), sha256: createHash("sha256").update(content).digest("hex") })
+  }
   const streamEvidence = (item) => ({
     sourcePath: item.sourcePath,
     archivePath: item.archivePath,
@@ -57,7 +83,8 @@ async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME } = {}) {
     logRuntimeSessionId: runtimeId,
     matchingTradingLogsAvailable: true,
     runtimeIdentity: { status: "matched", correlation: "same-runtime-session" },
-    tradingRuntime: { runtimeSessionId: runtimeId, processIdentity: { runtimeSessionId: runtimeId } },
+    dataCommitHash: recoveryDigest,
+    tradingRuntime: { runtimeSessionId: runtimeId, processIdentity },
     sessionInventory: [{ runtimeSessionId: runtimeId, completionStatus: "complete" }],
     evidenceIntegrity: {
       status: "matched",
