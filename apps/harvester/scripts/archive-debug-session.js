@@ -21,7 +21,6 @@ import { fileURLToPath } from "node:url"
 import { captureBuildMetadata } from "@coinzilla/utils"
 import packageMetadata from "../package.json" with { type: "json" }
 import { resolveOperationalStateDirectory } from "../src/infrastructure/operational-state/resolve-directory.js"
-import { assertHarvesterProcessStopped } from "./assert-harvester-process-stopped.js"
 
 const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const SOURCE_DIRECTORIES = Object.freeze(["logs", "recovery-facts"])
@@ -1624,13 +1623,11 @@ export async function runHarvesterDebugArchive({
   createArchiveId = randomUUID,
   onArchiveCreatedFn,
   onProgress = (message) => process.stdout.write(`${message}\\n`),
-  lockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
 } = {}) {
   assertCollectionArguments({
     env,
     args,
   })
-  await assertHarvesterProcessStopped({ lockDirectory })
   const sourcePaths = resolveArchiveSourcePaths({
     packageDirectory,
     env,
