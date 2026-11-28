@@ -2,7 +2,10 @@ import { NOTIFICATIONS_TG_PROFILES } from "../../../config/notifications-tg-prof
 import { ConfigValidationError } from "../../domain/app-config.js"
 
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value)
-const fail = ({ path, expectation }) => { throw new ConfigValidationError(path, expectation) }
+const fail = ({
+  path,
+  expectation,
+}) => { throw new ConfigValidationError(path, expectation) }
 const requireRecord = ({ value, path }) => {
   if (!isRecord(value)) {
     fail({ path, expectation: "an object" })
@@ -117,38 +120,50 @@ function validateTelegramOperatorControlConfig(appConfig) {
     return
   }
   const path = "operatorControl"
-  requireRecord({ value: appConfig.operatorControl,
-path })
+  requireRecord({
+    value: appConfig.operatorControl,
+    path,
+  })
   for (const key of Object.keys(appConfig.operatorControl)) {
     if (key !== "telegram") {
-      fail({ path: `${path  }.${  key}`,
+      fail({ path: `${path}.${key}`,
 expectation: "a supported operator-control configuration field" })
     }
   }
-  const {telegram} = appConfig.operatorControl
-  requireRecord({ value: telegram,
-path: `${path  }.telegram` })
+  const { telegram } = appConfig.operatorControl
+  requireRecord({
+    value: telegram,
+    path: `${path}.telegram`,
+  })
   for (const key of Object.keys(telegram)) {
     if (key !== "enabled" && key !== "allowedUserIds") {
-      fail({ path: `${path  }.telegram.${  key}`,
+      fail({ path: `${path}.telegram.${key}`,
 expectation: "a supported Telegram operator configuration field" })
     }
   }
-  requireBoolean({ value: telegram.enabled,
-path: `${path  }.telegram.enabled` })
+  requireBoolean({
+    value: telegram.enabled,
+    path: `${path}.telegram.enabled`,
+  })
   if (!Array.isArray(telegram.allowedUserIds)) {
-    fail({ path: `${path  }.telegram.allowedUserIds`,
-expectation: "an array of unique positive decimal Telegram user IDs" })
+    fail({
+      path: `${path}.telegram.allowedUserIds`,
+      expectation: "an array of unique positive decimal Telegram user IDs",
+    })
   }
   const seenUserIds = new Set()
   for (const userId of telegram.allowedUserIds) {
     if (typeof userId !== "string" || !/^[1-9][0-9]*$/.test(userId) || !Number.isSafeInteger(Number(userId))) {
-      fail({ path: `${path  }.telegram.allowedUserIds`,
-expectation: "canonical positive decimal Telegram user ID strings" })
+      fail({
+        path: `${path}.telegram.allowedUserIds`,
+        expectation: "canonical positive decimal Telegram user ID strings",
+      })
     }
     if (seenUserIds.has(userId)) {
-      fail({ path: `${path  }.telegram.allowedUserIds`,
-expectation: "unique positive decimal Telegram user IDs" })
+      fail({
+        path: `${path}.telegram.allowedUserIds`,
+        expectation: "unique positive decimal Telegram user IDs",
+      })
     }
     seenUserIds.add(userId)
   }
