@@ -70,6 +70,11 @@ describe('ScenarioRunnerComponent run details', () => {
     fixture.detectChanges();
   });
 
+  it('uses the breadcrumb as the page title without repeating a heading or subtitle', () => {
+    expect(nativeElement.querySelector('.runner-header'), 'the page must not repeat its breadcrumb with a local heading').toBeNull();
+    expect(nativeElement.querySelector('h1'), 'the breadcrumb already identifies the Scenario Runner page').toBeNull();
+  });
+
   it('exposes the GitHub develop checkbox and switches to a pinned read-only scenario snapshot', async () => {
     const checkbox = nativeElement.querySelector<HTMLInputElement>('.catalog-source-toggle input');
     expect(checkbox).not.toBeNull();
