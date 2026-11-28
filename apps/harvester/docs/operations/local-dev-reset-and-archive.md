@@ -4,11 +4,11 @@ This runbook covers the local TESTNET development workflow only. It does not aut
 
 ## Required environment
 
-- `TRADING_MODE=testnet` in `.env.development` is required for collection.
+- Debug archive collection is read-only and does not require `TRADING_MODE`; it infers testnet/live mode from the exact matched process identity.
 - `HARVESTER_ARCHIVE_REMOTE=https://github.com/45s/coinzilla-archive.git` and Git access are required for `archive:push` and `archive:debug:publish`, not for local debug collection.
 - Run commands from `apps/harvester`.
 
-`archive:push` validates and publishes the full development archive. `archive:debug` collects a lightweight TESTNET snapshot and may run while Harvester is active; it reads the process lock only to verify active-runtime ownership and never stops Harvester, reclaims/deletes a lock, or mutates trading state. `archive:debug:publish` publishes an already-collected immutable snapshot and does not inspect the running process.
+`archive:push` validates and publishes the full development archive. `archive:debug` collects a lightweight testnet/live runtime snapshot and may run while Harvester is active; it reads the process lock only to verify active-runtime ownership and never stops Harvester, reclaims/deletes a lock, or mutates trading state. `archive:debug:publish` publishes an already-collected immutable snapshot and does not inspect the running process.
 
 ## Start and stop a DEV session
 
@@ -30,11 +30,11 @@ Run this after Harvester has stopped:
 pnpm run archive:push
 ```
 
-The command creates a uniquely named local snapshot in the ignored `archive-output/` directory, requires the selected completed TESTNET log session and latest recovery-facts checkpoint to have the same runtime session ID, verifies its inventory and SHA-256 checksums, publishes to the private archive repository, and verifies the remote commit and each file blob. If publication fails, the local snapshot remains for inspection/retry and source folders remain unchanged.
+The command creates a uniquely named local snapshot in the ignored `archive-output/` directory, requires the selected completed testnet/live log session and latest recovery-facts checkpoint to have the same runtime session ID, verifies its inventory and SHA-256 checksums, publishes to the private archive repository, and verifies the remote commit and each file blob. If publication fails, the local snapshot remains for inspection/retry and source folders remain unchanged.
 
 Each archive contains:
 
-- `logs/sessions/`: only the newest completed TESTNET session with a valid process identity; its files are gzip-compressed.
+- `logs/sessions/`: all identified testnet/live sessions are preserved separately; only the exact runtime-ID match is selected, and its files are gzip-compressed.
 - `logs/cumulative/`: the final 5% of structured records belonging to that selected TESTNET runtime session. Shared `terminal.log` is deliberately excluded because it has no reliable per-record environment marker; the selected session's complete terminal log is included in the compressed session directory.
 - `data/`: all regular files and directories except `data/production/`. The configured `HARVESTER_DATABASE_DIRECTORY` override is honored; only non-production entries are copied.
 - `recovery-facts/`: the complete Operational State Store, including facts and manifest streams.
@@ -53,10 +53,10 @@ Debug archive collection and publication are separate commands with different sa
 Run this directly; do not stop Harvester just to collect debug evidence:
 
 ```bash
-TRADING_MODE=testnet pnpm run archive:debug
+pnpm run archive:debug
 ```
 
-Collection requires `TRADING_MODE=testnet`. It reads the TESTNET session inventory and Operational State Store, rejects symlinks and unsupported filesystem entries, and writes a uniquely named local archive directory. If Harvester is running, the collector verifies the live PID/host/start-time from the process lock against the session's process identity and durable `PROCESS_STARTED` fact. The lock is read-only: collection never stops the process, reclaims/deletes the lock, or waits for shutdown, and it rechecks both process-lock namespaces, including each lock token, after copying. Append-only files are copied only through the byte length observed at the snapshot boundary; source replacement, truncation, or mutation of the captured prefix fails closed. The copied recovery-facts checkpoint is validated inside the archive. The command does not contact GitHub or publish anything.
+Collection does not require `TRADING_MODE`. It reads testnet/live session identities and the Operational State Store, rejects symlinks and unsupported filesystem entries, and writes a uniquely named local archive directory. If Harvester is running, the collector verifies the live PID/host/start-time from the process lock against the session's process identity and durable `PROCESS_STARTED` fact. The lock is read-only: collection never stops the process, reclaims/deletes the lock, or waits for shutdown, and it rechecks both process-lock namespaces, including each lock token, after copying. Append-only files are copied only through the byte length observed at the snapshot boundary; source replacement, truncation, or mutation of the captured prefix fails closed. The copied recovery-facts checkpoint is validated inside the archive. The command does not contact GitHub or publish anything.
 
 A publishable collection requires one unique process identity whose immutable runtime ID matches the archived committed recovery-facts runtime, plus non-empty DEBUG (`harvester.log`) and TRACE (`trace.log`) streams. A stopped process must also have matching process-completion and logger-flush records with `logStreamsComplete=true`. A running process instead requires a live same-host process lock whose PID and start time match both the session identity and durable `PROCESS_STARTED` identity; the archive records this as `completionStatus=active` and adds `active-process-snapshot.json` without inventing a completion record. Every rotated generation is included; already-compressed `.gz` inputs are copied byte-for-byte, and uncompressed inputs are gzip-compressed. Original filenames, source paths, rotation generation, source/archive sizes and SHA-256 values are recorded per stream. Rotated files are ordered oldest-first, with the current file last.
 
@@ -83,7 +83,7 @@ Collection and publication flow:
 ```mermaid
 flowchart TD
     A[Harvester running or stopped] --> B[archive:debug]
-    B --> C[Copy eligible TESTNET logs and recovery-facts]
+    B --> C[Copy identified runtime logs and recovery-facts]
     C --> D[Write manifest and SHA-256 checksums]
     D --> E{Runtime identity and DEBUG/TRACE snapshot valid?}
     E -->|No| F[Keep diagnostic evidence; exit non-zero; do not publish]
@@ -98,9 +98,9 @@ flowchart TD
     M --> N
 ```
 
-The debug archive retains the existing timestamp/ID naming convention with the `_debug` suffix. Version-2 manifests distinguish `matched`, `missing`, `mismatched`, `incomplete` and `unverifiable` evidence. Other identified TESTNET sessions may be retained only as separately identified independent evidence; they are never used to satisfy the trading runtime DEBUG/TRACE streams. Only `matched` evidence is publishable. A live-process snapshot is publishable only when its active lock, process identity, durable runtime identity, and snapshot marker all agree. Older version-1 debug archives do not carry the required per-stream ownership/completeness proof and are rejected by the publisher; do not relabel or hand-edit them to bypass validation. The archive contains only:
+The debug archive retains the existing timestamp/ID naming convention with the `_debug` suffix. Version-2 manifests distinguish `matched`, `missing`, `mismatched`, `incomplete` and `unverifiable` evidence. Other identified testnet/live sessions may be retained only as separately identified independent evidence; they are never used to satisfy the trading runtime DEBUG/TRACE streams. Only `matched` evidence is publishable. A live-process snapshot is publishable only when its active lock, process identity, durable runtime identity, and snapshot marker all agree. Older version-1 debug archives do not carry the required per-stream ownership/completeness proof and are rejected by the publisher; do not relabel or hand-edit them to bypass validation. The archive contains only:
 
-- `logs/sessions/`: identified TESTNET session evidence, with DEBUG/TRACE rotation and compression provenance; unrelated runtimes remain in separate session directories.
+- `logs/sessions/`: identified testnet/live session evidence, with DEBUG/TRACE rotation and compression provenance; unrelated runtimes remain in separate session directories.
 - `recovery-facts/`: complete Operational State Store facts and manifest.
 - `data_commit_hash` and `manifest.json`: checkpoint identity, file inventory, sizes, and SHA-256 checksums.
 

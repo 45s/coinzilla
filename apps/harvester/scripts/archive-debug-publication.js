@@ -23,7 +23,7 @@ function validateArchiveName(archiveName) {
 function validateManifestHeader(manifest) {
   const hasExpectedFormat = manifest.formatVersion === 2
     && manifest.application === "harvester"
-    && manifest.commandTradingMode === "testnet"
+    && ["testnet", "live"].includes(manifest.runtimeTradingMode)
   const hasExpectedScope = JSON.stringify(manifest.includedDirectories) === JSON.stringify(REQUIRED_INCLUDED_DIRECTORIES)
     && JSON.stringify(manifest.excludedPaths) === JSON.stringify(REQUIRED_EXCLUSIONS)
   const hasCreationTime = typeof manifest.createdAt === "string"
@@ -77,7 +77,8 @@ async function readArchivedSessionJson({ directory, manifest, sourcePath } = {})
 function isMatchingArchivedProcessIdentity({ identity, session, expectedRuntimeId, manifest } = {}) {
   const expectedProcessId = manifest.tradingRuntime.processIdentity.processId
   return identity.application === "harvester"
-    && identity.environment === "testnet"
+    && ["testnet", "live"].includes(identity.environment)
+    && identity.environment === manifest.runtimeTradingMode
     && identity.runtimeSessionId === expectedRuntimeId
     && identity.startedAt === session.startedAt
     && identity.startedAt === manifest.tradingRuntime.processIdentity.startedAt

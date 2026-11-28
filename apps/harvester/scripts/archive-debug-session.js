@@ -512,10 +512,10 @@ function createArchiveSessionMissingFieldWarnings({
   ]
 }
 
-function isHarvesterTestnetSession({ identity } = {}) {
+function isHarvesterRuntimeSession({ identity } = {}) {
   return identity?.application === "harvester"
     && identity?.formatVersion === 1
-    && identity?.environment === "testnet"
+    && ["testnet", "live"].includes(identity?.environment)
 }
 
 function hasCompleteProcessCompletion({ identity, completion } = {}) {
@@ -546,12 +546,12 @@ function isMatchingActiveProcessOwner({ identity, processId, activeProcessOwner 
   })
 }
 
-function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCompletion, isHarvesterTestnet, processId, activeProcessOwner } = {}) {
+function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCompletion, isHarvesterSession, processId, activeProcessOwner } = {}) {
   if (!identity) {
     return "identity-missing"
   }
-  if (!isHarvesterTestnet) {
-    return "non-testnet-or-invalid"
+  if (!isHarvesterSession) {
+    return "unsupported-environment-or-invalid"
   }
   if (hasCompleteProcessCompletion({
     identity,
@@ -571,14 +571,14 @@ function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCom
     : "incomplete"
 }
 
-function resolveArchiveSessionLoggerCompletionStatus({ identity, loggerCompletion, isHarvesterTestnet, processId, activeProcessOwner } = {}) {
+function resolveArchiveSessionLoggerCompletionStatus({ identity, loggerCompletion, isHarvesterSession, processId, activeProcessOwner } = {}) {
   if (hasCompleteLoggerCompletion({
     identity,
     loggerCompletion,
-  }) && isHarvesterTestnet) {
+  }) && isHarvesterSession) {
     return "complete"
   }
-  return isHarvesterTestnet
+  return isHarvesterSession
     && isMatchingActiveProcessOwner({
     identity,
     processId,
@@ -647,21 +647,21 @@ function createArchiveSessionEvidenceRecord({
   loggerCompletion,
   processId,
   missingFieldWarnings,
-  isHarvesterTestnet,
+  isHarvesterSession,
   activeProcessOwner,
 } = {}) {
   const completionStatus = resolveArchiveSessionCompletionStatus({
     identity,
     completion,
     loggerCompletion,
-    isHarvesterTestnet,
+    isHarvesterSession,
     processId,
     activeProcessOwner,
   })
   const loggerCompletionStatus = resolveArchiveSessionLoggerCompletionStatus({
     identity,
     loggerCompletion,
-    isHarvesterTestnet,
+    isHarvesterSession,
     processId,
     activeProcessOwner,
   })
@@ -683,7 +683,7 @@ function createArchiveSessionEvidenceRecord({
     completionStatus,
     loggerCompletionStatus,
     missingFieldWarnings,
-    include: isHarvesterTestnet,
+    include: isHarvesterSession,
   }
 }
 
@@ -697,7 +697,7 @@ async function readArchiveSessionEvidence({ sessionsDirectory, sessionName, reco
   const { value: identity, error: identityError } = identityResult
   const { value: completion, error: completionError } = completionResult
   const { value: loggerCompletion, error: loggerCompletionError } = loggerCompletionResult
-  const isHarvesterTestnet = isHarvesterTestnetSession({ identity })
+  const isHarvesterSession = isHarvesterSessionSession({ identity })
   const processId = resolveArchiveSessionProcessId({
     identity,
     recoveryCheckpoint,
@@ -710,7 +710,7 @@ async function readArchiveSessionEvidence({ sessionsDirectory, sessionName, reco
     completionError,
     loggerCompletionError,
   })
-  if (isHarvesterTestnet && processId === null) {
+  if (isHarvesterSession && processId === null) {
     missingFieldWarnings.push("PROCESS_ID_MISSING")
   }
   return createArchiveSessionEvidenceRecord({
@@ -720,7 +720,7 @@ async function readArchiveSessionEvidence({ sessionsDirectory, sessionName, reco
     loggerCompletion,
     processId,
     missingFieldWarnings,
-    isHarvesterTestnet,
+    isHarvesterSession,
     activeProcessOwner,
   })
 }
@@ -786,7 +786,7 @@ function assignArchiveSessionSelectionReasons({ sessions, recoveryCheckpoint, st
     if (!session.include) {
       session.selectionReason = session.completionStatus === "identity-missing"
         ? "identity-unavailable"
-        : "excluded-non-testnet"
+        : "excluded-unsupported-environment"
       continue
     }
     if (session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId) {
@@ -810,7 +810,7 @@ function createArchiveLogSelectionWarnings({ sessions, recoveryCheckpoint, statu
   if (status === "ambiguous") {
     warnings.push({
       code: "MULTIPLE_MATCHING_LOG_SESSIONS",
-      message: "Multiple TESTNET log sessions carry the recovery-facts runtime ID; none is selected as the unique matching session.",
+      message: "Multiple Harvester log sessions carry the recovery-facts runtime ID; none is selected as the unique matching session.",
     })
   } else if (status === "incomplete") {
     warnings.push({
@@ -820,7 +820,7 @@ function createArchiveLogSelectionWarnings({ sessions, recoveryCheckpoint, statu
   } else if (status !== "matched") {
     warnings.push({
       code: "NO_MATCHING_TRADING_LOG_SESSION",
-      message: `No unique complete TESTNET log session matches recovery runtime ${recoveryCheckpoint.runtimeSessionId}.`,
+      message: `No unique complete Harvester log session matches recovery runtime ${recoveryCheckpoint.runtimeSessionId}.`,
     })
   }
   for (const session of sessions) {
@@ -860,6 +860,9 @@ async function findArchiveLogSessionSelection({ sessionsDirectory, recoveryCheck
   return {
     sessions,
     matchingSessionCandidates: matchingRuntimeSessions.map(({ sessionName }) => sessionName),
+    runtimeTradingMode: matchingRuntimeSessions.length === 1
+      ? matchingRuntimeSessions[0].environment
+      : "unknown",
     matchingTradingLogsAvailable,
     logRuntimeSessionId: matchingTradingLogsAvailable ? recoveryCheckpoint.runtimeSessionId : null,
     status,
@@ -1402,14 +1405,14 @@ async function createArchiveManifest({
   return {
     formatVersion: 2,
     application: "harvester",
-    commandTradingMode: "testnet",
+    runtimeTradingMode: logSelection.runtimeTradingMode ?? "unknown",
     snapshotType: "runtime-correlated-log-evidence",
     createdAt,
     includedDirectories: [...SOURCE_DIRECTORIES],
     excludedPaths: [...EXCLUDED_ARCHIVE_PATHS],
     logSelection: {
       cumulative: "excluded",
-      sessions: "all-identified-TESTNET-sessions-preserved-independently; exact-runtime-id-match-required; completed sessions or active-process snapshots; gzip-compressed",
+      sessions: "all-identified-Harvester-sessions-preserved-independently; exact-runtime-id-match-required; completed sessions or active-process snapshots; gzip-compressed",
       selectionReason: logSelection.evidenceIntegrity.status === "matched" ? logSelection.selectionReason : logSelection.evidenceIntegrity.status,
     },
     dataCommitHash,
@@ -1999,7 +2002,7 @@ async function copyArchiveEvidence({
   })
   const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(localArchive, "recovery-facts"))
 
-  reportProgress(onProgress, "Archive: matching TESTNET process sessions to the archived committed recovery runtime; cumulative logs are excluded...")
+  reportProgress(onProgress, "Archive: matching Harvester process sessions to the archived committed recovery runtime; cumulative logs are excluded...")
   const logSelection = await copySelectedLogs({
     sourceDirectory: path.join(packageDirectory, "logs"),
     destinationDirectory: path.join(localArchive, "logs"),
@@ -2090,10 +2093,7 @@ async function writeAndVerifyLocalArchive({
 }
 
 
-function assertCollectionArguments({ env, args } = {}) {
-  if (env.TRADING_MODE !== "testnet") {
-    throw new Error("Debug archive collection requires TRADING_MODE=testnet. LIVE and unspecified modes are rejected.")
-  }
+function assertCollectionArguments({ args } = {}) {
   if (args.length !== 0) {
     throw new TypeError("Usage: archive:debug")
   }
@@ -2167,10 +2167,7 @@ export async function runHarvesterDebugArchive({
   lockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
   isProcessAlive = isHarvesterProcessAlive,
 } = {}) {
-  assertCollectionArguments({
-    env,
-    args,
-  })
+  assertCollectionArguments({ args })
   const activeProcessOwner = await readActiveHarvesterProcessOwner({
     lockDirectory,
     isProcessAlive,
@@ -2243,7 +2240,7 @@ async function main() {
     result.matchingTradingLogsAvailable
       ? `Matched runtime: ${result.logRuntimeSessionId}`
       : `Unmatched recovery runtime: ${result.unmatchedRuntimeSessionId}`,
-    "Included: all identified TESTNET session evidence as separate sessions, recovery-facts/ and data_commit_hash",
+    "Included: all identified testnet/live session evidence as separate sessions, recovery-facts/ and data_commit_hash",
     "Excluded: all data/ (databases/backups), all logs/cumulative/ and unclassified log-root entries",
     `Local archive: ${result.localArchive}`,
   ].join("\n")
