@@ -344,6 +344,7 @@ test("starts a fresh current-process trading session when process recovery is di
     runtimeSessionId: "fresh-current-session-with-recovery-disabled",
   })
   const calls = []
+  const startupLogs = []
   const broker = createRsOnlyStartupBroker({ calls })
   try {
     const result = await startHarvesterForTest({
@@ -362,7 +363,7 @@ test("starts a fresh current-process trading session when process recovery is di
         data: { skipped: true },
       }),
       logger: {
-        info() {},
+        info: (record) => startupLogs.push(record),
         error() {},
       },
     })
@@ -377,6 +378,11 @@ test("starts a fresh current-process trading session when process recovery is di
       "The new process must establish its own market-price subscription.")
     assert.ok(calls.includes("subscribe:book:LINEAUSDT"),
       "Trading mode must establish the required book stream instead of silently remaining in read-only intake.")
+    assert.ok(startupLogs.some((record) =>
+      record.reason === "PROCESS_RESTART_RECOVERY_DISABLED" &&
+      record.previousProcessStarted === true &&
+      record.tradingEnabled === true
+    ), "Startup must explicitly report that prior process history is external while fresh current-session trading is enabled.")
     await result.stop()
   } finally {
     await rm(directory, {
