@@ -333,14 +333,17 @@ test("fails RS startup explicitly when its durable Operational State Store is mi
 
 test("fails RS startup explicitly when its Operational State Store is invalid", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
-  const invalidStore = Object.create(store)
-  invalidStore.verify = async () => ({
-    ok: true,
-    data: {
-      valid: false,
-      durableWriteSupported: false,
-    },
-  })
+  const invalidStore = {
+    append: store.append.bind(store),
+    readAll: store.readAll.bind(store),
+    verify: async () => ({
+      ok: true,
+      data: {
+        valid: false,
+        durableWriteSupported: false,
+      },
+    }),
+  }
   try {
     await assert.rejects(
       () => startHarvesterForTest({
