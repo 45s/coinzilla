@@ -517,6 +517,18 @@ function hasCompleteLoggerCompletion({ identity, loggerCompletion } = {}) {
     && loggerCompletion?.streams?.traceLog === true
 }
 
+const ACTIVE_PROCESS_LOCK_START_TOLERANCE_MS = 30_000
+
+function isMatchingActiveProcessOwner({ identity, processId, activeProcessOwner } = {}) {
+  const identityStartedAt = Date.parse(identity?.startedAt)
+  const lockStartedAt = Date.parse(activeProcessOwner?.startedAt)
+  return Number.isSafeInteger(processId)
+    && processId === activeProcessOwner?.pid
+    && Number.isFinite(identityStartedAt)
+    && Number.isFinite(lockStartedAt)
+    && Math.abs(identityStartedAt - lockStartedAt) <= ACTIVE_PROCESS_LOCK_START_TOLERANCE_MS
+}
+
 function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCompletion, isHarvesterTestnet, processId, activeProcessOwner } = {}) {
   if (!identity) {
     return "identity-missing"
@@ -533,9 +545,7 @@ function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCom
   })) {
     return "complete"
   }
-  return Number.isSafeInteger(processId)
-    && processId === activeProcessOwner?.pid
-    && identity.startedAt === activeProcessOwner?.startedAt
+  return isMatchingActiveProcessOwner({ identity, processId, activeProcessOwner })
     ? "active"
     : "incomplete"
 }
@@ -548,9 +558,7 @@ function resolveArchiveSessionLoggerCompletionStatus({ identity, loggerCompletio
     return "complete"
   }
   return isHarvesterTestnet
-    && Number.isSafeInteger(processId)
-    && processId === activeProcessOwner?.pid
-    && identity?.startedAt === activeProcessOwner?.startedAt
+    && isMatchingActiveProcessOwner({ identity, processId, activeProcessOwner })
     ? "active"
     : "incomplete"
 }
