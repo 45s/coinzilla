@@ -1380,7 +1380,7 @@ export async function runHarvesterDebugArchive({
   onProgress = (message) => process.stdout.write(`${message}\\n`),
   lockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
 } = {}) {
-  assertCollectionArguments({ env, args })
+  assertCollectionArguments({\n    env,\n    args,\n  })
   await assertHarvesterProcessStopped({ lockDirectory })
   const sourcePaths = resolveArchiveSourcePaths({
     packageDirectory,
