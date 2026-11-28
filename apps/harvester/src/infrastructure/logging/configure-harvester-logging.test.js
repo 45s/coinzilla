@@ -984,3 +984,33 @@ test("abbreviates Operational State Store wording in the terminal", () => {
   )
   output.destroy()
 })
+
+
+test("prints catalog code, exact stage, cause and remediation without cutting off the action", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
+
+  transport.write({
+    timestamp: "2026-11-28T06:00:00.000Z",
+    level: "error",
+    method: "error",
+    data: {
+      message: "Relational trading history is unavailable; legacy order history remains active",
+      errorCode: "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
+      errorStage: "RELATIONAL_MIGRATION_V5",
+      errorMessage: "SQLITE_ERROR: no such column: broker_order_id",
+    },
+  })
+
+  const line = written.trim()
+  assert.ok(line.length <= 200, "The operator diagnostic must respect the terminal line budget")
+  assert.match(line, /HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED/)
+  assert.match(line, /RELATIONAL_MIGRATION_V5/)
+  assert.match(line, /SQLITE_ERROR: no such column/)
+  assert.match(line, /do not delete or reset the database/)
+  output.destroy()
+})
