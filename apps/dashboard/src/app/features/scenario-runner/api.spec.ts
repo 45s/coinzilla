@@ -80,6 +80,13 @@ describe('ScenarioRunnerApi HTTP gateway', () => {
     });
   });
 
+  it('rejects an invalid GitHub ref SHA before requesting source files', async () => {
+    const response = api.loadDevelopCatalog();
+    http.expectOne('https://api.github.com/repos/45s/coinzilla/git/ref/heads/develop').flush({ object: { sha: 'develop' } });
+    await expect(response).rejects.toThrow(/invalid commit SHA/i);
+    http.expectNone((request) => request.url.startsWith('https://raw.githubusercontent.com/'));
+  });
+
   it('submits a validated scenario run', async () => {
     const input = {
       strategyId: 'RS',

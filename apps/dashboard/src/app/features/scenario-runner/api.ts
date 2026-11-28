@@ -22,6 +22,9 @@ export class ScenarioRunnerApi implements ScenarioRunnerGateway {
   async loadDevelopCatalog(): Promise<{ readonly catalog: readonly ScenarioCatalogItem[]; readonly commitSha: string }> {
     const ref = await firstValueFrom(this.http.get<{ readonly object: { readonly sha: string } }>('https://api.github.com/repos/45s/coinzilla/git/ref/heads/develop'));
     const commitSha = ref.object.sha;
+    if (!/^[a-f0-9]{40}$/i.test(commitSha)) {
+      throw new TypeError('GitHub develop returned an invalid commit SHA.');
+    }
     const sourcePaths = [
       'apps/harvester/src/infrastructure/scenario-runner/rs-scenario-adapter.js',
       'apps/harvester/src/infrastructure/scenario-runner/rs-runtime-scenario.js',
