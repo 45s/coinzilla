@@ -373,7 +373,12 @@ async function prepareRelationalResources({
   let resources
   const partialResources = {}
   try {
-    await relationalDatabase.connect()
+    try {
+      await relationalDatabase.connect()
+    } catch (error) {
+      error.stage = "RELATIONAL_DATABASE_CONNECT"
+      throw error
+    }
     const migrationBackups = await applyRelationalMigrations({
       database: relationalDatabase,
       filename,
@@ -393,6 +398,7 @@ async function prepareRelationalResources({
       ...migrationBackups,
     }
   } catch (error) {
+    error.stage ??= "RELATIONAL_RESOURCE_PREPARATION"
     await closePartialRelationalResources({
       database: relationalDatabase,
       observers: [
