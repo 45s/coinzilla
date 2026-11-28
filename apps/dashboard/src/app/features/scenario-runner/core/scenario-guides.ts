@@ -152,7 +152,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     expectedOutcome: 'Do not report a successful reservation. Record STOP and block new BUY spending. Inspect the run evidence to see whether the simulated exchange accepted the SELL.',
     path: [
       { id: 'submit', kind: 'production-flow', label: 'Reach the sole-SELL reservation callback', detail: 'After submission, the system tries to reserve this SELL as the only SELL for the recovery cycle.' },
-      { id: 'failure', kind: 'injected-failure', label: 'The recovery SELL cannot be reserved', detail: 'The reservation step returns an error instead of confirming the reservation.' },
+      { id: 'failure', kind: 'injected-failure', label: 'Sole-SELL reservation callback fails', detail: 'The reservation step returns an error instead of confirming the reservation.' },
       { id: 'guard', kind: 'outcome', label: 'Do not claim a retained reservation', detail: 'The expected state records reservation failure, raises STOP and blocks BUY admission.' },
     ],
   }),
@@ -198,7 +198,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     expectedOutcome: 'Do not mark the sale as reconciled. Keep the reservation, block further activity, and show that saving the reconciliation failed.',
     path: [
       { id: 'fill', kind: 'production-flow', label: 'Receive the completed SELL and its fill', detail: 'Send the terminal order and canonical fill through the production order-event workflow.' },
-      { id: 'failure', kind: 'injected-failure', label: 'Saving the completed SELL reconciliation fails', detail: 'After receiving the completed sale, the store refuses to save the reconciliation result.' },
+      { id: 'failure', kind: 'injected-failure', label: 'Terminal reconciliation persistence fails', detail: 'After receiving the completed sale, the store refuses to save the reconciliation result.' },
       { id: 'guard', kind: 'outcome', label: 'Fail closed and retain reservation', detail: 'Expect unreconciled terminal state, STOP, market pause, blocked BUY admission and retained SELL reservation.' },
     ],
   }),
@@ -209,7 +209,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     expectedOutcome: 'Do not claim STOP was saved. Even so, block the follow-up action and submit no second order.',
     path: [
       { id: 'fill', kind: 'production-flow', label: 'Record a completed SELL that missed its profit target', detail: 'The production order-event and accounting workflows determine the terminal cycle outcome.' },
-      { id: 'failure', kind: 'injected-failure', label: 'Saving the STOP record fails', detail: 'The run-local store rejects SAFETY_BLOCKER_RAISED after the under-target fill.' },
+      { id: 'failure', kind: 'injected-failure', label: 'Account STOP persistence fails', detail: 'The run-local store rejects SAFETY_BLOCKER_RAISED after the under-target fill.' },
       { id: 'follow-up', kind: 'decision', label: 'Attempt a follow-up evaluation', detail: 'The example tries another market evaluation at a lower simulated price to check that no second action is allowed.' },
       { id: 'blocked', kind: 'outcome', label: 'No follow-up action is submitted', detail: 'The expected result is a blocked follow-up dispatch with no second action or order; STOP persistence itself remains failed.' },
     ],
