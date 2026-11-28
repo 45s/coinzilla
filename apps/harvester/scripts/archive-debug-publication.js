@@ -102,24 +102,45 @@ function assertArchivedProcessId({ identity, completion, manifest, expectedRunti
   }
 }
 
-function isValidActiveSnapshotMarker({ marker, identity, manifest, expectedRuntimeId } = {}) {
-  const identityStartedAt = Date.parse(identity.startedAt)
-  const lockStartedAt = Date.parse(marker.lockStartedAt)
-  return marker.formatVersion === 1
-    && marker.snapshotType === "active-harvester-process"
-    && marker.runtimeSessionId === expectedRuntimeId
+function matchesActiveSnapshotProcess({ marker, identity, manifest, expectedRuntimeId } = {}) {
+  return marker.runtimeSessionId === expectedRuntimeId
     && marker.processId === identity.processId
     && marker.processId === manifest.tradingRuntime.processIdentity.processId
     && typeof marker.hostname === "string"
     && marker.processStartedAt === identity.startedAt
-    && Number.isFinite(lockStartedAt)
+}
+
+function matchesActiveSnapshotTimes({ marker, identity } = {}) {
+  const identityStartedAt = Date.parse(identity.startedAt)
+  const lockStartedAt = Date.parse(marker.lockStartedAt)
+  const capturedAt = Date.parse(marker.capturedAt)
+  return Number.isFinite(lockStartedAt)
     && Number.isFinite(identityStartedAt)
     && Math.abs(lockStartedAt - identityStartedAt) <= 30_000
-    && marker.recoveryDataCommitHash === manifest.dataCommitHash
-    && Number.isFinite(Date.parse(marker.capturedAt))
-    && Date.parse(marker.capturedAt) >= Date.parse(marker.lockStartedAt)
-    && marker.streams?.harvesterLog === true
+    && Number.isFinite(capturedAt)
+    && capturedAt >= lockStartedAt
+}
+
+function hasCompleteActiveSnapshotStreams(marker) {
+  return marker.streams?.harvesterLog === true
     && marker.streams?.traceLog === true
+}
+
+function isValidActiveSnapshotMarker({ marker, identity, manifest, expectedRuntimeId } = {}) {
+  return marker.formatVersion === 1
+    && marker.snapshotType === "active-harvester-process"
+    && matchesActiveSnapshotProcess({
+      marker,
+      identity,
+      manifest,
+      expectedRuntimeId,
+    })
+    && matchesActiveSnapshotTimes({
+      marker,
+      identity,
+    })
+    && marker.recoveryDataCommitHash === manifest.dataCommitHash
+    && hasCompleteActiveSnapshotStreams(marker)
 }
 
 function assertNoRuntimeMismatches({ integrity, expectedRuntimeId } = {}) {
