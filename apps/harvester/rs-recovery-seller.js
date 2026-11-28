@@ -8,7 +8,6 @@ const commonRecoverySellerFields = {
   makerPercent: 0.1,
   takerPercent: 0.1,
 };
-const { ...sharedRecoverySellerFields } = commonRecoverySellerFields;
 
 /**
  * Operator-authorized Recovery Seller markets.
@@ -18,7 +17,7 @@ const { ...sharedRecoverySellerFields } = commonRecoverySellerFields;
  */
 export const recoverySellerPairs = {
   LINEAUSDT: {
-    ...sharedRecoverySellerFields,
+    ...commonRecoverySellerFields,
     legacyPosition: {
       invested: 400,
       quantity: 25000,
@@ -29,7 +28,7 @@ export const recoverySellerPairs = {
     priceStepPercent: 0.5,
   },
   ARBUSDT: {
-    ...sharedRecoverySellerFields,
+    ...commonRecoverySellerFields,
     legacyPosition: {
       invested: 231,
       quantity: 400,
