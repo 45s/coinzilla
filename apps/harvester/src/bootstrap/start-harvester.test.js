@@ -106,11 +106,14 @@ function createRsOnlyStartupBroker({ calls }) {
     bitcoinBaseAsset,
     quoteAsset,
   ].map((asset) => [asset.id, asset])).values()]
-  broker.getAccountSnapshot = async () => ({
-    ok: true,
-    data: {
-      sourceTime: Date.now(),
-      balances: accountAssets.map((asset) => new Balance({
+  let accountSnapshotSourceTime
+  broker.getAccountSnapshot = async () => {
+    accountSnapshotSourceTime ??= Date.now()
+    return {
+      ok: true,
+      data: {
+        sourceTime: accountSnapshotSourceTime,
+        balances: accountAssets.map((asset) => new Balance({
         free: new Quantity({
           amount: "100000",
           asset,
@@ -120,8 +123,9 @@ function createRsOnlyStartupBroker({ calls }) {
           asset,
         }),
       })),
-    },
-  })
+      },
+    }
+  }
   return broker
 }
 
