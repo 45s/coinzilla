@@ -807,6 +807,7 @@ test("publishes a stopped-runtime snapshot while preserving unconfirmed completi
     snapshotType: "stopped-harvester-process",
     runtimeSessionId: manifest.recoveryRuntimeSessionId,
     processId: session.processId,
+    processStartedAt: session.startedAt,
     processAliveAtCapture: false,
     activeProcessLockOwnerAtCapture: false,
     completionConfirmed: false,
