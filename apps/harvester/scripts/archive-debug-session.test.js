@@ -874,6 +874,79 @@ async function assertActiveSnapshotRejectsChangedLock({ namespace, testContext }
 }
 
 
+test("marks an active snapshot incomplete when the selected process exits during collection", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const { lockPath, hostLockPath } = await prepareActiveRuntimeFixture({ fixture })
+  const applicationLockBefore = await readFile(lockPath)
+  const hostLockBefore = await readFile(hostLockPath)
+  let processAlive = true
+  let processExitSimulated = false
+  await assert.rejects(
+    runHarvesterDebugArchive({
+      ...archiveDependencies({ fixture }),
+      onArchiveCreatedFn: undefined,
+      isProcessAlive: (processId) => processAlive && processId === process.pid,
+      onProgress(message) {
+        if (!processExitSimulated && message.includes("retained/copied")) {
+          processExitSimulated = true
+          processAlive = false
+        }
+      },
+    }),
+    /process exited|snapshot.*not publishable/i,
+    "A process that exits after the snapshot boundary must not produce a publishable archive.",
+  )
+  assert.equal(processExitSimulated, true, "The test must simulate process exit after evidence copying begins.")
+  assert.deepEqual(await readFile(lockPath), applicationLockBefore, "The collector must not modify the application lock after process exit.")
+  assert.deepEqual(await readFile(hostLockPath), hostLockBefore, "The collector must not modify the host lock after process exit.")
+  const archiveDirectory = path.join(fixture.packageDirectory, "archive-output", "2026-11-24T18-30-00Z_123e4567_debug")
+  const incompleteMarker = JSON.parse(await readFile(path.join(archiveDirectory, "collection-incomplete.json"), "utf8"))
+  assert.equal(incompleteMarker.status, "incomplete", "Process exit during collection must leave an explicit incomplete marker.")
+  assert.equal(incompleteMarker.reason, "process-exited-during-collection", "The incomplete marker must explain why the active snapshot was rejected.")
+  await assert.rejects(
+    readFile(path.join(archiveDirectory, "logs/sessions/2026-11-24_testnet/active-process-snapshot.json")),
+    { code: "ENOENT" },
+    "A failed active snapshot must not receive a completed active-snapshot marker.",
+  )
+})
+
+
+test("rejects ambiguous ownership when multiple Harvester processes are alive", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const { lockPath, hostLockPath, lockOwner } = await prepareActiveRuntimeFixture({ fixture })
+  const additionalLockPath = path.join(fixture.lockDirectory, ".bitunix-harvester-trading-secondary.lock")
+  const additionalLockOwner = {
+    ...lockOwner,
+    pid: lockOwner.pid + 100000,
+    token: "second-live-process-token",
+  }
+  await writeFile(additionalLockPath, JSON.stringify(additionalLockOwner), "utf8")
+  const applicationLockBefore = await readFile(lockPath)
+  const hostLockBefore = await readFile(hostLockPath)
+  const additionalLockBefore = await readFile(additionalLockPath)
+  await assert.rejects(
+    runHarvesterDebugArchive({
+      ...archiveDependencies({ fixture }),
+      onArchiveCreatedFn: undefined,
+      isProcessAlive: () => true,
+    }),
+    /multiple active process owners/i,
+    "Multiple live PIDs must be rejected rather than selecting the newest or most convenient runtime.",
+  )
+  assert.deepEqual(await readFile(lockPath), applicationLockBefore, "Ambiguous ownership must not modify the application lock.")
+  assert.deepEqual(await readFile(hostLockPath), hostLockBefore, "Ambiguous ownership must not modify the host lock.")
+  assert.deepEqual(await readFile(additionalLockPath), additionalLockBefore, "Ambiguous ownership must not modify the second process lock.")
+})
+
+
 test("rejects an active snapshot when the application process-lock namespace changes during collection", async (t) => {
   await assertActiveSnapshotRejectsChangedLock({
     namespace: "application",
