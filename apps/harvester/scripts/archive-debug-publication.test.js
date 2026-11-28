@@ -128,9 +128,18 @@ function createRecoveryFixture(runtimeId) {
     processIdentity,
     recoveryDigest,
     files: [
-      { path: "recovery-facts/facts.jsonl", content: `${facts.join("\n")}\n` },
-      { path: "recovery-facts/manifest.jsonl", content: `${checkpoints.join("\n")}\n` },
-      { path: "data_commit_hash", content: `${recoveryDigest}\n` },
+      {
+        path: "recovery-facts/facts.jsonl",
+        content: `${facts.join("\n")}\n`,
+      },
+      {
+        path: "recovery-facts/manifest.jsonl",
+        content: `${checkpoints.join("\n")}\n`,
+      },
+      {
+        path: "data_commit_hash",
+        content: `${recoveryDigest}\n`,
+      },
     ],
   }
 }
@@ -627,7 +636,7 @@ test("publishes a verified active-process snapshot without requiring completion 
   const fixture = await createFixture(t)
   const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
-  const session = manifest.sessionInventory[0]
+  const [session] = manifest.sessionInventory
   session.completionStatus = "active"
   session.loggerCompletionStatus = "active"
   session.activeSnapshotPath = "logs/sessions/fixture/active-process-snapshot.json"
@@ -653,7 +662,10 @@ test("publishes a verified active-process snapshot without requiring completion 
     processStartedAt: session.startedAt,
     recoveryDataCommitHash: manifest.dataCommitHash,
     capturedAt: new Date().toISOString(),
-    streams: { harvesterLog: true, traceLog: true },
+    streams: {
+      harvesterLog: true,
+      traceLog: true,
+    },
   }
   const markerPath = path.join(fixture.archiveDirectory, session.activeSnapshotPath)
   await writeFile(markerPath, `${JSON.stringify(marker, null, 2)}\n`)
@@ -671,7 +683,10 @@ test("publishes a verified active-process snapshot without requiring completion 
     env: { HARVESTER_ARCHIVE_REMOTE: REMOTE },
     publishArchiveFn: async () => {
       publisherCalled = true
-      return { commit: "e".repeat(40), fileCount: manifest.files.length }
+      return {
+        commit: "e".repeat(40),
+        fileCount: manifest.files.length,
+      }
     },
   })
   assert.equal(publisherCalled, true, "A verified active-process snapshot must be eligible for publication.")
