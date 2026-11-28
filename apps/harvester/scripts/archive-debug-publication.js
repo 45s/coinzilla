@@ -34,14 +34,16 @@ function validateManifestHeader(manifest) {
 }
 
 function validateManifestFileEntry(entry, seenPaths) {
-  const validEntry = entry !== null && typeof entry === "object"
-  const pathSegments = validEntry && typeof entry.path === "string" ? entry.path.split("/") : []
-  const safePath = validEntry && pathSegments.length > 0
+  if (entry === null || typeof entry !== "object") {
+    throw new Error("Debug archive manifest contains a non-object file entry.")
+  }
+  const pathSegments = typeof entry.path === "string" ? entry.path.split("/") : []
+  const safePath = pathSegments.length > 0
     && !entry.path.includes("\\")
     && !path.posix.isAbsolute(entry.path)
     && pathSegments.every((segment) => segment !== "" && segment !== "." && segment !== "..")
-  const allowedPath = entry.path?.startsWith("logs/")
-    || entry.path?.startsWith("recovery-facts/")
+  const allowedPath = entry.path.startsWith("logs/")
+    || entry.path.startsWith("recovery-facts/")
     || entry.path === "data_commit_hash"
   const validDigest = typeof entry.sha256 === "string" && /^[a-f0-9]{64}$/.test(entry.sha256)
   const validSize = Number.isSafeInteger(entry.size) && entry.size >= 0
