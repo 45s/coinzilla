@@ -832,7 +832,7 @@ test("rejects an unreadable pre-compressed rotated log instead of archiving corr
   await assert.rejects(
     runHarvesterDebugArchive(archiveWithoutPublishing({
       fixture,
-      inspectArchive: async () => assert.fail("Corrupt compressed evidence must not reach the archive completion callback."),
+      inspectArchive: async () => assert.fail("ARCHIVE_CALLBACK_REACHED"),
     })),
     /gzip|compressed|decompress/i,
     "The collector must reject a .gz rotation whose contents cannot be decompressed.",
