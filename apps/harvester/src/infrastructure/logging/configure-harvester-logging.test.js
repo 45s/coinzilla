@@ -1061,3 +1061,40 @@ test("renders every catalogued startup and degraded failure in one bounded conso
   }
   output.destroy()
 })
+
+
+test("continues long catalogued causes without exceeding the per-line console budget", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const cause = `SQLite migration failed: ${"native constraint detail ".repeat(20)}`
+  transport.write({
+    timestamp: "2026-11-28T06:00:00.000Z",
+    level: "error",
+    method: "error",
+    data: {
+      message: "startup failed.",
+      errorCode: "HARVESTER_STARTUP_FAILED",
+      errorStage: "RELATIONAL_MIGRATION_V5",
+      errorMessage: cause,
+    },
+  })
+
+  const lines = written.trim().split("\n")
+  assert.ok(lines.length > 1, "A cause longer than the first-line budget must use continuation lines.")
+  for (const line of lines) {
+    assert.ok(line.length <= 200, "Every diagnostic and continuation line must respect the console line budget.")
+  }
+  const firstCause = lines[0].match(/cause=(.*?) \| action=/)?.[1]
+  assert.ok(firstCause?.endsWith("..."), "The first line must visibly signal that the cause continues.")
+  const continuationCause = lines.slice(1).map((line) => line.slice(line.indexOf("cause+") + 6)).join("")
+  assert.equal(
+    `${firstCause.slice(0, -3)}${continuationCause}`,
+    cause,
+    "Continuation lines must preserve the complete original cause without omission.",
+  )
+  output.destroy()
+})
