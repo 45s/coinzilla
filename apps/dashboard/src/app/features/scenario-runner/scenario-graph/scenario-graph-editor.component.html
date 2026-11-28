@@ -131,6 +131,10 @@
           Description
           <textarea rows="5" [value]="node.description ?? ''" (input)="updateSelectedDescription($any($event.target).value)"></textarea>
         </label>
+        <label>
+          Properties (JSON string map)
+          <textarea rows="5" [value]="selectedNodePropertiesJson()" (change)="updateSelectedProperties($any($event.target).value)"></textarea>
+        </label>
         <button type="button" class="danger-action" (click)="deleteSelectedNode()">Delete node</button>
       } @else if (selectedEdgeId()) {
         <p class="inspector-kind">Connection · {{ selectedEdgeId() }}</p>

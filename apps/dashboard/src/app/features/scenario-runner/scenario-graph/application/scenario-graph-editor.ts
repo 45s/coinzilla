@@ -140,6 +140,28 @@ export function createScenarioGraphEditor({ createId }: {
       return updateGraphNode(graph, nodeId, changes);
     },
 
+    updateNodeProperties({ graph, nodeId, serializedProperties }: {
+      readonly graph: ScenarioGraph;
+      readonly nodeId: string;
+      readonly serializedProperties: string;
+    }): ScenarioGraph {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(serializedProperties) as unknown;
+      } catch {
+        throw new Error('SCENARIO_GRAPH_PROPERTIES_JSON_INVALID');
+      }
+      if (
+        parsed === null
+        || typeof parsed !== 'object'
+        || Array.isArray(parsed)
+        || Object.values(parsed).some((value) => typeof value !== 'string')
+      ) {
+        throw new Error('SCENARIO_GRAPH_PROPERTIES_INVALID');
+      }
+      return updateGraphNode(graph, nodeId, { properties: parsed as Readonly<Record<string, string>> });
+    },
+
     validate({ graph }: { readonly graph: ScenarioGraph }) {
       const issues = validateScenarioGraph(graph);
       return { valid: issues.length === 0, status: graph.status, issues };

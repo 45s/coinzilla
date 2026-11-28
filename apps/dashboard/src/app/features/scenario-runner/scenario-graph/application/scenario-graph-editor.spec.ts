@@ -62,6 +62,24 @@ describe('scenario graph editor application', () => {
     expect(editor.suggestNodePosition({ graph: createGraph() }), 'default graph placement belongs to the framework-neutral application').toEqual({ x: 540, y: 80 });
   });
 
+  it('parses and validates node property maps in the application layer', () => {
+    const editor = createScenarioGraphEditor({ createId: () => 'unused' });
+    const updated = editor.updateNodeProperties({
+      graph: createGraph(),
+      nodeId: 'start',
+      serializedProperties: '{"purpose":"entry","enabled":"yes"}',
+    });
+    expect(updated.nodes[0].properties, 'the application must map valid string properties into the domain model').toEqual({
+      purpose: 'entry',
+      enabled: 'yes',
+    });
+    expect(() => editor.updateNodeProperties({
+      graph: createGraph(),
+      nodeId: 'start',
+      serializedProperties: '{"count":4}',
+    }), 'non-string property values must be rejected').toThrow('SCENARIO_GRAPH_PROPERTIES_INVALID');
+  });
+
   it('builds renderer-neutral geometry without importing a rendering framework', () => {
     const editor = createScenarioGraphEditor({ createId: () => 'unused' });
     const view = editor.viewModel({ graph: createGraph() });

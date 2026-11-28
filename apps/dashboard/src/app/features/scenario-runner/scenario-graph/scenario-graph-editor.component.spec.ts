@@ -72,6 +72,24 @@ describe('ScenarioGraphEditorComponent', () => {
     expect(fixture.nativeElement.textContent, 'the updated label must render on the canvas').toContain('Submit one authorized SELL');
   });
 
+  it('edits typed node properties through the application boundary', async () => {
+    await TestBed.configureTestingModule({ imports: [ScenarioGraphEditorComponent] }).compileComponents();
+    const fixture = TestBed.createComponent(ScenarioGraphEditorComponent);
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    component.selectNode('sell');
+    component.updateSelectedProperties('{"invariant":"one SELL lifecycle"}');
+
+    expect(component.selectedNode()?.properties, 'the inspector must update the graph through the application use case').toEqual({
+      invariant: 'one SELL lifecycle',
+    });
+    component.updateSelectedProperties('{"quantity":10}');
+    expect(component.error(), 'invalid property value types must be surfaced without mutating the graph').toBe('SCENARIO_GRAPH_PROPERTIES_INVALID');
+    expect(component.selectedNode()?.properties, 'invalid JSON maps must not replace valid graph properties').toEqual({
+      invariant: 'one SELL lifecycle',
+    });
+  });
+
   it('adds a node using the selected palette type and keeps the document visual-only', async () => {
     await TestBed.configureTestingModule({ imports: [ScenarioGraphEditorComponent] }).compileComponents();
     const fixture = TestBed.createComponent(ScenarioGraphEditorComponent);
