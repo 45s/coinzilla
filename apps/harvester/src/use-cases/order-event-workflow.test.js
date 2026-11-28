@@ -480,6 +480,36 @@ test("keeps an unmatched current-process order fail-closed even when the registr
   assert.deepEqual(calls.accounting, [], "An unresolved active-process order must not mutate strategy accounting.")
 })
 
+test("rejects an event when broker and client IDs resolve to different registered orders", async () => {
+  const brokerMatchedOrder = makeOrder({
+    clientOrderId: "broker-matched-client",
+    brokerOrderId: "broker-order-1",
+  })
+  const clientMatchedOrder = makeOrder({
+    clientOrderId: "client-matched-client",
+    brokerOrderId: "broker-order-2",
+  })
+  const registry = new OrderRegistry({
+    orders: [brokerMatchedOrder, clientMatchedOrder],
+  })
+  const { workflow, calls } = makeWorkflow({ registry })
+  const mismatchedOrder = makeOrder({
+    clientOrderId: clientMatchedOrder.clientOrderId,
+    brokerOrderId: brokerMatchedOrder.brokerOrderId,
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: mismatchedOrder,
+      clientOrderId: mismatchedOrder.clientOrderId,
+    },
+  })
+
+  assert.equal(result.ok, false, "Conflicting registered identities must fail closed.")
+  assert.deepEqual(calls.accounting, [], "Conflicting identities must never mutate strategy accounting.")
+})
+
 test("does not infer current-process ownership from a malformed legacy client ID", async () => {
   const order = makeOrder({
     clientOrderId: "h-abcdef0123456789abcdef-malformed",
