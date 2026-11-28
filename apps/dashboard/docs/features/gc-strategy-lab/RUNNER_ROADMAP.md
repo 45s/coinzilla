@@ -4,7 +4,13 @@
 
 ## Current status — 2026-11-28
 
-### GitHub `develop` catalogue preview
+### CG-conservative Dashboard inspection catalogue — 2026-11-28
+
+Issue [#2007](https://github.com/45s/coinzilla/issues/2007) / PR [#2008](https://github.com/45s/coinzilla/pull/2008) adds the complete eighteen-entry Conservative domain inventory to the live Harvester catalogue under the strategy ID `CG-conservative`. The Dashboard strategy and scenario selectors can inspect each scenario's source-declared preconditions, initial state, ordered input events, expected state/orders/accounting/side effects, invariants, source links and coverage status. The guide diagram connects declared event order only; it is explicitly scenario intent, not a runtime trace, and it does not invent decision branches.
+
+The current inventory is test-mapped metadata, not a set of executable Runner input scripts. All eighteen entries remain `BLOCKED` / non-executable, including the single `PARTIAL` coverage entry. The Dashboard shows the coverage reason and execution-readiness reason separately and does not permit input editing or Run. No CG worker is registered, so CG cannot fall through to the RS worker. A future CG execution increment must add a fixed isolated adapter that invokes actual Conservative production flow and produces independent assertions/trace evidence. `GC-aggressive` remains reserved for the future aggressive strategy.
+
+## GitHub `develop` catalogue preview
 
 Dashboard issue [#1986](https://github.com/45s/coinzilla/issues/1986) adds an opt-in checkbox that reads the RS scenario declarations from two source files at a single pinned `develop` commit and displays their IDs, names, layer and mapping status without restarting Harvester. This is a metadata preview only: downloaded JavaScript is never evaluated, all remote entries are forced non-executable, and scenario submission remains disabled until the operator switches back to the live Harvester catalogue. The live `/catalog` endpoint remains authoritative for execution. A refresh failure preserves the previously displayed catalogue and reports the error.
 

@@ -381,7 +381,9 @@ export class ScenarioRunnerComponent {
   }
 
   get selectedScenarioGuide(): ScenarioGuide | null {
-    return this.selectedScenario ? getScenarioGuide(this.selectedScenario.id) : null;
+    return this.selectedScenario
+      ? getScenarioGuide(this.selectedScenario.id, this.selectedScenario.details)
+      : null;
   }
 
   get selectedScenarioGraph() {
