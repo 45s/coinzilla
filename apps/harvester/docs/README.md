@@ -2,7 +2,9 @@
 
 This is the entry point for Harvester-specific documentation. Repository-wide rules remain authoritative where applicable; see [Coinzilla Documentation Governance](../../../docs/DOCUMENTATION_GOVERNANCE.md).
 
-## Current Harvester priority
+## Current Harvester priority — P0 trading reliability
+
+**The only P0 is a working, correct trading application.** When the trading runtime fails, investigate and fix that failure first. Recovery/restart restoration, durable facts/ledger expansion, SQLite/relational history, history APIs/projections, observability, architecture, and roadmap cleanup are secondary; none may delay trading repair or be represented as trading progress. Existing safeguards remain in force, but do not expand secondary systems while core trading is broken. See [TRADING_FIRST.md](./TRADING_FIRST.md) and the active [2026-11-27 trading incident #1962](https://github.com/45s/coinzilla/issues/1962).
 
 **Multi-provider execution and independent market-data routing (#1339): Phases 1–6 are complete and merged.** Harvester supports multiple configured Binance account runtimes, explicit per-symbol market-data source routing, and explicit `(strategyId, symbol)` execution routing with immutable provider/account provenance. See the [migration plan](../../../docs/architecture/multi-provider-migration-plan.md), [provider-instance registry](infrastructure/provider-instance-registry.md), and [execution-routing contract](infrastructure/execution-routing.md). The production adapter catalog remains Binance-only: Bitunix is not registered until [#1185](https://github.com/45s/coinzilla/issues/1185) is resolved and the complete standard provider contract is satisfied.
 

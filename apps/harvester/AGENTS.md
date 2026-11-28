@@ -14,9 +14,13 @@ Follow the selected issue's scope and repository task workflow. Journal evidence
 
 Follow the repository-wide [visual documentation and workflow schemas standard](../../ENGINEERING_STANDARDS.md#visual-documentation-and-workflow-schemas). For complex Harvester trading, order-lifecycle, and recovery workflows, use a source-verified Mermaid flowchart or sequence diagram in the closest existing authoritative document. Include exchange failure paths, deferred readiness, unknown outcomes, fill reconciliation, and safety boundaries; do not duplicate the authoritative Conservative strategy rules.
 
-## Product priority
+## Product priority — trading only
 
-[TRADING_FIRST.md](./docs/TRADING_FIRST.md) remains the source of truth for trading behavior and exchange-safety requirements. It does not impose a blanket acceptance gate on separately selected engineering work.
+**P0 is a working, correct trading application.** When trading is failing, every agent MUST investigate, reproduce, fix, and verify the trading failure before starting or continuing recovery, facts/ledger, database/SQLite, history/projection, roadmap, observability, architecture, or maintainability work. Those workstreams are secondary and MUST NOT be presented as progress toward a working trading app or used to delay its repair. Update relevant docs to preserve this priority. Do not claim trading works without exact regression and CI evidence.
+
+Preserve existing execution safeguards; do not weaken ownership, fill accounting, order idempotency, or required pre-side-effect barriers as a shortcut. If an existing safeguard itself prevents correct trading, fix its concrete defect with a focused regression. No new recovery/facts/database scope is authorized by a trading incident.
+
+[TRADING_FIRST.md](./docs/TRADING_FIRST.md) is the source of truth for this priority and trading behavior.
 
 ## Before changing code
 

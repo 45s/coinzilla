@@ -15,8 +15,36 @@ import { publishLifecycleEvent } from "../application/events/publish-lifecycle-e
 import { failureResult, withFailure } from "./recovery-failure.js"
 
 
-function isIgnorableExternalOrder({ hasHarvesterIdentity, externalOrdersPolicy } = {}) {
-  return !hasHarvesterIdentity && externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.IGNORE
+const HARVESTER_GENERATED_CLIENT_ORDER_ID_PATTERN = /^h-[a-f0-9]{22}-(?:\d+|preflight-\d+)$/i
+
+function hasCurrentSessionHarvesterIdentity({
+  currentProcessOrderIdNamespace,
+  order,
+  event,
+} = {}) {
+  const prefix = typeof currentProcessOrderIdNamespace === "string" &&
+    currentProcessOrderIdNamespace.trim()
+    ? `h-${currentProcessOrderIdNamespace}-`
+    : undefined
+  const clientOrderIds = [
+    order.clientOrderId,
+    event.clientOrderId,
+    event.originalClientOrderId,
+  ]
+  const hasReservedIdentity = clientOrderIds.some(isHarvesterClientOrderId)
+  if (!prefix) {
+    return hasReservedIdentity
+  }
+  const hasCurrentProcessIdentity = clientOrderIds.some((clientOrderId) =>
+    typeof clientOrderId === "string" && clientOrderId.startsWith(prefix))
+  const hasMalformedHarvesterIdentity = clientOrderIds.some((clientOrderId) =>
+    isHarvesterClientOrderId(clientOrderId) &&
+    !HARVESTER_GENERATED_CLIENT_ORDER_ID_PATTERN.test(clientOrderId))
+  return hasCurrentProcessIdentity || hasMalformedHarvesterIdentity
+}
+
+function isIgnorableExternalOrder({ hasCurrentSessionIdentity, externalOrdersPolicy } = {}) {
+  return !hasCurrentSessionIdentity && externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.IGNORE
 }
 
 async function requestExternalOrderReconciliation({
@@ -56,11 +84,11 @@ async function handleBlockedExternalOrder({
   dependencies,
   order,
   symbol,
-  hasHarvesterIdentity,
+  hasCurrentSessionIdentity,
   externalOrdersPolicy,
 } = {}) {
   if (isIgnorableExternalOrder({
-    hasHarvesterIdentity,
+    hasCurrentSessionIdentity,
     externalOrdersPolicy,
   })) {
     return {
@@ -72,7 +100,7 @@ async function handleBlockedExternalOrder({
       }),
     }
   }
-  if (!hasHarvesterIdentity &&
+  if (!hasCurrentSessionIdentity &&
       externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
       typeof dependencies.onUnownedExternalOrderObserved === "function") {
     return requestExternalOrderReconciliation({
@@ -102,16 +130,16 @@ async function handleUnownedOrderEvent({ dependencies, event, order, symbol } = 
     eventName: HARVESTER_EVENT_NAMES.EXECUTION_UNOWNED_ORDER,
     dataResult: mapExecutionUnownedOrderData({ order }),
   })
-  const hasHarvesterIdentity = [
-    order.clientOrderId,
-    event.clientOrderId,
-    event.originalClientOrderId,
-  ].some(isHarvesterClientOrderId)
+  const hasCurrentSessionIdentity = hasCurrentSessionHarvesterIdentity({
+    currentProcessOrderIdNamespace: dependencies.currentProcessOrderIdNamespace,
+    order,
+    event,
+  })
   return handleBlockedExternalOrder({
     dependencies,
     order,
     symbol,
-    hasHarvesterIdentity,
+    hasCurrentSessionIdentity,
     externalOrdersPolicy: pairs[symbol]?.externalOrdersPolicy ?? EXTERNAL_ORDERS_POLICIES.IGNORE,
   })
 }

@@ -4,6 +4,8 @@
 **Baseline:** `develop` `4af3434f788b87139513921f220294ae90daf4d5`  
 **Status vocabulary:** PASS / FAIL / PARTIAL / UNVERIFIED / CONFLICT. These labels distinguish evidence quality and reconciliation outcome; they are not a global release approval.
 
+> **Current execution priority (2026-11-27):** Trading correctness is the only active P0. Historical recovery, durable-facts, database/history, and projection findings remain evidence records and secondary backlog; they must not delay the in-process trading fix or be treated as current execution priorities. See [TRADING_FIRST.md](../../TRADING_FIRST.md).
+
 ## F-001 — DOGE SELL 1276698 filled after shutdown; historical snapshots are time-consistent
 
 **Status: PASS for exchange execution arithmetic and post-shutdown chronology; UNVERIFIED for the complete historical CLOSING order identity list and later in-process application (non-blocking; #654 owns restart reconciliation).**
