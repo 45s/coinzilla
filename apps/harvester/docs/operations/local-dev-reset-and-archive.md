@@ -72,7 +72,7 @@ The publisher selects the latest valid completed archive. To publish a specific 
 pnpm run archive:debug:publish -- --archive ./archive-output/<archive-directory>
 ```
 
-Publication validates the manifest, exact file inventory, sizes and SHA-256 checksums before contacting the configured private destination. It publishes only the selected archive directory to `https://github.com/45s/coinzilla-archive`, then verifies the remote commit and every published file blob.
+Publication validates the manifest, exact file inventory, sizes and SHA-256 checksums before contacting the configured private destination. It copies the completed archive into a private temporary snapshot, validates that copy again, and publishes only the verified temporary copy to `https://github.com/45s/coinzilla-archive`. The temporary copy is removed after the attempt; the original archive is never changed. Publication then verifies the remote commit and every published file blob.
 
 **Publication does not inspect the Harvester process, read or remove process locks, require `TRADING_MODE`, stop trading, access live operational directories, collect additional evidence, or modify the source archive.** It can therefore be retried while Harvester is actively trading. A retry of an already-published archive verifies the existing remote contents and does not create a duplicate archive.
 
