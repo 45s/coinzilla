@@ -387,7 +387,7 @@ test("ignores unmatched manual orders under the default external-order policy", 
 test("ignores unmatched orders from a prior Harvester process under the default external-order policy", async () => {
   const order = makeOrder({
     brokerOrderId: "previous-session-order",
-    clientOrderId: "h-previousprocessnamespace-7",
+    clientOrderId: "h-abcdef0123456789abcdef-7",
     status: "OPEN",
     executedQuantity: "0",
   })
@@ -396,7 +396,7 @@ test("ignores unmatched orders from a prior Harvester process under the default 
     calls,
   } = makeWorkflow({
     updateResult: { unknown: true },
-    currentProcessOrderIdNamespace: "currentprocessnamespace",
+    currentProcessOrderIdNamespace: "0123456789abcdef012345",
   })
 
   const result = await workflow.processUserDataEventTransition({
@@ -415,13 +415,13 @@ test("ignores unmatched orders from a prior Harvester process under the default 
 
 test("keeps an unmatched order from the current Harvester process fail-closed", async () => {
   const registeredOrder = makeOrder({
-    clientOrderId: "h-currentprocessnamespace-1",
+    clientOrderId: "h-0123456789abcdef012345-1",
     brokerOrderId: "current-session-order-1",
     status: "OPEN",
     executedQuantity: "0",
   })
   const unmatchedCurrentSessionOrder = makeOrder({
-    clientOrderId: "h-currentprocessnamespace-2",
+    clientOrderId: "h-0123456789abcdef012345-2",
     brokerOrderId: "current-session-order-2",
     status: "OPEN",
     executedQuantity: "0",
@@ -434,7 +434,7 @@ test("keeps an unmatched order from the current Harvester process fail-closed", 
     calls,
   } = makeWorkflow({
     registry,
-    currentProcessOrderIdNamespace: "currentprocessnamespace",
+    currentProcessOrderIdNamespace: "0123456789abcdef012345",
   })
 
   const result = await workflow.processUserDataEventTransition({
@@ -453,7 +453,7 @@ test("keeps an unmatched order from the current Harvester process fail-closed", 
 
 test("keeps an unmatched current-process order fail-closed even when the registry is empty", async () => {
   const order = makeOrder({
-    clientOrderId: "h-currentprocessnamespace-2",
+    clientOrderId: "h-0123456789abcdef012345-2",
     brokerOrderId: "current-session-order-2",
     status: "OPEN",
     executedQuantity: "0",
@@ -463,7 +463,7 @@ test("keeps an unmatched current-process order fail-closed even when the registr
     calls,
   } = makeWorkflow({
     registry: new OrderRegistry({ orders: [] }),
-    currentProcessOrderIdNamespace: "currentprocessnamespace",
+    currentProcessOrderIdNamespace: "0123456789abcdef012345",
   })
 
   const result = await workflow.processUserDataEventTransition({
@@ -480,9 +480,38 @@ test("keeps an unmatched current-process order fail-closed even when the registr
   assert.deepEqual(calls.accounting, [], "An unresolved active-process order must not mutate strategy accounting.")
 })
 
+test("keeps malformed Harvester-reserved IDs fail-closed even with a current process namespace", async () => {
+  const order = makeOrder({
+    clientOrderId: "h-0123456789abcdef012345-malformed",
+    brokerOrderId: "malformed-harvester-order",
+    status: "OPEN",
+    executedQuantity: "0",
+  })
+  const {
+    workflow,
+    calls,
+  } = makeWorkflow({
+    registry: new OrderRegistry({ orders: [] }),
+    currentProcessOrderIdNamespace: "0123456789abcdef012345",
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: order,
+      clientOrderId: order.clientOrderId,
+    },
+  })
+
+  assert.equal(result.ok, false, "Malformed IDs in the reserved Harvester namespace must not be ignored as prior-process external orders.")
+  assert.equal(result.failure.stage, "ORDER_REGISTRY_MATCH", "Malformed reserved identity must retain the ownership-integrity failure.")
+  assert.equal(calls.pauses[0]?.reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT", "Malformed reserved identity must pause its market.")
+  assert.deepEqual(calls.accounting, [], "Malformed reserved identity must not mutate strategy accounting.")
+})
+
 test("keeps Harvester-looking unknown IDs fail-closed when the process namespace is unavailable", async () => {
   const order = makeOrder({
-    clientOrderId: "h-unknownprocessnamespace-2",
+    clientOrderId: "h-abcdef0123456789abcdef-2",
     brokerOrderId: "unknown-process-order-2",
     status: "OPEN",
     executedQuantity: "0",
