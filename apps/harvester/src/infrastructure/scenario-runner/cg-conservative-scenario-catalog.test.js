@@ -21,6 +21,7 @@ const INSPECTED_SCENARIO_FIELDS = [
   "relatedRequirements",
   "relatedCriticalBehaviors",
   "relatedSourceFiles",
+  "relatedExistingTests",
   "coverageStatus",
   "coverageReason",
 ]

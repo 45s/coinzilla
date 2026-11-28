@@ -15,12 +15,31 @@ function deepFreeze(value) {
   return Object.freeze(value)
 }
 
+const DEFAULT_CONSERVATIVE_SCENARIO_DETAILS = Object.freeze({
+  tags: [],
+  preconditions: [],
+  initialState: {},
+  inputEvents: [],
+  expectedState: {},
+  expectedOrders: [],
+  expectedAccounting: {},
+  expectedSideEffects: {},
+  invariants: [],
+  relatedRequirements: [],
+  relatedCriticalBehaviors: [],
+  relatedSourceFiles: [],
+  relatedExistingTests: [],
+})
+
 const CG_CONSERVATIVE_SCENARIO_DETAILS = Object.freeze([
   ...CG_CONSERVATIVE_SCENARIO_DETAILS_PART_ONE,
   ...CG_CONSERVATIVE_SCENARIO_DETAILS_PART_TWO,
   ...CG_CONSERVATIVE_SCENARIO_DETAILS_PART_THREE,
   ...CG_CONSERVATIVE_SCENARIO_DETAILS_PART_FOUR,
-].map((details) => deepFreeze(structuredClone(details))))
+].map((details) => deepFreeze({
+  ...structuredClone(DEFAULT_CONSERVATIVE_SCENARIO_DETAILS),
+  ...structuredClone(details),
+})))
 
 /**
  * Return the read-only Conservative scenario inventory for the Dashboard Scenario Runner.
