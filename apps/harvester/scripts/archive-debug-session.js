@@ -560,6 +560,28 @@ function isMatchingActiveProcessOwner({ identity, processId, activeProcessOwner 
   })
 }
 
+function isEligibleStoppedRuntimeSnapshot({
+  identity,
+  processId,
+  activeProcessOwner,
+  recoveryCheckpoint,
+  missingFieldWarnings,
+  isProcessAlive,
+} = {}) {
+  const durableIdentity = recoveryCheckpoint?.processIdentity
+  const hasExactProcessIdentity = identity?.runtimeSessionId === recoveryCheckpoint?.runtimeSessionId
+    && processId === durableIdentity?.processId
+    && identity?.startedAt === durableIdentity?.startedAt
+    && Number.isSafeInteger(processId)
+    && processId > 0
+  const hasNoLiveOwner = activeProcessOwner === null
+    && typeof isProcessAlive === "function"
+    && !isProcessAlive(processId)
+  const hasOnlyAbsentCompletionRecords = missingFieldWarnings.includes("COMPLETION_RECORD_MISSING")
+    && missingFieldWarnings.includes("LOGGER_COMPLETION_RECORD_MISSING")
+  return hasExactProcessIdentity && hasNoLiveOwner && hasOnlyAbsentCompletionRecords
+}
+
 function resolveArchiveSessionCompletionStatus({
   identity,
   completion,
@@ -577,31 +599,32 @@ function resolveArchiveSessionCompletionStatus({
   if (!isHarvesterSession) {
     return "unsupported-environment-or-invalid"
   }
-  if (hasCompleteProcessCompletion({
+  const hasCleanCompletion = hasCompleteProcessCompletion({
     identity,
     completion,
   }) && hasCompleteLoggerCompletion({
     identity,
     loggerCompletion,
-  })) {
+  })
+  if (hasCleanCompletion) {
     return "complete"
   }
-  if (isMatchingActiveProcessOwner({ identity, processId, activeProcessOwner })) {
+  if (isMatchingActiveProcessOwner({
+    identity,
+    processId,
+    activeProcessOwner,
+  })) {
     return "active"
   }
-  const stoppedRuntimeIsProven = identity.runtimeSessionId === recoveryCheckpoint?.runtimeSessionId
-    && processId === recoveryCheckpoint?.processIdentity?.processId
-    && identity.startedAt === recoveryCheckpoint?.processIdentity?.startedAt
-    && Number.isSafeInteger(processId)
-    && processId > 0
-    && activeProcessOwner === null
-    && typeof isProcessAlive === "function"
-    && !isProcessAlive(processId)
-    && missingFieldWarnings.includes("COMPLETION_RECORD_MISSING")
-    && missingFieldWarnings.includes("LOGGER_COMPLETION_RECORD_MISSING")
-  return stoppedRuntimeIsProven ? "stopped-unconfirmed" : "incomplete"
+  return isEligibleStoppedRuntimeSnapshot({
+    identity,
+    processId,
+    activeProcessOwner,
+    recoveryCheckpoint,
+    missingFieldWarnings,
+    isProcessAlive,
+  }) ? "stopped-unconfirmed" : "incomplete"
 }
-
 function resolveArchiveSessionLoggerCompletionStatus({
   identity,
   loggerCompletion,
@@ -610,7 +633,10 @@ function resolveArchiveSessionLoggerCompletionStatus({
   activeProcessOwner,
   completionStatus,
 } = {}) {
-  if (hasCompleteLoggerCompletion({ identity, loggerCompletion }) && isHarvesterSession) {
+  if (hasCompleteLoggerCompletion({
+    identity,
+    loggerCompletion,
+  }) && isHarvesterSession) {
     return "complete"
   }
   if (completionStatus === "stopped-unconfirmed") {
@@ -620,7 +646,9 @@ function resolveArchiveSessionLoggerCompletionStatus({
     identity,
     processId,
     activeProcessOwner,
-  }) ? "active" : "incomplete"
+  })
+    ? "active"
+    : "incomplete"
 }
 
 function resolveArchiveSessionProcessId({ identity, recoveryCheckpoint } = {}) {
@@ -2128,6 +2156,52 @@ async function assertActiveSnapshotOwnershipStable({
   })
 }
 
+async function writeRuntimeSnapshotMarker({
+  localArchive,
+  logSelection,
+  activeProcessOwner,
+  recoveryCheckpoint,
+  lockDirectory,
+  isProcessAlive,
+} = {}) {
+  if (activeProcessOwner) {
+    await assertActiveSnapshotOwnershipStable({
+      localArchive,
+      activeProcessOwner,
+      lockDirectory,
+      isProcessAlive,
+      recoveryCheckpoint,
+    })
+    const activeSessionMatches = logSelection.sessions.some((session) =>
+      session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId
+        && session.completionStatus === "active"
+    )
+    if (activeSessionMatches) {
+      await writeActiveProcessSnapshotMarker({
+        localArchive,
+        logSelection,
+        activeProcessOwner,
+        recoveryCheckpoint,
+      })
+    }
+    return
+  }
+  const stoppedSession = logSelection.sessions.find((session) =>
+    session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId
+      && session.completionStatus === "stopped-unconfirmed"
+  )
+  if (stoppedSession) {
+    await writeStoppedProcessSnapshotMarker({
+      localArchive,
+      session: stoppedSession,
+      logSelection,
+      recoveryCheckpoint,
+      lockDirectory,
+      isProcessAlive,
+    })
+  }
+}
+
 async function copyArchiveEvidence({
   sourcePaths, packageDirectory, localArchive, activeProcessOwner,
   lockDirectory, isProcessAlive, onProgress,
@@ -2171,42 +2245,14 @@ async function copyArchiveEvidence({
       "WARNING: matching runtime logs are preserved, but process exit reason and logger flush are unconfirmed; the archive marks this as stopped-unconfirmed evidence.",
     )
   }
-  if (activeProcessOwner) {
-    await assertActiveSnapshotOwnershipStable({
-      localArchive,
-      activeProcessOwner,
-      lockDirectory,
-      isProcessAlive,
-      recoveryCheckpoint,
-    })
-    const activeSessionMatches = logSelection.sessions.some((session) =>
-      session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId
-        && session.completionStatus === "active"
-    )
-    if (activeSessionMatches) {
-      await writeActiveProcessSnapshotMarker({
-        localArchive,
-        logSelection,
-        activeProcessOwner,
-        recoveryCheckpoint,
-      })
-    }
-  } else {
-    const stoppedSession = logSelection.sessions.find((session) =>
-      session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId
-        && session.completionStatus === "stopped-unconfirmed"
-    )
-    if (stoppedSession) {
-      await writeStoppedProcessSnapshotMarker({
-        localArchive,
-        session: stoppedSession,
-        logSelection,
-        recoveryCheckpoint,
-        lockDirectory,
-        isProcessAlive,
-      })
-    }
-  }
+  await writeRuntimeSnapshotMarker({
+    localArchive,
+    logSelection,
+    activeProcessOwner,
+    recoveryCheckpoint,
+    lockDirectory,
+    isProcessAlive,
+  })
   reportProgress(onProgress, `Evidence snapshot complete: ${retainedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
   return logSelection
 }
