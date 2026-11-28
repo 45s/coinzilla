@@ -7,6 +7,14 @@
 
 ## Current priorities
 
+### P0 — make trading work
+
+**This is the only active P0.** Fix the currently failing trading runtime before starting or advancing any secondary workstream. The immediate incident is [#1962](https://github.com/45s/coinzilla/issues/1962): accepted SELLs followed by rejected/unknown execution events. Establish the exact order/event identity and lifecycle failure, add a deterministic regression that fails before the fix, implement the smallest correct change, and verify the exact PR head.
+
+**Secondary / deferred while trading is broken:** process-restart recovery (#654), durable facts/ledger expansion, SQLite and relational trading-history persistence (#1854), history APIs/projections, account-wide audit/reporting expansion, observability, architecture, multi-provider backlog, volatility calibration, scenario-lab work, and roadmap/maintainability cleanup. Existing safeguards remain; do not weaken order ownership or fill accounting to make tests pass. Do not start secondary tasks or describe them as progress until the trading P0 is resolved.
+
+### Secondary backlog — not current execution priority
+
 | Priority / area | Canonical issue | Current status |
 | --- | --- | --- |
 | Local Dashboard API connectivity and degraded-history availability | [#1953](https://github.com/45s/coinzilla/issues/1953) | In progress in [PR #1961](https://github.com/45s/coinzilla/pull/1961): allow dynamic local Dashboard ports and keep runtime/operator/market/provider snapshots available when relational history persistence is unavailable; persisted-history routes return explicit HTTP 503. The exact database failure remains tracked separately in #1854. |

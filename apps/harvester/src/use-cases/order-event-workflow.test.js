@@ -293,6 +293,7 @@ duplicate: false } }),
   updateRecoverySellerAccounting,
   reconcileRecoverySellerMixedSell,
   latchRecoverySellerStop,
+  currentProcessOrderIdNamespace,
 } = {}) {
   const calls = createWorkflowCalls()
   const state = createWorkflowState({ updateResult,
@@ -316,6 +317,7 @@ activeOrders })
     ...dependencies,
     logger,
     requireProviderProvenance,
+    currentProcessOrderIdNamespace,
   })
   return { workflow,
 state,
@@ -380,6 +382,159 @@ test("ignores unmatched manual orders under the default external-order policy", 
   assert.equal(result.data.externalOrder, true, "The result must distinguish an ignored external order.")
   assert.deepEqual(calls.pauses, [], "Manual external orders must not pause the market under ignore policy.")
   assert.deepEqual(calls.accounting, [], "Manual executions must never update strategy accounting.")
+})
+
+test("ignores unmatched orders from a prior Harvester process under the default external-order policy", async () => {
+  const order = makeOrder({
+    brokerOrderId: "previous-session-order",
+    clientOrderId: "h-abcdef0123456789abcdef-7",
+    status: "OPEN",
+    executedQuantity: "0",
+  })
+  const {
+    workflow,
+    calls,
+  } = makeWorkflow({
+    updateResult: { unknown: true },
+    currentProcessOrderIdNamespace: "0123456789abcdef012345",
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: order,
+      clientOrderId: order.clientOrderId,
+    },
+  })
+
+  assert.equal(result.ok, true, "An unmatched prior-session Harvester order must be treated as external to this process.")
+  assert.equal(result.data.externalOrder, true, "The prior-session order must remain explicitly external.")
+  assert.deepEqual(calls.pauses, [], "A prior-session order must not pause the current process market.")
+  assert.deepEqual(calls.accounting, [], "A prior-session execution must never enter current-session accounting.")
+})
+
+test("keeps an unmatched order from the current Harvester process fail-closed", async () => {
+  const registeredOrder = makeOrder({
+    clientOrderId: "h-0123456789abcdef012345-1",
+    brokerOrderId: "current-session-order-1",
+    status: "OPEN",
+    executedQuantity: "0",
+  })
+  const unmatchedCurrentSessionOrder = makeOrder({
+    clientOrderId: "h-0123456789abcdef012345-2",
+    brokerOrderId: "current-session-order-2",
+    status: "OPEN",
+    executedQuantity: "0",
+  })
+  const registry = new OrderRegistry({
+    orders: [registeredOrder],
+  })
+  const {
+    workflow,
+    calls,
+  } = makeWorkflow({
+    registry,
+    currentProcessOrderIdNamespace: "0123456789abcdef012345",
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: unmatchedCurrentSessionOrder,
+      clientOrderId: unmatchedCurrentSessionOrder.clientOrderId,
+    },
+  })
+
+  assert.equal(result.ok, false, "An unregistered order from this process must remain an ownership-integrity failure.")
+  assert.equal(result.failure.stage, "ORDER_REGISTRY_MATCH", "The current-session ownership failure must retain its stable stage.")
+  assert.equal(calls.pauses[0]?.reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT", "An unresolved current-session order must pause its market.")
+  assert.deepEqual(calls.accounting, [], "An unresolved current-session order must not be accounted.")
+})
+
+test("keeps an unmatched current-process order fail-closed even when the registry is empty", async () => {
+  const order = makeOrder({
+    clientOrderId: "h-0123456789abcdef012345-2",
+    brokerOrderId: "current-session-order-2",
+    status: "OPEN",
+    executedQuantity: "0",
+  })
+  const {
+    workflow,
+    calls,
+  } = makeWorkflow({
+    registry: new OrderRegistry({ orders: [] }),
+    currentProcessOrderIdNamespace: "0123456789abcdef012345",
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: order,
+      clientOrderId: order.clientOrderId,
+    },
+  })
+
+  assert.equal(result.ok, false, "An unmatched ID from the active process namespace must remain fail-closed without a registered-order hint.")
+  assert.equal(result.failure.stage, "ORDER_REGISTRY_MATCH", "The active-process ownership failure must retain its stable stage.")
+  assert.equal(calls.pauses[0]?.reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT", "An unresolved active-process order must pause its market.")
+  assert.deepEqual(calls.accounting, [], "An unresolved active-process order must not mutate strategy accounting.")
+})
+
+test("keeps malformed Harvester-reserved IDs fail-closed even with a current process namespace", async () => {
+  const order = makeOrder({
+    clientOrderId: "h-abcdef0123456789abcdef-malformed",
+    brokerOrderId: "malformed-harvester-order",
+    status: "OPEN",
+    executedQuantity: "0",
+  })
+  const {
+    workflow,
+    calls,
+  } = makeWorkflow({
+    registry: new OrderRegistry({ orders: [] }),
+    currentProcessOrderIdNamespace: "0123456789abcdef012345",
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: order,
+      clientOrderId: order.clientOrderId,
+    },
+  })
+
+  assert.equal(result.ok, false, "Malformed IDs in the reserved Harvester namespace must not be ignored as prior-process external orders.")
+  assert.equal(result.failure.stage, "ORDER_REGISTRY_MATCH", "Malformed reserved identity must retain the ownership-integrity failure.")
+  assert.equal(calls.pauses[0]?.reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT", "Malformed reserved identity must pause its market.")
+  assert.deepEqual(calls.accounting, [], "Malformed reserved identity must not mutate strategy accounting.")
+})
+
+test("keeps Harvester-looking unknown IDs fail-closed when the process namespace is unavailable", async () => {
+  const order = makeOrder({
+    clientOrderId: "h-abcdef0123456789abcdef-2",
+    brokerOrderId: "unknown-process-order-2",
+    status: "OPEN",
+    executedQuantity: "0",
+  })
+  const {
+    workflow,
+    calls,
+  } = makeWorkflow({
+    registry: new OrderRegistry({ orders: [] }),
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: order,
+      clientOrderId: order.clientOrderId,
+    },
+  })
+
+  assert.equal(result.ok, false, "A Harvester-looking identity must not be silently classified as external when the active process namespace is unavailable.")
+  assert.equal(result.failure.stage, "ORDER_REGISTRY_MATCH", "Missing process identity must retain the ownership-integrity failure.")
+  assert.equal(calls.pauses[0]?.reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT", "An unresolved Harvester-looking identity must pause its market.")
+  assert.deepEqual(calls.accounting, [], "An unresolved Harvester-looking identity must not mutate strategy accounting.")
 })
 
 test("applies partial BUY fills without advancing strategy evaluation", async () => {

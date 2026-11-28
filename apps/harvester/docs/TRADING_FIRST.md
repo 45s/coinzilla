@@ -4,15 +4,19 @@
 
 **This document is a mandatory execution-priority rule for every AI agent working on Harvester. It overrides any roadmap ordering, architecture ambition, optional capability, or agent preference that would delay the first working trading workflow.**
 
-## Work selection
+## Work selection — one P0: correct trading
 
-The former blanket TESTNET acceptance gate is removed. Explicitly selected user tasks may proceed independently of TESTNET acceptance. TESTNET validation remains a separate operational milestone, not a prerequisite for Journal evidence, documentation, or other selected engineering work.
+**When the trading application is failing, trading repair is the only P0 and the only implementation priority.** Reproduce the actual runtime failure, trace it through production composition, fix it, add a regression that fails before the fix, and verify the exact resulting PR head. Do not switch to another task because it is easier to document, audit, or implement.
 
-This does not authorize exchange writes during documentation or engineering preparation, removal of order-safety checks, or changes to the existing mandatory Journal durability barriers. The operator explicitly selects the exchange environment with `TRADING_MODE=testnet` or `TRADING_MODE=live`; selecting `live` enables real Binance order execution and must be an intentional production choice. Keep all order-safety protections, exact-order ownership safeguards, and Journal durability barriers intact.
+**Always secondary while trading is broken:** process-restart recovery/restoration, durable facts/checkpoint/ledger expansion, SQLite or relational history, order-history APIs/projections, account-wide history reconstruction, observability expansion, architecture/refactoring, scenario-lab work, and roadmap cleanup. These are not dependencies or acceptance gates for fixing the current trading workflow. Do not create secondary work or report it as progress toward working trading.
+
+Keep existing essential execution safeguards: exact order ownership, no duplicate submissions, actual-fill-only accounting, available-balance/quantity constraints, and required pre-side-effect durability barriers. Do not weaken them as a shortcut. If a safeguard's implementation is itself the confirmed trading defect, fix that defect narrowly and test it. No new recovery/facts/database scope is authorized by a trading incident.
+
+No LIVE or TESTNET exchange writes are authorized during engineering preparation. The operator explicitly selects the environment with `TRADING_MODE=testnet` or `TRADING_MODE=live`; selecting `live` enables real Binance order execution and must be an intentional production choice.
 
 ## Startup open-order ownership
 
-The implemented ownership boundary is defined by [ADR-0004](./architecture/decisions/0004-startup-open-orders-are-external.md) and merged in [PR #1166](https://github.com/45s/coinzilla/pull/1166). Every unmatched order in the startup snapshot is external to the new process; apply the configured per-market `IGNORE`/`BLOCK` policy. Do not adopt or manage startup orders. Later unmatched `h-` execution reports remain fail-closed. See [Journal Operations](./JOURNAL_OPERATIONS.md#external-open-orders-and-strategy-eligibility) for detailed runtime behavior.
+The implemented ownership boundary is defined by [ADR-0004](./architecture/decisions/0004-startup-open-orders-are-external.md) and merged in [PR #1166](https://github.com/45s/coinzilla/pull/1166). Every unmatched order in the startup snapshot is external to the new process; apply the configured per-market `IGNORE`/`BLOCK` policy. Do not adopt or manage startup orders. Later unmatched execution reports are matched against the current process's generated order-ID namespace: prior-session `h-` IDs are external and follow the configured external-order policy; unmatched IDs in the current process namespace remain fail-closed. See [Journal Operations](./JOURNAL_OPERATIONS.md#external-open-orders-and-strategy-eligibility) for detailed runtime behavior.
 
 ## Selected safety work — high-volatility protection (#1016)
 
@@ -49,7 +53,7 @@ Journal records are not trading-state authority. The ADR-0001 durable-facts ledg
 
 Harvester's first product deliverable is a running trading application that can repeatedly execute its selected strategy on Binance TESTNET. The main task is TRADING: read configuration, receive prices, decide, place orders, process executions, and repeat.
 
-Do not make unrequested persistence, Journal expansion, recovery frameworks, observability, architecture work, or optimization prerequisites for implementing or demonstrating the first working trading cycle. The user has explicitly selected ADR-0001 process-restart reconciliation in [issue #654](https://github.com/45s/coinzilla/issues/654) and the narrowly scoped P3 H7/H8 maintainability task in [issue #1073](https://github.com/45s/coinzilla/issues/1073) / [PR #1075](https://github.com/45s/coinzilla/pull/1075); these are explicit task-selection exceptions, not a change to Conservative trading priority. P3 is strictly behavior-preserving and neither task authorizes exchange operations or removes the TESTNET acceptance gate. The separately selected Journal evidence scope in issue [#650](https://github.com/45s/coinzilla/issues/650) may proceed independently; optional investigation evidence remains best-effort and must not block trading.
+Do not make unrequested persistence, Journal expansion, recovery frameworks, observability, architecture work, or optimization prerequisites for implementing or demonstrating the first working trading cycle. Issue [#654](https://github.com/45s/coinzilla/issues/654) (process-restart recovery), issue [#1073](https://github.com/45s/coinzilla/issues/1073) (maintainability), and issue [#650](https://github.com/45s/coinzilla/issues/650) (Journal evidence) are secondary and deferred while trading is broken. Their earlier selection does not override the current P0 priority. Do not resume them until the trading workflow is correct and the operator explicitly reprioritizes them.
 
 ## Current TESTNET incident safety gate — 2026-11-04 (post-PR #515)
 
@@ -103,9 +107,9 @@ Trading first does not mean careless execution. Implement the smallest safety bo
 
 These are execution safeguards, not a demand to build a comprehensive production reconciliation or persistence subsystem before the first TESTNET order.
 
-## Explicitly secondary — defer until the first TESTNET cycle works
+## Explicitly secondary — no work until trading is correct
 
-Unless one narrowly scoped part is essential to prevent an immediate unsafe TESTNET action, agents MUST NOT prioritize or block trading implementation on:
+The following are deferred whenever the trading application is broken. They MUST NOT be prioritized, expanded, or used as a prerequisite for trading repair. A narrowly scoped existing safeguard may be fixed only when its concrete defect directly causes incorrect or unsafe trading:
 
 - Runtime restoration/replay of Portfolio, RecoveryLedger, OrderRegistry and reservations remains disabled. ADR-0001 durable facts already persist order intents/outcomes, fills, recovery-cycle outcomes, safety/operator controls and process boundaries, but the offline candidate projection is not yet accepted for runtime use.
 - Full process-restart recovery, account-wide reconciliation readiness and exactly-once crash/restart guarantees (ADR-0001 Steps 8 parity and 9).

@@ -831,6 +831,7 @@ export function makeExecuteStrategyDecision(options = {}) {
       decision,
       marketMetadata,
     })
+  execute.orderIdNamespace = context.orderIdNamespace
   execute.validate = async ({ decision, marketMetadata, notifyValidationFailure = true } = {}) =>
     validateDecision({
       context,

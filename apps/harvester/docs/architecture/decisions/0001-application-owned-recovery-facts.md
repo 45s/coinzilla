@@ -10,6 +10,8 @@ created: 2026-11-11
 
 ## Status
 
+> **Current execution priority (2026-11-27): DEFERRED / SECONDARY.** Trading correctness is the only active P0. This accepted architecture record does not authorize implementation or expansion of recovery/facts work while the trading runtime is failing. It is not a prerequisite or acceptance gate for fixing current-process trading.
+
 **Accepted — target architecture contract.** This decision freezes the recovery boundary and minimum durable-fact guarantees. It does not implement startup restoration, enable replay, or authorize unattended process restart.
 
 > **Terminology note (2026-11-14):** This ADR retains its original title and durable-fact vocabulary as part of the accepted architectural record. The current application-facing component name is **Operational State Store**; current setup instructions and commands are maintained in the implementation section below and the Harvester operator documentation.
