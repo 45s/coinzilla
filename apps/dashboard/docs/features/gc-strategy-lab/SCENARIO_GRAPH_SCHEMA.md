@@ -1,7 +1,7 @@
 # Scenario Graph Schema
 
-**Status:** version 1, visual-authoring contract  
-**Owner:** Dashboard / Scenario Runner  
+**Status:** version 1, visual-authoring contract
+**Owner:** Dashboard / Scenario Runner
 **Tracking:** [Issue #1992](https://github.com/45s/coinzilla/issues/1992)
 
 ## Purpose and trust boundary
