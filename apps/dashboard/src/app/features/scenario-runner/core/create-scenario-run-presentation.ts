@@ -371,6 +371,7 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
       status: cycleStatus,
       sourceEvidence: cycleState,
     },
+    cycles: [],
     outcomes: {
       execution: {
         status: runStatus,
