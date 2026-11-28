@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import { createWriteStream } from "node:fs"
 import { once } from "node:events"
 import { finished } from "node:stream/promises"
-import { mkdir } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { defaultLogger } from "@coinzilla/utils"
 import { strategyLogMarkers } from "../../application/logging/strategy-log-markers.js"
@@ -318,6 +318,59 @@ async function registerHarvesterLogTransports({
   }
 }
 
+async function persistHarvesterSessionIdentity({ sessionPaths, processIdentity } = {}) {
+  const identityPath = path.join(sessionPaths.sessionDirectory, "process-identity.json")
+  const identity = {
+    formatVersion: 1,
+    application: "harvester",
+    environment: process.env.TRADING_MODE ?? "unknown",
+    startedAt: processIdentity.startedAt,
+    runtimeSessionId: processIdentity.runtimeSessionId,
+    processId: processIdentity.processId ?? process.pid,
+    version: processIdentity.version ?? null,
+    source: processIdentity.source ?? null,
+  }
+  try {
+    await writeFile(identityPath, `${JSON.stringify(identity, null, 2)}\n`, {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    })
+  } catch (error) {
+    if (error.code !== "EEXIST") {
+      throw error
+    }
+    const existing = JSON.parse(await readFile(identityPath, "utf8"))
+    if (
+      existing.application !== "harvester"
+      || existing.runtimeSessionId !== processIdentity.runtimeSessionId
+      || existing.startedAt !== processIdentity.startedAt
+      || existing.environment !== identity.environment
+    ) {
+      throw new Error(`Existing process identity does not match the active runtime: ${identityPath}`)
+    }
+  }
+}
+
+async function writeHarvesterLogStreamsCompletion({ sessionPaths, processIdentity } = {}) {
+  const completion = {
+    formatVersion: 1,
+    application: "harvester",
+    runtimeSessionId: processIdentity.runtimeSessionId,
+    endedAt: new Date().toISOString(),
+    logStreamsComplete: true,
+    streams: {
+      harvesterLog: true,
+      traceLog: true,
+    },
+  }
+  await writeFile(
+    path.join(sessionPaths.sessionDirectory, "log-streams-completed.json"),
+    `${JSON.stringify(completion, null, 2)}\n`,
+    { encoding: "utf8", flag: "wx", mode: 0o600 },
+  )
+}
+
 async function writeHarvesterProcessCompletion({ sessionPaths, processIdentity } = {}) {
   const completion = {
     formatVersion: 1,
@@ -355,7 +408,10 @@ function createHarvesterLogCloseHandler({ logger, sessionPaths, processIdentity 
     if (errors.length > 0) {
       throw new AggregateError(errors, "Failed to close Harvester log transports")
     }
-    await writeHarvesterProcessCompletion({ sessionPaths, processIdentity })
+    await writeHarvesterLogStreamsCompletion({ sessionPaths, processIdentity })
+    if (process.env.COINZILLA_RUNTIME_SESSION_ID !== processIdentity.runtimeSessionId) {
+      await writeHarvesterProcessCompletion({ sessionPaths, processIdentity })
+    }
   }
 }
 
@@ -395,6 +451,7 @@ export async function configureHarvesterLogging({
     mkdir(cumulativeDirectory, { recursive: true }),
     mkdir(sessionPaths.sessionDirectory, { recursive: true }),
   ])
+  await persistHarvesterSessionIdentity({ sessionPaths, processIdentity })
   const errorBuffer = createHarvesterRuntimeErrorBuffer({ logger })
   logger.addTransport(errorBuffer.transport)
   try {
