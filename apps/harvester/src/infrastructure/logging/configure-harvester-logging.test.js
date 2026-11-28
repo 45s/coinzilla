@@ -1004,7 +1004,7 @@ test("prints catalog code, exact stage, cause and remediation without cutting of
     method: "error",
     data: {
       message: "Relational trading history is unavailable; legacy order history remains active",
-      errorCode: "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
+      errorCode: "ERR_SQLITE_ERROR",
       harvesterErrorCode: "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
       errorStage: "RELATIONAL_MIGRATION_V5",
       errorMessage: "SQLITE_ERROR: no such column: broker_order_id",
@@ -1069,9 +1069,12 @@ test("renders every catalogued startup and degraded failure in bounded console o
       .map((continuationLine) => continuationLine.slice(continuationLine.indexOf("cause+") + 6))
       .join("")
     const initialCause = firstCause.endsWith("...") ? firstCause.slice(0, -3) : firstCause
+    const expectedCause = entry.errorCode === "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED"
+      ? `ERR_SQLITE_ERROR: concrete cause for ${entry.errorCode}`
+      : `concrete cause for ${entry.errorCode}`
     assert.equal(
       `${initialCause}${continuationCause}`,
-      `concrete cause for ${entry.errorCode}`,
+      expectedCause,
       `Console output for ${entry.errorCode} must preserve the complete concrete cause.`,
     )
   }
