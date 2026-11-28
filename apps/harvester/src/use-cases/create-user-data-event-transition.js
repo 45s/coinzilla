@@ -147,9 +147,9 @@ function getRegisteredOrder({ registry, order } = {}) {
 }
 
 function publishOrderUpdatedEvent({ eventPublisher, registry, previousOrder, order, event } = {}) {
-  const canonicalClientOrderId = previousOrder?.clientOrderId ?? order.clientOrderId
-  const updatedOrder = registry.getOrder?.({
-    clientOrderId: canonicalClientOrderId,
+  const updatedOrder = getRegisteredOrder({
+    registry,
+    order: previousOrder ?? order,
   }) ?? previousOrder ?? order
   const ownership = registry.getOwnership({
     clientOrderId: updatedOrder.clientOrderId,
