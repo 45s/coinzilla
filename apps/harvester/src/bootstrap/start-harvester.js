@@ -109,7 +109,10 @@ function assertOperationalStateProjection({ existingProjection } = {}) {
 
 function assertNoUnresolvedAccountSafetyBlockers({ projection } = {}) {
   const blockers = (projection?.data?.stickySafetyBlockers ?? [])
-    .filter((blocker) => blocker.scope === "ACCOUNT")
+    .filter((blocker) =>
+      blocker.scope === "ACCOUNT" &&
+      !isRecoverySellerStopRestartBlocker(blocker)
+    )
   if (blockers.length === 0) {
     return
   }
