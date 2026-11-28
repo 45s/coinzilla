@@ -253,7 +253,7 @@ describe('AppComponent', () => {
 
     const request = TestBed.inject(HttpTestingController)
       .expectOne('https://api.github.com/repos/45s/coinzilla/pulls?state=open&per_page=100&page=1');
-    expect(root.textContent).toContain('GitHub PRs');
+    expect(root.querySelector('.topbar .breadcrumb')?.textContent).toContain('GitHub');
     expect(root.textContent).toContain('PUBLIC READ ONLY');
     request.flush([]);
 

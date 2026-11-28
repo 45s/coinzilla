@@ -15,6 +15,8 @@ interface GitHubCommitPayload {
   } | null;
 }
 
+export interface GitHubMergedPullRequestsSnapshot { readonly pullRequests: readonly GitHubPullRequest[]; }
+
 export interface GitHubPullRequestsSnapshot {
   readonly pullRequests: readonly GitHubPullRequest[];
   readonly rateLimitReset: string | null;
@@ -57,6 +59,19 @@ function readRateLimitReset(error: unknown): string | null {
 export class GitHubPullRequestsApi {
   private readonly http = inject(HttpClient);
   private readonly commitDateBySha = new Map<string, string>();
+
+  async loadMergedPullRequests(): Promise<GitHubMergedPullRequestsSnapshot> {
+    const response = await firstValueFrom(this.http.get<unknown[]>(
+      API_ROOT + '/repos/45s/coinzilla/pulls?state=closed&per_page=100&page=1',
+    ));
+    if (!Array.isArray(response)) throw new Error('GitHub returned an invalid merged pull request list.');
+    const merged = response.filter((item) => typeof (item as { merged_at?: unknown }).merged_at === 'string');
+    return {
+      pullRequests: merged.map((item) => normalizePullRequest(item as Parameters<typeof normalizePullRequest>[0]))
+        .sort((left, right) => Date.parse(right.mergedAt ?? '') - Date.parse(left.mergedAt ?? ''))
+        .slice(0, 5),
+    };
+  }
 
   async loadOpenPullRequests(): Promise<GitHubPullRequestsSnapshot> {
     const rawPullRequests = await this.loadAllPullRequests();

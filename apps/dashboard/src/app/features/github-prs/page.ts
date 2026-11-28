@@ -6,6 +6,7 @@ import { GitHubPullRequestsApi } from './api';
 import { formatRelativeCommitTime, type GitHubPullRequest } from './model';
 import {
   assignLabel,
+  EMPTY_LABEL_STORE,
   createLabel,
   deleteLabel,
   LABEL_COLORS,
@@ -35,6 +36,8 @@ export class GitHubPullRequestsComponent implements OnInit, OnDestroy {
   private readonly initialLabelState = loadLabelStore(this.storage);
 
   readonly pullRequests = signal<readonly GitHubPullRequest[]>([]);
+  readonly mergedPullRequests = signal<readonly GitHubPullRequest[]>([]);
+  readonly mergedError = signal<string | null>(null);
   readonly loading = signal(true);
   readonly refreshing = signal(false);
   readonly stale = signal(false);
@@ -71,6 +74,13 @@ export class GitHubPullRequestsComponent implements OnInit, OnDestroy {
     this.errorMessage.set(null);
     try {
       const snapshot = await this.api.loadOpenPullRequests();
+      try {
+        const merged = await this.api.loadMergedPullRequests();
+        this.mergedPullRequests.set(merged.pullRequests.slice(0, 5));
+        this.mergedError.set(null);
+      } catch (mergedError) {
+        this.mergedError.set(mergedError instanceof Error ? mergedError.message : 'Merged PR history unavailable.');
+      }
       if (snapshot.rateLimitReset && this.hasSnapshot()) {
         this.rateLimitReset.set(snapshot.rateLimitReset);
         this.stale.set(true);
@@ -89,6 +99,16 @@ export class GitHubPullRequestsComponent implements OnInit, OnDestroy {
       this.refreshing.set(false);
       this.refreshInFlight = false;
     }
+  }
+
+  resetLabels(): void { this.applyLabelChange(() => EMPTY_LABEL_STORE); }
+
+  async copyTitle(title: string): Promise<void> { await this.copyText(title); }
+  async copyBranch(branch: string): Promise<void> { await this.copyText(branch); }
+
+  private async copyText(value: string): Promise<void> {
+    try { await navigator.clipboard.writeText(value); }
+    catch { this.errorMessage.set('Clipboard access failed. Select and copy the text manually.'); }
   }
 
   relativeTime(timestamp: string | null): string {

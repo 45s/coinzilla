@@ -16,6 +16,8 @@ describe('GitHub PR view model', () => {
       repository: '45s/coinzilla',
       number: 1824,
       title: 'Fix <script> display as text',
+      headBranch: 'Unavailable',
+      mergedAt: null,
       htmlUrl: 'https://github.com/45s/coinzilla/pull/1824',
       isDraft: true,
       headSha: 'a'.repeat(40),

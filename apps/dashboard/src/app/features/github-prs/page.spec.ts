@@ -9,6 +9,8 @@ const snapshot = {
     repository: '45s/coinzilla' as const,
     number: 1824,
     title: 'Add the GitHub dashboard',
+    headBranch: 'feat/dashboard',
+    mergedAt: null,
     htmlUrl: 'https://github.com/45s/coinzilla/pull/1824',
     isDraft: true,
     headSha: 'a'.repeat(40),
@@ -26,11 +28,11 @@ describe('GitHubPullRequestsComponent', () => {
     loadOpenPullRequests = vi.fn().mockResolvedValue(snapshot);
     await TestBed.configureTestingModule({
       imports: [GitHubPullRequestsComponent],
-      providers: [{ provide: GitHubPullRequestsApi, useValue: { loadOpenPullRequests } }],
+      providers: [{ provide: GitHubPullRequestsApi, useValue: { loadOpenPullRequests, loadMergedPullRequests: vi.fn().mockResolvedValue({ pullRequests: [] }) } }],
     }).compileComponents();
     fixture = TestBed.createComponent(GitHubPullRequestsComponent);
     fixture.detectChanges();
-    await Promise.resolve();
+    await fixture.whenStable();
     fixture.detectChanges();
   });
 
@@ -95,7 +97,7 @@ describe('GitHubPullRequestsComponent', () => {
     renameInput.dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
-    root.querySelector<HTMLButtonElement>('[aria-label="Set green color for Review"]')?.click();
+    root.querySelector<HTMLButtonElement>('[aria-label="Set green"]')?.click();
     fixture.detectChanges();
 
     expect(root.querySelector<HTMLInputElement>('.label-name-input')?.value).toBe('Review');
@@ -104,12 +106,23 @@ describe('GitHubPullRequestsComponent', () => {
     expect(root.querySelector('.delete-label-button')?.getAttribute('aria-label')).toBe('Delete Review');
   });
 
-  it('keeps a refresh action available in the viewport while browsing the PR list', () => {
+  it('keeps a refresh action available in the viewport while browsing the PR list', async () => {
     const root = fixture.nativeElement as HTMLElement;
     const refresh = root.querySelector<HTMLButtonElement>('.floating-refresh-button');
     expect(refresh).toBeDefined();
     refresh?.click();
+    await fixture.whenStable();
     expect(loadOpenPullRequests).toHaveBeenCalledTimes(2);
+  });
+
+  it('copies title and branch through the clipboard affordances', async () => {
+    const clipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
+    vi.stubGlobal('navigator', { clipboard });
+    await fixture.componentInstance.copyTitle(snapshot.pullRequests[0].title);
+    await fixture.componentInstance.copyBranch(snapshot.pullRequests[0].headBranch);
+    expect(clipboard.writeText).toHaveBeenNthCalledWith(1, snapshot.pullRequests[0].title);
+    expect(clipboard.writeText).toHaveBeenNthCalledWith(2, snapshot.pullRequests[0].headBranch);
+    vi.unstubAllGlobals();
   });
 
   it('Scenario 17 — displays the explicit empty state when no open PRs exist', async () => {
@@ -139,7 +152,7 @@ describe('GitHubPullRequestsComponent', () => {
     await fixture.componentInstance.refresh();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('STALE SNAPSHOT');
+    expect(fixture.nativeElement.textContent).toContain('STALE');
     expect(fixture.nativeElement.textContent).toContain('Add the GitHub dashboard');
     expect(fixture.nativeElement.textContent).toContain('GitHub is unavailable');
   });
@@ -192,6 +205,6 @@ describe('GitHubPullRequestsComponent', () => {
 
     expect(fixture.componentInstance.labelStoreStatus()).toBe('invalid');
     expect(window.localStorage.getItem('coinzilla.dashboard.github-pr-labels.v1')).toBe('{broken');
-    expect(fixture.nativeElement.textContent).toContain('It has not been overwritten');
+    expect(fixture.nativeElement.textContent).toContain('has not been overwritten');
   });
 });
