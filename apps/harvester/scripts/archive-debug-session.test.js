@@ -168,16 +168,9 @@ async function createFixture() {
   }
 }
 
-async function assertCollectedArchive({ directory, expectedIdentityStatus, expectedTradingMode = "testnet" } = {}) {
-  const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
-  assert.equal(manifest.runtimeTradingMode, expectedTradingMode, "Runtime trading mode must be inferred from the exact matched session identity.")
-  assert.deepEqual(manifest.includedDirectories, ["logs", "recovery-facts"], "Debug archives must contain only logs and recovery facts")
-  assert.deepEqual(manifest.excludedPaths, [
-    "data/** (all databases and backups)",
-    "logs/cumulative/**",
-  ], "Debug archives must declare databases and cumulative logs excluded")
+function assertArchiveRuntimeIdentity({ manifest, expectedIdentityStatus } = {}) {
   assert.equal(manifest.matchingTradingLogsAvailable, expectedIdentityStatus === "matched", "The archive must report whether a unique complete log session matches the recovery-facts runtime.")
-  assert.equal(manifest.logRuntimeSessionId, expectedIdentityStatus === "matched" ? RUNTIME_SESSION_ID : null, "Only a unique exact runtime match may be labelled as the trading runtime's logs.")
+  assert.equal(manifest.logRuntimeSessionId, expectedIdentityStatus === "matched" ? RUNTIME_SESSION_ID : null, "Only a unique exact runtime match may be labelled as the selected runtime logs.")
   assert.equal(manifest.tradingRuntime.runtimeSessionId, manifest.recoveryRuntimeSessionId, "The trading-runtime inventory must be bound to the durable recovery-facts session identity.")
   if (expectedIdentityStatus === "matched") {
     assert.equal(manifest.tradingRuntime.processIdentity.processId, 24680, "The durable process-start fact must preserve the original process ID.")
@@ -186,19 +179,20 @@ async function assertCollectedArchive({ directory, expectedIdentityStatus, expec
   } else {
     assert.equal(manifest.tradingRuntime.processIdentity, null, "A process identity from a different runtime must not be borrowed for the selected recovery runtime.")
   }
-  assert.equal(
-    manifest.runtimeIdentity.status,
-    expectedIdentityStatus,
-    "Archive manifest must explicitly state whether the log and recovery evidence share a runtime identity",
-  )
-  assert.equal(
-    manifest.runtimeIdentity.correlation,
-    expectedIdentityStatus === "matched"
-      ? "same-runtime-session"
-      : "independent-evidence-do-not-correlate",
-    "Mismatched evidence must never be represented as one correlated runtime session",
-  )
+  assert.equal(manifest.runtimeIdentity.status, expectedIdentityStatus, "Archive manifest must explicitly state whether the log and recovery evidence share a runtime identity")
+  assert.equal(manifest.runtimeIdentity.correlation, expectedIdentityStatus === "matched" ? "same-runtime-session" : "independent-evidence-do-not-correlate", "Mismatched evidence must never be represented as one correlated runtime session")
   assert.equal(manifest.recoveryRuntimeSessionId, expectedIdentityStatus === "matched" ? RUNTIME_SESSION_ID : OTHER_SESSION_ID)
+}
+
+async function assertCollectedArchive({ directory, expectedIdentityStatus, expectedTradingMode = "testnet" } = {}) {
+  const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
+  assert.equal(manifest.runtimeTradingMode, expectedTradingMode, "Runtime trading mode must be inferred from the exact matched session identity.")
+  assert.deepEqual(manifest.includedDirectories, ["logs", "recovery-facts"], "Debug archives must contain only logs and recovery facts")
+  assert.deepEqual(manifest.excludedPaths, [
+    "data/** (all databases and backups)",
+    "logs/cumulative/**",
+  ], "Debug archives must declare databases and cumulative logs excluded")
+  assertArchiveRuntimeIdentity({ manifest, expectedIdentityStatus })
   assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "Archive manifest must preserve the latest committed recovery checkpoint digest")
   assert.deepEqual(manifest.logSelection, {
     cumulative: "excluded",
