@@ -11,7 +11,7 @@ import type { ScenarioGraph } from './domain/scenario-graph';
 })
 export class ScenarioGraphViewerComponent {
   readonly graph = input.required<ScenarioGraph>();
-  readonly viewModel = computed(() => createScenarioGraphViewModel({ graph: this.graph() }));
+  readonly viewModel = computed(() => createScenarioGraphViewModel({ graph: this.graph(), orientation: 'vertical' }));
 
   edgePath(edge: ReturnType<typeof createScenarioGraphViewModel>['edges'][number]): string {
     const { start, control1, control2, end } = edge.curve;
