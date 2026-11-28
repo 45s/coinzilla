@@ -476,22 +476,32 @@ function hasCompleteLoggerCompletion({ identity, loggerCompletion } = {}) {
     && loggerCompletion?.streams?.traceLog === true
 }
 
-function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCompletion, isHarvesterTestnet } = {}) {
+function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCompletion, isHarvesterTestnet, processId, activeProcessOwner } = {}) {
   if (!identity) {
     return "identity-missing"
   }
   if (!isHarvesterTestnet) {
     return "non-testnet-or-invalid"
   }
-  return hasCompleteProcessCompletion({ identity, completion })
-    && hasCompleteLoggerCompletion({ identity, loggerCompletion })
-    ? "complete"
+  if (hasCompleteProcessCompletion({ identity, completion }) && hasCompleteLoggerCompletion({ identity, loggerCompletion })) {
+    return "complete"
+  }
+  return Number.isSafeInteger(processId)
+    && processId === activeProcessOwner?.pid
+    && identity.startedAt === activeProcessOwner?.startedAt
+    ? "active"
     : "incomplete"
 }
 
-function resolveArchiveSessionLoggerCompletionStatus({ identity, loggerCompletion, isHarvesterTestnet } = {}) {
-  return hasCompleteLoggerCompletion({ identity, loggerCompletion }) && isHarvesterTestnet
-    ? "complete"
+function resolveArchiveSessionLoggerCompletionStatus({ identity, loggerCompletion, isHarvesterTestnet, processId, activeProcessOwner } = {}) {
+  if (hasCompleteLoggerCompletion({ identity, loggerCompletion }) && isHarvesterTestnet) {
+    return "complete"
+  }
+  return isHarvesterTestnet
+    && Number.isSafeInteger(processId)
+    && processId === activeProcessOwner?.pid
+    && identity?.startedAt === activeProcessOwner?.startedAt
+    ? "active"
     : "incomplete"
 }
 
@@ -555,20 +565,28 @@ function createArchiveSessionEvidenceRecord({
   processId,
   missingFieldWarnings,
   isHarvesterTestnet,
+  activeProcessOwner,
 } = {}) {
   const completionStatus = resolveArchiveSessionCompletionStatus({
     identity,
     completion,
     loggerCompletion,
     isHarvesterTestnet,
+    processId,
+    activeProcessOwner,
   })
   const loggerCompletionStatus = resolveArchiveSessionLoggerCompletionStatus({
     identity,
     loggerCompletion,
     isHarvesterTestnet,
+    processId,
+    activeProcessOwner,
   })
   return {
     sessionName,
+    activeSnapshotPath: completionStatus === "active"
+      ? `logs/sessions/${sessionName}/active-process-snapshot.json`
+      : null,
     ...createArchiveSessionLifecycleFields({
       sessionName,
       identity,
