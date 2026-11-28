@@ -489,6 +489,28 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
     return
   }
 
+  if (summary.diagnostic) {
+    const diagnostic = summary.diagnostic
+    const diagnosticPrefix = `${time} ${levelLabel}[${diagnostic.diagnosticId}] stage=${diagnostic.stage}`
+    const action = `action=${diagnostic.operatorAction}`
+    const causePrefix = "cause="
+    const fixedLength = diagnosticPrefix.length + 1 + causePrefix.length + 1 + action.length
+    const causeBudget = Math.max(0, MAX_CONSOLE_LINE_LENGTH - fixedLength)
+    const cause = String(diagnostic.cause ?? diagnostic.meaning)
+      .replace(/[\\r\\n]+/g, " ")
+    const boundedCause = cause.length > causeBudget && causeBudget > 3
+      ? `${cause.slice(0, causeBudget - 3)}...`
+      : cause.slice(0, causeBudget)
+    const line = `${diagnosticPrefix} ${causePrefix}${boundedCause} | ${action}`
+    output.write(`${formatConsoleLine({
+      line,
+      level,
+      method,
+      color,
+    })}\\n`)
+    return
+  }
+
   const plainPrefix = `${time} ${strategyPrefix}${levelLabel}${summaryMessage}`
   const serializedDetails = Object.keys(summary.details ?? {}).length > 0
     ? ` ${JSON.stringify(summary.details)}`
