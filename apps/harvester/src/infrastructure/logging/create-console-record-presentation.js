@@ -65,9 +65,14 @@ function summarizeOrderHistoryProjectionFailure({ data, message } = {}) {
 }
 
 function summarizeCataloguedFailure({ data } = {}) {
-  const nativeCauseCode = data.harvesterErrorCode
-    ? (data.errorCode !== data.harvesterErrorCode ? data.errorCode : undefined)
-    : (data.causeCode !== data.errorCode ? data.causeCode : undefined)
+  let nativeCauseCode
+  if (data.harvesterErrorCode) {
+    if (data.errorCode !== data.harvesterErrorCode) {
+      nativeCauseCode = data.errorCode
+    }
+  } else if (data.causeCode !== data.errorCode) {
+    nativeCauseCode = data.causeCode
+  }
   const messageAlreadyIdentifiesNativeCode = typeof data.errorMessage === "string" &&
     data.errorMessage.startsWith(`${nativeCauseCode}:`)
   const causeMessage = messageAlreadyIdentifiesNativeCode
