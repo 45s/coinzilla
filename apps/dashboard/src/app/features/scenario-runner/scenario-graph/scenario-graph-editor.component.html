@@ -56,7 +56,7 @@
         <rect width="100%" height="100%" fill="url(#scenario-grid)" />
 
         @for (edge of viewModel().edges; track trackEdge($index, edge)) {
-          <g class="graph-edge">
+          <g class="graph-edge" [attr.data-selected]="selectedEdgeId() === edge.id" role="button" tabindex="0" [attr.aria-label]="'Connection ' + edge.id" (click)="selectEdge(edge.id)">
             <path [attr.d]="edge.path" marker-end="url(#scenario-arrow)" />
             @if (edge.label) {
               <text [attr.x]="edge.labelPosition.x" [attr.y]="edge.labelPosition.y">{{ edge.label }}</text>
@@ -91,9 +91,11 @@
                 [attr.cx]="0"
                 [attr.cy]="input.y - node.position.y"
                 r="7"
-                tabindex="-1"
+                tabindex="0"
+                role="button"
                 aria-label="Connection input"
                 (pointerup)="onInputPointerUp($event, node.id)"
+                (keydown)="onInputPortKeydown($event, node.id)"
               />
             }
             @for (port of node.outputs; track port.id) {
@@ -102,9 +104,11 @@
                 [attr.cx]="node.width"
                 [attr.cy]="port.y - node.position.y"
                 r="7"
-                tabindex="-1"
+                tabindex="0"
+                role="button"
                 [attr.aria-label]="'Connect ' + port.id + ' output'"
                 (pointerdown)="onOutputPointerDown($event, node.id, port.id)"
+                (keydown)="onOutputPortKeydown($event, node.id, port.id)"
               />
               @if (port.label) {
                 <text class="port-label" [attr.x]="node.width - 18" [attr.y]="port.y - node.position.y - 8">{{ port.label }}</text>
@@ -128,8 +132,11 @@
           <textarea rows="5" [value]="node.description ?? ''" (input)="updateSelectedDescription($any($event.target).value)"></textarea>
         </label>
         <button type="button" class="danger-action" (click)="deleteSelectedNode()">Delete node</button>
+      } @else if (selectedEdgeId()) {
+        <p class="inspector-kind">Connection · {{ selectedEdgeId() }}</p>
+        <button type="button" class="danger-action" (click)="deleteSelectedEdge()">Delete connection</button>
       } @else {
-        <p>Select a node on the canvas to inspect or edit its properties.</p>
+        <p>Select a node or connection on the canvas to inspect it.</p>
       }
       <div class="validation-list">
         <h4>Validation</h4>

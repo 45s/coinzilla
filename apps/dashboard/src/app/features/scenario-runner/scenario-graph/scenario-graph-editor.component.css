@@ -18,7 +18,7 @@
 .graph-canvas{display:block;max-width:none;touch-action:none}
 .grid-dot{fill:var(--muted);opacity:.35}
 .edge-arrow{fill:var(--muted)}
-.graph-edge path{fill:none;stroke:var(--muted);stroke-width:2;opacity:.8}
+.graph-edge{cursor:pointer;outline:none}.graph-edge path{fill:none;stroke:var(--muted);stroke-width:2;opacity:.8}.graph-edge[data-selected="true"] path,.graph-edge:focus path{stroke:var(--accent,#65d6ad);stroke-width:3;opacity:1}
 .graph-edge text{fill:var(--muted);font-size:11px;font-weight:800;text-anchor:middle}
 .graph-node{cursor:grab;outline:none}
 .graph-node:active{cursor:grabbing}

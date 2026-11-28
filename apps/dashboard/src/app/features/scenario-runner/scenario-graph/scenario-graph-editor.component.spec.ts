@@ -48,6 +48,18 @@ describe('ScenarioGraphEditorComponent', () => {
     expect(component.graph().status, 'adding nodes must not make a draft executable').toBe('visual-only');
   });
 
+  it('allows a selected connection to be removed without deleting its nodes', async () => {
+    await TestBed.configureTestingModule({ imports: [ScenarioGraphEditorComponent] }).compileComponents();
+    const fixture = TestBed.createComponent(ScenarioGraphEditorComponent);
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    const originalNodeCount = component.graph().nodes.length;
+    component.selectEdge('e-start-legacy');
+    component.deleteSelectedEdge();
+    expect(component.graph().edges.some((edge) => edge.id === 'e-start-legacy'), 'the selected edge must be disconnected').toBe(false);
+    expect(component.graph().nodes.length, 'disconnecting an edge must not delete either endpoint').toBe(originalNodeCount);
+  });
+
   it('connects compatible output and input ports through the application boundary', async () => {
     await TestBed.configureTestingModule({ imports: [ScenarioGraphEditorComponent] }).compileComponents();
     const fixture = TestBed.createComponent(ScenarioGraphEditorComponent);

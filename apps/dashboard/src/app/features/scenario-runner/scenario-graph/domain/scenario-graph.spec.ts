@@ -107,6 +107,12 @@ describe('scenario graph domain', () => {
     expect(restored, 'serialized graph documents must round-trip exactly').toEqual(graph);
   });
 
+  it('rejects unknown fields instead of silently dropping them', () => {
+    const graph = createValidGraph();
+    const serialized = JSON.stringify({ ...graph, executable: true });
+    expect(() => deserializeScenarioGraph(serialized), 'unknown schema fields must fail closed').toThrow('SCENARIO_GRAPH_DOCUMENT_INVALID');
+  });
+
   it('rejects unsupported schema versions instead of silently reinterpreting them', () => {
     const graph = createValidGraph();
     const serialized = JSON.stringify({ ...graph, schemaVersion: 99 });

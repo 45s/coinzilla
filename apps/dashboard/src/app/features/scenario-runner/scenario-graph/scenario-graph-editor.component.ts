@@ -28,6 +28,7 @@ export class ScenarioGraphEditorComponent {
 
   readonly graph = signal(createRecoverySellerGraph());
   readonly selectedNodeId = signal<string | null>('start');
+  readonly selectedEdgeId = signal<string | null>(null);
   readonly hoveredNodeId = signal<string | null>(null);
   readonly pendingConnection = signal<{ readonly nodeId: string; readonly portId: string } | null>(null);
   readonly addNodeType = signal<ScenarioGraphNodeType>('action');
@@ -68,12 +69,47 @@ export class ScenarioGraphEditorComponent {
   resetExample(): void {
     this.graph.set(createRecoverySellerGraph());
     this.selectedNodeId.set('start');
+    this.selectedEdgeId.set(null);
     this.pendingConnection.set(null);
     this.error.set(null);
   }
 
   selectNode(nodeId: string): void {
     this.selectedNodeId.set(nodeId);
+    this.selectedEdgeId.set(null);
+  }
+
+  selectEdge(edgeId: string): void {
+    this.selectedEdgeId.set(edgeId);
+    this.selectedNodeId.set(null);
+  }
+
+  deleteSelectedEdge(): void {
+    const edgeId = this.selectedEdgeId();
+    if (!edgeId) {
+      return;
+    }
+    try {
+      this.graph.set(this.editor.disconnect({ graph: this.graph(), edgeId }));
+      this.selectedEdgeId.set(null);
+      this.error.set(null);
+    } catch (error) {
+      this.showError(error);
+    }
+  }
+
+  onOutputPortKeydown(event: KeyboardEvent, nodeId: string, portId: string): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      this.pendingConnection.set({ nodeId, portId });
+    }
+  }
+
+  onInputPortKeydown(event: KeyboardEvent, nodeId: string): void {
+    if ((event.key === 'Enter' || event.key === ' ') && this.pendingConnection()) {
+      event.preventDefault();
+      this.onInputPointerUp(event as unknown as PointerEvent, nodeId);
+    }
   }
 
   onNodeKeydown(event: KeyboardEvent, node: ScenarioGraphNode): void {
@@ -205,10 +241,15 @@ export class ScenarioGraphEditorComponent {
 
   private capturePointer(event: PointerEvent): void {
     const target = event.currentTarget;
-    if (target instanceof SVGElement) {
-      target.ownerSVGElement?.setPointerCapture(event.pointerId);
-    } else if (target instanceof Element) {
-      target.closest('svg')?.setPointerCapture(event.pointerId);
+    const svg = target instanceof SVGSVGElement
+      ? target
+      : target instanceof SVGElement
+        ? target.ownerSVGElement
+        : target instanceof Element
+          ? target.closest('svg') as SVGSVGElement | null
+          : null;
+    if (svg && typeof svg.setPointerCapture === 'function') {
+      svg.setPointerCapture(event.pointerId);
     }
   }
 

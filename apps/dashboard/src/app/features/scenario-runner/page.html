@@ -89,7 +89,9 @@
       <p>No source-reviewed explanation is published for {{ selectedScenario.id }}. No generic strategy flow is substituted.</p>
     </section>
   }
-  <app-scenario-graph-editor />
+  @if (strategyId() === 'RS') {
+    <app-scenario-graph-editor />
+  }
   <label class="input-label">Run input (JSON)
     <textarea rows="8" [disabled]="useGitHubDevelopCatalog() || selectedScenario?.executable !== true" [value]="inputJson()" (input)="updateInput($any($event.target).value)"></textarea>
   </label>
