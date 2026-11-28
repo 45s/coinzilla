@@ -3267,6 +3267,12 @@ function createConservativeTradingEngineDependencies({ options = {} } = {}) {
         strategyId: StrategyId.COIN_GRABBER,
       })
       : logger,
+    recoverySellerLogger: logger
+      ? createStrategyLogger({
+        logger,
+        strategyId: StrategyId.RECOVERY_SELLER,
+      })
+      : logger,
     initialState,
   }
 }
