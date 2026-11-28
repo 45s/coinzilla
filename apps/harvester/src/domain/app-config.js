@@ -141,6 +141,36 @@ function validateTelegramNotificationConfig(config) {
   })
 }
 
+function validateComponentConfig(config) {
+  if (config.components === undefined) {
+    return
+  }
+  const path = "components"
+  requireRecord({ value: config.components, path })
+  for (const [componentName, componentConfig] of Object.entries(config.components)) {
+    if (componentName !== "tradingHistoryApi") {
+      fail({
+        path: `${path}.${componentName}`,
+        expectation: "a supported component",
+      })
+    }
+    const componentPath = `${path}.${componentName}`
+    requireRecord({ value: componentConfig, path: componentPath })
+    for (const key of Object.keys(componentConfig)) {
+      if (key !== "enabled") {
+        fail({
+          path: `${componentPath}.${key}`,
+          expectation: "only the enabled component-selection field",
+        })
+      }
+    }
+    requireBoolean({
+      value: componentConfig.enabled,
+      path: `${componentPath}.enabled`,
+    })
+  }
+}
+
 function validateTelegramOperatorControlConfig(appConfig) {
   if (appConfig.operatorControl === undefined) {
     return
@@ -697,6 +727,7 @@ export function validateAppConfig(config) {
 path: "root" })
 
   validateTelegramNotificationConfig(config)
+  validateComponentConfig(config)
   validateTelegramOperatorControlConfig(config)
   validateBrokerProviderInstances(config)
   validateExecutionRouting(config)

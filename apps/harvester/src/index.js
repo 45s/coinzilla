@@ -984,6 +984,16 @@ async function startTradingHistoryApiService({ options, resources, database, env
 }
 
 async function startOptionalTradingHistoryApi({ options, resources, runtime } = {}) {
+  if (resources.appConfig.components?.tradingHistoryApi?.enabled === false) {
+    logOptionalTradingHistoryApi({
+      logger: options.logger,
+      level: "info",
+      details: {
+        message: "Harvester local API disabled by app configuration.",
+      },
+    })
+    return
+  }
   if (!shouldStartTradingHistoryApi({ runtime })) {
     return
   }

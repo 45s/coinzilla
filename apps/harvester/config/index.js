@@ -5,6 +5,11 @@ import { RS_RECOVERY_SELLER_CONFIG } from "./strategies/rs-recovery-seller.js";
 import { StrategyId } from "../src/domain/strategies/strategy-ids.js";
 
 export const appConfig = {
+  components: {
+    tradingHistoryApi: {
+      enabled: true,
+    },
+  },
   notifications: {
     telegram: {
       enabled: true,
