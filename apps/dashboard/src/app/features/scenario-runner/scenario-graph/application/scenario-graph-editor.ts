@@ -24,6 +24,8 @@ export interface ScenarioGraphNodeDraft {
 export interface ScenarioGraphViewNode extends ScenarioGraphNode {
   readonly width: number;
   readonly height: number;
+  readonly labelLines: readonly string[];
+  readonly descriptionLines: readonly string[];
   readonly input: { readonly x: number; readonly y: number } | null;
   readonly outputs: readonly { readonly id: string; readonly x: number; readonly y: number; readonly label: string | null }[];
 }
@@ -45,7 +47,91 @@ export interface ScenarioGraphViewModel {
   readonly edges: readonly ScenarioGraphViewEdge[];
 }
 
-export function createScenarioGraphViewModel({ graph }: { readonly graph: ScenarioGraph }): ScenarioGraphViewModel {
+function wrapGraphText(value: string, maxCharacters: number): readonly string[] {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = '';
+
+  for (const word of words) {
+    if (line.length > 0 && line.length + word.length + 1 > maxCharacters) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = line.length > 0 ? `${line} ${word}` : word;
+    }
+  }
+
+  if (line.length > 0) {
+    lines.push(line);
+  }
+
+  return lines.length > 0 ? lines : [''];
+}
+
+function createVerticalScenarioGraphViewModel({ graph }: { readonly graph: ScenarioGraph }): ScenarioGraphViewModel {
+  const width = 1240;
+  const nodeWidth = 1120;
+  const nodeX = 60;
+  const nodeGap = 64;
+  let nextY = 48;
+  const nodes = graph.nodes.map((node): ScenarioGraphViewNode => {
+    const labelLines = wrapGraphText(node.label, 64);
+    const descriptionLines = wrapGraphText(node.description ?? '', 108);
+    const height = Math.max(174, 92 + labelLines.length * 32 + descriptionLines.length * 25);
+    const position = { x: nodeX, y: nextY };
+    nextY += height + nodeGap;
+
+    return {
+      ...node,
+      position,
+      width: nodeWidth,
+      height,
+      labelLines,
+      descriptionLines,
+      input: node.type === 'start' ? null : { x: nodeX + nodeWidth / 2, y: position.y },
+      outputs: node.type === 'end'
+        ? []
+        : [{ id: 'next', x: nodeX + nodeWidth / 2, y: position.y + height, label: null }],
+    };
+  });
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const edges = graph.edges.flatMap((edge): ScenarioGraphViewEdge[] => {
+    const source = nodeById.get(edge.from.nodeId);
+    const target = nodeById.get(edge.to.nodeId);
+    if (!source || !target) {
+      return [];
+    }
+    const start = { x: source.position.x + source.width / 2, y: source.position.y + source.height };
+    const end = { x: target.position.x + target.width / 2, y: target.position.y };
+    const controlY = start.y + (end.y - start.y) / 2;
+    return [{
+      ...edge,
+      curve: {
+        start,
+        control1: { x: start.x, y: controlY },
+        control2: { x: end.x, y: controlY },
+        end,
+      },
+      labelPosition: { x: start.x + 24, y: controlY },
+    }];
+  });
+
+  return {
+    width,
+    height: Math.max(600, nextY - nodeGap + 48),
+    nodes,
+    edges,
+  };
+}
+
+export function createScenarioGraphViewModel({ graph, orientation = 'horizontal' }: {
+  readonly graph: ScenarioGraph;
+  readonly orientation?: 'horizontal' | 'vertical';
+}): ScenarioGraphViewModel {
+  if (orientation === 'vertical') {
+    return createVerticalScenarioGraphViewModel({ graph });
+  }
+
   const width = 190;
   const height = 82;
   const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
@@ -53,6 +139,8 @@ export function createScenarioGraphViewModel({ graph }: { readonly graph: Scenar
     ...node,
     width,
     height,
+    labelLines: [node.label],
+    descriptionLines: [node.description ?? ''],
     input: node.type === 'start' ? null : { x: node.position.x, y: node.position.y + height / 2 },
     outputs: node.type === 'end'
       ? []
