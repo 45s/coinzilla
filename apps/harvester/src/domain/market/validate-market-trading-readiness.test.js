@@ -1,3 +1,4 @@
+import { SystemCustomError } from "@coinzilla/utils"
 import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, Market, Money, Quantity, TradingRules } from "@coinzilla/entities"
@@ -317,4 +318,25 @@ scope: "SYMBOL" }],
     /require type, scope, and sourceFilterType/,
     "A constraint diagnostic must retain its source filter type as well as its canonical category and scope.",
   )
+})
+
+
+test("preserves typed market-readiness identity and a nested native cause", () => {
+  const originalCause = new Error("exchange constraint evaluator unavailable")
+  const error = new UnvalidatedMarketExchangeConstraintsError({
+    symbol: "DOGEUSDT",
+    constraints: [{
+      type: "DYNAMIC_PRICE_BAND",
+      scope: "SYMBOL",
+      sourceFilterType: "PERCENT_PRICE_BY_SIDE",
+    }],
+    cause: originalCause,
+  })
+
+  assert.ok(error instanceof SystemCustomError, "Market readiness failures must use the shared structured error base.")
+  assert.equal(error.name, "UnvalidatedMarketExchangeConstraintsError", "The concrete domain error name must remain stable.")
+  assert.equal(error.code, "HARVESTER_MARKET_UNVALIDATED_EXCHANGE_CONSTRAINTS", "The catalogued market-readiness code must remain stable.")
+  assert.equal(error.cause, originalCause, "Wrapping must preserve the original failure by identity.")
+  assert.equal(error.context.stage, "MARKET_READINESS_VALIDATION", "The safe error context must identify the exact readiness stage.")
+  assert.equal(error.context.symbol, "DOGEUSDT", "The safe error context must identify the affected market.")
 })
