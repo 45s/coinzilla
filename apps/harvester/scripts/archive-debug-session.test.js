@@ -840,40 +840,53 @@ test("rejects an unreadable pre-compressed rotated log instead of archiving corr
 })
 
 
-test("rejects an active snapshot when either process-lock namespace changes during collection", async (t) => {
-  for (const namespace of ["application", "host"]) {
-    await t.test(namespace, async (subtest) => {
-      const fixture = await createFixture()
-      subtest.after(() => rm(fixture.packageDirectory, {
-        recursive: true,
-        force: true,
-      }))
-      const { lockPath, hostLockPath, lockOwner } = await prepareActiveRuntimeFixture({ fixture })
-      const changedLockPath = namespace === "host" ? hostLockPath : lockPath
-      let lockChanged = false
-      await assert.rejects(
-        runHarvesterDebugArchive({
-          ...archiveDependencies({ fixture }),
-          onProgress(message) {
-            if (!lockChanged && message.includes("retained/copied")) {
-              lockChanged = true
-              writeFileSync(changedLockPath, JSON.stringify({
-                ...lockOwner,
-                token: "externally-replaced-lock-token",
-              }), "utf8")
-            }
-          },
-        }),
-        /lock changed|ownership changed|snapshot.*not publishable/i,
-        "The collector must reject a snapshot when either owned lock namespace changes.",
-      )
-      assert.equal(lockChanged, true, "The test must replace the selected lock after the snapshot copy has started.")
-      const archiveDirectory = path.join(fixture.packageDirectory, "archive-output", "2026-11-24T18-30-00Z_123e4567_debug")
-      const incompleteMarker = JSON.parse(await readFile(path.join(archiveDirectory, "collection-incomplete.json"), "utf8"))
-      assert.equal(incompleteMarker.status, "incomplete", "A failed active snapshot must remain explicitly marked incomplete.")
-      assert.equal(incompleteMarker.runtimeSessionId, RUNTIME_SESSION_ID, "The incomplete marker must identify the affected runtime.")
-    })
-  }
+async function assertActiveSnapshotRejectsChangedLock({ namespace, testContext } = {}) {
+  const fixture = await createFixture()
+  testContext.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const { lockPath, hostLockPath, lockOwner } = await prepareActiveRuntimeFixture({ fixture })
+  const changedLockPath = namespace === "host" ? hostLockPath : lockPath
+  let lockChanged = false
+  await assert.rejects(
+    runHarvesterDebugArchive({
+      ...archiveDependencies({ fixture }),
+      onArchiveCreatedFn: undefined,
+      onProgress(message) {
+        if (!lockChanged && message.includes("retained/copied")) {
+          lockChanged = true
+          writeFileSync(changedLockPath, JSON.stringify({
+            ...lockOwner,
+            token: "externally-replaced-lock-token",
+          }), "utf8")
+        }
+      },
+    }),
+    /lock changed|ownership changed|snapshot.*not publishable/i,
+    "The collector must reject a snapshot when either owned lock namespace changes.",
+  )
+  assert.equal(lockChanged, true, "The test must replace the selected lock after the snapshot copy has started.")
+  const archiveDirectory = path.join(fixture.packageDirectory, "archive-output", "2026-11-24T18-30-00Z_123e4567_debug")
+  const incompleteMarker = JSON.parse(await readFile(path.join(archiveDirectory, "collection-incomplete.json"), "utf8"))
+  assert.equal(incompleteMarker.status, "incomplete", "A failed active snapshot must remain explicitly marked incomplete.")
+  assert.equal(incompleteMarker.runtimeSessionId, RUNTIME_SESSION_ID, "The incomplete marker must identify the affected runtime.")
+}
+
+
+test("rejects an active snapshot when the application process-lock namespace changes during collection", async (t) => {
+  await assertActiveSnapshotRejectsChangedLock({
+    namespace: "application",
+    testContext: t,
+  })
+})
+
+
+test("rejects an active snapshot when the host process-lock namespace changes during collection", async (t) => {
+  await assertActiveSnapshotRejectsChangedLock({
+    namespace: "host",
+    testContext: t,
+  })
 })
 
 

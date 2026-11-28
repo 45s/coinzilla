@@ -6,7 +6,7 @@ import { promisify } from "node:util"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { gzipSync } from "node:zlib"
+import { gzipSync, gunzipSync } from "node:zlib"
 import { publishArchive } from "./archive-debug-session.js"
 import { runHarvesterDebugArchivePublication } from "./archive-debug-publication.js"
 
@@ -653,7 +653,10 @@ test("rejects a completed archive when session PID disagrees with the committed 
       env: { HARVESTER_ARCHIVE_REMOTE: REMOTE },
       publishArchiveFn: async () => {
         publisherCalled = true
-        return { commit: "f".repeat(40), fileCount: 1 }
+        return {
+          commit: "f".repeat(40),
+          fileCount: 1,
+        }
       },
     }),
     /process ID|process identity|PID/i,
