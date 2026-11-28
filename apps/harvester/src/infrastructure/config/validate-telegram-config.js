@@ -126,8 +126,10 @@ function validateTelegramOperatorControlConfig(appConfig) {
   })
   for (const key of Object.keys(appConfig.operatorControl)) {
     if (key !== "telegram") {
-      fail({ path: `${path}.${key}`,
-expectation: "a supported operator-control configuration field" })
+      fail({
+        path: `${path}.${key}`,
+        expectation: "a supported operator-control configuration field",
+      })
     }
   }
   const { telegram } = appConfig.operatorControl
@@ -137,8 +139,10 @@ expectation: "a supported operator-control configuration field" })
   })
   for (const key of Object.keys(telegram)) {
     if (key !== "enabled" && key !== "allowedUserIds") {
-      fail({ path: `${path}.telegram.${key}`,
-expectation: "a supported Telegram operator configuration field" })
+      fail({
+        path: `${path}.telegram.${key}`,
+        expectation: "a supported Telegram operator configuration field",
+      })
     }
   }
   requireBoolean({
