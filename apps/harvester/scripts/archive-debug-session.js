@@ -1742,7 +1742,10 @@ async function readHarvesterProcessLockOwner({ filename, hostname } = {}) {
 async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.hostname(), isProcessAlive = isHarvesterProcessAlive } = {}) {
   const entries = await readHarvesterProcessLockEntries({ lockDirectory })
   const owners = []
-  for (const entry of entries.filter((candidate) => candidate.name.endsWith(".lock"))) {
+  const lockEntries = entries
+    .filter((candidate) => candidate.name.endsWith(".lock"))
+    .sort((left, right) => left.name.localeCompare(right.name))
+  for (const entry of lockEntries) {
     const filename = path.join(lockDirectory, entry.name)
     const owner = await readHarvesterProcessLockOwner({ filename, hostname })
     if (isProcessAlive(owner.pid)) {
