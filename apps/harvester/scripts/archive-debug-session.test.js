@@ -18,7 +18,6 @@ import {
   runHarvesterDebugArchive,
 } from "./archive-debug-session.js"
 
-const ARCHIVE_REMOTE = "https://github.com/45s/coinzilla-archive.git"
 const CREATED_AT = "2026-11-24T18:30:00.123Z"
 const ARCHIVE_ID = "123e4567-e89b-42d3-a456-426614174000"
 const REMOTE_COMMIT = "a".repeat(40)
@@ -151,8 +150,7 @@ async function createFixture() {
   }
 }
 
-async function assertPublishedArchive({ directory, remote, expectedIdentityStatus } = {}) {
-  assert.equal(remote, ARCHIVE_REMOTE, "Archive publication must target the configured private archive repository")
+async function assertCollectedArchive({ directory, expectedIdentityStatus } = {}) {
   const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
   assert.deepEqual(manifest.includedDirectories, ["logs", "recovery-facts"], "Debug archives must contain only logs and recovery facts")
   assert.deepEqual(manifest.excludedPaths, [
@@ -214,16 +212,14 @@ function archiveDependencies({ fixture, overrides = {}, expectedIdentityStatus =
     lockDirectory: fixture.lockDirectory,
     env: {
       TRADING_MODE: "testnet",
-      HARVESTER_ARCHIVE_REMOTE: ARCHIVE_REMOTE,
       OPERATIONAL_STATE_DIRECTORY: path.join(fixture.packageDirectory, "recovery-facts"),
       ...overrides,
     },
     args: [],
     now: () => new Date(CREATED_AT),
     createArchiveId: () => ARCHIVE_ID,
-    onArchiveCreatedFn: ({ directory }) => assertPublishedArchive({
+    onArchiveCreatedFn: ({ directory }) => assertCollectedArchive({
       directory,
-      remote: ARCHIVE_REMOTE,
       expectedIdentityStatus,
     }),
   }
