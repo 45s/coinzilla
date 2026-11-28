@@ -391,10 +391,16 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
     const conservativeResult = await evaluateConservativeLatestTransition(options)
     if (!conservativeResult?.ok ||
         typeof dependencies.evaluateRecoverySellerTransition !== "function" ||
+        !Object.hasOwn(dependencies.recoverySellerPairs ?? {}, options.symbol) ||
         options.preflightOnly === true ||
         options.shutdownRecoveryOnly === true) {
       return conservativeResult
     }
+    const recoverySellerLogger = dependencies.recoverySellerLogger ?? dependencies.logger
+    recoverySellerLogger?.debug?.({
+      message: "Harvester Recovery Seller evaluation started",
+      symbol: options.symbol,
+    })
     try {
       const recoverySellerResult = await dependencies.evaluateRecoverySellerTransition({
         ...options,
@@ -419,11 +425,25 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
         isStopping: dependencies.isStopping,
         isMarketPriceFresh: dependencies.isMarketPriceFresh,
         isMarketBookFresh: dependencies.isMarketBookFresh,
-        logger: dependencies.logger,
+        logger: recoverySellerLogger,
       })
       if (recoverySellerResult?.ok !== true) {
+        recoverySellerLogger?.error?.({
+          message: "Harvester Recovery Seller evaluation failed",
+          symbol: options.symbol,
+          error: recoverySellerResult?.errors?.[0],
+        })
         return recoverySellerResult
       }
+      const recoverySellerDecision = recoverySellerResult.data?.decision
+      recoverySellerLogger?.debug?.({
+        message: "Harvester Recovery Seller evaluation completed",
+        symbol: options.symbol,
+        outcome: recoverySellerDecision?.outcome ??
+          (recoverySellerResult.data?.skipped === true ? "SKIPPED" : "COMPLETED"),
+        reasonCode: recoverySellerDecision?.reasonCode,
+        explanation: recoverySellerDecision?.explanation,
+      })
       if (recoverySellerResult.data?.skipped === true) {
         return conservativeResult
       }
@@ -437,6 +457,11 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
         },
       })
     } catch (error) {
+      recoverySellerLogger?.error?.({
+        message: "Harvester Recovery Seller evaluation failed",
+        symbol: options.symbol,
+        error,
+      })
       return toResult({ error })
     }
   }
