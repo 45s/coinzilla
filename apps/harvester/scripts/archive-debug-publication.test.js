@@ -13,7 +13,7 @@ const execFileAsync = promisify(execFile)
 const ARCHIVE_NAME = "2026-11-28T12-00-00Z_123e4567_debug"
 const REMOTE = "https://github.com/45s/coinzilla-archive.git"
 
-function createSourceFileEntries() {
+function createSourceFileEntries(runtimeId) {
   return [
     {
       sourcePath: "logs/sessions/fixture/harvester.log",
@@ -29,6 +29,47 @@ function createSourceFileEntries() {
       sourcePath: "logs/sessions/fixture/terminal.log",
       archivePath: "logs/sessions/fixture/terminal.log.gz",
       content: "terminal session evidence\n",
+    },
+    {
+      sourcePath: "logs/sessions/fixture/process-identity.json",
+      archivePath: "logs/sessions/fixture/process-identity.json.gz",
+      content: JSON.stringify({
+        formatVersion: 1,
+        application: "harvester",
+        environment: "testnet",
+        runtimeSessionId: runtimeId,
+        startedAt: "2026-11-28T11:00:00.000Z",
+        processId: 24680,
+      }) + "\n",
+    },
+    {
+      sourcePath: "logs/sessions/fixture/process-completed.json",
+      archivePath: "logs/sessions/fixture/process-completed.json.gz",
+      content: JSON.stringify({
+        formatVersion: 1,
+        application: "harvester",
+        runtimeSessionId: runtimeId,
+        startedAt: "2026-11-28T11:00:00.000Z",
+        endedAt: "2026-11-28T11:10:00.000Z",
+        processId: 24680,
+        exitCode: 0,
+        signal: null,
+        loggerStreamsComplete: true,
+        terminalCaptureComplete: true,
+        logStreamsComplete: true,
+      }) + "\n",
+    },
+    {
+      sourcePath: "logs/sessions/fixture/log-streams-completed.json",
+      archivePath: "logs/sessions/fixture/log-streams-completed.json.gz",
+      content: JSON.stringify({
+        formatVersion: 1,
+        application: "harvester",
+        runtimeSessionId: runtimeId,
+        endedAt: "2026-11-28T11:10:00.000Z",
+        logStreamsComplete: true,
+        streams: { harvesterLog: true, traceLog: true },
+      }) + "\n",
     },
   ]
 }
@@ -125,8 +166,19 @@ function createArchiveManifest({ runtimeId, recovery, sourceFiles, files } = {})
       processIdentity: recovery.processIdentity,
     },
     sessionInventory: [{
+      sessionName: "fixture",
+      relativePath: "logs/sessions/fixture",
+      processIdentityPath: "logs/sessions/fixture/process-identity.json",
+      processCompletionPath: "logs/sessions/fixture/process-completed.json",
+      loggerCompletionPath: "logs/sessions/fixture/log-streams-completed.json",
       runtimeSessionId: runtimeId,
       completionStatus: "complete",
+      loggerCompletionStatus: "complete",
+      startedAt: "2026-11-28T11:00:00.000Z",
+      endedAt: "2026-11-28T11:10:00.000Z",
+      processId: 24680,
+      logStreamsComplete: true,
+      loggerStreamsComplete: true,
     }],
     evidenceIntegrity: {
       status: "matched",
@@ -162,7 +214,7 @@ async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME } = {}) {
   await mkdir(path.join(archiveDirectory, "logs", "sessions", "fixture"), { recursive: true })
   await mkdir(path.join(archiveDirectory, "recovery-facts"), { recursive: true })
   const runtimeId = "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c"
-  const sourceFiles = createSourceFileEntries()
+  const sourceFiles = createSourceFileEntries(runtimeId)
   const recovery = createRecoveryFixture(runtimeId)
   const files = []
   for (const item of sourceFiles) {
