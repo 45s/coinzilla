@@ -127,7 +127,7 @@ function summarizeConsoleData({ data, shutdownPresentation } = {}) {
       .map((key) => {
         const value = data[key]
         if (typeof value === "string") {
-          const maxLength = key === "errorMessage" ? 160 : 100
+          const maxLength = key === "errorMessage" ? 72 : 100
           if (value.length > maxLength) {
             return [key, `${value.slice(0, maxLength - 3)}...`]
           }
