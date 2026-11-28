@@ -23,7 +23,17 @@ export const HARVESTER_ERROR_CATALOG = Object.freeze({
     severity: "ERROR",
     stopBehavior: "PROCESS_STOPS",
     meaning: "A required startup operation failed; the originating error remains the primary cause.",
-    operatorAction: "See session DEBUG for the full cause chain.",
+    operatorAction: "Inspect DEBUG cause chain; do not retry blindly.",
+  }),
+  HARVESTER_MARKET_UNVALIDATED_EXCHANGE_CONSTRAINTS: Object.freeze({
+    errorCode: "HARVESTER_MARKET_UNVALIDATED_EXCHANGE_CONSTRAINTS",
+    title: "Market blocked by unvalidated exchange constraints",
+    subsystem: "market-readiness",
+    failureStage: "MARKET_READINESS_VALIDATION",
+    severity: "ERROR",
+    stopBehavior: "AFFECTED_MARKET_BLOCKED",
+    meaning: "The market has applicable exchange constraints without a validated domain evaluator.",
+    operatorAction: "Implement evaluators before enabling market.",
   }),
 })
 
