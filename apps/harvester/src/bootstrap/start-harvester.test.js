@@ -138,6 +138,7 @@ function createRsOnlyStartupConfig({ enableVolatilityProtection = false } = {}) 
   }
   return {
     ...appConfig,
+    components: { recovery: { enabled: false } },
     strategies: {
       ...appConfig.strategies,
       RS_recoverySeller: {
