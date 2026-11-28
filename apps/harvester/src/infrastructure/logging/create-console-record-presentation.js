@@ -68,10 +68,8 @@ function summarizeCataloguedFailure({ data } = {}) {
   const nativeCauseCode = data.harvesterErrorCode
     ? (data.errorCode !== data.harvesterErrorCode ? data.errorCode : undefined)
     : (data.causeCode !== data.errorCode ? data.causeCode : undefined)
-  const messageAlreadyIdentifiesNativeCode = typeof data.errorMessage === "string" && (
-    data.errorMessage.startsWith(`${nativeCauseCode}:`) ||
-    (nativeCauseCode === "ERR_SQLITE_ERROR" && data.errorMessage.startsWith("SQLITE_ERROR:"))
-  )
+  const messageAlreadyIdentifiesNativeCode = typeof data.errorMessage === "string" &&
+    data.errorMessage.startsWith(`${nativeCauseCode}:`)
   const causeMessage = messageAlreadyIdentifiesNativeCode
     ? data.errorMessage
     : [
