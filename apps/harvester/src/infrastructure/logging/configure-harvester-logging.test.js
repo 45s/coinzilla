@@ -6,6 +6,7 @@ import test from "node:test"
 import { PassThrough } from "node:stream"
 import { configureHarvesterLogging, createHarvesterConsoleTransport } from "./configure-harvester-logging.js"
 import { createHarvesterLogSessionPaths } from "./create-harvester-log-session-paths.js"
+import { HARVESTER_ERROR_CATALOG } from "./harvester-error-catalog.js"
 
 const ANSI_ESCAPE = String.fromCharCode(27)
 
@@ -1016,5 +1017,47 @@ test("prints catalog code, exact stage, cause and remediation without cutting of
   assert.match(line, /RELATIONAL_MIGRATION_V5/)
   assert.match(line, /SQLITE_ERROR: no such column/)
   assert.match(line, /do not reset DB/)
+  output.destroy()
+})
+
+
+test("renders every catalogued startup and degraded failure in one bounded console line", () => {
+  const output = new PassThrough()
+  let written = ""
+  output.on("data", (chunk) => {
+    written += chunk.toString()
+  })
+  const transport = createHarvesterConsoleTransport({ output, color: false })
+  for (const entry of Object.values(HARVESTER_ERROR_CATALOG)) {
+    const isPersistenceFailure = entry.errorCode === "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED"
+    transport.write({
+      timestamp: "2026-11-28T06:00:00.000Z",
+      level: "error",
+      method: "error",
+      data: {
+        message: entry.errorCode === "HARVESTER_STARTUP_FAILED"
+          ? "startup failed."
+          : "catalogued failure",
+        errorCode: isPersistenceFailure ? "ERR_SQLITE_ERROR" : entry.errorCode,
+        harvesterErrorCode: isPersistenceFailure ? entry.errorCode : undefined,
+        errorStage: entry.failureStage,
+        errorMessage: `concrete cause for ${entry.errorCode}`,
+      },
+    })
+  }
+  const lines = written.trim().split("\n")
+  assert.equal(
+    lines.length,
+    Object.keys(HARVESTER_ERROR_CATALOG).length,
+    "Every catalog entry must produce exactly one operator-facing console line.",
+  )
+  for (const entry of Object.values(HARVESTER_ERROR_CATALOG)) {
+    const line = lines.find((candidate) => candidate.includes(entry.errorCode))
+    assert.ok(line, `Console output must retain catalog identifier ${entry.errorCode}.`)
+    assert.ok(line.length <= 200, `Console output for ${entry.errorCode} must fit the configured line budget.`)
+    assert.ok(line.includes(entry.failureStage), `Console output for ${entry.errorCode} must identify its failure stage.`)
+    assert.ok(line.includes(`concrete cause for ${entry.errorCode}`), `Console output for ${entry.errorCode} must preserve its concrete cause.`)
+    assert.ok(line.includes(entry.operatorAction), `Console output for ${entry.errorCode} must preserve operator remediation.`)
+  }
   output.destroy()
 })
