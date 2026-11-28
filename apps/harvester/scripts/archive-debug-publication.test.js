@@ -13,66 +13,99 @@ const execFileAsync = promisify(execFile)
 const ARCHIVE_NAME = "2026-11-28T12-00-00Z_123e4567_debug"
 const REMOTE = "https://github.com/45s/coinzilla-archive.git"
 
-async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME } = {}) {
-  const archiveDirectory = path.join(root, "archive-output", archiveName)
-  const sessionDirectory = path.join(archiveDirectory, "logs", "sessions", "fixture")
-  await mkdir(sessionDirectory, { recursive: true })
-  await mkdir(path.join(archiveDirectory, "recovery-facts"), { recursive: true })
-  const runtimeId = "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c"
-  const sourceFiles = [
-    { sourcePath: "logs/sessions/fixture/harvester.log", archivePath: "logs/sessions/fixture/harvester.log.gz", content: "debug stream evidence\n" },
-    { sourcePath: "logs/sessions/fixture/trace.log", archivePath: "logs/sessions/fixture/trace.log.gz", content: "trace stream evidence\n" },
-    { sourcePath: "logs/sessions/fixture/terminal.log", archivePath: "logs/sessions/fixture/terminal.log.gz", content: "terminal session evidence\n" },
+function createSourceFileEntries() {
+  return [
+    {
+      sourcePath: "logs/sessions/fixture/harvester.log",
+      archivePath: "logs/sessions/fixture/harvester.log.gz",
+      content: "debug stream evidence\n",
+    },
+    {
+      sourcePath: "logs/sessions/fixture/trace.log",
+      archivePath: "logs/sessions/fixture/trace.log.gz",
+      content: "trace stream evidence\n",
+    },
+    {
+      sourcePath: "logs/sessions/fixture/terminal.log",
+      archivePath: "logs/sessions/fixture/terminal.log.gz",
+      content: "terminal session evidence\n",
+    },
   ]
-  const files = []
-  for (const item of sourceFiles) {
-    await writeFile(path.join(archiveDirectory, item.archivePath), item.content)
-    files.push({
-      path: item.archivePath,
-      size: Buffer.byteLength(item.content),
-      sha256: createHash("sha256").update(item.content).digest("hex"),
-    })
-  }
+}
+
+function createRecoveryFixture(runtimeId) {
   const processIdentity = {
     application: "harvester",
     version: "1.0.001",
     runtimeSessionId: runtimeId,
     processId: 24680,
     startedAt: "2026-11-28T11:00:00.000Z",
-    source: { branch: "develop", commit: "a".repeat(40), workingTree: "clean" },
+    source: {
+      branch: "develop",
+      commit: "a".repeat(40),
+      workingTree: "clean",
+    },
   }
   const recoveryDigest = "a".repeat(64)
-  const factsContent = [
-    JSON.stringify({ sequence: "0", digest: "0".repeat(64), factType: "PROCESS_STARTED", runtimeSessionId: runtimeId, data: { processIdentity } }),
-    JSON.stringify({ sequence: "1", digest: recoveryDigest, runtimeSessionId: runtimeId, factType: "CHECKPOINT" }),
-  ].join("\n") + "\n"
-  const recoveryManifestContent = [
+  const facts = [
+    JSON.stringify({
+      sequence: "0",
+      digest: "0".repeat(64),
+      factType: "PROCESS_STARTED",
+      runtimeSessionId: runtimeId,
+      data: { processIdentity },
+    }),
+    JSON.stringify({
+      sequence: "1",
+      digest: recoveryDigest,
+      runtimeSessionId: runtimeId,
+      factType: "CHECKPOINT",
+    }),
+  ]
+  const checkpoints = [
     JSON.stringify({ sequence: "0", recordCount: "1", lastCommittedDigest: "0".repeat(64) }),
     JSON.stringify({ sequence: "1", recordCount: "2", lastCommittedDigest: recoveryDigest }),
-  ].join("\n") + "\n"
-  const checkpointFileContent = recoveryDigest + "\n"
-  for (const [relativePath, content] of [
-    ["recovery-facts/facts.jsonl", factsContent],
-    ["recovery-facts/manifest.jsonl", recoveryManifestContent],
-    ["data_commit_hash", checkpointFileContent],
-  ]) {
-    await writeFile(path.join(archiveDirectory, relativePath), content)
-    files.push({ path: relativePath, size: Buffer.byteLength(content), sha256: createHash("sha256").update(content).digest("hex") })
+  ]
+  return {
+    processIdentity,
+    recoveryDigest,
+    files: [
+      { path: "recovery-facts/facts.jsonl", content: `${facts.join("\n")}\n` },
+      { path: "recovery-facts/manifest.jsonl", content: `${checkpoints.join("\n")}\n` },
+      { path: "data_commit_hash", content: `${recoveryDigest}\n` },
+    ],
   }
-  const streamEvidence = (item) => ({
+}
+
+function createStreamEvidence(item, runtimeId) {
+  const sourceSize = Buffer.byteLength(item.content)
+  const sourceSha256 = createHash("sha256").update(item.content).digest("hex")
+  return {
     sourcePath: item.sourcePath,
     archivePath: item.archivePath,
     actualRuntimeId: runtimeId,
-    sourceSize: Buffer.byteLength(item.content),
-    archiveSize: Buffer.byteLength(item.content),
-    sourceSha256: createHash("sha256").update(item.content).digest("hex"),
-    archiveSha256: createHash("sha256").update(item.content).digest("hex"),
+    sourceSize,
+    archiveSize: sourceSize,
+    sourceSha256,
+    archiveSha256: sourceSha256,
     compression: "source-gzip-preserved",
     rotationIndex: 0,
     result: "collected",
     reason: null,
+  }
+}
+
+async function appendFixtureFile({ archiveDirectory, files, relativePath, content } = {}) {
+  await writeFile(path.join(archiveDirectory, relativePath), content)
+  files.push({
+    path: relativePath,
+    size: Buffer.byteLength(content),
+    sha256: createHash("sha256").update(content).digest("hex"),
   })
-  const manifest = {
+}
+
+function createArchiveManifest({ runtimeId, recovery, sourceFiles, files } = {}) {
+  return {
     formatVersion: 2,
     application: "harvester",
     commandTradingMode: "testnet",
@@ -82,26 +115,67 @@ async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME } = {}) {
     recoveryRuntimeSessionId: runtimeId,
     logRuntimeSessionId: runtimeId,
     matchingTradingLogsAvailable: true,
-    runtimeIdentity: { status: "matched", correlation: "same-runtime-session" },
-    dataCommitHash: recoveryDigest,
-    tradingRuntime: { runtimeSessionId: runtimeId, processIdentity },
-    sessionInventory: [{ runtimeSessionId: runtimeId, completionStatus: "complete" }],
+    runtimeIdentity: {
+      status: "matched",
+      correlation: "same-runtime-session",
+    },
+    dataCommitHash: recovery.recoveryDigest,
+    tradingRuntime: {
+      runtimeSessionId: runtimeId,
+      processIdentity: recovery.processIdentity,
+    },
+    sessionInventory: [{
+      runtimeSessionId: runtimeId,
+      completionStatus: "complete",
+    }],
     evidenceIntegrity: {
       status: "matched",
       validForPublication: true,
       expectedRuntimeId: runtimeId,
       recoveryProcessIdentityStatus: "matched",
       streams: {
-        harvesterLog: { status: "matched", expectedRuntimeId: runtimeId, actualRuntimeIds: [runtimeId], fileCount: 1, totalBytes: Buffer.byteLength(sourceFiles[0].content), files: [streamEvidence(sourceFiles[0])] },
-        traceLog: { status: "matched", expectedRuntimeId: runtimeId, actualRuntimeIds: [runtimeId], fileCount: 1, totalBytes: Buffer.byteLength(sourceFiles[1].content), files: [streamEvidence(sourceFiles[1])] },
+        harvesterLog: {
+          status: "matched",
+          expectedRuntimeId: runtimeId,
+          actualRuntimeIds: [runtimeId],
+          fileCount: 1,
+          totalBytes: Buffer.byteLength(sourceFiles[0].content),
+          files: [createStreamEvidence(sourceFiles[0], runtimeId)],
+        },
+        traceLog: {
+          status: "matched",
+          expectedRuntimeId: runtimeId,
+          actualRuntimeIds: [runtimeId],
+          fileCount: 1,
+          totalBytes: Buffer.byteLength(sourceFiles[1].content),
+          files: [createStreamEvidence(sourceFiles[1], runtimeId)],
+        },
       },
       mismatches: [],
     },
     files,
   }
-  await writeFile(path.join(archiveDirectory, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n")
+}
+
+async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME } = {}) {
+  const archiveDirectory = path.join(root, "archive-output", archiveName)
+  await mkdir(path.join(archiveDirectory, "logs", "sessions", "fixture"), { recursive: true })
+  await mkdir(path.join(archiveDirectory, "recovery-facts"), { recursive: true })
+  const runtimeId = "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c"
+  const sourceFiles = createSourceFileEntries()
+  const recovery = createRecoveryFixture(runtimeId)
+  const files = []
+  for (const item of sourceFiles) {
+    await appendFixtureFile({ archiveDirectory, files, relativePath: item.archivePath, content: item.content })
+  }
+  for (const item of recovery.files) {
+    await appendFixtureFile({ archiveDirectory, files, relativePath: item.path, content: item.content })
+  }
+  const manifest = createArchiveManifest({ runtimeId, recovery, sourceFiles, files })
+  await writeFile(path.join(archiveDirectory, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`)
   return archiveDirectory
 }
+
 async function snapshotDirectory(directory) {
   const files = new Map()
   async function visit({ current, relative = "" } = {}) {
@@ -372,8 +446,14 @@ test("rejects a mismatched runtime evidence manifest before invoking the publish
     validForPublication: false,
     expectedRuntimeId: "4b827393-0738-4de0-a2a8-a3942e7b7bec",
     streams: {
-      harvesterLog: { status: "mismatched", fileCount: 2 },
-      traceLog: { status: "mismatched", fileCount: 2 },
+      harvesterLog: {
+        status: "mismatched",
+        fileCount: 2,
+      },
+      traceLog: {
+        status: "mismatched",
+        fileCount: 2,
+      },
     },
     mismatches: [{
       expectedRuntimeId: "4b827393-0738-4de0-a2a8-a3942e7b7bec",
@@ -389,7 +469,10 @@ test("rejects a mismatched runtime evidence manifest before invoking the publish
       env: { HARVESTER_ARCHIVE_REMOTE: REMOTE },
       publishArchiveFn: async () => {
         publisherCalled = true
-        return { commit: "f".repeat(40), fileCount: 1 }
+        return {
+          commit: "f".repeat(40),
+          fileCount: 1,
+        }
       },
     }),
     /mismatched|integrity|runtime/i,
