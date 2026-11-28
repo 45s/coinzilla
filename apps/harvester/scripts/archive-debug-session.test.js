@@ -239,6 +239,26 @@ test("adds _debug to the existing timestamp and archive-ID directory name", () =
   )
 })
 
+
+test("collects a verified archive without requiring GitHub publication configuration", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  let collectionCompleted = false
+  const result = await runHarvesterDebugArchive({
+    ...archiveDependencies({ fixture, overrides: { HARVESTER_ARCHIVE_REMOTE: undefined } }),
+    onArchiveCreatedFn: async ({ directory }) => {
+      const manifest = await readArchiveManifest(directory)
+      assert.ok(manifest.files.length > 0, "Collection must finish writing the archive manifest before returning.")
+      collectionCompleted = true
+    },
+  })
+  assert.equal(collectionCompleted, true, "Collection must complete without invoking a publication step.")
+  assert.equal(result.archiveName, "2026-11-24T18-30-00Z_123e4567_debug", "Collection must return its local immutable archive identity.")
+})
+
 test("preserves TESTNET session inventory and recovery facts without changing source evidence", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
