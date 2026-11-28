@@ -683,6 +683,14 @@ test("publishes a verified active-runtime snapshot without process-completion fi
   const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
   const session = manifest.sessionInventory[0]
+  const completionArchivePaths = [
+    "logs/sessions/fixture/process-completed.json.gz",
+    "logs/sessions/fixture/log-streams-completed.json.gz",
+  ]
+  for (const archivePath of completionArchivePaths) {
+    await rm(path.join(fixture.archiveDirectory, archivePath))
+  }
+  manifest.files = manifest.files.filter((entry) => !completionArchivePaths.includes(entry.path))
   const activeSnapshotPath = "logs/sessions/fixture/active-process-snapshot.json"
   const marker = {
     formatVersion: 1,
@@ -698,7 +706,7 @@ test("publishes a verified active-runtime snapshot without process-completion fi
       traceLog: true,
     },
   }
-  const markerContent = JSON.stringify(marker, null, 2) + "\n"
+  const markerContent = `${JSON.stringify(marker, null, 2)}\n`
   await writeFile(path.join(fixture.archiveDirectory, activeSnapshotPath), markerContent)
   manifest.files.push({
     path: activeSnapshotPath,
