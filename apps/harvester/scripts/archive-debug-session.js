@@ -1692,33 +1692,95 @@ function selectUniqueActiveHarvesterProcessOwner(owners) {
   return uniqueOwners[0] ?? null
 }
 
-async function readActiveHarvesterProcessOwner({
-  lockDirectory,
-  hostname = os.hostname(),
-  isProcessAlive = isHarvesterProcessAlive,
-} = {}) {
-  let entries
+async function readHarvesterProcessLockEntries({ lockDirectory } = {}) {
   try {
-    entries = await readdir(lockDirectory, { withFileTypes: true })
+    return await readdir(lockDirectory, { withFileTypes: true })
   } catch (error) {
     if (error?.code === "ENOENT") {
-      return null
+      return []
     }
     throw error
   }
-  const owners = []
-  for (const entry of entries.filter((candidate) => candidate.name.endsWith(".lock"))) {
-    const owner = await readHarvesterProcessLockOwner({
-      filename: path.join(lockDirectory, entry.name),
-      hostname,
-    })
-    if (isProcessAlive(owner.pid)) {
-      owners.push(owner)
-    }
-  }
-  return selectUniqueActiveHarvesterProcessOwner(owners)
 }
 
+async function readHarvesterProcessLockOwner({ filename, hostname } = {}) {
+  const stats = await lstat(filename)
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    throw new Error(`Cannot snapshot Harvester: invalid lock file ${filename}.`)
+  }
+  let owner
+  try {
+    owner = JSON.parse(await readFile(filename, "utf8"))
+  } catch (error) {
+    throw new Error(`Cannot snapshot Harvester: unreadable lock metadata ${filename}.`, { cause: error })
+  }
+  const validOwner = Number.isSafeInteger(owner?.pid)
+    && owner.pid > 0
+    && typeof owner.hostname === "string"
+    && typeof owner.startedAt === "string"
+    && typeof owner.token === "string"
+    && owner.token.trim().length > 0
+  if (!validOwner) {
+    throw new Error(`Cannot snapshot Harvester: invalid lock metadata ${filename}.`)
+  }
+  if (owner.hostname.toLowerCase() !== hostname.toLowerCase()) {
+    throw new Error(`Cannot snapshot Harvester: lock belongs to another host (${owner.hostname}).`)
+  }
+  return owner
+}
+
+async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.hostname(), isProcessAlive = isHarvesterProcessAlive } = {}) {
+  const entries = await readHarvesterProcessLockEntries({ lockDirectory })
+  const owners = []
+  for (const entry of entries.filter((candidate) => candidate.name.endsWith(".lock"))) {
+    const filename = path.join(lockDirectory, entry.name)
+    const owner = await readHarvesterProcessLockOwner({ filename, hostname })
+    if (isProcessAlive(owner.pid)) {
+      owners.push({
+        pid: owner.pid,
+        hostname: owner.hostname,
+        startedAt: owner.startedAt,
+        token: owner.token,
+      })
+    }
+  }
+  const uniqueOwners = [...new Map(owners.map((owner) => [owner.pid, owner])).values()]
+  if (uniqueOwners.length > 1) {
+    throw new Error(`Cannot snapshot Harvester: multiple active process owners: ${uniqueOwners.map((owner) => owner.pid).join(", ")}.`)
+  }
+  return uniqueOwners[0] ?? null
+}
+
+async function writeActiveProcessSnapshotMarker({ localArchive, logSelection, activeProcessOwner, recoveryCheckpoint } = {}) {
+  const session = logSelection.sessions.find((candidate) =>
+    candidate.runtimeSessionId === recoveryCheckpoint.runtimeSessionId && candidate.completionStatus === "active"
+  )
+  const streams = logSelection.evidenceIntegrity.streams
+  const marker = {
+    formatVersion: 1,
+    snapshotType: "active-harvester-process",
+    runtimeSessionId: recoveryCheckpoint.runtimeSessionId,
+    processId: activeProcessOwner.pid,
+    hostname: activeProcessOwner.hostname,
+    lockStartedAt: activeProcessOwner.startedAt,
+    capturedAt: new Date().toISOString(),
+    recoveryDataCommitHash: recoveryCheckpoint.dataCommitHash,
+    streams: {
+      harvesterLog: streams.harvesterLog.status === "matched" && streams.harvesterLog.fileCount > 0,
+      traceLog: streams.traceLog.status === "matched" && streams.traceLog.fileCount > 0,
+    },
+  }
+  if (!session?.activeSnapshotPath || !marker.streams.harvesterLog || !marker.streams.traceLog) {
+    throw new Error(`Cannot create an active snapshot marker without both runtime-matched log streams for ${recoveryCheckpoint.runtimeSessionId}.`)
+  }
+  const markerPath = path.join(localArchive, session.activeSnapshotPath)
+  await mkdir(path.dirname(markerPath), { recursive: true, mode: 0o700 })
+  await writeFile(markerPath, `${JSON.stringify(marker, null, 2)}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o600,
+  })
+}
 async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive, activeProcessOwner, lockDirectory, onProgress } = {}) {
   const recoverySource = sourcePaths.find((source) => source.directoryName === "recovery-facts")
   const recoverySize = await getTreeSize(recoverySource.sourceDirectory)
@@ -1761,6 +1823,12 @@ async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive
     if (!lockOwnershipUnchanged || !isHarvesterProcessAlive(activeProcessOwner.pid)) {
       throw new Error(`The active Harvester process lock changed or the process exited during archive collection (PID ${activeProcessOwner.pid}); the snapshot is not publishable.`)
     }
+    await writeActiveProcessSnapshotMarker({
+      localArchive,
+      logSelection,
+      activeProcessOwner,
+      recoveryCheckpoint,
+    })
   }
   reportProgress(onProgress, `Evidence snapshot complete: ${retainedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
   return logSelection
