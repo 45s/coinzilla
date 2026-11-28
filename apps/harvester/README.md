@@ -57,7 +57,7 @@ The ADR-0001 Step 7 offline market audit is available through `pnpm --filter @co
 
 The [Trading-history API v1](./docs/api/trading-history-api.md) serves persisted orders, individual fills, and commission facts to independent clients from the existing Harvester process. It uses a transport-independent application query facade and Harvester's already-open relational database connection. It does not add tables, change trading behavior, or connect to a broker/exchange.
 
-The API starts automatically with Harvester and binds to `127.0.0.1:4201`. No token or extra environment configuration is required. Start Harvester normally with the intended `TRADING_MODE`:
+The API is an optional process component, enabled by default to preserve existing behavior. Set `components.tradingHistoryApi.enabled: false` in the named `appConfig` in `config/index.js` to omit its HTTP/WebSocket listener at the next launch. This does not disable relational persistence, order/fill accounting, or any trading safety service. When enabled, it binds to `127.0.0.1:4201`; no token or extra environment configuration is required. Start Harvester normally with the intended `TRADING_MODE`:
 
 ```sh
 pnpm --filter @coinzilla/harvester dev

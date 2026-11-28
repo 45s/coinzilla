@@ -2663,3 +2663,27 @@ after(() => {
   // Reset it after assertions; the test runner reports assertion failures independently.
   process.exitCode = 0
 })
+
+test("does not initialize the optional trading-history API when its pre-launch component flag is disabled", async () => {
+  const configuredApp = createTestAppConfig()
+  configuredApp.components = {
+    tradingHistoryApi: { enabled: false },
+  }
+  let apiStartCount = 0
+  await runMain({
+    loadConfig: async () => configuredApp,
+    start: async () => ({
+      stop: async () => ({ ok: true }),
+    }),
+    startTradingHistoryApi: async () => {
+      apiStartCount += 1
+      return { close: async () => ({ ok: true, closed: true }) }
+    },
+    logger: { info() {}, system() {}, warn() {}, error() {} },
+  })
+  assert.equal(
+    apiStartCount,
+    0,
+    "A disabled optional local API must not bind HTTP/WebSocket listeners or construct its runtime service.",
+  )
+})
