@@ -482,7 +482,7 @@ test("keeps an unmatched current-process order fail-closed even when the registr
 
 test("keeps malformed Harvester-reserved IDs fail-closed even with a current process namespace", async () => {
   const order = makeOrder({
-    clientOrderId: "h-0123456789abcdef012345-malformed",
+    clientOrderId: "h-abcdef0123456789abcdef-malformed",
     brokerOrderId: "malformed-harvester-order",
     status: "OPEN",
     executedQuantity: "0",
