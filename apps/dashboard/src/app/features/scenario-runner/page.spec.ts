@@ -30,12 +30,21 @@ const catalog: readonly ScenarioCatalogItem[] = [{
     executionStatus: 'EXECUTABLE',
     executable: true,
     defaultInput: runRecord.input,
+  }, {
+    id: 'RS-RUNTIME-SELL-SUBMISSION-001',
+    name: 'Runtime SELL submission',
+    layer: 'APPLICATION',
+    status: 'PARTIAL',
+    executionStatus: 'EXECUTABLE',
+    executable: true,
+    defaultInput: {},
   }],
 }];
 
 describe('ScenarioRunnerComponent run details', () => {
   let component: ScenarioRunnerComponent;
   let nativeElement: HTMLElement;
+  let fixture: ReturnType<typeof TestBed.createComponent<ScenarioRunnerComponent>>;
 
   beforeEach(async () => {
     const socket = { close: vi.fn() } as unknown as WebSocket;
@@ -53,7 +62,7 @@ describe('ScenarioRunnerComponent run details', () => {
       imports: [ScenarioRunnerComponent],
       providers: [{ provide: ScenarioRunnerApi, useValue: api }],
     });
-    const fixture = TestBed.createComponent(ScenarioRunnerComponent);
+    fixture = TestBed.createComponent(ScenarioRunnerComponent);
     component = fixture.componentInstance;
     nativeElement = fixture.nativeElement as HTMLElement;
     await fixture.whenStable();
@@ -94,6 +103,18 @@ describe('ScenarioRunnerComponent run details', () => {
     expect(text, 'order cards must expose their exact source submission and terminal evidence').toContain('Inspect exact submission and lifecycle evidence');
     expect(text, 'decision cards must expose original decision calculations').toContain('Inspect decision calculations and original evidence');
     expect(text, 'missing build artifact identity must not be implied to exist').toContain('build artifact: unavailable');
+  });
+
+
+  it('renders the selected scenario guide instead of a static Recovery Seller graph', () => {
+    expect(nativeElement.querySelector('app-scenario-graph-editor')).toBeNull();
+    expect(nativeElement.textContent).toContain('Partial fill, then terminal CANCELED');
+
+    component.selectScenario('RS-RUNTIME-SELL-SUBMISSION-001');
+    fixture.detectChanges();
+
+    expect(nativeElement.textContent).toContain('Persist intent → broker ACK → persist outcome → reserve cycle');
+    expect(nativeElement.textContent).not.toContain('Partial fill, then terminal CANCELED');
   });
 
   it('lets an operator select a source step and inspect its exact trace evidence', () => {
