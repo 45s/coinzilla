@@ -5,7 +5,7 @@ function nodeType(kind: ScenarioGuide['steps'][number]['kind'], index: number, c
   if (index === 0 || kind === 'start') {
     return 'start';
   }
-  if (index === count - 1 || kind === 'outcome') {
+  if (index === count - 1) {
     return 'end';
   }
   if (kind === 'injected-failure') {
