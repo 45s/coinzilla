@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import { createWriteStream } from "node:fs"
 import { once } from "node:events"
 import { finished } from "node:stream/promises"
-import { mkdir } from "node:fs/promises"
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { defaultLogger } from "@coinzilla/utils"
 import { strategyLogMarkers } from "../../application/logging/strategy-log-markers.js"
@@ -144,7 +144,7 @@ function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
  * Attach independent DEBUG and TRACE JSONL destinations to the shared logger.
  * The compact console destination remains independently configurable.
  *
- * @param {{ logger?: object, directory?: string, output?: NodeJS.WritableStream, processIdentity?: { startedAt: string, runtimeSessionId: string } }} input
+ * @param {{ logger?: object, directory?: string, output?: NodeJS.WritableStream, processIdentity?: { startedAt: string, runtimeSessionId: string, processId?: number } }} input
  * @returns {Promise<{ directory: string, cumulativeDirectory: string, sessionPaths: object, errorBuffer: object, close: () => Promise<void> }>}
  */
 async function closeHarvesterLogStreams({ streams } = {}) {
@@ -318,7 +318,130 @@ async function registerHarvesterLogTransports({
   }
 }
 
-function createHarvesterLogCloseHandler({ logger } = {}) {
+function createHarvesterSessionIdentityRecord({ processIdentity, environment } = {}) {
+  return {
+    formatVersion: 1,
+    application: "harvester",
+    environment,
+    startedAt: processIdentity.startedAt,
+    runtimeSessionId: processIdentity.runtimeSessionId,
+    processId: processIdentity.processId ?? process.pid,
+    version: processIdentity.version ?? null,
+    source: processIdentity.source ?? null,
+  }
+}
+
+function assertExistingHarvesterSessionIdentityMatches({ existing, expected, identityPath, cause } = {}) {
+  const matches = existing.application === "harvester"
+    && existing.runtimeSessionId === expected.runtimeSessionId
+    && existing.startedAt === expected.startedAt
+    && existing.environment === expected.environment
+    && (!existing.processId || existing.processId === expected.processId)
+  if (!matches) {
+    throw new Error(`Existing process identity does not match the active runtime: ${identityPath}`, { cause })
+  }
+}
+
+async function updateLegacyHarvesterSessionIdentity({ identityPath, existing, identity } = {}) {
+  const temporaryPath = `${identityPath}.${randomUUID()}.tmp`
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify({
+      ...existing,
+      processId: identity.processId,
+      version: identity.version,
+    }, null, 2)}\n`, {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    })
+    await rename(temporaryPath, identityPath)
+  } catch (error) {
+    await rm(temporaryPath, { force: true })
+    throw error
+  }
+}
+
+async function persistHarvesterSessionIdentity({ sessionPaths, processIdentity } = {}) {
+  const identityPath = path.join(sessionPaths.sessionDirectory, "process-identity.json")
+  const identity = createHarvesterSessionIdentityRecord({
+    processIdentity,
+    environment: process.env.TRADING_MODE ?? "unknown",
+  })
+  try {
+    await writeFile(identityPath, `${JSON.stringify(identity, null, 2)}\n`, {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    })
+    return
+  } catch (error) {
+    if (error.code !== "EEXIST") {
+      throw error
+    }
+  }
+  const existing = JSON.parse(await readFile(identityPath, "utf8"))
+  assertExistingHarvesterSessionIdentityMatches({
+    existing,
+    expected: identity,
+    identityPath,
+    cause: new Error("The session identity file already exists."),
+  })
+  if (!existing.processId) {
+    await updateLegacyHarvesterSessionIdentity({
+      identityPath,
+      existing,
+      identity,
+    })
+  }
+}
+
+async function writeHarvesterLogStreamsCompletion({ sessionPaths, processIdentity } = {}) {
+  const completion = {
+    formatVersion: 1,
+    application: "harvester",
+    runtimeSessionId: processIdentity.runtimeSessionId,
+    endedAt: new Date().toISOString(),
+    logStreamsComplete: true,
+    streams: {
+      harvesterLog: true,
+      traceLog: true,
+    },
+  }
+  await writeFile(
+    path.join(sessionPaths.sessionDirectory, "log-streams-completed.json"),
+    `${JSON.stringify(completion, null, 2)}\n`,
+    {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    },
+  )
+}
+
+async function writeHarvesterProcessCompletion({ sessionPaths, processIdentity } = {}) {
+  const completion = {
+    formatVersion: 1,
+    application: "harvester",
+    runtimeSessionId: processIdentity.runtimeSessionId,
+    startedAt: processIdentity.startedAt,
+    endedAt: new Date().toISOString(),
+    processId: process.pid,
+    exitCode: process.exitCode ?? 0,
+    signal: null,
+    logStreamsComplete: true,
+  }
+  await writeFile(
+    path.join(sessionPaths.sessionDirectory, "process-completed.json"),
+    `${JSON.stringify(completion, null, 2)}\n`,
+    {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    },
+  )
+}
+
+function createHarvesterLogCloseHandler({ logger, sessionPaths, processIdentity } = {}) {
   let closed = false
   return async () => {
     if (closed) {
@@ -336,6 +459,16 @@ function createHarvesterLogCloseHandler({ logger } = {}) {
     if (errors.length > 0) {
       throw new AggregateError(errors, "Failed to close Harvester log transports")
     }
+    await writeHarvesterLogStreamsCompletion({
+      sessionPaths,
+      processIdentity,
+    })
+    if (process.env.COINZILLA_DEV_RUNNER !== "1") {
+      await writeHarvesterProcessCompletion({
+        sessionPaths,
+        processIdentity,
+      })
+    }
   }
 }
 
@@ -346,36 +479,18 @@ function createHarvesterLogCloseHandler({ logger } = {}) {
  * @param {{ logger?: object, directory?: string, output?: NodeJS.WritableStream, processIdentity?: { startedAt: string, runtimeSessionId: string } }} input
  * @returns {Promise<{ directory: string, cumulativeDirectory: string, sessionPaths: object, close: () => Promise<void> }>}
  */
-export async function configureHarvesterLogging({
-  logger = defaultLogger,
-  directory = path.resolve(process.cwd(), "logs"),
-  output = process.stdout,
-  processIdentity = {
-    startedAt: new Date().toISOString(),
-    runtimeSessionId: randomUUID(),
-  },
-} = {}) {
-  if (
-    typeof logger?.addTransport !== "function"
-    || typeof logger?.removeTransport !== "function"
-    || typeof logger?.setLevel !== "function"
-  ) {
+function assertHarvesterLoggerSupportsTransports(logger) {
+  const supportsTransports = typeof logger?.addTransport === "function"
+    && typeof logger?.removeTransport === "function"
+    && typeof logger?.setLevel === "function"
+  if (!supportsTransports) {
     throw new TypeError(
       "Harvester logging requires @coinzilla/utils Logger transport support; update the shared utils dependency first",
     )
   }
+}
 
-  const sessionPaths = createHarvesterLogSessionPaths({
-    directory,
-    startedAt: processIdentity.startedAt,
-    runtimeSessionId: processIdentity.runtimeSessionId,
-  })
-  const cumulativeDirectory = path.join(directory, "cumulative")
-  await Promise.all([
-    mkdir(cumulativeDirectory, { recursive: true }),
-    mkdir(sessionPaths.sessionDirectory, { recursive: true }),
-  ])
-  const errorBuffer = createHarvesterRuntimeErrorBuffer({ logger })
+async function attachHarvesterLogTransports({ logger, output, cumulativeDirectory, sessionPaths, errorBuffer } = {}) {
   logger.addTransport(errorBuffer.transport)
   try {
     await registerHarvesterLogTransports({
@@ -388,13 +503,54 @@ export async function configureHarvesterLogging({
     await logger.removeTransport(RUNTIME_ERROR_TRANSPORT_NAME)
     throw error
   }
+}
 
+export async function configureHarvesterLogging({
+  logger = defaultLogger,
+  directory = path.resolve(process.cwd(), "logs"),
+  output = process.stdout,
+  processIdentity = {
+    startedAt: new Date().toISOString(),
+    runtimeSessionId: randomUUID(),
+  },
+} = {}) {
+  assertHarvesterLoggerSupportsTransports(logger)
+  const sessionPaths = createHarvesterLogSessionPaths({
+    directory,
+    startedAt: processIdentity.startedAt,
+    runtimeSessionId: processIdentity.runtimeSessionId,
+  })
+  const cumulativeDirectory = path.join(directory, "cumulative")
+  await Promise.all([
+    mkdir(cumulativeDirectory, {
+      recursive: true,
+    }),
+    mkdir(sessionPaths.sessionDirectory, {
+      recursive: true,
+    }),
+  ])
+  await persistHarvesterSessionIdentity({
+    sessionPaths,
+    processIdentity,
+  })
+  const errorBuffer = createHarvesterRuntimeErrorBuffer({ logger })
+  await attachHarvesterLogTransports({
+    logger,
+    output,
+    cumulativeDirectory,
+    sessionPaths,
+    errorBuffer,
+  })
   return Object.freeze({
     directory,
     cumulativeDirectory,
     sessionPaths,
     errorBuffer,
-    close: createHarvesterLogCloseHandler({ logger }),
+    close: createHarvesterLogCloseHandler({
+      logger,
+      sessionPaths,
+      processIdentity,
+    }),
   })
 }
 

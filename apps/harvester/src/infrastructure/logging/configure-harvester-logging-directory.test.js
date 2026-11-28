@@ -64,7 +64,7 @@ test("creates missing logs root and process-session directories", async (t) => {
   )
   assert.deepEqual(
     (await readdir(path.join(directory, "sessions", "2026-11-22_12-00-00-missing-logs-session"))).sort(),
-    ["harvester.log", "trace.log"],
+    ["harvester.log", "process-identity.json", "trace.log"],
   )
   await logging.close()
 })
