@@ -23,4 +23,20 @@ export const recoverySellerPairs = {
     makerPercent: 0.1,
     takerPercent: 0.1,
   },
+  ARBUSDT: {
+    enabled: true,
+    tradingEnvironment: TRADING_ENVIRONMENTS.TESTNET,
+    enableVolatilityProtection: false,
+    legacyPosition: {
+      invested: 231,
+      quantity: 400,
+    },
+    sellQuantity: 1,
+    investment: 100,
+    orderQuantity: 100,
+    minProfit: 0.01,
+    priceStepPercent: 0.3,
+    makerPercent: 0.1,
+    takerPercent: 0.1,
+  },
 };
