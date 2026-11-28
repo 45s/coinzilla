@@ -1760,6 +1760,7 @@ async function collectPreparedArchive({
       packageDirectory,
       localArchive,
       activeProcessOwner,
+      lockDirectory,
       onProgress,
     })
     await writeAndVerifyLocalArchive({
@@ -1835,6 +1836,8 @@ export async function runHarvesterDebugArchive({
     createdAt,
     onProgress,
     onArchiveCreatedFn,
+    activeProcessOwner,
+    lockDirectory,
   })
 }
 
