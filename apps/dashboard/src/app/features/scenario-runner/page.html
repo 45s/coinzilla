@@ -135,6 +135,13 @@
         </article>
       </section>
 
+      @if (view.initialState !== null) {
+        <section class="configuration-summary">
+          <h3>Initial balances and position state</h3>
+          <pre>{{ view.initialState | json }}</pre>
+        </section>
+      }
+
       <section class="configuration-summary">
         <h3>Configuration used</h3>
         <div class="config-pills">
@@ -169,6 +176,24 @@
               @if (order.executedQuantity !== null) {
                 <p>Executed: <strong>{{ order.executedQuantity }}</strong> · terminal status: {{ order.terminalStatus ?? 'not supplied' }}</p>
               }
+              @if (order.remainingQuantity !== null) {
+                <p>Remaining quantity: {{ order.remainingQuantity }}</p>
+              }
+              @if (order.averageExecutionPrice !== null) {
+                <p>Average execution price: {{ order.averageExecutionPrice }}</p>
+              }
+              @if (order.commissions !== null) {
+                <p>Commissions: {{ order.commissions | json }}</p>
+              }
+              @if (order.submittedAt) {
+                <small>Submitted: {{ order.submittedAt }}</small>
+              }
+              @if (order.acknowledgedAt) {
+                <small>Acknowledged: {{ order.acknowledgedAt }}</small>
+              }
+              @if (order.terminalAt) {
+                <small>Terminal event: {{ order.terminalAt }}</small>
+              }
               <p>Submission: {{ order.submissionOutcome ?? 'Acknowledgement evidence unavailable' }}</p>
               <p>Broker order ID: <code>{{ order.brokerOrderId ?? 'not supplied' }}</code></p>
               <p>Client order ID: <code>{{ order.clientOrderId ?? 'not supplied' }}</code></p>
@@ -179,6 +204,17 @@
               }
             </article>
           }
+        </section>
+      }
+
+      @if (view.cycles.length > 1) {
+        <section class="cycle-history">
+          <h3>Cycle history</h3>
+          <ol>
+            @for (cycle of view.cycles; track cycle.id ?? $index) {
+              <li><strong>{{ cycle.id ?? 'Cycle identity unavailable' }}</strong> · {{ cycle.status }} · Position {{ cycle.positionId ?? 'unavailable' }}</li>
+            }
+          </ol>
         </section>
       }
 

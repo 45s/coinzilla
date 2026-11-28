@@ -22,12 +22,25 @@ export interface ScenarioRunPresentationOrder {
   readonly brokerOrderId: string | null;
   readonly terminalStatus: string | null;
   readonly executedQuantity: string | null;
+  readonly remainingQuantity: string | null;
+  readonly averageExecutionPrice: string | null;
+  readonly commissions: unknown;
+  readonly submittedAt: string | null;
+  readonly acknowledgedAt: string | null;
+  readonly terminalAt: string | null;
   readonly terminalReconciled: boolean | null;
   readonly sourceEvidence: {
     readonly submittedOrder: unknown;
     readonly submissionFact: unknown;
     readonly terminalOrder: unknown;
   };
+}
+
+export interface ScenarioRunPresentationCycle {
+  readonly id: string | null;
+  readonly positionId: string | null;
+  readonly status: string;
+  readonly sourceEvidence: unknown;
 }
 
 export interface ScenarioRunPresentation {
@@ -43,6 +56,7 @@ export interface ScenarioRunPresentation {
   };
   readonly configuration: unknown;
   readonly configurationSummary: readonly { readonly key: string; readonly value: unknown }[];
+  readonly initialState: unknown;
   readonly steps: readonly ScenarioRunPresentationStep[];
   readonly edges: readonly {
     readonly from: string;
@@ -52,11 +66,8 @@ export interface ScenarioRunPresentation {
   readonly decision: { readonly outcome: string | null; readonly explanation: string | null; readonly reasonCode: string | null } | null;
   readonly action: unknown;
   readonly orders: readonly ScenarioRunPresentationOrder[];
-  readonly cycle: {
-    readonly status: string;
-    readonly sourceEvidence: unknown;
-  };
-  readonly cycles: readonly { readonly id: string | null; readonly positionId: string | null; readonly status: string; readonly sourceEvidence: unknown }[];
+  readonly cycle: ScenarioRunPresentationCycle;
+  readonly cycles: readonly ScenarioRunPresentationCycle[];
   readonly outcomes: {
     readonly execution: {
       readonly status: string | null;
@@ -202,14 +213,14 @@ function readAssertions(root: EvidenceRecord | null, runOutput: EvidenceRecord |
 }
 
 function compareDecimalStrings(left: string, right: string): number | null {
-  const decimalPattern = /^\\d+(?:\\.\\d+)?$/;
+  const decimalPattern = /^\d+(?:\.\d+)?$/;
   if (!decimalPattern.test(left) || !decimalPattern.test(right)) {
     return null;
   }
   const [leftWhole, leftFraction = ''] = left.split('.');
   const [rightWhole, rightFraction = ''] = right.split('.');
-  const normalizedLeftWhole = leftWhole.replace(/^0+(?=\\d)/, '');
-  const normalizedRightWhole = rightWhole.replace(/^0+(?=\\d)/, '');
+  const normalizedLeftWhole = leftWhole.replace(/^0+(?=\d)/, '');
+  const normalizedRightWhole = rightWhole.replace(/^0+(?=\d)/, '');
   if (normalizedLeftWhole.length !== normalizedRightWhole.length) {
     return normalizedLeftWhole.length > normalizedRightWhole.length ? 1 : -1;
   }
@@ -235,11 +246,29 @@ function isPartialExecution(order: ScenarioRunPresentationOrder): boolean {
     totalComparison !== null && totalComparison < 0;
 }
 
-function buildOrders(runtimeOutput: EvidenceRecord | null): readonly ScenarioRunPresentationOrder[] {
+function readTerminalOrders(runtimeOutput: EvidenceRecord | null): readonly EvidenceRecord[] {
+  const candidates = [
+    runtimeOutput?.['terminalOrders'],
+    runtimeOutput?.['orderLifecycles'],
+    runtimeOutput?.['terminalOrderRecords'],
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      const records = candidate.map(asRecord).filter((value): value is EvidenceRecord => value !== null);
+      if (records.length > 0) {
+        return records;
+      }
+    }
+  }
+  const legacyTerminalOrder = readRecord(runtimeOutput, 'terminalSell');
+  return legacyTerminalOrder ? [legacyTerminalOrder] : [];
+}
+
+function buildOrders(
+  runtimeOutput: EvidenceRecord | null,
+  terminalOrders: readonly EvidenceRecord[],
+): readonly ScenarioRunPresentationOrder[] {
   const submittedOrders = asArray(runtimeOutput?.['submittedOrders']);
-  const terminalOrder = readRecord(runtimeOutput, 'terminalSell');
-  const terminalClientOrderId = readString(terminalOrder, 'clientOrderId');
-  const terminalBrokerOrderId = readString(terminalOrder, 'brokerOrderId');
   const simulationFacts = asArray(runtimeOutput?.['simulationFacts']);
 
   return submittedOrders.flatMap((sourceOrder) => {
@@ -249,12 +278,12 @@ function buildOrders(runtimeOutput: EvidenceRecord | null): readonly ScenarioRun
     }
     const clientOrderId = readString(order, 'clientOrderId');
     const brokerOrderId = readString(order, 'brokerOrderId');
-    const matchesTerminal = Boolean(
-      terminalOrder &&
-      ((clientOrderId && terminalClientOrderId === clientOrderId) ||
-        (brokerOrderId && terminalBrokerOrderId === brokerOrderId)),
-    );
-    const matchedTerminal = matchesTerminal ? terminalOrder : null;
+    const matchedTerminal = terminalOrders.find((terminal) =>
+      Boolean(
+        (clientOrderId && readString(terminal, 'clientOrderId') === clientOrderId) ||
+        (brokerOrderId && readString(terminal, 'brokerOrderId') === brokerOrderId),
+      ),
+    ) ?? null;
     const submissionFact = simulationFacts
       .map(asRecord)
       .find((fact) => {
@@ -263,21 +292,37 @@ function buildOrders(runtimeOutput: EvidenceRecord | null): readonly ScenarioRun
           readString(fact, 'factType') === 'ORDER_SUBMISSION_OUTCOME');
       }) ?? null;
     const submissionData = readRecord(submissionFact, 'data');
-    const executedQuantity = readString(matchedTerminal, 'executedQuantity');
 
     return [{
       side: readString(order, 'side'),
       purpose: firstString(readString(order, 'purpose'), readString(submissionData, 'purpose')),
       quantity: readString(order, 'quantity'),
       price: readString(order, 'price'),
-      orderType: readString(order, 'type'),
-      submissionOutcome: readString(submissionData, 'outcome'),
+      orderType: firstString(readString(order, 'type'), readString(order, 'orderType')),
+      submissionOutcome: firstString(readString(order, 'submissionOutcome'), readString(submissionData, 'outcome')),
       initialStatus: readString(order, 'status'),
       clientOrderId,
       brokerOrderId,
-      terminalStatus: readString(matchedTerminal, 'orderStatus'),
-      executedQuantity,
-      terminalReconciled: readBoolean(matchedTerminal, 'terminalReconciled'),
+      terminalStatus: firstString(readString(matchedTerminal, 'orderStatus'), readString(matchedTerminal, 'status')),
+      executedQuantity: readString(matchedTerminal, 'executedQuantity'),
+      remainingQuantity: firstString(readString(matchedTerminal, 'remainingQuantity'), readString(order, 'remainingQuantity')),
+      averageExecutionPrice: firstString(
+        readString(matchedTerminal, 'averageExecutionPrice'),
+        readString(matchedTerminal, 'avgPrice'),
+        readString(order, 'averageExecutionPrice'),
+      ),
+      commissions: matchedTerminal?.['commissions'] ?? matchedTerminal?.['commission'] ?? null,
+      submittedAt: firstString(readString(order, 'submittedAt'), readString(order, 'createdAt'), readString(order, 'timestamp')),
+      acknowledgedAt: firstString(readString(submissionFact, 'timestamp'), readString(submissionFact, 'at')),
+      terminalAt: firstString(
+        readString(matchedTerminal, 'terminalAt'),
+        readString(matchedTerminal, 'updatedAt'),
+        readString(matchedTerminal, 'timestamp'),
+      ),
+      terminalReconciled: firstBoolean(
+        readBoolean(matchedTerminal, 'terminalReconciled'),
+        readBoolean(matchedTerminal, 'reconciled'),
+      ),
       sourceEvidence: {
         submittedOrder: sourceOrder,
         submissionFact,
@@ -285,6 +330,66 @@ function buildOrders(runtimeOutput: EvidenceRecord | null): readonly ScenarioRun
       },
     }];
   });
+}
+
+function buildCycles(
+  runtimeOutput: EvidenceRecord | null,
+  terminalOrders: readonly EvidenceRecord[],
+): readonly ScenarioRunPresentationCycle[] {
+  const explicitCycles = runtimeOutput?.['cycleStates'] ?? runtimeOutput?.['cycles'];
+  if (Array.isArray(explicitCycles)) {
+    return explicitCycles.flatMap((value): ScenarioRunPresentationCycle[] => {
+      const cycle = asRecord(value);
+      if (!cycle) {
+        return [];
+      }
+      return [{
+        id: firstString(readString(cycle, 'cycleId'), readString(cycle, 'id')),
+        positionId: readString(cycle, 'positionId'),
+        status: readString(cycle, 'status') ?? 'UNAVAILABLE',
+        sourceEvidence: value,
+      }];
+    });
+  }
+
+  const embeddedCycles = terminalOrders
+    .map((order) => readRecord(order, 'cycleState'))
+    .filter((cycle): cycle is EvidenceRecord => cycle !== null);
+  if (embeddedCycles.length > 0) {
+    const seen = new Set<string>();
+    return embeddedCycles.flatMap((cycle): ScenarioRunPresentationCycle[] => {
+      const id = firstString(readString(cycle, 'cycleId'), readString(cycle, 'id'));
+      if (id && seen.has(id)) {
+        return [];
+      }
+      if (id) {
+        seen.add(id);
+      }
+      return [{
+        id,
+        positionId: readString(cycle, 'positionId'),
+        status: readString(cycle, 'status') ?? 'UNAVAILABLE',
+        sourceEvidence: cycle,
+      }];
+    });
+  }
+
+  const cycleState = readRecord(runtimeOutput, 'cycleState');
+  if (cycleState) {
+    return [{
+      id: firstString(readString(cycleState, 'cycleId'), readString(cycleState, 'id')),
+      positionId: readString(cycleState, 'positionId'),
+      status: readString(cycleState, 'status') ?? 'UNAVAILABLE',
+      sourceEvidence: cycleState,
+    }];
+  }
+  const cycleStatus = readString(runtimeOutput, 'cycleStatus');
+  return cycleStatus ? [{
+    id: null,
+    positionId: null,
+    status: cycleStatus,
+    sourceEvidence: runtimeOutput,
+  }] : [];
 }
 
 export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunPresentation {
@@ -298,20 +403,33 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
   const replayProvenance = readRecord(run, 'replayProvenance') ?? readRecord(root, 'replayProvenance') ?? readRecord(runOutput, 'replayProvenance');
   const provenanceIdentity = readRecord(replayProvenance, 'identity');
   const catalog = readRecord(root, 'scenarioCatalogSnapshot');
-  const terminalOrder = readRecord(runtimeOutput, 'terminalSell');
-  const cycleState = readRecord(terminalOrder, 'cycleState') ?? readRecord(runtimeOutput, 'cycleState');
-  const cycleStatus = firstString(readString(cycleState, 'status'), readString(runtimeOutput, 'cycleStatus')) ?? 'UNAVAILABLE';
+  const terminalOrders = readTerminalOrders(runtimeOutput);
+  const latestTerminalOrder = terminalOrders[terminalOrders.length - 1] ?? null;
+  const cycles = buildCycles(runtimeOutput, terminalOrders);
+  const currentCycle = cycles[cycles.length - 1] ?? {
+    id: null,
+    positionId: null,
+    status: 'UNAVAILABLE',
+    sourceEvidence: null,
+  };
+  const cycleStatus = currentCycle.status;
   const simulationFacts = asArray(runtimeOutput?.['simulationFacts']);
+  const safety = readRecord(runtimeOutput, 'safety') ?? readRecord(root, 'safety');
   const hasSafetyFact = simulationFacts.some((value) =>
     readString(asRecord(value), 'factType') === 'SAFETY_BLOCKER_RAISED');
   const stopRecorded = firstBoolean(
+    readBoolean(safety, 'stopRecorded'),
     readBoolean(runtimeOutput, 'stopFactAppended'),
-    readBoolean(terminalOrder, 'stopFactAppended'),
+    readBoolean(latestTerminalOrder, 'stopFactAppended'),
     hasSafetyFact ? true : null,
   );
-  const orders = buildOrders(runtimeOutput);
+  const orders = buildOrders(runtimeOutput, terminalOrders);
   const decisionSource = readRecord(runtimeOutput, 'decision');
-  const configurationSummary = ['investment', 'quoteBalanceFree', 'orderQuantity', 'sellQuantity', 'keepQuantity', 'minProfit', 'marketPrice', 'makerPercent', 'takerPercent', 'minQuantity', 'minNotional', 'priceIncrement', 'quantityIncrement']
+  const configurationSummary = [
+    'investment', 'quoteBalanceFree', 'orderQuantity', 'sellQuantity', 'keepQuantity',
+    'minProfit', 'marketPrice', 'makerPercent', 'takerPercent', 'minQuantity',
+    'minNotional', 'priceIncrement', 'quantityIncrement',
+  ]
     .filter((key) => input !== null && Object.prototype.hasOwnProperty.call(input, key))
     .map((key) => ({ key, value: input?.[key] }));
   const artifactHashValue = provenanceIdentity?.['buildArtifactSha256'];
@@ -343,7 +461,9 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
   const assertions = readAssertions(root, runOutput);
   const terminalOrderCount = orders.filter((order) => order.terminalStatus !== null).length;
   const partiallyExecutedOrderCount = orders.filter(isPartialExecution).length;
-  const pauseReasons = asArray(terminalOrder?.['pauseReasons'] ?? runtimeOutput?.['pauseReasons']);
+  const pauseReasons = asArray(
+    safety?.['pauseReasons'] ?? latestTerminalOrder?.['pauseReasons'] ?? runtimeOutput?.['pauseReasons'],
+  );
 
   return {
     rawPayload,
@@ -358,6 +478,7 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
     },
     configuration: input,
     configurationSummary,
+    initialState: root?.['initialState'] ?? runtimeOutput?.['initialState'] ?? null,
     steps,
     edges: readEdges(root, runOutput),
     decision: decisionSource ? {
@@ -367,11 +488,8 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
     } : null,
     action: runtimeOutput?.['action'] ?? null,
     orders,
-    cycle: {
-      status: cycleStatus,
-      sourceEvidence: cycleState,
-    },
-    cycles: [],
+    cycle: currentCycle,
+    cycles,
     outcomes: {
       execution: {
         status: runStatus,
@@ -387,20 +505,23 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
       },
       accounting: {
         cycleStatus,
-        complete: cycleStatus === 'COMPLETED' ? true : cycleStatus === 'UNRESOLVED' ? false : null,
+        complete: cycleStatus.toUpperCase() === 'COMPLETED' ? true : cycleStatus.toUpperCase() === 'UNRESOLVED' ? false : null,
       },
       safety: {
         stopRecorded,
         marketPaused: firstBoolean(
-          readBoolean(terminalOrder, 'marketPaused'),
+          readBoolean(safety, 'marketPaused'),
+          readBoolean(latestTerminalOrder, 'marketPaused'),
           readBoolean(runtimeOutput, 'marketPaused'),
         ),
         buyAdmissionBlocked: firstBoolean(
-          readBoolean(terminalOrder, 'buyAdmissionBlocked'),
+          readBoolean(safety, 'buyAdmissionBlocked'),
+          readBoolean(latestTerminalOrder, 'buyAdmissionBlocked'),
           readBoolean(runtimeOutput, 'buyAdmissionBlocked'),
         ),
         sellAdmissionBlocked: firstBoolean(
-          readBoolean(terminalOrder, 'sellAdmissionBlocked'),
+          readBoolean(safety, 'sellAdmissionBlocked'),
+          readBoolean(latestTerminalOrder, 'sellAdmissionBlocked'),
           readBoolean(runtimeOutput, 'sellAdmissionBlocked'),
         ),
         pauseReasons,

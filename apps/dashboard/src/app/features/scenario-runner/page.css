@@ -50,3 +50,8 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:520px;overflow:auto}
 .history strong{font-size:11px}
 @media(max-width:800px){.outcome-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.orders-summary{grid-template-columns:1fr}}
 @media(max-width:600px){.controls,.outcome-grid{grid-template-columns:1fr}.story-heading,.order-heading,.inspector-heading{flex-direction:column}.mode-note{white-space:normal}.run-story{padding:12px}}
+
+.cycle-history{display:grid;gap:8px;border:1px solid var(--line);border-radius:10px;padding:12px}
+.cycle-history h3{margin:0}
+.cycle-history ol{display:grid;gap:6px;margin:0;padding-left:22px}
+.cycle-history li{overflow-wrap:anywhere}
