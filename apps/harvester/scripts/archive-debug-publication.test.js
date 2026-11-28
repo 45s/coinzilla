@@ -6,6 +6,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
+import { publishArchive } from "./archive-debug-session.js"
 import { runHarvesterDebugArchivePublication } from "./archive-debug-publication.js"
 
 const execFileAsync = promisify(execFile)
@@ -64,6 +65,68 @@ async function createFixture(t) {
   await writeFile(lockPath, "active trading process lock")
   return { root, archiveDirectory, lockPath }
 }
+
+
+test("publishes to a temporary Git remote, retries an interrupted push, and verifies idempotently", async (t) => {
+  const fixture = await createFixture(t)
+  const bareRemote = path.join(fixture.root, "archive-remote.git")
+  const seedRepository = path.join(fixture.root, "seed")
+  await mkdir(seedRepository)
+  await execFileAsync("git", ["init", "--bare", "--initial-branch=main", bareRemote])
+  await execFileAsync("git", ["init", "--initial-branch=main"], { cwd: seedRepository })
+  await execFileAsync("git", ["config", "user.name", "Archive Test"], { cwd: seedRepository })
+  await execFileAsync("git", ["config", "user.email", "archive-test@example.invalid"], { cwd: seedRepository })
+  await writeFile(path.join(seedRepository, "README.md"), "temporary archive repository\n")
+  await execFileAsync("git", ["add", "README.md"], { cwd: seedRepository })
+  await execFileAsync("git", ["commit", "-m", "initialize archive repository"], { cwd: seedRepository })
+  await execFileAsync("git", ["remote", "add", "origin", bareRemote], { cwd: seedRepository })
+  await execFileAsync("git", ["push", "-u", "origin", "main"], { cwd: seedRepository })
+
+  const sourceBefore = await snapshotDirectory(fixture.archiveDirectory)
+  let interrupted = false
+  const failFirstPush = async (args, options = {}) => {
+    if (args[0] === "push" && !interrupted) {
+      interrupted = true
+      throw new Error("simulated connection loss during push")
+    }
+    const { stdout } = await execFileAsync("git", args, { cwd: options.cwd })
+    return stdout.trim()
+  }
+  await assert.rejects(
+    publishArchive({
+      directory: fixture.archiveDirectory,
+      archiveName: ARCHIVE_NAME,
+      remote: bareRemote,
+      runGit: failFirstPush,
+    }),
+    /simulated connection loss/,
+    "An interrupted push must report failure without changing the source archive",
+  )
+  const retry = await publishArchive({
+    directory: fixture.archiveDirectory,
+    archiveName: ARCHIVE_NAME,
+    remote: bareRemote,
+  })
+  assert.equal(retry.alreadyPublished, false, "A successful retry must create the archive commit")
+  assert.match(retry.commit, /^[a-f0-9]{40}$/, "The retry must return the committed remote revision")
+  const repeated = await publishArchive({
+    directory: fixture.archiveDirectory,
+    archiveName: ARCHIVE_NAME,
+    remote: bareRemote,
+  })
+  assert.equal(repeated.alreadyPublished, true, "A repeated publication must verify the existing remote archive without duplicating it")
+  assert.equal(repeated.commit, retry.commit, "Idempotent publication must resolve to the same remote commit")
+  assert.deepEqual(
+    await snapshotDirectory(fixture.archiveDirectory),
+    sourceBefore,
+    "Real Git publication, retry and idempotency must not modify the source archive",
+  )
+  assert.equal(
+    await readFile(fixture.lockPath, "utf8"),
+    "active trading process lock",
+    "Real Git publication must not remove or modify the Harvester process lock",
+  )
+})
 
 test("publishes a completed archive while a Harvester process lock exists", async (t) => {
   const fixture = await createFixture(t)
