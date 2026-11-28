@@ -478,12 +478,12 @@ function writeCataloguedDiagnosticRecord({
   const action = `action=${diagnostic.operatorAction}`
   const causePrefix = "cause="
   const causeBudget = Math.max(0, MAX_CONSOLE_LINE_LENGTH - prefix.length - causePrefix.length - action.length - 4)
-  const cause = String(diagnostic.cause ?? diagnostic.meaning).replace(/[\\r\\n]+/g, " ")
+  const cause = String(diagnostic.cause ?? diagnostic.meaning).replace(/[\r\n]+/g, " ")
   const boundedCause = cause.length > causeBudget && causeBudget > 3
     ? `${cause.slice(0, causeBudget - 3)}...`
     : cause.slice(0, causeBudget)
   const line = `${prefix} ${causePrefix}${boundedCause} | ${action}`
-  output.write(`${formatConsoleLine({ line, level, method, color })}\\n`)
+  output.write(`${formatConsoleLine({ line, level, method, color })}\n`)
 }
 
 function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary, strategyId } = {}) {
