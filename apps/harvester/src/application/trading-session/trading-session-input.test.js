@@ -19,7 +19,9 @@ const provenance = {
 }
 
 test("maps build provenance into a bounded canonical application input", () => {
-  const mapped = mapTradingSessionInput({ buildProvenance: provenance })
+  const mapped = mapTradingSessionInput({
+    buildProvenance: provenance,
+  })
   assert.deepEqual(mapped.buildProvenance, {
     application: "harvester",
     version: "1.0.001",
@@ -59,36 +61,75 @@ test("rejects malformed build provenance at the application boundary", () => {
   const invalid = [
     {
       label: "commit SHA",
-      value: { ...provenance, source: { ...provenance.source, commit: "bad" } },
+      value: {
+        ...provenance,
+        source: {
+          ...provenance.source,
+          commit: "bad",
+        },
+      },
       expected: /hexadecimal Git SHA/,
     },
     {
       label: "short SHA",
-      value: { ...provenance, source: { ...provenance.source, shortCommit: "bbbbbbbb" } },
+      value: {
+        ...provenance,
+        source: {
+          ...provenance.source,
+          shortCommit: "bbbbbbbb",
+        },
+      },
       expected: /match the full Git SHA/,
     },
     {
       label: "commit date",
-      value: { ...provenance, source: { ...provenance.source, commitDate: "yesterday" } },
+      value: {
+        ...provenance,
+        source: {
+          ...provenance.source,
+          commitDate: "yesterday",
+        },
+      },
       expected: /canonical UTC ISO-8601/,
     },
     {
       label: "working-tree state",
-      value: { ...provenance, source: { ...provenance.source, workingTree: "modified" } },
+      value: {
+        ...provenance,
+        source: {
+          ...provenance.source,
+          workingTree: "modified",
+        },
+      },
       expected: /workingTree must be/,
     },
     {
       label: "metadata source",
-      value: { ...provenance, source: { ...provenance.source, metadataSource: "other" } },
+      value: {
+        ...provenance,
+        source: {
+          ...provenance.source,
+          metadataSource: "other",
+        },
+      },
       expected: /metadataSource must be/,
     },
     {
       label: "process id",
-      value: { ...provenance, processId: 0 },
+      value: {
+        ...provenance,
+        processId: 0,
+      },
       expected: /positive safe integer/,
     },
   ]
   for (const entry of invalid) {
-    assert.throws(() => mapTradingSessionInput({ buildProvenance: entry.value }), entry.expected, `Invalid ${entry.label} must be rejected by the application mapper.`)
+    assert.throws(
+      () => mapTradingSessionInput({
+        buildProvenance: entry.value,
+      }),
+      entry.expected,
+      `Invalid ${entry.label} must be rejected by the application mapper.`,
+    )
   }
 })

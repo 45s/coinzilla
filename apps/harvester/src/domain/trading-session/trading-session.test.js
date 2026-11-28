@@ -16,7 +16,7 @@ const BUILD_PROVENANCE = Object.freeze({
     branch: "develop",
     commit: "a".repeat(40),
     shortCommit: "a".repeat(8),
-      commitDate: "2026-11-17T15:00:00.000Z",
+    commitDate: "2026-11-17T15:00:00.000Z",
     workingTree: "clean",
     metadataSource: "git",
   },
@@ -48,7 +48,7 @@ test("creates a bounded allowlisted session record with canonical identity", () 
   assert.deepEqual(record.metadata, { recordKind: "ordinary-trading-history" }, "Only the fixed non-secret history classification may be persisted as metadata.")
 })
 
-test("rejects invalid environment, identity, configuration, markets, timestamps and provenance", () => {
+test("rejects invalid environment, identity, configuration, markets and timestamps", () => {
   const invalidCases = [
     {
       label: "environment",

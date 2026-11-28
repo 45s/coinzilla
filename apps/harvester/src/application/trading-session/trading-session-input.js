@@ -1,19 +1,37 @@
 const WORKING_TREE_STATES = new Set(["clean", "dirty", "unknown"])
 const BUILD_METADATA_SOURCES = new Set(["git", "environment", "unavailable"])
+
 function requireText({ value, field, maxLength = 160 }) {
-  if (typeof value !== "string" || value.trim() === "" || value.length > maxLength) throw new TypeError(`${field} must be a non-empty string of at most ${maxLength} characters`)
+  if (typeof value !== "string" || value.trim() === "" || value.length > maxLength) {
+    throw new TypeError(`${field} must be a non-empty string of at most ${maxLength} characters`)
+  }
   return value.trim()
 }
+
 function requireNullableText({ value, field, maxLength }) {
-  if (value === null) return null
-  return requireText({ value, field, maxLength })
+  if (value === null) {
+    return null
+  }
+  return requireText({
+    value,
+    field,
+    maxLength,
+  })
 }
+
 function requireTimestamp({ value, field }) {
-  const timestamp = requireText({ value, field, maxLength: 40 })
+  const timestamp = requireText({
+    value,
+    field,
+    maxLength: 40,
+  })
   const parsed = new Date(timestamp)
-  if (Number.isNaN(parsed.getTime()) || parsed.toISOString() !== timestamp) throw new TypeError(`${field} must be a canonical UTC ISO-8601 timestamp with milliseconds`)
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString() !== timestamp) {
+    throw new TypeError(`${field} must be a canonical UTC ISO-8601 timestamp with milliseconds`)
+  }
   return timestamp
 }
+
 function mapCommitIdentity({ value }) {
   const commit = requireNullableText({
     value: value.commit,
@@ -109,7 +127,10 @@ function mapBuildProvenance({ value }) {
   }
 }
 
-
 export function mapTradingSessionInput({ buildProvenance } = {}) {
-  return { buildProvenance: mapBuildProvenance({ value: buildProvenance }) }
+  return {
+    buildProvenance: mapBuildProvenance({
+      value: buildProvenance,
+    }),
+  }
 }
