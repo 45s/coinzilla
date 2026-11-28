@@ -218,7 +218,9 @@ test("restores the durable RS STOP latch before writing PROCESS_STARTED", async 
 
   assert.equal(startup.recoverySellerStopWorkflow.getStopState().status, "STOPPED", "restores the durable RS STOP latch before writing PROCESS_STARTED: expected startup.recoverySellerStopWorkflow.getStopState().status to equal \"STOPPED\".")
   assert.equal(startup.recoverySellerStopWorkflow.getBlockerId(), blocker.data.record.data.blockerId, "restores the durable RS STOP latch before writing PROCESS_STARTED: expected startup.recoverySellerStopWorkflow.getBlockerId() to equal blocker.data.record.data.blockerId.")
-  assert.equal(startup.startupOptions.tradingEnabled, false, "A prior-process RS STOP may restart only in observation-only mode.")
+  assert.equal(startup.startupOptions.tradingEnabled, true, "A prior-process RS STOP must remain strategy-scoped and must not globally disable a fresh current-process session.")
+  assert.equal(startup.recoverySellerStopWorkflow.isBuyAdmissionBlocked(), true, "The persisted RS STOP must continue blocking investment BUY admission.")
+  assert.equal(startup.recoverySellerStopWorkflow.isSellAdmissionBlocked(), false, "The persisted RS STOP must continue allowing recovery SELL admission.")
   const processStartIndex = calls.indexOf("PROCESS_STARTED")
   const lastReadIndex = calls.lastIndexOf("READ_ALL")
   assert.ok(processStartIndex >= 0, "The current process boundary must be persisted.")
@@ -264,7 +266,7 @@ test("records configuration and process boundaries before broker startup and aft
   assert.equal(processStop.data.clean, true, "records configuration and process boundaries before broker startup and after shutdown: expected processStop.data.clean to equal true.")
 })
 
-test("starts in observation-only mode after a clean prior process when restart recovery is disabled", async (t) => {
+test("starts a fresh current-session runtime after a clean prior process when restart recovery is disabled", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-restart-gate-"))
   t.after(() => rm(directory, {
     recursive: true,
@@ -285,12 +287,13 @@ test("starts in observation-only mode after a clean prior process when restart r
     appConfig,
     operationalStateStore: restartStore,
   })
-  assert.equal(runtime.connected, true, "a clean prior process must not prevent Command Center/runtime startup")
-  assert.equal(runtime.tradingEnabled, false, "trading must remain disabled because prior process state was not restored")
+  assert.equal(runtime.connected, true, "a clean prior process must not prevent current-process startup")
+  assert.equal(runtime.tradingEnabled, true, "prior-session orders remain external and must not globally disable a fresh current-process session when recovery is disabled")
+  assert.equal(runtime.userDataReady, true, "fresh PREFLIGHT and current-process user-data readiness must open the trading gate")
   await runtime.stop()
 })
 
-test("starts in observation-only mode after an unclean prior process when restart recovery is disabled", async (t) => {
+test("starts a fresh current-session runtime after an unclean prior process when restart recovery is disabled", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-crash-restart-gate-"))
   t.after(() => rm(directory, {
     recursive: true,
@@ -310,7 +313,8 @@ test("starts in observation-only mode after an unclean prior process when restar
     appConfig,
     operationalStateStore: restartStore,
   })
-  assert.equal(runtime.connected, true, "an unclean prior process must not prevent Command Center/runtime startup")
-  assert.equal(runtime.tradingEnabled, false, "trading must remain disabled because prior process state was not restored")
+  assert.equal(runtime.connected, true, "an unclean prior process must not prevent current-process startup")
+  assert.equal(runtime.tradingEnabled, true, "prior-session orders remain external; fresh current-session trading is gated by current PREFLIGHT and safety checks, not replay")
+  assert.equal(runtime.userDataReady, true, "fresh PREFLIGHT and current-process user-data readiness must open the trading gate")
   await runtime.stop()
 })
