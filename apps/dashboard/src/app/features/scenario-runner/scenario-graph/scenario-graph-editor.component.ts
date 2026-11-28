@@ -36,7 +36,8 @@ export class ScenarioGraphEditorComponent {
   readonly selectedEdgeId = signal<string | null>(null);
   readonly hoveredNodeId = signal<string | null>(null);
   readonly pendingConnection = signal<{ readonly nodeId: string; readonly portId: string } | null>(null);
-  readonly addNodeType = signal<ScenarioGraphNodeType>('action');\n  readonly canAddStart = computed(() => !this.graph().nodes.some((node) => node.type === 'start'));
+  readonly addNodeType = signal<ScenarioGraphNodeType>('action');
+  readonly canAddStart = computed(() => !this.graph().nodes.some((node) => node.type === 'start'));
   readonly error = signal<string | null>(null);
   readonly validation = computed(() => this.editor.validate({ graph: this.graph() }));
   readonly viewModel = computed<ScenarioGraphViewModel>(() => this.editor.viewModel({ graph: this.graph() }));
