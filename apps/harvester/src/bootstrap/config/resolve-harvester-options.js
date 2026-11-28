@@ -53,7 +53,10 @@ function validateExecutionSymbolList({ executionSymbols, routeSymbols } = {}) {
   }
 }
 
-function getDisabledRecoveryOnlySymbols({ configuredAppConfig, executionRoutes } = {}) {
+function getDisabledRecoveryOnlySymbols({
+  configuredAppConfig,
+  executionRoutes,
+} = {}) {
   const recoverySellerSymbols = Object.keys(configuredAppConfig.strategies?.RS_recoverySeller?.pairs ?? {})
   const conservativeSymbols = new Set(Object.keys(configuredAppConfig.strategies?.CG_coinGrabber?.pairs ?? {}))
   const disabledRecoveryOnlySymbols = new Set(
