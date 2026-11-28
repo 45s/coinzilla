@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import { once } from "node:events"
 import { finished } from "node:stream/promises"
 import { createWriteStream, mkdirSync } from "node:fs"
-import { writeFile } from "node:fs/promises"
+import { readFile, writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { spawn } from "node:child_process"
@@ -14,6 +14,93 @@ import {
 } from "./capture-harvester-archive-process-identity.js"
 import { forwardChildOutput } from "./forward-child-output.js"
 import { createHarvesterLogSessionPaths } from "../src/infrastructure/logging/create-harvester-log-session-paths.js"
+
+async function readLoggerStreamsCompletion({ sessionDirectory, runtimeSessionId } = {}) {
+  try {
+    const completion = JSON.parse(await readFile(resolve(sessionDirectory, "log-streams-completed.json"), "utf8"))
+    return completion.runtimeSessionId === runtimeSessionId
+      && completion.logStreamsComplete === true
+      && completion.streams?.harvesterLog === true
+      && completion.streams?.traceLog === true
+  } catch {
+    return false
+  }
+}
+
+function resolveTerminalCaptureComplete({ childStarted, logStreamFailed, outputForwardingFailed, logStreamsClosed } = {}) {
+  return childStarted && !logStreamFailed && !outputForwardingFailed && logStreamsClosed
+}
+
+async function persistDevRunnerProcessCompletion({
+  sessionDirectory,
+  runtimeSessionId,
+  sessionStartedAt,
+  processId,
+  code,
+  signal,
+  childStarted,
+  logStreamFailed,
+  outputForwardingFailed,
+  logStreamsClosed,
+} = {}) {
+  const loggerStreamsComplete = await readLoggerStreamsCompletion({ sessionDirectory, runtimeSessionId })
+  const terminalCaptureComplete = resolveTerminalCaptureComplete({
+    childStarted,
+    logStreamFailed,
+    outputForwardingFailed,
+    logStreamsClosed,
+  })
+  const completion = {
+    formatVersion: 1,
+    application: "harvester",
+    runtimeSessionId,
+    startedAt: sessionStartedAt,
+    endedAt: new Date().toISOString(),
+    processId,
+    exitCode: code,
+    signal,
+    loggerStreamsComplete,
+    terminalCaptureComplete,
+    logStreamsComplete: loggerStreamsComplete && terminalCaptureComplete,
+  }
+  await writeFile(resolve(sessionDirectory, "process-completed.json"), `${JSON.stringify(completion, null, 2)}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o600,
+  })
+}
+
+function sumOutputChunkCounts({ outputChunkCounts } = {}) {
+  let total = 0
+  for (const count of outputChunkCounts) {
+    total += count
+  }
+  return total
+}
+
+function reportDroppedOutputChunks({ droppedChunks, logPath, sessionLogStream } = {}) {
+  if (droppedChunks > 0 && !process.stderr.destroyed && !process.stderr.writableNeedDrain) {
+    process.stderr.write(
+      `Harvester terminal display skipped ${droppedChunks} output chunk(s); full child output remains in ${logPath} and ${sessionLogStream.path}\n`,
+    )
+  }
+}
+
+function resolveDevRunnerExitCode({ code, signal, logStreamFailed } = {}) {
+  if (logStreamFailed) {
+    process.exitCode = 1
+  } else if (code !== null) {
+    process.exitCode = code
+  } else if (signal === "SIGINT") {
+    process.exitCode = 130
+  } else if (signal === "SIGTERM") {
+    process.exitCode = 143
+  } else if (signal) {
+    process.exitCode = 1
+  } else {
+    process.exitCode ??= 0
+  }
+}
 
 const packageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const cliArguments = process.argv.slice(2)
@@ -209,84 +296,28 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
     childClosed = true
     process.removeListener("SIGINT", onSigint)
     process.removeListener("SIGTERM", onSigterm)
-
     const outputChunkCounts = await Promise.all(outputForwarding)
-    let droppedChunks = 0
-    for (const outputChunkCount of outputChunkCounts) {
-      droppedChunks += outputChunkCount
-    }
-
+    const droppedChunks = sumOutputChunkCounts({ outputChunkCounts })
     const logStreamsClosed = await closeLogStreams()
-    let loggerStreamsComplete = false
     try {
-      const loggerCompletion = JSON.parse(await readFile(
-        resolve(sessionPaths.sessionDirectory, "log-streams-completed.json"),
-        "utf8",
-      ))
-      loggerStreamsComplete = loggerCompletion.runtimeSessionId === runtimeSessionId
-        && loggerCompletion.logStreamsComplete === true
-        && loggerCompletion.streams?.harvesterLog === true
-        && loggerCompletion.streams?.traceLog === true
-    } catch {
-      loggerStreamsComplete = false
-    }
-    const terminalCaptureComplete = childStarted
-      && !logStreamFailed
-      && !outputForwardingFailed
-      && logStreamsClosed
-
-    try {
-      await writeFile(
-        resolve(sessionPaths.sessionDirectory, "process-completed.json"),
-        `${JSON.stringify({
-          formatVersion: 1,
-          application: "harvester",
-          runtimeSessionId,
-          startedAt: sessionStartedAt,
-          endedAt: new Date().toISOString(),
-          processId: childProcess.current.pid ?? null,
-          exitCode: code,
-          signal,
-          loggerStreamsComplete,
-          terminalCaptureComplete,
-          logStreamsComplete: loggerStreamsComplete && terminalCaptureComplete,
-        }, null, 2)}\n`,
-        {
-          encoding: "utf8",
-          flag: "wx",
-          mode: 0o600,
-        },
-      )
+      await persistDevRunnerProcessCompletion({
+        sessionDirectory: sessionPaths.sessionDirectory,
+        runtimeSessionId,
+        sessionStartedAt,
+        processId: childProcess.current.pid ?? null,
+        code,
+        signal,
+        childStarted,
+        logStreamFailed,
+        outputForwardingFailed,
+        logStreamsClosed,
+      })
     } catch (error) {
       process.stderr.write(`Failed to persist Harvester session completion: ${error.message}\n`)
       process.exitCode = 1
     }
-
-    if (
-      droppedChunks > 0
-      && !process.stderr.destroyed
-      && !process.stderr.writableNeedDrain
-    ) {
-      process.stderr.write(
-        `Harvester terminal display skipped ${droppedChunks} output chunk(s); full child output remains in ${logPath} and ${sessionLogStream.path}\n`,
-      )
-    }
-
-    if (logStreamFailed) {
-      process.exitCode = 1
-    } else if (code !== null) {
-      process.exitCode = code
-    } else if (signal) {
-      if (signal === "SIGINT") {
-        process.exitCode = 130
-      } else if (signal === "SIGTERM") {
-        process.exitCode = 143
-      } else {
-        process.exitCode = 1
-      }
-    } else {
-      process.exitCode ??= 0
-    }
-  })
+    reportDroppedOutputChunks({ droppedChunks, logPath, sessionLogStream })
+    resolveDevRunnerExitCode({ code, signal, logStreamFailed })
+  }))
 
 }
