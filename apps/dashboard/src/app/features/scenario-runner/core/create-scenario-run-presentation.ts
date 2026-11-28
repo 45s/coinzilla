@@ -165,7 +165,10 @@ function readEdges(root: EvidenceRecord | null, runOutput: EvidenceRecord | null
   const candidates = [
     root?.['traceEdges'],
     graph?.['edges'],
+    readRecord(root, 'traceGraph')?.['edges'],
     runOutput?.['traceEdges'],
+    readRecord(runOutput, 'graph')?.['edges'],
+    readRecord(runOutput, 'traceGraph')?.['edges'],
   ];
   const sourceEdges = candidates.find(Array.isArray);
   return asArray(sourceEdges).flatMap((value) => {
@@ -185,7 +188,7 @@ function readAssertions(root: EvidenceRecord | null, runOutput: EvidenceRecord |
   readonly total: number;
   readonly failed: number;
 } | null {
-  const source = root?.['assertionResults'] ?? runOutput?.['assertions'];
+  const source = root?.['assertionResults'] ?? runOutput?.['assertionResults'] ?? runOutput?.['assertions'];
   if (!Array.isArray(source)) {
     return null;
   }
@@ -197,21 +200,38 @@ function readAssertions(root: EvidenceRecord | null, runOutput: EvidenceRecord |
   };
 }
 
-function isPositiveQuantity(value: string | null): boolean | null {
-  if (value === null || value.trim() === '') {
+function compareDecimalStrings(left: string, right: string): number | null {
+  const decimalPattern = /^\\d+(?:\\.\\d+)?$/;
+  if (!decimalPattern.test(left) || !decimalPattern.test(right)) {
     return null;
   }
-  const quantity = Number(value);
-  return Number.isFinite(quantity) ? quantity > 0 : null;
+  const [leftWhole, leftFraction = ''] = left.split('.');
+  const [rightWhole, rightFraction = ''] = right.split('.');
+  const normalizedLeftWhole = leftWhole.replace(/^0+(?=\\d)/, '');
+  const normalizedRightWhole = rightWhole.replace(/^0+(?=\\d)/, '');
+  if (normalizedLeftWhole.length !== normalizedRightWhole.length) {
+    return normalizedLeftWhole.length > normalizedRightWhole.length ? 1 : -1;
+  }
+  if (normalizedLeftWhole !== normalizedRightWhole) {
+    return normalizedLeftWhole > normalizedRightWhole ? 1 : -1;
+  }
+  const fractionLength = Math.max(leftFraction.length, rightFraction.length);
+  const normalizedLeftFraction = leftFraction.padEnd(fractionLength, '0');
+  const normalizedRightFraction = rightFraction.padEnd(fractionLength, '0');
+  if (normalizedLeftFraction === normalizedRightFraction) {
+    return 0;
+  }
+  return normalizedLeftFraction > normalizedRightFraction ? 1 : -1;
 }
 
 function isPartialExecution(order: ScenarioRunPresentationOrder): boolean {
-  if (order.executedQuantity === null || order.quantity === null) {
+  if (order.terminalStatus === null || order.executedQuantity === null || order.quantity === null) {
     return false;
   }
-  const executed = Number(order.executedQuantity);
-  const total = Number(order.quantity);
-  return Number.isFinite(executed) && Number.isFinite(total) && executed > 0 && executed < total;
+  const executedComparison = compareDecimalStrings(order.executedQuantity, '0');
+  const totalComparison = compareDecimalStrings(order.executedQuantity, order.quantity);
+  return executedComparison !== null && executedComparison > 0 &&
+    totalComparison !== null && totalComparison < 0;
 }
 
 function buildOrders(runtimeOutput: EvidenceRecord | null): readonly ScenarioRunPresentationOrder[] {
@@ -274,7 +294,7 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
   const runtimeOutput = readRecord(runOutput, 'output') ?? runOutput;
   const input = readRecord(run, 'input') ?? readRecord(runOutput, 'input');
   const execution = readRecord(root, 'execution');
-  const replayProvenance = readRecord(run, 'replayProvenance') ?? readRecord(root, 'replayProvenance');
+  const replayProvenance = readRecord(run, 'replayProvenance') ?? readRecord(root, 'replayProvenance') ?? readRecord(runOutput, 'replayProvenance');
   const provenanceIdentity = readRecord(replayProvenance, 'identity');
   const catalog = readRecord(root, 'scenarioCatalogSnapshot');
   const terminalOrder = readRecord(runtimeOutput, 'terminalSell');
@@ -316,6 +336,7 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
     readString(root, 'executionMode'),
     readString(execution, 'mode'),
     readString(run, 'executionMode'),
+    readString(runOutput, 'executionMode'),
   );
   const runStatus = readString(run, 'status');
   const assertions = readAssertions(root, runOutput);
@@ -354,7 +375,7 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
         status: runStatus,
         outcome: readString(execution, 'outcome'),
         mode: executionMode,
-        workerIsolation: readString(execution, 'workerIsolation'),
+        workerIsolation: firstString(readString(execution, 'workerIsolation'), readString(runOutput, 'workerIsolation')),
       },
       assertions,
       lifecycle: {
@@ -386,7 +407,7 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
         verified: provenanceVerified,
         catalogStatus: readString(catalog, 'status'),
         buildArtifactSha256,
-        workerIsolation: readString(execution, 'workerIsolation'),
+        workerIsolation: firstString(readString(execution, 'workerIsolation'), readString(runOutput, 'workerIsolation')),
         missing: asArray(replayProvenance?.['missing']),
         traceCompleteness: readString(root, 'traceCompleteness'),
         catalogSnapshotProvenance: readString(root, 'scenarioCatalogSnapshotProvenance'),

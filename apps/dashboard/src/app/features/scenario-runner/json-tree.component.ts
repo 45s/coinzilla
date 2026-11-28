@@ -51,7 +51,7 @@ interface JsonTreeEntry {
   `],
 })
 export class JsonTreeComponent {
-  @Input({ required: true }) value: unknown;
+  @Input({ required: true }) value!: unknown;
   @Input() label = 'root';
   @Input() depth = 0;
   @Input() path = 'root';
