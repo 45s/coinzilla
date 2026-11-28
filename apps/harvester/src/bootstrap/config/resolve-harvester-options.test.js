@@ -80,22 +80,23 @@ test("selects CG and RS markets independently while preserving strategy-owned pa
     },
   }
   const executionRoutes = [
-    {
+    ...conservativeSymbols.map((symbol) => ({
       strategyId: "CG_coinGrabber",
-      symbol: "BTCUSDT",
-    },
-    {
+      symbol,
+    })),
+    ...recoverySellerSymbols.map((symbol) => ({
       strategyId: "RS_recoverySeller",
-      symbol: "ETHUSDT",
-    },
+      symbol,
+    })),
   ]
+  const executionSymbols = [...conservativeSymbols, ...recoverySellerSymbols]
   const fixture = createFixture({
     cfg,
     env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
   })
   const result = await resolveHarvesterOptions({
     ...fixture.input,
-    executionSymbols: ["BTCUSDT", "ETHUSDT"],
+    executionSymbols,
     executionRoutes,
   })
 
@@ -207,7 +208,7 @@ test("resolves an RS-only provider account without creating a Conservative execu
   })
 
   assert.deepEqual(result.conservativePairs, {}, "An RS-only provider must not receive a synthetic Conservative market.")
-  assert.deepEqual(Object.keys(result.recoverySellerPairs), ["ETHUSDT"], "The RS provider must receive only its explicitly routed RS pair.")
+  assert.deepEqual(Object.keys(result.recoverySellerPairs), recoverySellerSymbols, "The RS provider must receive only its explicitly routed RS pair.")
   assert.deepEqual(Object.keys(result.pairs), ["ETHUSDT"], "The provider market map must contain the RS market without adding it to CG.")
   assert.deepEqual(result.executionSymbols, ["ETHUSDT"], "The RS route must remain executable on the selected provider.")
   assert.equal(result.tradingEnabled, true, "An enabled RS route must not be disabled merely because this account has no CG route.")
@@ -568,7 +569,9 @@ test("rejects enabled RS configuration when provider execution routes are missin
 })
 
 test("keeps enabled RS execution routes when CG process recovery is disabled", async () => {
-  const baseConfig = config({ enabledSymbols: ["BTCUSDT"] })
+  const conservativeSymbols = ["ADAUSDT", "DOGEUSDT", "LINKUSDT", "ZROUSDT"]
+  const recoverySellerSymbols = ["LINEAUSDT", "ARBUSDT"]
+  const baseConfig = config({ enabledSymbols: conservativeSymbols })
   const cfg = {
     ...baseConfig,
     components: { recovery: { enabled: false } },
@@ -576,7 +579,10 @@ test("keeps enabled RS execution routes when CG process recovery is disabled", a
       ...baseConfig.strategies,
       RS_recoverySeller: {
         enabled: true,
-        pairs: { ETHUSDT: recoverySellerPair() },
+        pairs: Object.fromEntries(recoverySellerSymbols.map((symbol) => [
+          symbol,
+          recoverySellerPair(),
+        ])),
       },
     },
   }
@@ -602,14 +608,14 @@ test("keeps enabled RS execution routes when CG process recovery is disabled", a
 
   assert.equal(result.appConfig.strategies.RS_recoverySeller.enabled, true,
     "The CG process-recovery switch must not disable the independent RS strategy.")
-  assert.deepEqual(Object.keys(result.appConfig.strategies.RS_recoverySeller.pairs), ["ETHUSDT"],
+  assert.deepEqual(Object.keys(result.appConfig.strategies.RS_recoverySeller.pairs), recoverySellerSymbols,
     "The enabled RS market must remain in the effective runtime configuration.")
   assert.deepEqual(Object.keys(result.recoverySellerPairs), ["ETHUSDT"],
     "The RS market must survive strategy pair resolution.")
   assert.deepEqual(result.executionRoutes, executionRoutes,
     "The provider's CG and RS execution routes must both be retained.")
-  assert.deepEqual(result.executionSymbols, ["BTCUSDT", "ETHUSDT"],
+  assert.deepEqual(result.executionSymbols, executionSymbols,
     "The provider's CG and RS execution symbols must both be retained.")
-  assert.deepEqual(result.enabledSymbols, ["BTCUSDT", "ETHUSDT"],
+  assert.deepEqual(result.enabledSymbols, [...conservativeSymbols, ...recoverySellerSymbols].sort(),
     "Configuration evidence must include enabled markets from both strategies.")
 })
