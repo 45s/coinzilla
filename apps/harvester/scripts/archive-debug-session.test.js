@@ -769,3 +769,40 @@ test("rejects missing process-completion metadata even when both log files exist
     "Log file presence alone must not prove successful process completion",
   )
 })
+
+ 
+test("fails when only the Harvester DEBUG stream is missing", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  await rm(path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/harvester.log"))
+  await assert.rejects(
+    runHarvesterDebugArchive(archiveWithoutPublishing({
+      fixture,
+      inspectArchive: async ({ directory }) => {
+        const manifest = await readArchiveManifest(directory)
+        assert.equal(manifest.evidenceIntegrity.streams.harvesterLog.status, "missing")
+        assert.equal(manifest.evidenceIntegrity.streams.traceLog.status, "matched")
+      },
+    })),
+    /HARVESTER LOG COLLECTION FAILED/i,
+    "Missing DEBUG evidence must have a stream-specific failure",
+  )
+})
+
+test("fails when only the TRACE stream is missing", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  await rm(path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/trace.log"))
+  await assert.rejects(
+    runHarvesterDebugArchive(archiveWithoutPublishing({
+      fixture,
+      inspectArchive: async ({ directory }) => {
+        const manifest = await readArchiveManifest(directory)
+        assert.equal(manifest.evidenceIntegrity.streams.harvesterLog.status, "matched")
+        assert.equal(manifest.evidenceIntegrity.streams.traceLog.status, "missing")
+      },
+    })),
+    /TRACE LOG COLLECTION FAILED/i,
+    "Missing TRACE evidence must have a stream-specific failure",
+  )
+})
