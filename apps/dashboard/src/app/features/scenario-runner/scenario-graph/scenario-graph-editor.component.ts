@@ -35,7 +35,8 @@ export class ScenarioGraphEditorComponent {
   readonly error = signal<string | null>(null);
   readonly validation = computed(() => this.editor.validate({ graph: this.graph() }));
   readonly viewModel = computed<ScenarioGraphViewModel>(() => this.editor.viewModel({ graph: this.graph() }));
-  readonly selectedNode = computed(() => this.graph().nodes.find((node) => node.id === this.selectedNodeId()) ?? null);\n  readonly selectedNodePropertiesJson = computed(() => JSON.stringify(this.selectedNode()?.properties ?? {}, null, 2));
+  readonly selectedNode = computed(() => this.graph().nodes.find((node) => node.id === this.selectedNodeId()) ?? null);
+  readonly selectedNodePropertiesJson = computed(() => JSON.stringify(this.selectedNode()?.properties ?? {}, null, 2));
   readonly serializedGraph = computed(() => this.editor.serialize({ graph: this.graph() }));
 
   setNodeType(value: string): void {
