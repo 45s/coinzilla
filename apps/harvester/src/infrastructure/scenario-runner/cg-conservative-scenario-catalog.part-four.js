@@ -273,7 +273,17 @@ export const CG_CONSERVATIVE_SCENARIO_DETAILS_PART_FOUR = [
       "SHUTDOWN_PROCESS_OWNERSHIP"
     ],
     "coverageStatus": "TEST-MAPPED",
-    "coverageReason": "Four-market recovery-input failure and shared-service retention tests are mapped; historical incident outcomes and other failure-ordering combinations remain under review."
+    "coverageReason": "Four-market recovery-input failure and shared-service retention tests are mapped; historical incident outcomes and other failure-ordering combinations remain under review.",
+    "relatedExistingTests": [
+      {
+        "path": "src/bootstrap/shutdown/create-conservative-shutdown-participant.test.js",
+        "name": "retains recovery-input blockers independently for all four configured markets"
+      },
+      {
+        "path": "src/bootstrap/shutdown/create-shutdown-handler.test.js",
+        "name": "retains shared services when four-market shutdown proof is blocked"
+      }
+    ]
   },
   {
     "id": "CON-SELL-001",
@@ -370,3 +380,4 @@ export const CG_CONSERVATIVE_SCENARIO_DETAILS_PART_FOUR = [
     "coverageReason": "The recovery SELL planner and fresh-filter tests are mapped; the complete exchange rejection and terminal-order matrix remains a separate application concern."
   }
 ]
+
