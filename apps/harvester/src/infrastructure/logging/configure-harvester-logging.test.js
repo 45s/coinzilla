@@ -1155,3 +1155,34 @@ test("continues long catalogued causes without exceeding the per-line console bu
   )
   output.destroy()
 })
+
+ 
+test("completes a DEV-runner identity with the child process ID", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-runner-identity-"))
+  const startedAt = "2026-11-05T12:00:00.000Z"
+  const runtimeSessionId = "session-runner"
+  const sessionDirectory = path.join(directory, "sessions", "2026-11-05_12-00-00-session-runner")
+  await mkdir(sessionDirectory, { recursive: true })
+  await writeFile(path.join(sessionDirectory, "process-identity.json"), JSON.stringify({
+    formatVersion: 1,
+    application: "harvester",
+    environment: process.env.TRADING_MODE ?? "unknown",
+    startedAt,
+    runtimeSessionId,
+    source: { branch: "develop", commit: "a".repeat(40), workingTree: "clean" },
+  }))
+  const logger = createLogger()
+  try {
+    const logging = await configureHarvesterLogging({
+      logger,
+      directory,
+      processIdentity: { startedAt, runtimeSessionId, processId: process.pid, version: "test" },
+    })
+    const identity = JSON.parse(await readFile(path.join(sessionDirectory, "process-identity.json"), "utf8"))
+    assert.equal(identity.runtimeSessionId, runtimeSessionId)
+    assert.equal(identity.processId, process.pid, "The child must complete the pre-created identity with its own PID.")
+    await logging.close()
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
