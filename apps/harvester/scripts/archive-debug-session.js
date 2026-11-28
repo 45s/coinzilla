@@ -163,10 +163,16 @@ async function copyFileRange({ sourcePath, destinationPath, size, compressed = f
     end: size - 1,
   })
   if (compressed) {
-    await pipeline(source, createGzip({ level: 6 }), createWriteStream(destinationPath, { flags: "wx", mode: 0o600 }))
+    await pipeline(source, createGzip({ level: 6 }), createWriteStream(destinationPath, {
+      flags: "wx",
+      mode: 0o600,
+    }))
     return
   }
-  await pipeline(source, createWriteStream(destinationPath, { flags: "wx", mode: 0o600 }))
+  await pipeline(source, createWriteStream(destinationPath, {
+      flags: "wx",
+      mode: 0o600,
+    }))
 }
 
 async function copyStableFile({ sourcePath, destinationPath } = {}) {
@@ -535,7 +541,10 @@ function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCom
 }
 
 function resolveArchiveSessionLoggerCompletionStatus({ identity, loggerCompletion, isHarvesterTestnet, processId, activeProcessOwner } = {}) {
-  if (hasCompleteLoggerCompletion({ identity, loggerCompletion }) && isHarvesterTestnet) {
+  if (hasCompleteLoggerCompletion({
+    identity,
+    loggerCompletion,
+  }) && isHarvesterTestnet) {
     return "complete"
   }
   return isHarvesterTestnet
