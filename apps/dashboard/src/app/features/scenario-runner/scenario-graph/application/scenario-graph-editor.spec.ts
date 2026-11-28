@@ -42,6 +42,21 @@ describe('scenario graph editor application', () => {
     }), 'duplicate node IDs must be rejected by the application boundary').toThrow('SCENARIO_GRAPH_NODE_ID_DUPLICATE');
   });
 
+  it('creates connection identities through the injected ID generator', () => {
+    const editor = createScenarioGraphEditor({ createId: () => 'edge-2' });
+    const graph = editor.connect({
+      graph: createGraph(),
+      from: { nodeId: 'start', portId: 'next' },
+      to: { nodeId: 'end', portId: 'in' },
+    });
+    expect(graph.edges[1]?.id, 'the application boundary must generate connection identities').toBe('edge-2');
+  });
+
+  it('suggests deterministic node positions outside the presentation component', () => {
+    const editor = createScenarioGraphEditor({ createId: () => 'unused' });
+    expect(editor.suggestNodePosition({ graph: createGraph() }), 'default graph placement belongs to the framework-neutral application').toEqual({ x: 540, y: 80 });
+  });
+
   it('builds renderer-neutral geometry without importing a rendering framework', () => {
     const editor = createScenarioGraphEditor({ createId: () => 'unused' });
     const view = editor.viewModel({ graph: createGraph() });

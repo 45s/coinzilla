@@ -46,7 +46,6 @@ export class ScenarioGraphEditorComponent {
   }
 
   addNode(): void {
-    const index = this.nextId;
     try {
       const graph = this.editor.addNode({
         graph: this.graph(),
@@ -54,7 +53,7 @@ export class ScenarioGraphEditorComponent {
           type: this.addNodeType(),
           label: this.addNodeType() === 'decision' ? 'New condition' : 'New step',
           description: 'Draft node. Edit its description before using this graph as documentation.',
-          position: { x: 80 + (index % 4) * 230, y: 80 + Math.floor(index / 4) * 130 },
+          position: this.editor.suggestNodePosition({ graph: this.graph() }),
           properties: {},
         },
       });
@@ -152,14 +151,10 @@ export class ScenarioGraphEditorComponent {
       return;
     }
     try {
-      const edgeCount = this.graph().edges.length + 1;
       this.graph.set(this.editor.connect({
         graph: this.graph(),
-        edge: {
-          id: `draft-edge-${edgeCount}`,
-          from: source,
-          to: { nodeId, portId: 'in' },
-        },
+        from: source,
+        to: { nodeId, portId: 'in' },
       }));
       this.error.set(null);
     } catch (error) {

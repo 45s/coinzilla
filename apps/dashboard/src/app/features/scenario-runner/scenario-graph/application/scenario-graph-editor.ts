@@ -86,6 +86,11 @@ export function createScenarioGraphEditor({ createId }: {
   readonly createId: () => string;
 }) {
   return Object.freeze({
+    suggestNodePosition({ graph }: { readonly graph: ScenarioGraph }): ScenarioGraphPosition {
+      const index = graph.nodes.length;
+      return { x: 80 + (index % 4) * 230, y: 80 + Math.floor(index / 4) * 130 };
+    },
+
     addNode({ graph, node }: { readonly graph: ScenarioGraph; readonly node: ScenarioGraphNodeDraft }): ScenarioGraph {
       const id = createId();
       if (graph.nodes.some((existing) => existing.id === id) || graph.edges.some((existing) => existing.id === id)) {
@@ -105,8 +110,8 @@ export function createScenarioGraphEditor({ createId }: {
       return moveGraphNode(graph, nodeId, position);
     },
 
-    connect({ graph, edge }: { readonly graph: ScenarioGraph; readonly edge: ScenarioGraphEdge }): ScenarioGraph {
-      return connectGraphNodes(graph, edge);
+    connect({ graph, from, to, label }: { readonly graph: ScenarioGraph; readonly from: ScenarioGraphEdge['from']; readonly to: ScenarioGraphEdge['to']; readonly label?: string }): ScenarioGraph {
+      return connectGraphNodes(graph, { id: createId(), from, to, label });
     },
 
     disconnect({ graph, edgeId }: { readonly graph: ScenarioGraph; readonly edgeId: string }): ScenarioGraph {
