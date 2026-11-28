@@ -531,10 +531,10 @@ test("does not infer current-process ownership from a legacy-looking client ID",
     },
   })
 
-  assert.equal(result.ok, false, "A Harvester-looking identity must not be silently classified as external when the active process namespace is unavailable.")
-  assert.equal(result.failure.stage, "ORDER_REGISTRY_MATCH", "Missing process identity must retain the ownership-integrity failure.")
-  assert.equal(calls.pauses[0]?.reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT", "An unresolved Harvester-looking identity must pause its market.")
-  assert.deepEqual(calls.accounting, [], "An unresolved Harvester-looking identity must not mutate strategy accounting.")
+  assert.equal(result.ok, true, "A legacy-looking ID without current-process membership must remain external.")
+  assert.equal(result.data.externalOrder, true, "An unmatched prior-process order must be explicitly classified as external.")
+  assert.deepEqual(calls.pauses, [], "A prior-process order must not pause the current process.")
+  assert.deepEqual(calls.accounting, [], "An unowned order must never mutate strategy accounting.")
 })
 
 test("applies partial BUY fills without advancing strategy evaluation", async () => {
