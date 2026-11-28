@@ -2775,7 +2775,10 @@ test("preserves nested process error identity while redacting credential-bearing
     }),
     {
       code: "HARVESTER_PROVIDER_IDENTITY_INVALID",
-      context: { component: "provider", operation: "connect" },
+      context: {
+        component: "provider",
+        operation: "connect",
+      },
     },
   )
 
