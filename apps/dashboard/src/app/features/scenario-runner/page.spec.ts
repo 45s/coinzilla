@@ -239,11 +239,11 @@ describe('ScenarioRunnerComponent run details', () => {
     expect(component.selectedScenarioGraph?.source.kind, 'CG scenarios must use the dedicated Conservative domain graph, not a flat list of metadata events').toBe('cg-domain-specification');
     expect(component.selectedScenarioGraph?.nodes.map((node) => node.id), 'CG graph must show the canonical recovery path and its branches').toEqual(expect.arrayContaining([
       'active-sell',
-      'cancel-valid',
+      'active-sell-valid',
       'sellable-check',
-      'sell-update',
+      'terminal-update',
       'terminal-valid',
-      'profit-check',
+      'profit-retained-check',
       'next-buy-eligible',
     ]));
     expect(component.selectedScenarioGraph?.nodes.some((node) => node.label.startsWith('Declared event')), 'scenario metadata events must not become graph nodes').toBe(false);
