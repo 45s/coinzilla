@@ -693,6 +693,21 @@ test("publishes a verified active-process snapshot without requiring completion 
     processId: session.processId,
     hostname: os.hostname(),
     lockStartedAt: session.startedAt,
+    lockFiles: [
+      {
+        name: `.harvester-trading-${"a".repeat(64)}.lock`,
+        namespace: "application",
+        fingerprint: "a".repeat(64),
+        startedAt: session.startedAt,
+      },
+      {
+        name: `.binance-harvester-trading-${"a".repeat(64)}.lock`,
+        namespace: "host",
+        broker: "binance",
+        fingerprint: "a".repeat(64),
+        startedAt: session.startedAt,
+      },
+    ],
     processStartedAt: session.startedAt,
     recoveryDataCommitHash: manifest.dataCommitHash,
     capturedAt: new Date().toISOString(),

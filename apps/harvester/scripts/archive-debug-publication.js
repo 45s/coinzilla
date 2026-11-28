@@ -75,11 +75,16 @@ async function readArchivedSessionJson({ directory, manifest, sourcePath } = {})
 }
 
 function isMatchingArchivedProcessIdentity({ identity, session, expectedRuntimeId, manifest } = {}) {
+  const expectedProcessId = manifest.tradingRuntime.processIdentity.processId
   return identity.application === "harvester"
     && identity.environment === "testnet"
     && identity.runtimeSessionId === expectedRuntimeId
     && identity.startedAt === session.startedAt
     && identity.startedAt === manifest.tradingRuntime.processIdentity.startedAt
+    && Number.isSafeInteger(identity.processId)
+    && identity.processId > 0
+    && identity.processId === session.processId
+    && identity.processId === expectedProcessId
 }
 
 function isMatchingArchivedProcessCompletion({ completion, expectedRuntimeId } = {}) {
@@ -97,8 +102,13 @@ function isMatchingArchivedLoggerCompletion({ loggerCompletion, expectedRuntimeI
 
 function assertArchivedProcessId({ identity, completion, manifest, expectedRuntimeId } = {}) {
   const expectedProcessId = manifest.tradingRuntime.processIdentity.processId
-  if (expectedProcessId && completion.processId !== expectedProcessId) {
-    throw new Error(`Process ID mismatch in lifecycle evidence for runtime ${expectedRuntimeId}: identity=${identity.processId}; completion=${completion.processId}.`)
+  if (
+    !Number.isSafeInteger(expectedProcessId)
+    || expectedProcessId <= 0
+    || identity.processId !== expectedProcessId
+    || completion.processId !== expectedProcessId
+  ) {
+    throw new Error(`Process ID mismatch in lifecycle evidence for runtime ${expectedRuntimeId}: expected=${expectedProcessId}; identity=${identity.processId}; completion=${completion.processId}.`)
   }
 }
 
@@ -126,6 +136,47 @@ function hasCompleteActiveSnapshotStreams(marker) {
     && marker.streams?.traceLog === true
 }
 
+function hasValidActiveSnapshotLockFiles(marker) {
+  if (!Array.isArray(marker.lockFiles) || marker.lockFiles.length < 2) {
+    return false
+  }
+  const processStartedAt = Date.parse(marker.processStartedAt)
+  if (!Number.isFinite(processStartedAt)) {
+    return false
+  }
+  const namespacesByFingerprint = new Map()
+  for (const lockFile of marker.lockFiles) {
+    const lockStartedAt = Date.parse(lockFile?.startedAt)
+    if (
+      !/^[a-f0-9]{64}$/i.test(lockFile?.fingerprint ?? "")
+      || typeof lockFile.name !== "string"
+      || !Number.isFinite(lockStartedAt)
+      || Math.abs(lockStartedAt - processStartedAt) > 30_000
+      || !["application", "host"].includes(lockFile.namespace)
+    ) {
+      return false
+    }
+    const expectedName = lockFile.namespace === "application"
+      ? ".harvester-trading-" + lockFile.fingerprint + ".lock"
+      : typeof lockFile.broker === "string" && /^[a-z0-9-]+$/i.test(lockFile.broker)
+        ? "." + lockFile.broker.toLowerCase() + "-harvester-trading-" + lockFile.fingerprint + ".lock"
+        : null
+    if (lockFile.name !== expectedName) {
+      return false
+    }
+    const namespaces = namespacesByFingerprint.get(lockFile.fingerprint) ?? new Set()
+    if (namespaces.has(lockFile.namespace)) {
+      return false
+    }
+    namespaces.add(lockFile.namespace)
+    namespacesByFingerprint.set(lockFile.fingerprint, namespaces)
+  }
+  return [...namespacesByFingerprint.values()].every((namespaces) =>
+    namespaces.has("application") && namespaces.has("host")
+  )
+}
+
+
 function isValidActiveSnapshotMarker({ marker, identity, manifest, expectedRuntimeId } = {}) {
   return marker.formatVersion === 1
     && marker.snapshotType === "active-harvester-process"
@@ -139,6 +190,7 @@ function isValidActiveSnapshotMarker({ marker, identity, manifest, expectedRunti
       marker,
       identity,
     })
+    && hasValidActiveSnapshotLockFiles(marker)
     && marker.recoveryDataCommitHash === manifest.dataCommitHash
     && hasCompleteActiveSnapshotStreams(marker)
 }

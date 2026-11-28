@@ -14,7 +14,7 @@ import { spawn } from "node:child_process"
 import { createReadStream, createWriteStream } from "node:fs"
 import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
-import { createGzip } from "node:zlib"
+import { createGzip, createGunzip } from "node:zlib"
 import path from "node:path"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
@@ -533,13 +533,17 @@ function hasCompleteLoggerCompletion({ identity, loggerCompletion } = {}) {
 const ACTIVE_PROCESS_LOCK_START_TOLERANCE_MS = 30_000
 
 function isMatchingActiveProcessOwner({ identity, processId, activeProcessOwner } = {}) {
+  if (!activeProcessOwner || !Number.isSafeInteger(processId)) {
+    return false
+  }
   const identityStartedAt = Date.parse(identity?.startedAt)
-  const lockStartedAt = Date.parse(activeProcessOwner?.startedAt)
-  return Number.isSafeInteger(processId)
-    && processId === activeProcessOwner?.pid
-    && Number.isFinite(identityStartedAt)
-    && Number.isFinite(lockStartedAt)
-    && Math.abs(identityStartedAt - lockStartedAt) <= ACTIVE_PROCESS_LOCK_START_TOLERANCE_MS
+  const lockOwners = activeProcessOwner.lockOwners ?? [activeProcessOwner]
+  return Number.isFinite(identityStartedAt) && lockOwners.length > 0 && lockOwners.every((owner) => {
+    const lockStartedAt = Date.parse(owner.startedAt)
+    return owner.pid === processId
+      && Number.isFinite(lockStartedAt)
+      && Math.abs(identityStartedAt - lockStartedAt) <= ACTIVE_PROCESS_LOCK_START_TOLERANCE_MS
+  })
 }
 
 function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCompletion, isHarvesterTestnet, processId, activeProcessOwner } = {}) {
@@ -584,14 +588,10 @@ function resolveArchiveSessionLoggerCompletionStatus({ identity, loggerCompletio
     : "incomplete"
 }
 
-function resolveArchiveSessionProcessId({ identity, recoveryCheckpoint } = {}) {
-  if (Number.isSafeInteger(identity?.processId) && identity.processId > 0) {
-    return identity.processId
-  }
-  if (identity?.runtimeSessionId === recoveryCheckpoint.runtimeSessionId) {
-    return recoveryCheckpoint.processIdentity?.processId ?? null
-  }
-  return null
+function resolveArchiveSessionProcessId({ identity } = {}) {
+  return Number.isSafeInteger(identity?.processId) && identity.processId > 0
+    ? identity.processId
+    : null
 }
 
 function resolveArchiveSessionRuntimeSessionId(identity) {
@@ -756,7 +756,11 @@ function resolveArchiveLogSelectionStatus({ sessions, matchingRuntimeSessions } 
     return "ambiguous"
   }
   if (matchingRuntimeSessions.length === 1) {
-    if (["complete", "active"].includes(matchingRuntimeSessions[0].completionStatus)) {
+    const matchingSession = matchingRuntimeSessions[0]
+    if (!Number.isSafeInteger(matchingSession.processId) || matchingSession.processId <= 0) {
+      return "incomplete"
+    }
+    if (["complete", "active"].includes(matchingSession.completionStatus)) {
       return "matched"
     }
     return "incomplete"
@@ -1436,6 +1440,28 @@ async function createArchiveManifest({
 }
 
 
+async function* discardDecompressedChunks(source) {
+  for await (const chunk of source) {
+    void chunk
+  }
+}
+
+
+async function assertReadableGzipFile({ filename } = {}) {
+  try {
+    await pipeline(
+      createReadStream(filename),
+      createGunzip(),
+      discardDecompressedChunks,
+    )
+  } catch (error) {
+    throw new Error("Compressed archive evidence is not readable gzip data: " + filename, {
+      cause: error,
+    })
+  }
+}
+
+
 export async function verifyArchive({ directory, manifest } = {}) {
   const expectedPaths = manifest.files.map((entry) => entry.path).sort()
   const actualPaths = (await listRegularFiles({ directory }))
@@ -1448,6 +1474,9 @@ export async function verifyArchive({ directory, manifest } = {}) {
     const fileStats = await stat(filename)
     if (fileStats.size !== entry.size || await sha256File(filename) !== entry.sha256) {
       throw new Error(`Archive checksum or size verification failed: ${entry.path}`)
+    }
+    if (/\.gz$/i.test(entry.path)) {
+      await assertReadableGzipFile({ filename })
     }
   }
 }
@@ -1709,6 +1738,45 @@ async function readHarvesterProcessLockOwner({ filename, hostname } = {}) {
   return owner
 }
 
+function resolveHarvesterProcessLockNamespace(lockName) {
+  const applicationLock = /^\.harvester-trading-([a-f0-9]{64})\.lock$/i.exec(lockName)
+  if (applicationLock) {
+    return {
+      namespace: "application",
+      fingerprint: applicationLock[1].toLowerCase(),
+    }
+  }
+  const hostLock = /^\.([a-z0-9-]+)-harvester-trading-([a-f0-9]{64})\.lock$/i.exec(lockName)
+  if (hostLock) {
+    return {
+      namespace: "host",
+      broker: hostLock[1].toLowerCase(),
+      fingerprint: hostLock[2].toLowerCase(),
+    }
+  }
+  return null
+}
+
+
+function assertActiveProcessLockNamespacePairs(owners) {
+  const lockPairs = new Map()
+  for (const owner of owners) {
+    const pairKey = String(owner.pid) + ":" + owner.fingerprint
+    const namespaces = lockPairs.get(pairKey) ?? new Set()
+    if (namespaces.has(owner.namespace)) {
+      throw new Error("Cannot snapshot Harvester: duplicate " + owner.namespace + " lock for active process " + owner.pid + ".")
+    }
+    namespaces.add(owner.namespace)
+    lockPairs.set(pairKey, namespaces)
+  }
+  for (const [pairKey, namespaces] of lockPairs) {
+    if (!namespaces.has("host") || !namespaces.has("application")) {
+      throw new Error("Cannot snapshot Harvester: active process lock namespace pair is incomplete for " + pairKey + "; both host and application lock namespaces are required.")
+    }
+  }
+}
+
+
 async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.hostname(), isProcessAlive = isHarvesterProcessAlive } = {}) {
   const entries = await readHarvesterProcessLockEntries({ lockDirectory })
   const owners = []
@@ -1722,7 +1790,13 @@ async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.ho
       hostname,
     })
     if (isProcessAlive(owner.pid)) {
+      const lockNamespace = resolveHarvesterProcessLockNamespace(entry.name)
+      if (!lockNamespace) {
+        throw new Error("Cannot snapshot Harvester: unsupported active process lock namespace " + entry.name + ".")
+      }
       owners.push({
+        ...lockNamespace,
+        lockName: entry.name,
         pid: owner.pid,
         hostname: owner.hostname,
         startedAt: owner.startedAt,
@@ -1730,11 +1804,18 @@ async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.ho
       })
     }
   }
+  assertActiveProcessLockNamespacePairs(owners)
   const uniqueOwners = [...new Map(owners.map((owner) => [owner.pid, owner])).values()]
   if (uniqueOwners.length > 1) {
     throw new Error(`Cannot snapshot Harvester: multiple active process owners: ${uniqueOwners.map((owner) => owner.pid).join(", ")}.`)
   }
-  return uniqueOwners[0] ?? null
+  const activeOwner = uniqueOwners[0]
+  return activeOwner
+    ? {
+        ...activeOwner,
+        lockOwners: owners,
+      }
+    : null
 }
 
 async function writeActiveProcessSnapshotMarker({ localArchive, logSelection, activeProcessOwner, recoveryCheckpoint } = {}) {
@@ -1752,6 +1833,13 @@ async function writeActiveProcessSnapshotMarker({ localArchive, logSelection, ac
     processId: activeProcessOwner.pid,
     hostname: activeProcessOwner.hostname,
     lockStartedAt: activeProcessOwner.startedAt,
+    lockFiles: (activeProcessOwner.lockOwners ?? [activeProcessOwner]).map((owner) => ({
+      name: owner.lockName,
+      namespace: owner.namespace,
+      broker: owner.broker ?? null,
+      fingerprint: owner.fingerprint,
+      startedAt: owner.startedAt,
+    })),
     processStartedAt: session.startedAt,
     capturedAt: new Date().toISOString(),
     recoveryDataCommitHash: recoveryCheckpoint.dataCommitHash,
@@ -1774,7 +1862,79 @@ async function writeActiveProcessSnapshotMarker({ localArchive, logSelection, ac
     mode: 0o600,
   })
 }
-async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive, activeProcessOwner, lockDirectory, onProgress } = {}) {
+function areActiveProcessLockOwnersUnchanged({ initialOwner, currentOwner } = {}) {
+  if (
+    currentOwner?.pid !== initialOwner?.pid
+    || currentOwner?.hostname !== initialOwner?.hostname
+  ) {
+    return false
+  }
+  const initialLockOwners = initialOwner.lockOwners ?? [initialOwner]
+  const currentLockOwners = currentOwner.lockOwners ?? [currentOwner]
+  if (initialLockOwners.length !== currentLockOwners.length) {
+    return false
+  }
+  const currentOwnersByName = new Map(currentLockOwners.map((owner) => [owner.lockName, owner]))
+  return initialLockOwners.every((initialLockOwner) => {
+    const currentLockOwner = currentOwnersByName.get(initialLockOwner.lockName)
+    return currentLockOwner !== undefined
+      && currentLockOwner.pid === initialLockOwner.pid
+      && currentLockOwner.hostname === initialLockOwner.hostname
+      && currentLockOwner.startedAt === initialLockOwner.startedAt
+      && currentLockOwner.token === initialLockOwner.token
+      && currentLockOwner.namespace === initialLockOwner.namespace
+      && currentLockOwner.fingerprint === initialLockOwner.fingerprint
+      && currentLockOwner.broker === initialLockOwner.broker
+  })
+}
+
+
+async function writeIncompleteActiveSnapshotMarker({
+  localArchive,
+  activeProcessOwner,
+  recoveryCheckpoint,
+  reason,
+} = {}) {
+  const lockOwners = activeProcessOwner.lockOwners ?? [activeProcessOwner]
+  const marker = {
+    formatVersion: 1,
+    status: "incomplete",
+    snapshotType: "active-harvester-process",
+    runtimeSessionId: recoveryCheckpoint.runtimeSessionId,
+    processId: activeProcessOwner.pid,
+    hostname: activeProcessOwner.hostname,
+    capturedAt: new Date().toISOString(),
+    recoveryDataCommitHash: recoveryCheckpoint.dataCommitHash,
+    reason,
+    lockFiles: lockOwners.map((owner) => ({
+      name: owner.lockName ?? "unknown",
+      namespace: owner.namespace ?? "unknown",
+      broker: owner.broker ?? null,
+      fingerprint: owner.fingerprint ?? null,
+      startedAt: owner.startedAt,
+    })),
+  }
+  await writeFile(
+    path.join(localArchive, "collection-incomplete.json"),
+    JSON.stringify(marker, null, 2) + "\n",
+    {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    },
+  )
+}
+
+
+async function copyArchiveEvidence({
+  sourcePaths,
+  packageDirectory,
+  localArchive,
+  activeProcessOwner,
+  lockDirectory,
+  isProcessAlive,
+  onProgress,
+} = {}) {
   const recoverySource = sourcePaths.find((source) => source.directoryName === "recovery-facts")
   const recoverySize = await getTreeSize(recoverySource.sourceDirectory)
   let retainedFiles = 0
@@ -1808,13 +1968,39 @@ async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive
     )
   }
   if (activeProcessOwner) {
-    const currentOwner = await readActiveHarvesterProcessOwner({ lockDirectory })
-    const lockOwnershipUnchanged = currentOwner?.pid === activeProcessOwner.pid
-      && currentOwner.hostname === activeProcessOwner.hostname
-      && currentOwner.startedAt === activeProcessOwner.startedAt
-      && currentOwner.token === activeProcessOwner.token
-    if (!lockOwnershipUnchanged || !isHarvesterProcessAlive(activeProcessOwner.pid)) {
-      throw new Error(`The active Harvester process lock changed or the process exited during archive collection (PID ${activeProcessOwner.pid}); the snapshot is not publishable.`)
+    let currentOwner
+    let ownershipReadError
+    try {
+      currentOwner = await readActiveHarvesterProcessOwner({
+        lockDirectory,
+        isProcessAlive,
+      })
+    } catch (error) {
+      ownershipReadError = error
+    }
+    const lockOwnershipUnchanged = !ownershipReadError && areActiveProcessLockOwnersUnchanged({
+      initialOwner: activeProcessOwner,
+      currentOwner,
+    })
+    const processStillAlive = isProcessAlive(activeProcessOwner.pid)
+    if (!lockOwnershipUnchanged || !processStillAlive) {
+      let reason = "process-lock-ownership-changed-during-collection"
+      let failureMessage = "The active Harvester process lock ownership changed or became ambiguous during archive collection"
+      if (!processStillAlive) {
+        reason = "process-exited-during-collection"
+        failureMessage = "The active Harvester process exited during archive collection"
+      } else if (ownershipReadError) {
+        reason = "process-lock-ownership-unverifiable-during-collection"
+      }
+      await writeIncompleteActiveSnapshotMarker({
+        localArchive,
+        activeProcessOwner,
+        recoveryCheckpoint,
+        reason,
+      })
+      throw new Error(failureMessage + " (PID " + activeProcessOwner.pid + "); the snapshot is not publishable.", {
+        cause: ownershipReadError,
+      })
     }
     const activeSessionMatches = logSelection.sessions.some((session) =>
       session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId
@@ -1904,6 +2090,7 @@ async function collectPreparedArchive({
   onArchiveCreatedFn,
   activeProcessOwner,
   lockDirectory,
+  isProcessAlive,
 }) {
   try {
     await mkdir(localArchive, {
@@ -1916,6 +2103,7 @@ async function collectPreparedArchive({
       localArchive,
       activeProcessOwner,
       lockDirectory,
+      isProcessAlive,
       onProgress,
     })
     await writeAndVerifyLocalArchive({
@@ -1956,14 +2144,18 @@ export async function runHarvesterDebugArchive({
   now = () => new Date(),
   createArchiveId = randomUUID,
   onArchiveCreatedFn,
-  onProgress = (message) => process.stdout.write(`${message}\\n`),
+  onProgress = (message) => process.stdout.write(`${message}\n`),
   lockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
+  isProcessAlive = isHarvesterProcessAlive,
 } = {}) {
   assertCollectionArguments({
     env,
     args,
   })
-  const activeProcessOwner = await readActiveHarvesterProcessOwner({ lockDirectory })
+  const activeProcessOwner = await readActiveHarvesterProcessOwner({
+    lockDirectory,
+    isProcessAlive,
+  })
   const sourcePaths = resolveArchiveSourcePaths({
     packageDirectory,
     env,
@@ -1993,6 +2185,7 @@ export async function runHarvesterDebugArchive({
     onArchiveCreatedFn,
     activeProcessOwner,
     lockDirectory,
+    isProcessAlive,
   })
 }
 
