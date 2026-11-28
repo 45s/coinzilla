@@ -919,7 +919,17 @@ function publishRuntimeStarted({
   })
 }
 
-function shouldStartTradingHistoryApi({ runtime } = {}) {
+function shouldStartTradingHistoryApi({ runtime, appConfig, logger } = {}) {
+  if (appConfig?.components?.tradingHistoryApi?.enabled === false) {
+    logOptionalTradingHistoryApi({
+      logger,
+      level: "info",
+      details: {
+        message: "Harvester local API disabled by app configuration.",
+      },
+    })
+    return false
+  }
   return typeof runtime?.stop === "function"
 }
 
@@ -984,17 +994,11 @@ async function startTradingHistoryApiService({ options, resources, database, env
 }
 
 async function startOptionalTradingHistoryApi({ options, resources, runtime } = {}) {
-  if (resources.appConfig.components?.tradingHistoryApi?.enabled === false) {
-    logOptionalTradingHistoryApi({
-      logger: options.logger,
-      level: "info",
-      details: {
-        message: "Harvester local API disabled by app configuration.",
-      },
-    })
-    return
-  }
-  if (!shouldStartTradingHistoryApi({ runtime })) {
+  if (!shouldStartTradingHistoryApi({
+    runtime,
+    appConfig: resources.appConfig,
+    logger: options.logger,
+  })) {
     return
   }
   const database = resources.orderHistoryPersistence?.relationalDatabase

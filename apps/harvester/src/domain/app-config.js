@@ -146,7 +146,10 @@ function validateComponentConfig(config) {
     return
   }
   const path = "components"
-  requireRecord({ value: config.components, path })
+  requireRecord({
+    value: config.components,
+    path,
+  })
   for (const [componentName, componentConfig] of Object.entries(config.components)) {
     if (componentName !== "tradingHistoryApi") {
       fail({
@@ -155,7 +158,10 @@ function validateComponentConfig(config) {
       })
     }
     const componentPath = `${path}.${componentName}`
-    requireRecord({ value: componentConfig, path: componentPath })
+    requireRecord({
+      value: componentConfig,
+      path: componentPath,
+    })
     for (const key of Object.keys(componentConfig)) {
       if (key !== "enabled") {
         fail({
