@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url"
 import { describeProcessError } from "./infrastructure/process/describe-process-error.js"
+import { resolveHarvesterErrorDiagnostic } from "./infrastructure/logging/harvester-error-catalog.js"
 import { createRuntimeShutdownHandler } from "./infrastructure/process/harvester-process-shutdown.js"
 import { createHarvesterProcessIdentity } from "./infrastructure/process/create-harvester-process-identity.js"
 import os from "node:os"
@@ -1156,7 +1157,11 @@ function logStartupFailure({ error, logger } = {}) {
       message: "startup failed.",
       error,
       errorName: error?.name ?? "Error",
-      errorCode: error?.code ?? "HARVESTER_STARTUP_FAILED",
+      errorCode: resolveHarvesterErrorDiagnostic({ errorCode: error?.code })
+        ? error.code
+        : "HARVESTER_STARTUP_FAILED",
+      causeCode: error?.code,
+      errorStage: error?.stage ?? error?.context?.stage,
       errorMessage: error?.message ?? String(error),
       symbol: error?.symbol,
       sourceFilterTypes: error?.constraints?.map((constraint) => constraint.sourceFilterType),
