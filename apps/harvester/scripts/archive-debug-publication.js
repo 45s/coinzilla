@@ -132,7 +132,8 @@ async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
       && marker.processId === identity.processId
       && marker.processId === manifest.tradingRuntime.processIdentity.processId
       && typeof marker.hostname === "string"
-      && marker.lockStartedAt === identity.startedAt
+      && Number.isFinite(Date.parse(marker.lockStartedAt))
+      && Math.abs(Date.parse(marker.lockStartedAt) - Date.parse(identity.startedAt)) <= 30_000
       && marker.recoveryDataCommitHash === manifest.dataCommitHash
       && !Number.isNaN(Date.parse(marker.capturedAt))
       && Date.parse(marker.capturedAt) >= Date.parse(identity.startedAt)
