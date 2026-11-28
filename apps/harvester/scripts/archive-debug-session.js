@@ -604,11 +604,11 @@ function resolveArchiveSessionLoggerCompletionStatus({ identity, loggerCompletio
 
 function resolveArchiveSessionProcessId({ identity, recoveryCheckpoint } = {}) {
   if (identity?.processId !== undefined) {
-    const processId = identity.processId
-    if (!Number.isSafeInteger(processId) || processId <= 0) {
+    const { processId: sessionProcessId } = identity
+    if (!Number.isSafeInteger(sessionProcessId) || sessionProcessId <= 0) {
       return null
     }
-    return processId
+    return sessionProcessId
   }
   const durableIdentity = recoveryCheckpoint?.processIdentity
   if (!durableIdentity || !identity) {
@@ -623,11 +623,11 @@ function resolveArchiveSessionProcessId({ identity, recoveryCheckpoint } = {}) {
   if (durableIdentity.startedAt !== identity.startedAt) {
     return null
   }
-  const processId = durableIdentity.processId
-  if (!Number.isSafeInteger(processId) || processId <= 0) {
+  const { processId: durableProcessId } = durableIdentity
+  if (!Number.isSafeInteger(durableProcessId) || durableProcessId <= 0) {
     return null
   }
-  return processId
+  return durableProcessId
 }
 
 function resolveArchiveSessionRuntimeSessionId(identity) {
