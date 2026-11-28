@@ -68,6 +68,7 @@ async function persistDevRunnerProcessCompletion({
     flag: "wx",
     mode: 0o600,
   })
+  return completion
 }
 
 function sumOutputChunkCounts({ outputChunkCounts } = {}) {
@@ -86,8 +87,8 @@ function reportDroppedOutputChunks({ droppedChunks, logPath, sessionLogStream } 
   }
 }
 
-function resolveDevRunnerExitCode({ code, signal, logStreamFailed } = {}) {
-  if (logStreamFailed) {
+function resolveDevRunnerExitCode({ code, signal, integrityFailed } = {}) {
+  if (integrityFailed) {
     process.exitCode = 1
   } else if (code !== null) {
     process.exitCode = code
@@ -210,6 +211,7 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
           : "0",
         COINZILLA_PROCESS_STARTED_AT: sessionStartedAt,
         COINZILLA_RUNTIME_SESSION_ID: runtimeSessionId,
+        COINZILLA_DEV_RUNNER: "1",
       },
     },
   )
@@ -299,8 +301,10 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
     const outputChunkCounts = await Promise.all(outputForwarding)
     const droppedChunks = sumOutputChunkCounts({ outputChunkCounts })
     const logStreamsClosed = await closeLogStreams()
+    let completionEvidence
+    let completionPersistFailed = false
     try {
-      await persistDevRunnerProcessCompletion({
+      completionEvidence = await persistDevRunnerProcessCompletion({
         sessionDirectory: sessionPaths.sessionDirectory,
         runtimeSessionId,
         sessionStartedAt,
@@ -313,11 +317,16 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
         logStreamsClosed,
       })
     } catch (error) {
+      completionPersistFailed = true
       process.stderr.write(`Failed to persist Harvester session completion: ${error.message}\n`)
-      process.exitCode = 1
     }
     reportDroppedOutputChunks({ droppedChunks, logPath, sessionLogStream })
-    resolveDevRunnerExitCode({ code, signal, logStreamFailed })
-  }))
+    resolveDevRunnerExitCode({
+      code,
+      signal,
+      integrityFailed: logStreamFailed || !logStreamsClosed || completionPersistFailed || !completionEvidence?.logStreamsComplete,
+    })
+  })
+
 
 }
