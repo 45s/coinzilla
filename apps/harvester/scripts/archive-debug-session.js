@@ -545,7 +545,11 @@ function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCom
   })) {
     return "complete"
   }
-  return isMatchingActiveProcessOwner({ identity, processId, activeProcessOwner })
+  return isMatchingActiveProcessOwner({
+    identity,
+    processId,
+    activeProcessOwner,
+  })
     ? "active"
     : "incomplete"
 }
@@ -558,7 +562,11 @@ function resolveArchiveSessionLoggerCompletionStatus({ identity, loggerCompletio
     return "complete"
   }
   return isHarvesterTestnet
-    && isMatchingActiveProcessOwner({ identity, processId, activeProcessOwner })
+    && isMatchingActiveProcessOwner({
+    identity,
+    processId,
+    activeProcessOwner,
+  })
     ? "active"
     : "incomplete"
 }
@@ -1747,7 +1755,10 @@ async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.ho
     .sort((left, right) => left.name.localeCompare(right.name))
   for (const entry of lockEntries) {
     const filename = path.join(lockDirectory, entry.name)
-    const owner = await readHarvesterProcessLockOwner({ filename, hostname })
+    const owner = await readHarvesterProcessLockOwner({
+      filename,
+      hostname,
+    })
     if (isProcessAlive(owner.pid)) {
       owners.push({
         pid: owner.pid,
@@ -1788,7 +1799,10 @@ async function writeActiveProcessSnapshotMarker({ localArchive, logSelection, ac
     throw new Error(`Cannot create an active snapshot marker without both runtime-matched log streams for ${recoveryCheckpoint.runtimeSessionId}.`)
   }
   const markerPath = path.join(localArchive, session.activeSnapshotPath)
-  await mkdir(path.dirname(markerPath), { recursive: true, mode: 0o700 })
+  await mkdir(path.dirname(markerPath), {
+    recursive: true,
+    mode: 0o700,
+  })
   await writeFile(markerPath, `${JSON.stringify(marker, null, 2)}\n`, {
     encoding: "utf8",
     flag: "wx",
