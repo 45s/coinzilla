@@ -1151,15 +1151,19 @@ async function closeStartupTelegramNotifications({ notifications, logger } = {})
   return errors
 }
 
+function resolveStartupFailureDiagnosticCode({ error } = {}) {
+  return resolveHarvesterErrorDiagnostic({ errorCode: error?.code })
+    ? error.code
+    : "HARVESTER_STARTUP_FAILED"
+}
+
 function logStartupFailure({ error, logger } = {}) {
   try {
     logger.error({
       message: "startup failed.",
       error,
       errorName: error?.name ?? "Error",
-      errorCode: resolveHarvesterErrorDiagnostic({ errorCode: error?.code })
-        ? error.code
-        : "HARVESTER_STARTUP_FAILED",
+      errorCode: resolveStartupFailureDiagnosticCode({ error }),
       causeCode: error?.code,
       errorStage: error?.stage ?? error?.context?.stage,
       errorMessage: error?.message ?? String(error),
