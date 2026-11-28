@@ -1112,7 +1112,7 @@ async function createArchiveManifest({
     logSelection: {
       cumulative: "excluded",
       sessions: "all-identified-TESTNET-sessions-preserved-independently; exact-runtime-id-match-required; gzip-compressed",
-      selectionReason: logSelection.selectionReason,
+      selectionReason: logSelection.evidenceIntegrity.status === "matched" ? logSelection.selectionReason : logSelection.evidenceIntegrity.status,
     },
     dataCommitHash,
     logRuntimeSessionId: logSelection.logRuntimeSessionId,
@@ -1127,7 +1127,7 @@ async function createArchiveManifest({
     },
     tradingRuntime: createTradingRuntimeManifestEntry({ recoveryCheckpoint }),
     sessionInventory: logSelection.sessions.map((session) => createArchiveSessionManifestEntry({ session })),
-    warnings: logSelection.warnings,
+    warnings: [\n      ...logSelection.warnings,\n      ...(logSelection.evidenceIntegrity.validForPublication ? [] : [{\n        code: "DEBUG_TRACE_STREAM_INTEGRITY_FAILED",\n        message: createEvidenceIntegrityFailureMessage(logSelection.evidenceIntegrity),\n      }]),\n    ],
     duplicateArtifacts: createDuplicateArchiveArtifactGroups({ artifactProvenance }),\n    evidenceIntegrity: logSelection.evidenceIntegrity,
     recoveryFactSequence: recoveryCheckpoint.sequence,
     files: entries,
