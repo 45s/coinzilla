@@ -9,7 +9,7 @@ describe('ScenarioGraphEditorComponent', () => {
     fixture.detectChanges();
     const element = fixture.nativeElement as HTMLElement;
 
-    expect(element.querySelectorAll('.graph-node').length, 'the editor must render the complete RS lifecycle graph').toBe(13);
+    expect(element.querySelectorAll('.graph-node').length, 'the editor must render the complete RS lifecycle graph').toBe(16);
     expect(element.textContent, 'the editor must disclose that its graph is not executable').toContain('VISUAL-ONLY');
     expect(element.textContent, 'the editor must expose the source-derived sole SELL invariant').toContain('Submit the sole cycle SELL');
     expect(element.querySelector('button[aria-label="Run scenario"]'), 'the visual editor must not provide an execution action').toBeNull();
