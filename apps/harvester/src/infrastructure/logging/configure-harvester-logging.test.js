@@ -316,8 +316,10 @@ test("retains the machine-readable Journal error code in compact console output"
     },
   })
 
-  assert.match(written, /"errorCode":"JOURNAL_DIRECTORY_LOCKED"/)
-  assert.doesNotMatch(written, /diagnosticId/)
+  assert.match(written, /WARN \\[JOURNAL_DIRECTORY_LOCKED\\]/)
+  assert.match(written, /stage=JOURNAL_WRITER_ACQUISITION/)
+  assert.match(written, /action=Verify no active writer before removing only the stale lock\\./)
+  assert.ok(written.trim().split("\\n").every((line) => line.length <= 200))
   output.destroy()
 })
 
@@ -1105,7 +1107,7 @@ test("continues long catalogued causes without exceeding the per-line console bu
     output,
     color: false,
   })
-  const cause = `SQLite migration failed: ${"native constraint detail ".repeat(20)}`
+  const cause = `SQLite migration failed: ${Array(20).fill("native constraint detail").join(" ")}`
   transport.write({
     timestamp: "2026-11-28T06:00:00.000Z",
     level: "error",
