@@ -339,6 +339,12 @@ test("starts a fresh current-process trading session when process recovery is di
   const calls = []
   const startupLogs = []
   const broker = createRsOnlyStartupBroker({ calls })
+  const initialPriceRequests = []
+  const getPrices = broker.getPrices.bind(broker)
+  broker.getPrices = async (request) => {
+    initialPriceRequests.push(request.symbol)
+    return getPrices(request)
+  }
   try {
     const result = await startHarvesterForTest({
       loadConfig: async () => config,
@@ -369,6 +375,8 @@ test("starts a fresh current-process trading session when process recovery is di
       "Fresh current-session PREFLIGHT and user-data readiness must open the existing gate.")
     assert.ok(calls.includes("subscribe:LINEAUSDT"),
       "The new process must establish its own market-price subscription.")
+    assert.ok(initialPriceRequests.includes("LINEAUSDT"),
+      "Trading readiness must seed an initial ticker price instead of leaving market.price stale.")
     assert.ok(calls.includes("subscribe:book:LINEAUSDT"),
       "Trading mode must establish the required book stream instead of silently remaining in read-only intake.")
     assert.ok(startupLogs.some((record) =>
