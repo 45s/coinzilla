@@ -6,6 +6,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  rename,
   rm,
   stat,
   writeFile,
@@ -128,6 +129,38 @@ async function assertRealDirectory(directory) {
   }
 }
 
+async function copyStableFile({ sourcePath, destinationPath } = {}) {
+  const before = await lstat(sourcePath)
+  if (before.isSymbolicLink() || !before.isFile()) {
+    throw new Error(`Refusing to snapshot a non-regular file: ${sourcePath}`)
+  }
+  const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
+  try {
+    await copyFile(sourcePath, temporaryPath)
+    const after = await lstat(sourcePath)
+    if (
+      after.isSymbolicLink()
+      || !after.isFile()
+      || before.dev !== after.dev
+      || before.ino !== after.ino
+      || before.size !== after.size
+      || before.mtimeMs !== after.mtimeMs
+      || before.ctimeMs !== after.ctimeMs
+    ) {
+      throw new Error(`Source file changed while the debug snapshot was being collected: ${sourcePath}`)
+    }
+    const copied = await lstat(temporaryPath)
+    if (copied.size !== after.size) {
+      throw new Error(`Snapshot copy size changed while collecting: ${sourcePath}`)
+    }
+    await rename(temporaryPath, destinationPath)
+    return after.size
+  } catch (error) {
+    await rm(temporaryPath, { force: true })
+    throw error
+  }
+}
+
 async function copyRegularTree({
   sourceDirectory,
   destinationDirectory,
@@ -160,10 +193,10 @@ async function copyRegularTree({
         onFileCopied,
       })
     } else if (sourceStats.isFile()) {
-      await copyFile(sourcePath, destinationPath)
+      const copiedSize = await copyStableFile({ sourcePath, destinationPath })
       await onFileCopied?.({
         relativePath: path.join(relative, entry.name).split(path.sep).join("/"),
-        size: sourceStats.size,
+        size: copiedSize,
       })
     } else {
       throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
@@ -195,14 +228,37 @@ async function copyCompressedTree({ sourceDirectory, destinationDirectory, relat
     } else if (sourceStats.isFile()) {
       const compressedRelative = `${childRelative}.gz`
       const destinationPath = path.join(destinationDirectory, compressedRelative)
-      await pipeline(
-        createReadStream(sourcePath),
-        createGzip({ level: 6 }),
-        createWriteStream(destinationPath, {
-          flags: "w",
-          mode: 0o600,
-        }),
-      )
+      const sourceBefore = await lstat(sourcePath)
+      if (sourceBefore.isSymbolicLink() || !sourceBefore.isFile()) {
+        throw new Error(`Refusing to compress a non-regular source file: ${sourcePath}`)
+      }
+      const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
+      try {
+        await pipeline(
+          createReadStream(sourcePath),
+          createGzip({ level: 6 }),
+          createWriteStream(temporaryPath, {
+            flags: "wx",
+            mode: 0o600,
+          }),
+        )
+        const sourceAfter = await lstat(sourcePath)
+        if (
+          sourceAfter.isSymbolicLink()
+          || !sourceAfter.isFile()
+          || sourceBefore.dev !== sourceAfter.dev
+          || sourceBefore.ino !== sourceAfter.ino
+          || sourceBefore.size !== sourceAfter.size
+          || sourceBefore.mtimeMs !== sourceAfter.mtimeMs
+          || sourceBefore.ctimeMs !== sourceAfter.ctimeMs
+        ) {
+          throw new Error(`Source file changed while the debug snapshot was being collected: ${sourcePath}`)
+        }
+        await rename(temporaryPath, destinationPath)
+      } catch (error) {
+        await rm(temporaryPath, { force: true })
+        throw error
+      }
       const archiveStats = await stat(destinationPath)
       await onFileCopied?.({
         relativePath: compressedRelative.split(path.sep).join("/"),
@@ -1171,6 +1227,14 @@ async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive
     destinationDirectory: path.join(localArchive, "recovery-facts"),
     onFileCopied,
   })
+  const recoveryCheckpointAfterCopy = await readLatestRecoveryCheckpoint(recoverySource.sourceDirectory)
+  if (
+    recoveryCheckpointAfterCopy.sequence !== recoveryCheckpoint.sequence
+    || recoveryCheckpointAfterCopy.dataCommitHash !== recoveryCheckpoint.dataCommitHash
+    || recoveryCheckpointAfterCopy.runtimeSessionId !== recoveryCheckpoint.runtimeSessionId
+  ) {
+    throw new Error("Operational State Store changed while the debug snapshot was being collected; refusing to create a mixed-time archive.")
+  }
   reportProgress(onProgress, `Evidence copy complete: ${retainedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
   return logSelection
 }
