@@ -698,7 +698,7 @@ test("publishes a verified active-runtime snapshot without process-completion fi
   const fixture = await createFixture(t)
   const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
-  const session = manifest.sessionInventory[0]
+  const [session] = manifest.sessionInventory
   const completionArchivePaths = [
     "logs/sessions/fixture/process-completed.json.gz",
     "logs/sessions/fixture/log-streams-completed.json.gz",
