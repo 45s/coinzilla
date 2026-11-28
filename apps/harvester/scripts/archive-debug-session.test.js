@@ -210,8 +210,9 @@ async function assertCollectedArchive({ directory, expectedIdentityStatus, expec
     `${DATA_COMMIT_HASH}\n`,
     "Published checkpoint identity file must match the recovery-facts manifest",
   )
+  const selectedSessionName = expectedTradingMode === "live" ? "2026-11-24_live" : "2026-11-24_testnet"
   assert.equal(
-    gunzipSync(await readFile(path.join(directory, "logs/sessions/2026-11-24_testnet/terminal.log.gz"))).toString("utf8"),
+    gunzipSync(await readFile(path.join(directory, `logs/sessions/${selectedSessionName}/terminal.log.gz`))).toString("utf8"),
     "selected runtime session evidence",
     "The selected runtime log must be preserved in gzip form",
   )
@@ -350,7 +351,7 @@ test("preserves testnet and live session inventory without changing source evide
   }
 })
 
-test("retains mismatched log and recovery evidence only as local diagnostic evidence", async (t) => {
+test("retains an unverifiable recovery checkpoint only as local diagnostic evidence", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
@@ -368,12 +369,12 @@ test("retains mismatched log and recovery evidence only as local diagnostic evid
       onArchiveCreatedFn: async ({ directory }) => {
         diagnosticDirectory = directory
         const manifest = await readArchiveManifest(directory)
-        assert.equal(manifest.runtimeIdentity.status, "mismatched", "The diagnostic archive must identify the runtime mismatch.")
+        assert.equal(manifest.runtimeIdentity.status, "unverifiable", "The diagnostic archive must identify the inconsistent recovery checkpoint.")
         assert.equal(manifest.evidenceIntegrity.validForPublication, false, "Mismatched evidence must not be publishable.")
       },
     }),
-    /mismatched|evidence integrity/i,
-    "Mismatched runtime evidence must fail collection after retaining local diagnostics",
+    /unverifiable|evidence integrity/i,
+    "An unverifiable recovery checkpoint must fail collection after retaining local diagnostics",
   )
   assert.ok(diagnosticDirectory, "The diagnostic archive must remain available locally.")
   assert.equal(await readFile(filename, "utf8"), mismatchedFactsContent, "Collection must leave source recovery facts unchanged.")
