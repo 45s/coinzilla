@@ -374,7 +374,7 @@ test("collects and marks the exact active runtime without stopping or clearing i
   assert.equal(manifest.evidenceIntegrity.validForPublication, true, "A uniquely identified active runtime snapshot is publishable.")
 })
 
-test("reclaims confirmed stale same-host locks before collecting the TESTNET debug archive", async (t) => {
+test("leaves stale process locks untouched while collecting the TESTNET debug archive", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
@@ -394,13 +394,9 @@ test("reclaims confirmed stale same-host locks before collecting the TESTNET deb
 
   const result = await runHarvesterDebugArchive(archiveDependencies({ fixture }))
 
-  assert.equal(result.archiveName, "2026-11-24T18-30-00Z_123e4567_debug", "A confirmed stale lock must be reclaimed before collection.")
+  assert.equal(result.archiveName, "2026-11-24T18-30-00Z_123e4567_debug", "A stale lock must not block a read-only archive snapshot.")
   for (const lockPath of lockPaths) {
-    await assert.rejects(
-      readFile(lockPath, "utf8"),
-      { code: "ENOENT" },
-      "Every confirmed stale lock namespace must be reclaimed before archive publication.",
-    )
+    assert.equal(await readFile(lockPath, "utf8"), JSON.stringify(staleOwner), "Archive collection must never reclaim or mutate process locks.")
   }
 })
 
