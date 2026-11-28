@@ -368,7 +368,6 @@ test("ignores unmatched manual orders under the default external-order policy", 
     calls
   } = makeWorkflow({
     updateResult: { unknown: true },
-    currentProcessOrderIdNamespace: "currentprocessnamespace",
   })
 
   const result = await workflow.processUserDataEventTransition({
@@ -479,6 +478,34 @@ test("keeps an unmatched current-process order fail-closed even when the registr
   assert.equal(result.failure.stage, "ORDER_REGISTRY_MATCH", "The active-process ownership failure must retain its stable stage.")
   assert.equal(calls.pauses[0]?.reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT", "An unresolved active-process order must pause its market.")
   assert.deepEqual(calls.accounting, [], "An unresolved active-process order must not mutate strategy accounting.")
+})
+
+test("keeps Harvester-looking unknown IDs fail-closed when the process namespace is unavailable", async () => {
+  const order = makeOrder({
+    clientOrderId: "h-unknownprocessnamespace-2",
+    brokerOrderId: "unknown-process-order-2",
+    status: "OPEN",
+    executedQuantity: "0",
+  })
+  const {
+    workflow,
+    calls,
+  } = makeWorkflow({
+    registry: new OrderRegistry({ orders: [] }),
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: order,
+      clientOrderId: order.clientOrderId,
+    },
+  })
+
+  assert.equal(result.ok, false, "A Harvester-looking identity must not be silently classified as external when the active process namespace is unavailable.")
+  assert.equal(result.failure.stage, "ORDER_REGISTRY_MATCH", "Missing process identity must retain the ownership-integrity failure.")
+  assert.equal(calls.pauses[0]?.reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT", "An unresolved Harvester-looking identity must pause its market.")
+  assert.deepEqual(calls.accounting, [], "An unresolved Harvester-looking identity must not mutate strategy accounting.")
 })
 
 test("applies partial BUY fills without advancing strategy evaluation", async () => {
