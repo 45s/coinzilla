@@ -78,7 +78,12 @@ export function createScenarioGraphViewModel({ graph }: { readonly graph: Scenar
     const controlX = startX + Math.max(36, (endX - startX) / 2);
     return [{
       ...edge,
-      curve: {\n        start: { x: startX, y: sourceY },\n        control1: { x: controlX, y: sourceY },\n        control2: { x: controlX, y: targetY },\n        end: { x: endX, y: targetY },\n      },
+      curve: {
+        start: { x: startX, y: sourceY },
+        control1: { x: controlX, y: sourceY },
+        control2: { x: controlX, y: targetY },
+        end: { x: endX, y: targetY },
+      },
       labelPosition: { x: (startX + endX) / 2, y: (sourceY + targetY) / 2 - 10 },
     }];
   });

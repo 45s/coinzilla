@@ -224,7 +224,12 @@ export class ScenarioGraphEditorComponent {
     return node.id;
   }
 
-  edgePath(edge: ScenarioGraphViewModel['edges'][number]): string {\n    const { start, control1, control2, end } = edge.curve;\n    return `M ${start.x} ${start.y} C ${control1.x} ${control1.y}, ${control2.x} ${control2.y}, ${end.x} ${end.y}`;\n  }\n\n  trackEdge(_index: number, edge: { readonly id: string }): string {
+  edgePath(edge: ScenarioGraphViewModel['edges'][number]): string {
+    const { start, control1, control2, end } = edge.curve;
+    return `M ${start.x} ${start.y} C ${control1.x} ${control1.y}, ${control2.x} ${control2.y}, ${end.x} ${end.y}`;
+  }
+
+  trackEdge(_index: number, edge: { readonly id: string }): string {
     return edge.id;
   }
 
