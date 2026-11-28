@@ -1027,7 +1027,10 @@ test("renders every catalogued startup and degraded failure in bounded console o
   output.on("data", (chunk) => {
     written += chunk.toString()
   })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
   for (const entry of Object.values(HARVESTER_ERROR_CATALOG)) {
     const isPersistenceFailure = entry.errorCode === "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED"
     transport.write({
@@ -1082,7 +1085,10 @@ test("continues long catalogued causes without exceeding the per-line console bu
   output.on("data", (chunk) => {
     written += chunk.toString()
   })
-  const transport = createHarvesterConsoleTransport({ output, color: false })
+  const transport = createHarvesterConsoleTransport({
+    output,
+    color: false,
+  })
   const cause = `SQLite migration failed: ${"native constraint detail ".repeat(20)}`
   transport.write({
     timestamp: "2026-11-28T06:00:00.000Z",
