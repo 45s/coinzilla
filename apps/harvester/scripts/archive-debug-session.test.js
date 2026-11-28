@@ -362,7 +362,9 @@ test("collects and marks the exact active runtime without stopping or clearing i
     token: "active-test-lock-token",
   }
   const lockPath = path.join(fixture.lockDirectory, ".harvester-trading-test.lock")
+  const hostLockPath = path.join(fixture.lockDirectory, ".binance-harvester-trading-test.lock")
   await writeFile(lockPath, JSON.stringify(lockOwner), "utf8")
+  await writeFile(hostLockPath, JSON.stringify({ ...lockOwner, token: "active-host-lock-token" }), "utf8")
   const result = await runHarvesterDebugArchive({ ...archiveDependencies({ fixture }), onArchiveCreatedFn: undefined })
   const manifest = await readArchiveManifest(result.localArchive)
   const matchingSession = manifest.sessionInventory.find(({ runtimeSessionId }) => runtimeSessionId === RUNTIME_SESSION_ID)
@@ -375,7 +377,8 @@ test("collects and marks the exact active runtime without stopping or clearing i
   assert.equal(snapshotMarker.processId, process.pid, "The active snapshot marker must identify the locked process.")
   assert.equal(snapshotMarker.recoveryDataCommitHash, DATA_COMMIT_HASH, "The active snapshot marker must bind to the copied recovery checkpoint.")
   assert.deepEqual(snapshotMarker.streams, { harvesterLog: true, traceLog: true }, "The active snapshot marker must confirm both runtime-owned streams.")
-  assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, lockOwner.token, "Collection must not modify or remove the running process lock.")
+  assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, lockOwner.token, "Collection must not modify or remove the Journal process lock.")
+  assert.equal(JSON.parse(await readFile(hostLockPath, "utf8")).token, "active-host-lock-token", "Collection must not modify or remove the host process lock.")
   assert.equal(manifest.evidenceIntegrity.validForPublication, true, "A uniquely identified active runtime snapshot is publishable.")
 })
 
