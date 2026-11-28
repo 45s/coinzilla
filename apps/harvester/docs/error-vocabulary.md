@@ -109,7 +109,6 @@ The validation field is limited to an ASCII dotted identifier no longer than 128
 
 **Safe recovery:** inspect the reported field and event/market identity, compare the canonical order event with the owning order state, and fix the mapping/contract defect. Do not fabricate missing identity fields, edit exchange orders, or infer an invalid field from a historical log entry that did not preserve it. The 28 archived 2026-11-22 occurrences remain unattributed; the database dump has not been inspected.
 
-
 ## Central Harvester failure catalog
 
 The table below is the operator-facing rendering of the source catalog in
@@ -118,6 +117,7 @@ validate every field in this block, so titles, ownership, stages, severity,
 stop behavior, meaning and remediation cannot silently drift from the source.
 
 <!-- BEGIN GENERATED HARVESTER ERROR CATALOG -->
+
 | Code | Title | Subsystem | Failure stage | Severity | Stop behavior | Meaning | Operator action |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED` | Relational order history unavailable | persistence | `RELATIONAL_PERSISTENCE_PREPARATION` | WARN | `TRADING_CONTINUES_WITH_LEGACY_HISTORY` | The optional relational trading-history projection could not be prepared. | Full cause: session DEBUG; do not reset DB. |
@@ -128,6 +128,7 @@ stop behavior, meaning and remediation cannot silently drift from the source.
 | `HARVESTER_PROCESS_LOCK_EXISTS` | Harvester process ownership lock already exists | process-ownership | `PROCESS_LOCK_ACQUISITION` | ERROR | `PROCESS_STOPS` | Another process owns the same provider/account execution scope. | Verify the lock owner; never delete an active lock. |
 | `JOURNAL_DIRECTORY_LOCKED` | Journal directory is locked | journal | `JOURNAL_WRITER_ACQUISITION` | WARN | `CONTINUE_WITHOUT_OPTIONAL_JOURNAL` | The optional Journal writer could not acquire exclusive directory ownership. | Verify no active writer before removing only the stale lock. |
 | `HARVESTER_ACCOUNT_HISTORY_SYNC_FAILED` | Account history synchronization is incomplete | history-synchronization | `ACCOUNT_HISTORY_SYNCHRONIZATION` | WARN | `CONTINUE_DEGRADED_WITH_HISTORY_GAP` | One or more exchange history pages failed; affected cursors remain unadvanced. | Resolve the recorded page failure; never advance cursors manually. |
+
 <!-- END GENERATED HARVESTER ERROR CATALOG -->
 
 For relational persistence, `harvesterErrorCode` carries the Harvester
