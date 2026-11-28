@@ -1511,6 +1511,9 @@ async function collectPreparedArchive({
       directory: localArchive,
       archiveName,
     })
+    if (!logSelection.evidenceIntegrity.validForPublication) {
+      throw new Error(createEvidenceIntegrityFailureMessage(logSelection.evidenceIntegrity))
+    }
     reportProgress(onProgress, "Local debug archive collected and verified.")
     return {
       archiveName,
