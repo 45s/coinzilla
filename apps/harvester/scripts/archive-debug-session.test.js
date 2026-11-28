@@ -6,6 +6,7 @@ import {
   readFile,
   readdir,
   rm,
+  symlink,
   writeFile
 } from "node:fs/promises"
 import os from "node:os"
@@ -17,7 +18,6 @@ import {
   runHarvesterDebugArchive,
 } from "./archive-debug-session.js"
 
-const ARCHIVE_REMOTE = "https://github.com/45s/coinzilla-archive.git"
 const CREATED_AT = "2026-11-24T18:30:00.123Z"
 const ARCHIVE_ID = "123e4567-e89b-42d3-a456-426614174000"
 const REMOTE_COMMIT = "a".repeat(40)
@@ -150,8 +150,7 @@ async function createFixture() {
   }
 }
 
-async function assertPublishedArchive({ directory, remote, expectedIdentityStatus } = {}) {
-  assert.equal(remote, ARCHIVE_REMOTE, "Archive publication must target the configured private archive repository")
+async function assertCollectedArchive({ directory, expectedIdentityStatus } = {}) {
   const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
   assert.deepEqual(manifest.includedDirectories, ["logs", "recovery-facts"], "Debug archives must contain only logs and recovery facts")
   assert.deepEqual(manifest.excludedPaths, [
@@ -213,16 +212,14 @@ function archiveDependencies({ fixture, overrides = {}, expectedIdentityStatus =
     lockDirectory: fixture.lockDirectory,
     env: {
       TRADING_MODE: "testnet",
-      HARVESTER_ARCHIVE_REMOTE: ARCHIVE_REMOTE,
       OPERATIONAL_STATE_DIRECTORY: path.join(fixture.packageDirectory, "recovery-facts"),
       ...overrides,
     },
     args: [],
     now: () => new Date(CREATED_AT),
     createArchiveId: () => ARCHIVE_ID,
-    publishArchiveFn: ({ directory, remote }) => assertPublishedArchive({
+    onArchiveCreatedFn: ({ directory }) => assertCollectedArchive({
       directory,
-      remote,
       expectedIdentityStatus,
     }),
   }
@@ -239,6 +236,29 @@ test("adds _debug to the existing timestamp and archive-ID directory name", () =
   )
 })
 
+
+test("collects a verified archive without requiring GitHub publication configuration", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  let collectionCompleted = false
+  const result = await runHarvesterDebugArchive({
+    ...archiveDependencies({
+      fixture,
+      overrides: { HARVESTER_ARCHIVE_REMOTE: undefined },
+    }),
+    onArchiveCreatedFn: async ({ directory }) => {
+      const manifest = await readArchiveManifest(directory)
+      assert.ok(manifest.files.length > 0, "Collection must finish writing the archive manifest before returning.")
+      collectionCompleted = true
+    },
+  })
+  assert.equal(collectionCompleted, true, "Collection must complete without invoking a publication step.")
+  assert.equal(result.archiveName, "2026-11-24T18-30-00Z_123e4567_debug", "Collection must return its local immutable archive identity.")
+})
+
 test("preserves TESTNET session inventory and recovery facts without changing source evidence", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
@@ -247,7 +267,7 @@ test("preserves TESTNET session inventory and recovery facts without changing so
   }))
   const result = await runHarvesterDebugArchive(archiveDependencies({ fixture }))
   assert.equal(result.archiveName, "2026-11-24T18-30-00Z_123e4567_debug", "Published archive must use the deterministic debug directory name")
-  assert.equal(result.remoteCommit, REMOTE_COMMIT, "Archive publication must return the verified remote commit")
+  assert.equal(result.localArchive.endsWith(result.archiveName), true, "Collection must return the completed local archive directory")
   for (const [relativePath, expected] of Object.entries(fixture.files)) {
     assert.equal(
       await readFile(path.join(fixture.packageDirectory, relativePath), "utf8"),
@@ -276,7 +296,7 @@ test("publishes mismatched log and recovery evidence as independent sources with
     }),
     onProgress: (message) => progressMessages.push(message),
   })
-  assert.equal(result.remoteCommit, REMOTE_COMMIT, "Independently valid mismatched evidence must still be published")
+  assert.equal(result.archiveName, "2026-11-24T18-30-00Z_123e4567_debug", "Mismatched but valid evidence must still be collected")
   assert.ok(
     progressMessages.some((message) => message.includes("WARNING: matchingTradingLogsAvailable=false")),
     "The operator must be told explicitly that no matching trading-runtime logs are available.",
@@ -326,7 +346,7 @@ test("refuses to archive while a Harvester process lock exists", async (t) => {
   await assert.rejects(readdir(path.join(fixture.packageDirectory, "archive-output")), { code: "ENOENT" }, "A rejected active-process preflight must not create archive output")
 })
 
-test("reclaims confirmed stale same-host locks before publishing the TESTNET debug archive", async (t) => {
+test("reclaims confirmed stale same-host locks before collecting the TESTNET debug archive", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
@@ -346,7 +366,7 @@ test("reclaims confirmed stale same-host locks before publishing the TESTNET deb
 
   const result = await runHarvesterDebugArchive(archiveDependencies({ fixture }))
 
-  assert.equal(result.remoteCommit, REMOTE_COMMIT, "A stale lock must not block safe debug archive publication.")
+  assert.equal(result.archiveName, "2026-11-24T18-30-00Z_123e4567_debug", "A confirmed stale lock must be reclaimed before collection.")
   for (const lockPath of lockPaths) {
     await assert.rejects(
       readFile(lockPath, "utf8"),
@@ -354,6 +374,41 @@ test("reclaims confirmed stale same-host locks before publishing the TESTNET deb
       "Every confirmed stale lock namespace must be reclaimed before archive publication.",
     )
   }
+})
+
+
+test("collection rejects symbolic links instead of archiving their targets", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const externalPath = path.join(fixture.packageDirectory, "external-terminal.log")
+  await writeFile(externalPath, "external data must not be followed", "utf8")
+  const terminalPath = path.join(
+    fixture.packageDirectory,
+    "logs/sessions/2026-11-24_testnet/terminal.log",
+  )
+  await rm(terminalPath)
+  try {
+    await symlink(externalPath, terminalPath)
+  } catch (error) {
+    if (["EPERM", "EACCES", "ENOTSUP"].includes(error.code)) {
+      t.skip("This platform does not permit creating symbolic links for the test.")
+      return
+    }
+    throw error
+  }
+  await assert.rejects(
+    runHarvesterDebugArchive(archiveDependencies({ fixture })),
+    /symbolic link/i,
+    "Collection must reject a symlink rather than following it into the archive.",
+  )
+  assert.equal(
+    await readFile(externalPath, "utf8"),
+    "external data must not be followed",
+    "The external target must remain untouched.",
+  )
 })
 
 test("rejects LIVE mode before creating an archive", async (t) => {
@@ -423,14 +478,7 @@ async function readArchiveManifest(directory) {
 function archiveWithoutPublishing({ fixture, inspectArchive }) {
   return {
     ...archiveDependencies({ fixture }),
-    publishArchiveFn: async ({ directory }) => {
-      await inspectArchive({ directory })
-      const manifest = await readArchiveManifest(directory)
-      return {
-        commit: REMOTE_COMMIT,
-        fileCount: manifest.files.length + 1,
-      }
-    },
+    onArchiveCreatedFn: async ({ directory }) => inspectArchive({ directory }),
   }
 }
 
