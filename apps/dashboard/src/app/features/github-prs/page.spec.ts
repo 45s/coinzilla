@@ -32,7 +32,7 @@ describe('GitHubPullRequestsComponent', () => {
     }).compileComponents();
     fixture = TestBed.createComponent(GitHubPullRequestsComponent);
     fixture.detectChanges();
-    await Promise.resolve();
+    await fixture.whenStable();
     fixture.detectChanges();
   });
 
@@ -97,7 +97,7 @@ describe('GitHubPullRequestsComponent', () => {
     renameInput.dispatchEvent(new Event('change'));
     fixture.detectChanges();
 
-    root.querySelector<HTMLButtonElement>('[aria-label="Set green color for Review"]')?.click();
+    root.querySelector<HTMLButtonElement>('[aria-label="Set green"]')?.click();
     fixture.detectChanges();
 
     expect(root.querySelector<HTMLInputElement>('.label-name-input')?.value).toBe('Review');
@@ -106,11 +106,12 @@ describe('GitHubPullRequestsComponent', () => {
     expect(root.querySelector('.delete-label-button')?.getAttribute('aria-label')).toBe('Delete Review');
   });
 
-  it('keeps a refresh action available in the viewport while browsing the PR list', () => {
+  it('keeps a refresh action available in the viewport while browsing the PR list', async () => {
     const root = fixture.nativeElement as HTMLElement;
     const refresh = root.querySelector<HTMLButtonElement>('.floating-refresh-button');
     expect(refresh).toBeDefined();
     refresh?.click();
+    await fixture.whenStable();
     expect(loadOpenPullRequests).toHaveBeenCalledTimes(2);
   });
 
