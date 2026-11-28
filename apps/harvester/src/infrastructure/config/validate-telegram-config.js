@@ -8,12 +8,18 @@ const fail = ({
 }) => { throw new ConfigValidationError(path, expectation) }
 const requireRecord = ({ value, path }) => {
   if (!isRecord(value)) {
-    fail({ path, expectation: "an object" })
+    fail({
+      path,
+      expectation: "an object",
+    })
   }
 }
 const requireBoolean = ({ value, path }) => {
   if (typeof value !== "boolean") {
-    fail({ path, expectation: "a boolean" })
+    fail({
+      path,
+      expectation: "a boolean",
+    })
   }
 }
 const TELEGRAM_NOTIFICATION_PROFILES = Object.freeze(Object.values(NOTIFICATIONS_TG_PROFILES))
