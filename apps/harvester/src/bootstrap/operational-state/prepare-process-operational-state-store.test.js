@@ -149,6 +149,38 @@ test("does not prepare the store for globally disabled RS or RS without enabled 
   assert.equal(calls, 0, "inactive RS configuration must not construct the store")
 })
 
+test("prepares the RS STOP store when CG process recovery is disabled", async () => {
+  let options
+  const expected = store()
+  const actual = await prepareProcessOperationalStateStore({
+    appConfig: {
+      ...config({ recoverySeller: true }),
+      components: { recovery: { enabled: false } },
+    },
+    env: {},
+    runtimeSessionId: "rs-without-process-recovery",
+    createOperationalStateStore: (value) => { options = value; return expected },
+  })
+
+  assert.strictEqual(actual, expected, "RS still requires its verified durable STOP store.")
+  assert.equal(options.runtimeSessionId, "rs-without-process-recovery")
+})
+
+test("does not create RS-only dependencies when both RS and CG process recovery are disabled", async () => {
+  let calls = 0
+  const actual = await prepareProcessOperationalStateStore({
+    appConfig: {
+      ...config({ recoverySeller: false }),
+      components: { recovery: { enabled: false } },
+    },
+    runtimeSessionId: "no-recovery-dependencies",
+    createOperationalStateStore: () => { calls += 1; return store() },
+  })
+
+  assert.equal(actual, undefined)
+  assert.equal(calls, 0, "No Operational State Store should be created when neither process recovery nor RS needs it.")
+})
+
 test("uses the documented default directory when restart recovery is enabled", async () => {
   let options
   const expected = store()
