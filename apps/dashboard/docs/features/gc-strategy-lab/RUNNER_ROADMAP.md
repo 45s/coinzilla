@@ -8,9 +8,9 @@
 
 Dashboard issue [#1986](https://github.com/45s/coinzilla/issues/1986) adds an opt-in checkbox that reads the RS scenario declarations from two source files at a single pinned `develop` commit and displays their IDs, names, layer and mapping status without restarting Harvester. This is a metadata preview only: downloaded JavaScript is never evaluated, all remote entries are forced non-executable, and scenario submission remains disabled until the operator switches back to the live Harvester catalogue. The live `/catalog` endpoint remains authoritative for execution. A refresh failure preserves the previously displayed catalogue and reports the error.
 
-## Scenario flow visualization — 2026-11-28
+## Scenario graph visualization — 2026-11-28
 
-The Dashboard presents the selected scenario's published guide as a read-only expected flow. The actual run status and trace are shown separately from scenario intent. No editable graph, graph schema, graph persistence or graph execution is provided. If a selected scenario has no reviewed guide, the UI says so instead of displaying another scenario's flow.
+The native SVG viewer uses the framework-independent graph model and projects the currently selected scenario's source-reviewed guide into read-only nodes and ordered connections. Changing the scenario changes the graph. The guide contract has no branch topology, so the graph does not infer conditional edges. Actual run status and trace evidence remain separate; no progress is painted onto expected nodes without a verified source mapping. Graph editing is out of scope.
 
 ## Current status — 2026-11-27
 
