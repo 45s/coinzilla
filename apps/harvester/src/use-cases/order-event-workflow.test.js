@@ -396,7 +396,7 @@ test("ignores unmatched orders from a prior Harvester process under the default 
     calls,
   } = makeWorkflow({
     updateResult: { unknown: true },
-    isCurrentProcessClientOrderId: (clientOrderId) => clientOrderId === order.clientOrderId,
+    isCurrentProcessClientOrderId: () => false,
   })
 
   const result = await workflow.processUserDataEventTransition({
@@ -492,7 +492,7 @@ test("does not infer current-process ownership from a malformed legacy client ID
     calls,
   } = makeWorkflow({
     registry: new OrderRegistry({ orders: [] }),
-    isCurrentProcessClientOrderId: (clientOrderId) => clientOrderId === order.clientOrderId,
+    isCurrentProcessClientOrderId: () => false,
   })
 
   const result = await workflow.processUserDataEventTransition({
