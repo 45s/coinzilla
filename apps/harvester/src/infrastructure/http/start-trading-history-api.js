@@ -161,6 +161,17 @@ function createScenarioRunnerAdapter({ env, platform }) {
 }
 
 
+function createScenarioRunnerStrategyRegistrations() {
+  return [
+    {
+      strategyId: "RS",
+      strategyName: "Recovery Seller",
+      scenarios: getRecoverySellerRunnerCatalog(),
+    },
+    getCgConservativeScenarioRegistration(),
+  ]
+}
+
 function createUnavailableTradingHistoryQueries() {
   const unavailable = () => ({
     ok: false,
@@ -248,14 +259,7 @@ export async function startTradingHistoryApi({
       env,
       platform,
     })],
-    strategyRegistrations: [
-      {
-        strategyId: "RS",
-        strategyName: "Recovery Seller",
-        scenarios: getRecoverySellerRunnerCatalog(),
-      },
-      getCgConservativeScenarioRegistration(),
-    ],
+    strategyRegistrations: createScenarioRunnerStrategyRegistrations(),
     sourceRevision: resolveScenarioRunnerSourceRevision({ env }),
   })
   const server = await openApiServer({
