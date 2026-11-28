@@ -1,0 +1,1360 @@
+{
+  "schema": "coinzilla.scenario-run.debug",
+  "schemaVersion": 2,
+  "executionMode": "simulation-only",
+  "execution": {
+    "mode": "simulation-only",
+    "outcome": "result-recorded",
+    "workerIsolation": "unverified"
+  },
+  "run": {
+    "runId": "2e1936d6-e980-4751-9c22-966d063269ab",
+    "strategyId": "RS",
+    "scenarioId": "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
+    "scenarioIdentity": "RS/RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
+    "inputSha256": "f1cfb1022f7e93c6d0c4145fbaf429bd61248a45507e36162b966503d61567ef",
+    "replayProvenance": {
+      "verified": false,
+      "missing": [
+        "verified build artifact provenance is unavailable",
+        "verified buildArtifactSha256 is unavailable",
+        "trusted build-artifact verification is not integrated into the Scenario Runner trust boundary"
+      ],
+      "identity": {
+        "sourceCommitSha": "173b7d336d431c586292a31915de1caa9aed650c",
+        "checkedOutCommitSha": "173b7d336d431c586292a31915de1caa9aed650c",
+        "sourceTreeSha": "d5683bcdff48a047d0112b5d15bfab55a8cd627c",
+        "dependencyLockSha256": "373d7a4289053bc28249aa6239e37a435ba2f3c55efa368a2363fd09b4aa4652",
+        "buildArtifactSha256": null,
+        "runtimeIdentity": "v26.13.0|win32|x64",
+        "scenarioRegistrySha256": "83bfa1e38f8fef2d6dccb47af945693ea89e48750c19f3c9bd5500e4deb37b4d"
+      }
+    },
+    "sourceRevision": "173b7d336d431c586292a31915de1caa9aed650c",
+    "replayOfRunId": null,
+    "status": "Completed",
+    "createdAt": "2026-11-28T08:16:38.737Z",
+    "updatedAt": "2026-11-28T08:16:39.108Z",
+    "startedAt": "2026-11-28T08:16:39.050Z",
+    "completedAt": "2026-11-28T08:16:39.108Z",
+    "input": {
+      "marketPrice": "12.3",
+      "symbol": "ZROUSDT",
+      "baseAssetCode": "ZRO",
+      "quoteAssetCode": "USDT",
+      "venue": "binance",
+      "initialBuyPrice": "2",
+      "quoteBalanceFree": "1000",
+      "priceIncrement": "0.001",
+      "quantityIncrement": "0.01",
+      "minQuantity": "0.01",
+      "minNotional": "5",
+      "investment": 100,
+      "orderQuantity": 5,
+      "sellQuantity": 50,
+      "keepQuantity": 1,
+      "minProfit": 0.2,
+      "priceStepPercent": 0.05,
+      "makerPercent": 0,
+      "takerPercent": 0,
+      "thirdAssetFeeQuoteValue": "0",
+      "pricePrecision": 3,
+      "quantityPrecision": 2,
+      "legacyInvested": 100,
+      "legacyQuantity": 50,
+      "enableVolatilityProtection": false,
+      "externalOrdersPolicy": "BLOCK"
+    },
+    "output": {
+      "runId": "2e1936d6-e980-4751-9c22-966d063269ab",
+      "strategyId": "RS",
+      "scenarioId": "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
+      "scenarioName": "Production Recovery Seller runtime reconciles a profitable partial CANCELED SELL",
+      "input": {
+        "marketPrice": "12.3",
+        "symbol": "ZROUSDT",
+        "baseAssetCode": "ZRO",
+        "quoteAssetCode": "USDT",
+        "venue": "binance",
+        "initialBuyPrice": "2",
+        "quoteBalanceFree": "1000",
+        "priceIncrement": "0.001",
+        "quantityIncrement": "0.01",
+        "minQuantity": "0.01",
+        "minNotional": "5",
+        "investment": 100,
+        "orderQuantity": 5,
+        "sellQuantity": 50,
+        "keepQuantity": 1,
+        "minProfit": 0.2,
+        "priceStepPercent": 0.05,
+        "makerPercent": 0,
+        "takerPercent": 0,
+        "thirdAssetFeeQuoteValue": "0",
+        "pricePrecision": 3,
+        "quantityPrecision": 2,
+        "legacyInvested": 100,
+        "legacyQuantity": 50,
+        "enableVolatilityProtection": false,
+        "externalOrdersPolicy": "BLOCK"
+      },
+      "output": {
+        "decision": {
+          "outcome": "SUBMIT",
+          "reasonCode": "RECOVERY_SELL_PROFITABILITY_AND_FILTERS_PASSED",
+          "explanation": "The single mixed SELL passes all profitability and supported exchange-filter requirements"
+        },
+        "action": {
+          "side": "SELL",
+          "purpose": "RECOVERY_SELL",
+          "quantity": "55",
+          "price": "12.3",
+          "cycleId": "rs-scenario-cycle-1",
+          "positionId": "rs-scenario-position-1"
+        },
+        "submitted": true,
+        "submissionRejected": false,
+        "stopFactAppended": true,
+        "buyAdmissionBlocked": true,
+        "sellAdmissionBlocked": false,
+        "brokerSubmissionCallCount": 1,
+        "terminalSell": {
+          "clientOrderId": "86b71f74072d48afb82ae75fe153e8fb",
+          "orderStatus": "CANCELED",
+          "executedQuantity": "2.5",
+          "profitabilityEligible": true,
+          "terminalReconciliationFailed": false,
+          "terminalReconciliationError": null,
+          "terminalReconciled": true,
+          "eventWorkflowFailedClosed": true,
+          "marketPaused": true,
+          "pauseReasons": [
+            "RS_TERMINAL_SELL_NOT_FILLED_STOP"
+          ],
+          "stopFactAppended": true,
+          "stopPersistenceFailed": false,
+          "buyAdmissionBlocked": true,
+          "sellAdmissionBlocked": false,
+          "postFailureBuyAdmissionBlocked": false,
+          "postFailureSellAdmissionBlocked": false,
+          "postFailureSubmittedOrderCount": 0,
+          "postFailureActionSubmitted": false,
+          "eventFillStaged": true,
+          "stagedSellFillCount": 1,
+          "cycleState": {
+            "cycleId": "rs-scenario-cycle-1",
+            "positionId": "rs-scenario-position-1",
+            "status": "UNRESOLVED",
+            "sellOrderIdentity": {
+              "clientOrderId": "86b71f74072d48afb82ae75fe153e8fb",
+              "brokerOrderId": "sim-86b71f74072d48afb82ae75fe153e8fb"
+            },
+            "terminalOrderStatus": "CANCELED",
+            "terminalReconciled": true,
+            "profitabilityEligible": true,
+            "marketId": "binance:ZROUSDT",
+            "sellOrderClientId": "86b71f74072d48afb82ae75fe153e8fb",
+            "sellOrderBrokerOrderId": "sim-86b71f74072d48afb82ae75fe153e8fb",
+            "appliedFillIds": [
+              "binance:ZROUSDT:rs-scenario-partial-sell-fill-1"
+            ],
+            "eligible": true
+          }
+        },
+        "stopAdmissionChecks": null,
+        "submittedOrders": [
+          {
+            "clientOrderId": "86b71f74072d48afb82ae75fe153e8fb",
+            "brokerOrderId": "sim-86b71f74072d48afb82ae75fe153e8fb",
+            "side": "SELL",
+            "type": "LIMIT_MAKER",
+            "price": "12.3",
+            "quantity": "55",
+            "status": "OPEN"
+          }
+        ],
+        "reservedSellCycle": null,
+        "simulationFacts": [
+          {
+            "factId": "order-submission-intent:86b71f74072d48afb82ae75fe153e8fb",
+            "factType": "ORDER_SUBMISSION_INTENT",
+            "data": {
+              "clientOrderId": "86b71f74072d48afb82ae75fe153e8fb",
+              "providerInstanceId": "scenario-runner-simulation",
+              "providerType": "simulation",
+              "accountId": "scenario-2e1936d6-e980-4751-9c22-966d063269ab",
+              "marketId": "binance:ZROUSDT",
+              "venue": "binance",
+              "symbol": "ZROUSDT",
+              "baseAssetId": "binance:ZRO",
+              "quoteAssetId": "binance:USDT",
+              "side": "SELL",
+              "type": "LIMIT_MAKER",
+              "price": "12.3",
+              "quantity": "55",
+              "purpose": "RECOVERY_SELL",
+              "strategyId": "RS_recoverySeller",
+              "positionId": "rs-scenario-position-1",
+              "cycleId": "rs-scenario-cycle-1"
+            }
+          },
+          {
+            "factId": "order-submission-outcome:86b71f74072d48afb82ae75fe153e8fb:ACKNOWLEDGED",
+            "factType": "ORDER_SUBMISSION_OUTCOME",
+            "data": {
+              "clientOrderId": "86b71f74072d48afb82ae75fe153e8fb",
+              "providerInstanceId": "scenario-runner-simulation",
+              "providerType": "simulation",
+              "accountId": "scenario-2e1936d6-e980-4751-9c22-966d063269ab",
+              "marketId": "binance:ZROUSDT",
+              "venue": "binance",
+              "symbol": "ZROUSDT",
+              "baseAssetId": "binance:ZRO",
+              "quoteAssetId": "binance:USDT",
+              "side": "SELL",
+              "type": "LIMIT_MAKER",
+              "price": "12.3",
+              "quantity": "55",
+              "executedQuantity": "0",
+              "purpose": "RECOVERY_SELL",
+              "outcome": "ACKNOWLEDGED",
+              "brokerOrderId": "sim-86b71f74072d48afb82ae75fe153e8fb",
+              "status": "OPEN",
+              "strategyId": "RS_recoverySeller",
+              "positionId": "rs-scenario-position-1",
+              "cycleId": "rs-scenario-cycle-1"
+            }
+          },
+          {
+            "factId": "rs-mixed-sell-reconciled-86b71f74072d48afb82ae75fe153e8fb",
+            "factType": "RECOVERY_SELLER_MIXED_SELL_RECONCILED",
+            "data": {
+              "marketId": "binance:ZROUSDT",
+              "cycleId": "rs-scenario-cycle-1",
+              "positionId": "rs-scenario-position-1",
+              "clientOrderId": "86b71f74072d48afb82ae75fe153e8fb",
+              "brokerOrderId": "sim-86b71f74072d48afb82ae75fe153e8fb",
+              "terminalOrderStatus": "CANCELED",
+              "fillIds": [
+                "binance:ZROUSDT:rs-scenario-partial-sell-fill-1"
+              ],
+              "profitabilityEligible": true,
+              "accountingApplied": true
+            }
+          },
+          {
+            "factId": "safety-blocker-raised:f0d8ffa6cd84974bffefaa7385157616eb2bbffad6b221c16698bfb42522ba5a",
+            "factType": "SAFETY_BLOCKER_RAISED",
+            "data": {
+              "blockerId": "f0d8ffa6cd84974bffefaa7385157616eb2bbffad6b221c16698bfb42522ba5a",
+              "producer": "RECOVERY_SELLER_STOP_WORKFLOW",
+              "scope": "ACCOUNT",
+              "symbol": null,
+              "reason": "RECOVERY_SELLER_UNEXPECTED_CONDITION",
+              "evidenceDigest": "d5a70f761eeb4664875655a16b8a73397b8dfca264f4e0b27e8b591dd098f974"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "decisionOutcome": "SUBMIT",
+        "actionSide": "SELL",
+        "actionQuantity": "55",
+        "submittedOrderCount": 1,
+        "reservationMatchesSubmittedOrder": true,
+        "terminalOrderStatus": "CANCELED",
+        "terminalCycleStatus": "UNRESOLVED",
+        "terminalReconciled": true,
+        "profitabilityEligible": true,
+        "reservationReleased": true,
+        "stopFactAppended": true,
+        "eventWorkflowFailedClosed": true,
+        "marketPaused": true,
+        "buyAdmissionBlocked": true,
+        "sellAdmissionBlocked": false
+      },
+      "assertions": [
+        {
+          "name": "production RS transition selects a SELL action",
+          "passed": true,
+          "actual": "SUBMIT",
+          "expected": "SUBMIT"
+        },
+        {
+          "name": "SELL action includes the configured recovery quantity and authorized legacy slice",
+          "passed": true,
+          "actual": "SELL",
+          "expected": "SELL"
+        },
+        {
+          "name": "SELL quantity preserves the canonical recovery and legacy quantities",
+          "passed": true,
+          "actual": "55",
+          "expected": "55"
+        },
+        {
+          "name": "simulation broker acknowledges exactly one order",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "terminal SELL preserves the broker terminal status",
+          "passed": true,
+          "actual": "CANCELED",
+          "expected": "CANCELED"
+        },
+        {
+          "name": "terminal SELL leaves the cycle unresolved",
+          "passed": true,
+          "actual": "UNRESOLVED",
+          "expected": "UNRESOLVED"
+        },
+        {
+          "name": "terminal SELL is completely reconciled",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "production order-event workflow stages the canonical SELL fill",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "terminal SELL preserves its profitability result without closing an unresolved cycle",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "production order-event workflow fails closed after terminal SELL",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "run-local STOP fact persistence matches the scenario outcome",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "production order-event workflow pauses the affected market after terminal SELL STOP",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "RS BUY admission remains blocked after terminal SELL STOP",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "RS SELL admission remains closed only while STOP persistence is unverified",
+          "passed": true,
+          "actual": false,
+          "expected": false
+        },
+        {
+          "name": "the BUY admission gate remains blocked after terminal SELL STOP",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "terminal SELL releases the terminal order reservation after fill reconciliation",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        }
+      ],
+      "passed": true,
+      "trace": [
+        {
+          "id": "input-1",
+          "kind": "input",
+          "label": "Simulated ZROUSDT market price",
+          "inputs": {
+            "marketPrice": "12.3",
+            "symbol": "ZROUSDT",
+            "baseAssetCode": "ZRO",
+            "quoteAssetCode": "USDT",
+            "venue": "binance",
+            "initialBuyPrice": "2",
+            "quoteBalanceFree": "1000",
+            "priceIncrement": "0.001",
+            "quantityIncrement": "0.01",
+            "minQuantity": "0.01",
+            "minNotional": "5",
+            "investment": 100,
+            "orderQuantity": 5,
+            "sellQuantity": 50,
+            "keepQuantity": 1,
+            "minProfit": 0.2,
+            "priceStepPercent": 0.05,
+            "makerPercent": 0,
+            "takerPercent": 0,
+            "thirdAssetFeeQuoteValue": "0",
+            "pricePrecision": 3,
+            "quantityPrecision": 2,
+            "legacyInvested": 100,
+            "legacyQuantity": 50,
+            "enableVolatilityProtection": false,
+            "externalOrdersPolicy": "BLOCK"
+          },
+          "source": "deterministic-simulation-fixture"
+        },
+        {
+          "id": "fill-1",
+          "kind": "accounting",
+          "label": "Seed canonical recovery BUY Fill into production accounting workflow",
+          "inputs": {
+            "tradeId": "rs-scenario-buy-fill-1",
+            "quantity": "5",
+            "price": "2",
+            "quoteQuantity": "10"
+          },
+          "outputs": {
+            "recoveryBuyApplied": true,
+            "recoveryPositionId": "rs-scenario-position-1"
+          },
+          "source": "createRecoverySellerAccountingWorkflow.applyBuyFill"
+        },
+        {
+          "id": "runtime-1",
+          "kind": "production-runtime",
+          "label": "Evaluate production Recovery Seller runtime transition",
+          "inputs": {
+            "symbol": "ZROUSDT",
+            "marketPrice": "12.3",
+            "config": {
+              "enabled": true,
+              "enableVolatilityProtection": false,
+              "externalOrdersPolicy": "BLOCK",
+              "investment": 100,
+              "orderQuantity": 5,
+              "sellQuantity": 50,
+              "keepQuantity": 1,
+              "minProfit": 0.2,
+              "priceStepPercent": 0.05,
+              "makerPercent": 0,
+              "takerPercent": 0,
+              "thirdAssetFeeQuoteValue": "0",
+              "pricePrecision": 3,
+              "quantityPrecision": 2,
+              "legacyPosition": {
+                "invested": 100,
+                "quantity": 50
+              }
+            },
+            "marketMetadata": {
+              "source": "validated-scenario-market-metadata",
+              "orderType": "LIMIT_MAKER",
+              "tradingRules": [
+                {
+                  "type": "PRICE_INCREMENT",
+                  "status": "SUPPORTED",
+                  "amount": "0.001"
+                },
+                {
+                  "type": "QUANTITY_INCREMENT",
+                  "status": "SUPPORTED",
+                  "amount": "0.01"
+                },
+                {
+                  "type": "MIN_QUANTITY",
+                  "status": "SUPPORTED",
+                  "amount": "0.01"
+                },
+                {
+                  "type": "MIN_NOTIONAL",
+                  "status": "SUPPORTED",
+                  "amount": "5"
+                }
+              ]
+            }
+          },
+          "outputs": {
+            "outcome": "SUBMIT",
+            "reasonCode": "RECOVERY_SELL_PROFITABILITY_AND_FILTERS_PASSED",
+            "explanation": "The single mixed SELL passes all profitability and supported exchange-filter requirements"
+          },
+          "source": "createRecoverySellerRuntimeDispatch"
+        },
+        {
+          "id": "broker-1",
+          "kind": "simulated-broker",
+          "label": "Attempt the production SELL intent through the run-local simulated broker",
+          "inputs": {
+            "side": "SELL",
+            "purpose": "RECOVERY_SELL",
+            "quantity": "55",
+            "price": "12.3",
+            "cycleId": "rs-scenario-cycle-1",
+            "positionId": "rs-scenario-position-1"
+          },
+          "outputs": {
+            "submittedOrders": [
+              {
+                "clientOrderId": "86b71f74072d48afb82ae75fe153e8fb",
+                "brokerOrderId": "sim-86b71f74072d48afb82ae75fe153e8fb",
+                "side": "SELL",
+                "type": "LIMIT_MAKER",
+                "price": "12.3",
+                "quantity": "55",
+                "status": "OPEN"
+              }
+            ],
+            "brokerSubmissionCallCount": 1
+          },
+          "source": "createRecoverySellerOrderSubmitter"
+        },
+        {
+          "id": "terminal-1",
+          "kind": "order-lifecycle",
+          "label": "Reconcile a terminal SELL through production order-event and accounting workflows",
+          "inputs": {
+            "orderStatus": "CANCELED",
+            "executedQuantity": "2.5"
+          },
+          "outputs": {
+            "cycleStatus": "UNRESOLVED",
+            "terminalReconciled": true,
+            "profitabilityEligible": true,
+            "eventFillStaged": true,
+            "eventWorkflowFailedClosed": true,
+            "stopPersistenceFailed": false,
+            "buyAdmissionBlocked": true,
+            "sellAdmissionBlocked": false,
+            "marketPaused": true,
+            "pauseReasons": [
+              "RS_TERMINAL_SELL_NOT_FILLED_STOP"
+            ]
+          },
+          "source": "makeOrderEventWorkflow.processUserDataEventTransition → createRecoverySellerAccountingWorkflow.reconcileTerminalMixedSell"
+        },
+        {
+          "id": "assertions-1",
+          "kind": "assertion",
+          "label": "Compare production execution with scenario expectations",
+          "outputs": [
+            {
+              "name": "production RS transition selects a SELL action",
+              "passed": true,
+              "actual": "SUBMIT",
+              "expected": "SUBMIT"
+            },
+            {
+              "name": "SELL action includes the configured recovery quantity and authorized legacy slice",
+              "passed": true,
+              "actual": "SELL",
+              "expected": "SELL"
+            },
+            {
+              "name": "SELL quantity preserves the canonical recovery and legacy quantities",
+              "passed": true,
+              "actual": "55",
+              "expected": "55"
+            },
+            {
+              "name": "simulation broker acknowledges exactly one order",
+              "passed": true,
+              "actual": 1,
+              "expected": 1
+            },
+            {
+              "name": "terminal SELL preserves the broker terminal status",
+              "passed": true,
+              "actual": "CANCELED",
+              "expected": "CANCELED"
+            },
+            {
+              "name": "terminal SELL leaves the cycle unresolved",
+              "passed": true,
+              "actual": "UNRESOLVED",
+              "expected": "UNRESOLVED"
+            },
+            {
+              "name": "terminal SELL is completely reconciled",
+              "passed": true,
+              "actual": true,
+              "expected": true
+            },
+            {
+              "name": "production order-event workflow stages the canonical SELL fill",
+              "passed": true,
+              "actual": 1,
+              "expected": 1
+            },
+            {
+              "name": "terminal SELL preserves its profitability result without closing an unresolved cycle",
+              "passed": true,
+              "actual": true,
+              "expected": true
+            },
+            {
+              "name": "production order-event workflow fails closed after terminal SELL",
+              "passed": true,
+              "actual": true,
+              "expected": true
+            },
+            {
+              "name": "run-local STOP fact persistence matches the scenario outcome",
+              "passed": true,
+              "actual": true,
+              "expected": true
+            },
+            {
+              "name": "production order-event workflow pauses the affected market after terminal SELL STOP",
+              "passed": true,
+              "actual": true,
+              "expected": true
+            },
+            {
+              "name": "RS BUY admission remains blocked after terminal SELL STOP",
+              "passed": true,
+              "actual": true,
+              "expected": true
+            },
+            {
+              "name": "RS SELL admission remains closed only while STOP persistence is unverified",
+              "passed": true,
+              "actual": false,
+              "expected": false
+            },
+            {
+              "name": "the BUY admission gate remains blocked after terminal SELL STOP",
+              "passed": true,
+              "actual": true,
+              "expected": true
+            },
+            {
+              "name": "terminal SELL releases the terminal order reservation after fill reconciliation",
+              "passed": true,
+              "actual": true,
+              "expected": true
+            }
+          ]
+        }
+      ],
+      "diagnostics": [],
+      "source": "production-runtime-evaluator"
+    },
+    "diagnostics": [],
+    "transitions": [
+      {
+        "status": "Accepted",
+        "at": "2026-11-28T08:16:38.737Z"
+      },
+      {
+        "status": "Starting",
+        "at": "2026-11-28T08:16:38.737Z"
+      },
+      {
+        "status": "Running",
+        "at": "2026-11-28T08:16:39.050Z"
+      },
+      {
+        "status": "Completed",
+        "at": "2026-11-28T08:16:39.108Z"
+      }
+    ]
+  },
+  "scenarioCatalogSnapshot": {
+    "id": "RS-RUNTIME-SELL-PARTIAL-CANCEL-001",
+    "name": "Production Recovery Seller runtime reconciles a profitable partial CANCELED SELL",
+    "layer": "APPLICATION",
+    "status": "PARTIAL",
+    "executionStatus": "EXECUTABLE",
+    "executable": true,
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "marketPrice",
+        "symbol",
+        "baseAssetCode",
+        "quoteAssetCode",
+        "venue",
+        "initialBuyPrice",
+        "quoteBalanceFree",
+        "priceIncrement",
+        "quantityIncrement",
+        "minQuantity",
+        "minNotional",
+        "investment",
+        "orderQuantity",
+        "sellQuantity",
+        "keepQuantity",
+        "minProfit",
+        "priceStepPercent",
+        "makerPercent",
+        "takerPercent",
+        "thirdAssetFeeQuoteValue",
+        "pricePrecision",
+        "quantityPrecision",
+        "legacyInvested",
+        "legacyQuantity",
+        "enableVolatilityProtection",
+        "externalOrdersPolicy"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "marketPrice": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+          "exclusiveMinimum": "0"
+        },
+        "symbol": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{3,20}$"
+        },
+        "baseAssetCode": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{2,10}$"
+        },
+        "quoteAssetCode": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{2,10}$"
+        },
+        "venue": {
+          "type": "string",
+          "pattern": "^[a-z0-9_-]{2,32}$"
+        },
+        "initialBuyPrice": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+          "exclusiveMinimum": "0"
+        },
+        "quoteBalanceFree": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+          "exclusiveMinimum": "0"
+        },
+        "priceIncrement": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+          "exclusiveMinimum": "0"
+        },
+        "quantityIncrement": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+          "exclusiveMinimum": "0"
+        },
+        "minQuantity": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+          "exclusiveMinimum": "0"
+        },
+        "minNotional": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+          "exclusiveMinimum": "0"
+        },
+        "investment": {
+          "type": "number"
+        },
+        "orderQuantity": {
+          "type": "number"
+        },
+        "sellQuantity": {
+          "type": "number"
+        },
+        "keepQuantity": {
+          "type": "number"
+        },
+        "minProfit": {
+          "type": "number"
+        },
+        "priceStepPercent": {
+          "type": "number"
+        },
+        "makerPercent": {
+          "type": "number"
+        },
+        "takerPercent": {
+          "type": "number"
+        },
+        "thirdAssetFeeQuoteValue": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$"
+        },
+        "pricePrecision": {
+          "type": "number"
+        },
+        "quantityPrecision": {
+          "type": "number"
+        },
+        "legacyInvested": {
+          "type": "number"
+        },
+        "legacyQuantity": {
+          "type": "number"
+        },
+        "enableVolatilityProtection": {
+          "type": "boolean"
+        },
+        "externalOrdersPolicy": {
+          "type": "string",
+          "pattern": "^(?:BLOCK|IGNORE)$"
+        }
+      }
+    },
+    "defaultInput": {
+      "marketPrice": "12.3",
+      "symbol": "ZROUSDT",
+      "baseAssetCode": "ZRO",
+      "quoteAssetCode": "USDT",
+      "venue": "binance",
+      "initialBuyPrice": "2",
+      "quoteBalanceFree": "1000",
+      "priceIncrement": "0.001",
+      "quantityIncrement": "0.01",
+      "minQuantity": "0.01",
+      "minNotional": "5",
+      "investment": 100,
+      "orderQuantity": 5,
+      "sellQuantity": 50,
+      "keepQuantity": 1,
+      "minProfit": 0.2,
+      "priceStepPercent": 0.05,
+      "makerPercent": 0,
+      "takerPercent": 0,
+      "thirdAssetFeeQuoteValue": "0",
+      "pricePrecision": 3,
+      "quantityPrecision": 2,
+      "legacyInvested": 100,
+      "legacyQuantity": 50,
+      "enableVolatilityProtection": false,
+      "externalOrdersPolicy": "BLOCK"
+    },
+    "readinessReasons": [
+      "Scenario infrastructure uses a run-local simulated broker and in-memory operational store; it does not prove durable production account or STOP state.",
+      "SELL intent/reservation/outcome failures, ambiguous broker placement, terminal-reconciliation persistence failure, STOP persistence failures and BUY-only STOP admission are covered; remaining infrastructure acceptance includes runner-specific retry/idempotency."
+    ]
+  },
+  "scenarioCatalogSnapshotProvenance": "current-catalog-at-export-time-not-verified-as-run-time",
+  "trace": [
+    {
+      "id": "input-1",
+      "kind": "input",
+      "label": "Simulated ZROUSDT market price",
+      "inputs": {
+        "marketPrice": "12.3",
+        "symbol": "ZROUSDT",
+        "baseAssetCode": "ZRO",
+        "quoteAssetCode": "USDT",
+        "venue": "binance",
+        "initialBuyPrice": "2",
+        "quoteBalanceFree": "1000",
+        "priceIncrement": "0.001",
+        "quantityIncrement": "0.01",
+        "minQuantity": "0.01",
+        "minNotional": "5",
+        "investment": 100,
+        "orderQuantity": 5,
+        "sellQuantity": 50,
+        "keepQuantity": 1,
+        "minProfit": 0.2,
+        "priceStepPercent": 0.05,
+        "makerPercent": 0,
+        "takerPercent": 0,
+        "thirdAssetFeeQuoteValue": "0",
+        "pricePrecision": 3,
+        "quantityPrecision": 2,
+        "legacyInvested": 100,
+        "legacyQuantity": 50,
+        "enableVolatilityProtection": false,
+        "externalOrdersPolicy": "BLOCK"
+      },
+      "source": "deterministic-simulation-fixture"
+    },
+    {
+      "id": "fill-1",
+      "kind": "accounting",
+      "label": "Seed canonical recovery BUY Fill into production accounting workflow",
+      "inputs": {
+        "tradeId": "rs-scenario-buy-fill-1",
+        "quantity": "5",
+        "price": "2",
+        "quoteQuantity": "10"
+      },
+      "outputs": {
+        "recoveryBuyApplied": true,
+        "recoveryPositionId": "rs-scenario-position-1"
+      },
+      "source": "createRecoverySellerAccountingWorkflow.applyBuyFill"
+    },
+    {
+      "id": "runtime-1",
+      "kind": "production-runtime",
+      "label": "Evaluate production Recovery Seller runtime transition",
+      "inputs": {
+        "symbol": "ZROUSDT",
+        "marketPrice": "12.3",
+        "config": {
+          "enabled": true,
+          "enableVolatilityProtection": false,
+          "externalOrdersPolicy": "BLOCK",
+          "investment": 100,
+          "orderQuantity": 5,
+          "sellQuantity": 50,
+          "keepQuantity": 1,
+          "minProfit": 0.2,
+          "priceStepPercent": 0.05,
+          "makerPercent": 0,
+          "takerPercent": 0,
+          "thirdAssetFeeQuoteValue": "0",
+          "pricePrecision": 3,
+          "quantityPrecision": 2,
+          "legacyPosition": {
+            "invested": 100,
+            "quantity": 50
+          }
+        },
+        "marketMetadata": {
+          "source": "validated-scenario-market-metadata",
+          "orderType": "LIMIT_MAKER",
+          "tradingRules": [
+            {
+              "type": "PRICE_INCREMENT",
+              "status": "SUPPORTED",
+              "amount": "0.001"
+            },
+            {
+              "type": "QUANTITY_INCREMENT",
+              "status": "SUPPORTED",
+              "amount": "0.01"
+            },
+            {
+              "type": "MIN_QUANTITY",
+              "status": "SUPPORTED",
+              "amount": "0.01"
+            },
+            {
+              "type": "MIN_NOTIONAL",
+              "status": "SUPPORTED",
+              "amount": "5"
+            }
+          ]
+        }
+      },
+      "outputs": {
+        "outcome": "SUBMIT",
+        "reasonCode": "RECOVERY_SELL_PROFITABILITY_AND_FILTERS_PASSED",
+        "explanation": "The single mixed SELL passes all profitability and supported exchange-filter requirements"
+      },
+      "source": "createRecoverySellerRuntimeDispatch"
+    },
+    {
+      "id": "broker-1",
+      "kind": "simulated-broker",
+      "label": "Attempt the production SELL intent through the run-local simulated broker",
+      "inputs": {
+        "side": "SELL",
+        "purpose": "RECOVERY_SELL",
+        "quantity": "55",
+        "price": "12.3",
+        "cycleId": "rs-scenario-cycle-1",
+        "positionId": "rs-scenario-position-1"
+      },
+      "outputs": {
+        "submittedOrders": [
+          {
+            "clientOrderId": "86b71f74072d48afb82ae75fe153e8fb",
+            "brokerOrderId": "sim-86b71f74072d48afb82ae75fe153e8fb",
+            "side": "SELL",
+            "type": "LIMIT_MAKER",
+            "price": "12.3",
+            "quantity": "55",
+            "status": "OPEN"
+          }
+        ],
+        "brokerSubmissionCallCount": 1
+      },
+      "source": "createRecoverySellerOrderSubmitter"
+    },
+    {
+      "id": "terminal-1",
+      "kind": "order-lifecycle",
+      "label": "Reconcile a terminal SELL through production order-event and accounting workflows",
+      "inputs": {
+        "orderStatus": "CANCELED",
+        "executedQuantity": "2.5"
+      },
+      "outputs": {
+        "cycleStatus": "UNRESOLVED",
+        "terminalReconciled": true,
+        "profitabilityEligible": true,
+        "eventFillStaged": true,
+        "eventWorkflowFailedClosed": true,
+        "stopPersistenceFailed": false,
+        "buyAdmissionBlocked": true,
+        "sellAdmissionBlocked": false,
+        "marketPaused": true,
+        "pauseReasons": [
+          "RS_TERMINAL_SELL_NOT_FILLED_STOP"
+        ]
+      },
+      "source": "makeOrderEventWorkflow.processUserDataEventTransition → createRecoverySellerAccountingWorkflow.reconcileTerminalMixedSell"
+    },
+    {
+      "id": "assertions-1",
+      "kind": "assertion",
+      "label": "Compare production execution with scenario expectations",
+      "outputs": [
+        {
+          "name": "production RS transition selects a SELL action",
+          "passed": true,
+          "actual": "SUBMIT",
+          "expected": "SUBMIT"
+        },
+        {
+          "name": "SELL action includes the configured recovery quantity and authorized legacy slice",
+          "passed": true,
+          "actual": "SELL",
+          "expected": "SELL"
+        },
+        {
+          "name": "SELL quantity preserves the canonical recovery and legacy quantities",
+          "passed": true,
+          "actual": "55",
+          "expected": "55"
+        },
+        {
+          "name": "simulation broker acknowledges exactly one order",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "terminal SELL preserves the broker terminal status",
+          "passed": true,
+          "actual": "CANCELED",
+          "expected": "CANCELED"
+        },
+        {
+          "name": "terminal SELL leaves the cycle unresolved",
+          "passed": true,
+          "actual": "UNRESOLVED",
+          "expected": "UNRESOLVED"
+        },
+        {
+          "name": "terminal SELL is completely reconciled",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "production order-event workflow stages the canonical SELL fill",
+          "passed": true,
+          "actual": 1,
+          "expected": 1
+        },
+        {
+          "name": "terminal SELL preserves its profitability result without closing an unresolved cycle",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "production order-event workflow fails closed after terminal SELL",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "run-local STOP fact persistence matches the scenario outcome",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "production order-event workflow pauses the affected market after terminal SELL STOP",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "RS BUY admission remains blocked after terminal SELL STOP",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "RS SELL admission remains closed only while STOP persistence is unverified",
+          "passed": true,
+          "actual": false,
+          "expected": false
+        },
+        {
+          "name": "the BUY admission gate remains blocked after terminal SELL STOP",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        },
+        {
+          "name": "terminal SELL releases the terminal order reservation after fill reconciliation",
+          "passed": true,
+          "actual": true,
+          "expected": true
+        }
+      ]
+    }
+  ],
+  "expected": {
+    "decisionOutcome": "SUBMIT",
+    "actionSide": "SELL",
+    "actionQuantity": "55",
+    "submittedOrderCount": 1,
+    "reservationMatchesSubmittedOrder": true,
+    "terminalOrderStatus": "CANCELED",
+    "terminalCycleStatus": "UNRESOLVED",
+    "terminalReconciled": true,
+    "profitabilityEligible": true,
+    "reservationReleased": true,
+    "stopFactAppended": true,
+    "eventWorkflowFailedClosed": true,
+    "marketPaused": true,
+    "buyAdmissionBlocked": true,
+    "sellAdmissionBlocked": false
+  },
+  "assertionResults": [
+    {
+      "name": "production RS transition selects a SELL action",
+      "passed": true,
+      "actual": "SUBMIT",
+      "expected": "SUBMIT"
+    },
+    {
+      "name": "SELL action includes the configured recovery quantity and authorized legacy slice",
+      "passed": true,
+      "actual": "SELL",
+      "expected": "SELL"
+    },
+    {
+      "name": "SELL quantity preserves the canonical recovery and legacy quantities",
+      "passed": true,
+      "actual": "55",
+      "expected": "55"
+    },
+    {
+      "name": "simulation broker acknowledges exactly one order",
+      "passed": true,
+      "actual": 1,
+      "expected": 1
+    },
+    {
+      "name": "terminal SELL preserves the broker terminal status",
+      "passed": true,
+      "actual": "CANCELED",
+      "expected": "CANCELED"
+    },
+    {
+      "name": "terminal SELL leaves the cycle unresolved",
+      "passed": true,
+      "actual": "UNRESOLVED",
+      "expected": "UNRESOLVED"
+    },
+    {
+      "name": "terminal SELL is completely reconciled",
+      "passed": true,
+      "actual": true,
+      "expected": true
+    },
+    {
+      "name": "production order-event workflow stages the canonical SELL fill",
+      "passed": true,
+      "actual": 1,
+      "expected": 1
+    },
+    {
+      "name": "terminal SELL preserves its profitability result without closing an unresolved cycle",
+      "passed": true,
+      "actual": true,
+      "expected": true
+    },
+    {
+      "name": "production order-event workflow fails closed after terminal SELL",
+      "passed": true,
+      "actual": true,
+      "expected": true
+    },
+    {
+      "name": "run-local STOP fact persistence matches the scenario outcome",
+      "passed": true,
+      "actual": true,
+      "expected": true
+    },
+    {
+      "name": "production order-event workflow pauses the affected market after terminal SELL STOP",
+      "passed": true,
+      "actual": true,
+      "expected": true
+    },
+    {
+      "name": "RS BUY admission remains blocked after terminal SELL STOP",
+      "passed": true,
+      "actual": true,
+      "expected": true
+    },
+    {
+      "name": "RS SELL admission remains closed only while STOP persistence is unverified",
+      "passed": true,
+      "actual": false,
+      "expected": false
+    },
+    {
+      "name": "the BUY admission gate remains blocked after terminal SELL STOP",
+      "passed": true,
+      "actual": true,
+      "expected": true
+    },
+    {
+      "name": "terminal SELL releases the terminal order reservation after fill reconciliation",
+      "passed": true,
+      "actual": true,
+      "expected": true
+    }
+  ],
+  "metadata": {
+    "executionSource": "production-runtime-evaluator",
+    "codeRevision": "173b7d336d431c586292a31915de1caa9aed650c",
+    "scenarioSchema": {
+      "type": "object",
+      "required": [
+        "marketPrice",
+        "symbol",
+        "baseAssetCode",
+        "quoteAssetCode",
+        "venue",
+        "initialBuyPrice",
+        "quoteBalanceFree",
+        "priceIncrement",
+        "quantityIncrement",
+        "minQuantity",
+        "minNotional",
+        "investment",
+        "orderQuantity",
+        "sellQuantity",
+        "keepQuantity",
+        "minProfit",
+        "priceStepPercent",
+        "makerPercent",
+        "takerPercent",
+        "thirdAssetFeeQuoteValue",
+        "pricePrecision",
+        "quantityPrecision",
+        "legacyInvested",
+        "legacyQuantity",
+        "enableVolatilityProtection",
+        "externalOrdersPolicy"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "marketPrice": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+          "exclusiveMinimum": "0"
+        },
+        "symbol": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{3,20}$"
+        },
+        "baseAssetCode": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{2,10}$"
+        },
+        "quoteAssetCode": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{2,10}$"
+        },
+        "venue": {
+          "type": "string",
+          "pattern": "^[a-z0-9_-]{2,32}$"
+        },
+        "initialBuyPrice": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+          "exclusiveMinimum": "0"
+        },
+        "quoteBalanceFree": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+          "exclusiveMinimum": "0"
+        },
+        "priceIncrement": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+          "exclusiveMinimum": "0"
+        },
+        "quantityIncrement": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+          "exclusiveMinimum": "0"
+        },
+        "minQuantity": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+          "exclusiveMinimum": "0"
+        },
+        "minNotional": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$",
+          "exclusiveMinimum": "0"
+        },
+        "investment": {
+          "type": "number"
+        },
+        "orderQuantity": {
+          "type": "number"
+        },
+        "sellQuantity": {
+          "type": "number"
+        },
+        "keepQuantity": {
+          "type": "number"
+        },
+        "minProfit": {
+          "type": "number"
+        },
+        "priceStepPercent": {
+          "type": "number"
+        },
+        "makerPercent": {
+          "type": "number"
+        },
+        "takerPercent": {
+          "type": "number"
+        },
+        "thirdAssetFeeQuoteValue": {
+          "type": "string",
+          "pattern": "^(?:0|[1-9][0-9]*)(?:[.][0-9]+)?$"
+        },
+        "pricePrecision": {
+          "type": "number"
+        },
+        "quantityPrecision": {
+          "type": "number"
+        },
+        "legacyInvested": {
+          "type": "number"
+        },
+        "legacyQuantity": {
+          "type": "number"
+        },
+        "enableVolatilityProtection": {
+          "type": "boolean"
+        },
+        "externalOrdersPolicy": {
+          "type": "string",
+          "pattern": "^(?:BLOCK|IGNORE)$"
+        }
+      }
+    },
+    "scenarioCatalogSnapshotProvenance": "current-catalog-at-export-time-not-verified-as-run-time"
+  },
+  "traceCompleteness": "completeness-unverified"
+}
