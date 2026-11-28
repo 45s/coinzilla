@@ -632,6 +632,37 @@ test("rejects an archive with a missing required stream before invoking the publ
   )
   assert.equal(publisherCalled, false, "Missing streams must be rejected before Git publication")
 })
+test("rejects a completed archive when session PID disagrees with the committed recovery process identity", async (t) => {
+  const fixture = await createFixture(t)
+  const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
+  const session = manifest.sessionInventory.find(({ runtimeSessionId }) => runtimeSessionId === manifest.recoveryRuntimeSessionId)
+  const identityEntry = manifest.files.find(({ sourcePath }) => sourcePath === session.processIdentityPath)
+  const identityPath = path.join(fixture.archiveDirectory, identityEntry.path)
+  const identity = JSON.parse(gunzipSync(await readFile(identityPath)).toString("utf8"))
+  identity.processId = 99999
+  const changedIdentity = gzipSync(Buffer.from(JSON.stringify(identity)))
+  await writeFile(identityPath, changedIdentity)
+  identityEntry.size = changedIdentity.length
+  identityEntry.sha256 = createHash("sha256").update(changedIdentity).digest("hex")
+  await writeFile(manifestPath, JSON.stringify(manifest, null, 2))
+  let publisherCalled = false
+  await assert.rejects(
+    runHarvesterDebugArchivePublication({
+      archiveDirectory: fixture.archiveDirectory,
+      env: { HARVESTER_ARCHIVE_REMOTE: REMOTE },
+      publishArchiveFn: async () => {
+        publisherCalled = true
+        return { commit: "f".repeat(40), fileCount: 1 }
+      },
+    }),
+    /process ID|process identity|PID/i,
+    "The publisher must compare the archived session identity PID with the committed PROCESS_STARTED PID.",
+  )
+  assert.equal(publisherCalled, false, "A PID-mismatched archive must be rejected before publication.")
+})
+
+
 test("publishes a verified active-process snapshot without requiring completion records", async (t) => {
   const fixture = await createFixture(t)
   const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")

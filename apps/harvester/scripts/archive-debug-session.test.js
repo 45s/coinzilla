@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
+import { writeFileSync } from "node:fs"
 import {
   mkdtemp,
   mkdir,
@@ -12,7 +13,7 @@ import {
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { gunzipSync } from "node:zlib"
+import { gzipSync, gunzipSync } from "node:zlib"
 import {
   createHarvesterArchiveDirectoryName,
   runHarvesterDebugArchive,
@@ -41,6 +42,7 @@ function createMatchingTestnetFixtureFiles() {
       environment: "testnet",
       startedAt: "2026-11-24T18:20:00.000Z",
       runtimeSessionId: RUNTIME_SESSION_ID,
+      processId: 24680,
       source: {
         branch: "develop",
         commit: "a".repeat(40),
@@ -799,7 +801,7 @@ test("collects every rotated and pre-compressed DEBUG and TRACE file for the exa
   }))
   const sessionDirectory = path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet")
   const rotatedDebug = "older rotated debug evidence"
-  const rotatedTrace = Buffer.from("pre-compressed trace evidence")
+  const rotatedTrace = gzipSync(Buffer.from("pre-compressed trace evidence"))
   await writeFile(path.join(sessionDirectory, "harvester.log.1"), rotatedDebug)
   await writeFile(path.join(sessionDirectory, "trace.log.1.gz"), rotatedTrace)
   await runHarvesterDebugArchive(archiveWithoutPublishing({
@@ -814,9 +816,66 @@ test("collects every rotated and pre-compressed DEBUG and TRACE file for the exa
       assert.equal(traceFile.rotationIndex, 1, "Compressed rotation metadata must preserve the numeric generation.")
       assert.equal(traceFile.compression, "source-gzip-preserved", "An existing gzip file must not be compressed a second time.")
       assert.deepEqual(await readFile(path.join(directory, traceFile.archivePath)), rotatedTrace, "The original compressed bytes and filename must be preserved.")
+      assert.equal(gunzipSync(await readFile(path.join(directory, traceFile.archivePath))).toString("utf8"), "pre-compressed trace evidence", "A preserved compressed rotation must contain readable gzip data.")
     },
   }))
 })
+
+test("rejects an unreadable pre-compressed rotated log instead of archiving corrupt gzip bytes", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const sessionDirectory = path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet")
+  await writeFile(path.join(sessionDirectory, "trace.log.1.gz"), Buffer.from("not a gzip stream"))
+  await assert.rejects(
+    runHarvesterDebugArchive(archiveWithoutPublishing({
+      fixture,
+      inspectArchive: async () => assert.fail("Corrupt compressed evidence must not reach the archive completion callback."),
+    })),
+    /gzip|compressed|decompress/i,
+    "The collector must reject a .gz rotation whose contents cannot be decompressed.",
+  )
+})
+
+
+test("rejects an active snapshot when either process-lock namespace changes during collection", async (t) => {
+  for (const namespace of ["application", "host"]) {
+    await t.test(namespace, async (subtest) => {
+      const fixture = await createFixture()
+      subtest.after(() => rm(fixture.packageDirectory, {
+        recursive: true,
+        force: true,
+      }))
+      const { lockPath, hostLockPath, lockOwner } = await prepareActiveRuntimeFixture({ fixture })
+      const changedLockPath = namespace === "host" ? hostLockPath : lockPath
+      let lockChanged = false
+      await assert.rejects(
+        runHarvesterDebugArchive({
+          ...archiveDependencies({ fixture }),
+          onProgress(message) {
+            if (!lockChanged && message.includes("retained/copied")) {
+              lockChanged = true
+              writeFileSync(changedLockPath, JSON.stringify({
+                ...lockOwner,
+                token: "externally-replaced-lock-token",
+              }), "utf8")
+            }
+          },
+        }),
+        /lock changed|ownership changed|snapshot.*not publishable/i,
+        "The collector must reject a snapshot when either owned lock namespace changes.",
+      )
+      assert.equal(lockChanged, true, "The test must replace the selected lock after the snapshot copy has started.")
+      const archiveDirectory = path.join(fixture.packageDirectory, "archive-output", "2026-11-24T18-30-00Z_123e4567_debug")
+      const incompleteMarker = JSON.parse(await readFile(path.join(archiveDirectory, "collection-incomplete.json"), "utf8"))
+      assert.equal(incompleteMarker.status, "incomplete", "A failed active snapshot must remain explicitly marked incomplete.")
+      assert.equal(incompleteMarker.runtimeSessionId, RUNTIME_SESSION_ID, "The incomplete marker must identify the affected runtime.")
+    })
+  }
+})
+
 
 test("rejects empty TRACE streams and records the empty source file", async (t) => {
   const fixture = await createFixture()
