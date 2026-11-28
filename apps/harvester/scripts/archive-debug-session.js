@@ -1031,13 +1031,14 @@ function createEvidenceIntegrity({ selection, artifactProvenance } = {}) {
   }
 }
 
-function formatStreamCollectionFailure({ stream, integrity } = {}) {
+function formatStreamCollectionFailure({ stream, integrity, streamKey } = {}) {
   const matchingFiles = stream.files.filter((file) => file.actualRuntimeId === integrity.expectedRuntimeId)
   const mismatchedFiles = stream.files.filter((file) => file.actualRuntimeId !== integrity.expectedRuntimeId)
   const discoveredRuntimeIds = [...new Set(mismatchedFiles.map((file) => file.actualRuntimeId).filter(Boolean))]
   const missing = stream.status === "missing" ? "missing stream; " : ""
   const sources = stream.files.map((file) => file.sourcePath).join(", ") || stream.searchedDirectories.join(", ") || "logs/sessions/"
-  return `${stream.key === "traceLog" ? "TRACE LOG" : "HARVESTER LOG"} COLLECTION FAILED: expected runtime=${integrity.expectedRuntimeId}; discovered runtime=${discoveredRuntimeIds.join(",") || "none"}; matching files=${matchingFiles.length}; mismatched files=${mismatchedFiles.length}; ${missing}looked at: ${sources}; reason=${stream.reason ?? stream.status}`
+  const label = streamKey === "traceLog" ? "TRACE LOG" : "HARVESTER LOG"
+  return `${label} COLLECTION FAILED: expected runtime=${integrity.expectedRuntimeId}; discovered runtime=${discoveredRuntimeIds.join(",") || "none"}; matching files=${matchingFiles.length}; mismatched files=${mismatchedFiles.length}; ${missing}looked at: ${sources}; reason=${stream.reason ?? stream.status}`
 }
 
 function createEvidenceIntegrityFailureMessage(integrity) {
@@ -1045,6 +1046,7 @@ function createEvidenceIntegrityFailureMessage(integrity) {
   const streamReports = LOG_STREAM_DEFINITIONS.map((definition) => formatStreamCollectionFailure({
     stream: integrity.streams[definition.key],
     integrity,
+    streamKey: definition.key,
   }))
   return [summary, ...streamReports].join("\n")
 }
