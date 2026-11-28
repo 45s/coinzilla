@@ -1011,6 +1011,6 @@ test("prints catalog code, exact stage, cause and remediation without cutting of
   assert.match(line, /HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED/)
   assert.match(line, /RELATIONAL_MIGRATION_V5/)
   assert.match(line, /SQLITE_ERROR: no such column/)
-  assert.match(line, /do not delete or reset the database/)
+  assert.match(line, /never delete\/reset the database/)
   output.destroy()
 })
