@@ -34,7 +34,7 @@ describe('scenario guide graph projection', () => {
   });
 
   it('does not invent decision branches when the guide publishes ordered steps only', () => {
-    const graph = createScenarioGuideGraph({ scenarioId: 'RS-EXAMPLE-001', guide });
+    const graph = createScenarioGuideGraph({ scenarioId: 'RS-EXAMPLE-001', scenarioName: 'Example recovery scenario', guide });
     expect(graph.edges.some((edge) => edge.label === 'YES' || edge.label === 'NO')).toBe(false);
     expect(graph.limitations).toContain('The guide publishes ordered steps, not branch topology. No conditional edges are inferred.');
   });
