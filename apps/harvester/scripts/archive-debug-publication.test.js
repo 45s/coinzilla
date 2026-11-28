@@ -183,7 +183,7 @@ test("publication command publishes to a temporary Git remote while a process lo
     return runGit(mappedArgs, options)
   }
   const result = await runHarvesterDebugArchivePublication({
-    archiveDirectory: fixture.archiveDirectory,
+    args: ["--archive", fixture.archiveDirectory],
     env: {
       HARVESTER_ARCHIVE_REMOTE: REMOTE,
     },
