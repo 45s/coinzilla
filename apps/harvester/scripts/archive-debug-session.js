@@ -732,38 +732,34 @@ function createSessionStreamFileInventory({ selection, artifactProvenance, strea
 function createEvidenceIntegrity({ selection, artifactProvenance } = {}) {
   const streams = Object.fromEntries(LOG_STREAM_DEFINITIONS.map((streamDefinition) => [
     streamDefinition.key,
-    createSessionStreamFileInventory({
-      selection,
-      artifactProvenance,
-      streamDefinition,
-    }),
+    createSessionStreamFileInventory({ selection, artifactProvenance, streamDefinition }),
   ]))
+  const recoveryProcessIdentityStatus = !selection.recoveryProcessIdentity
+    ? "missing"
+    : selection.recoveryProcessIdentity.runtimeSessionId === selection.recoveryRuntimeSessionId ? "matched" : "mismatched"
   let status = selection.status
-  if (status === "ambiguous") {
+  if (recoveryProcessIdentityStatus === "missing" || status === "ambiguous") {
     status = "unverifiable"
-  }
-  if (status === "matched") {
-    status = Object.values(streams).every((stream) => stream.status === "matched")
-      ? "matched"
-      : "incomplete"
+  } else if (recoveryProcessIdentityStatus === "mismatched") {
+    status = "mismatched"
+  } else if (status === "matched") {
+    status = Object.values(streams).every((stream) => stream.status === "matched") ? "matched" : "incomplete"
   } else if (status === "mismatched") {
-    status = Object.values(streams).some((stream) => stream.status === "mismatched")
-      ? "mismatched"
-      : "missing"
+    status = Object.values(streams).some((stream) => stream.status === "mismatched") ? "mismatched" : "missing"
   }
-  const mismatches = Object.values(streams)
-    .flatMap((stream) => stream.files
-      .filter((file) => file.actualRuntimeId !== selection.recoveryRuntimeSessionId)
-      .map((file) => ({
-        expectedRuntimeId: selection.recoveryRuntimeSessionId,
-        actualRuntimeId: file.actualRuntimeId,
-        sourcePath: file.sourcePath,
-        streamStatus: stream.status,
-      })))
+  const mismatches = Object.values(streams).flatMap((stream) => stream.files
+    .filter((file) => file.actualRuntimeId !== selection.recoveryRuntimeSessionId)
+    .map((file) => ({
+      expectedRuntimeId: selection.recoveryRuntimeSessionId,
+      actualRuntimeId: file.actualRuntimeId,
+      sourcePath: file.sourcePath,
+      streamStatus: stream.status,
+    })))
   return {
     status,
     validForPublication: status === "matched",
     expectedRuntimeId: selection.recoveryRuntimeSessionId,
+    recoveryProcessIdentityStatus,
     streams,
     mismatches,
   }
@@ -779,12 +775,12 @@ function formatStreamCollectionFailure({ stream, integrity } = {}) {
 }
 
 function createEvidenceIntegrityFailureMessage(integrity) {
-  return LOG_STREAM_DEFINITIONS
-    .map((definition) => formatStreamCollectionFailure({
-      stream: integrity.streams[definition.key],
-      integrity,
-    }))
-    .join("\\n")
+  const summary = "DEBUG ARCHIVE EVIDENCE INTEGRITY FAILED: expected runtime=" + integrity.expectedRuntimeId + "; status=" + integrity.status + "; recovery process identity=" + integrity.recoveryProcessIdentityStatus + "."
+  const streamReports = LOG_STREAM_DEFINITIONS.map((definition) => formatStreamCollectionFailure({
+    stream: integrity.streams[definition.key],
+    integrity,
+  }))
+  return [summary, ...streamReports].join("\n")
 }
 
 async function copySelectedLogs({
@@ -842,6 +838,7 @@ async function copySelectedLogs({
   const selectionWithRuntime = {
     ...selection,
     recoveryRuntimeSessionId: recoveryCheckpoint.runtimeSessionId,
+    recoveryProcessIdentity: recoveryCheckpoint.processIdentity,
   }
   const evidenceIntegrity = createEvidenceIntegrity({
     selection: selectionWithRuntime,
@@ -1102,7 +1099,7 @@ async function createArchiveManifest({
   const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(directory, "recovery-facts"))
   const dataCommitHash = (await readFile(path.join(directory, "data_commit_hash"), "utf8")).trim()
   return {
-    formatVersion: 1,
+    formatVersion: 2,
     application: "harvester",
     commandTradingMode: "testnet",
     snapshotType: "runtime-correlated-log-evidence",
@@ -1115,19 +1112,25 @@ async function createArchiveManifest({
       selectionReason: logSelection.evidenceIntegrity.status === "matched" ? logSelection.selectionReason : logSelection.evidenceIntegrity.status,
     },
     dataCommitHash,
-    logRuntimeSessionId: logSelection.logRuntimeSessionId,
+    logRuntimeSessionId: logSelection.evidenceIntegrity.validForPublication ? recoveryCheckpoint.runtimeSessionId : null,
     recoveryRuntimeSessionId: recoveryCheckpoint.runtimeSessionId,
-    matchingTradingLogsAvailable: logSelection.matchingTradingLogsAvailable,
+    matchingTradingLogsAvailable: logSelection.evidenceIntegrity.validForPublication,
     matchingSessionCandidates: logSelection.matchingSessionCandidates,
     runtimeIdentity: {
-      status: logSelection.status,
-      correlation: logSelection.status === "matched"
+      status: logSelection.evidenceIntegrity.status,
+      correlation: logSelection.evidenceIntegrity.status === "matched"
         ? "same-runtime-session"
         : "independent-evidence-do-not-correlate",
     },
     tradingRuntime: createTradingRuntimeManifestEntry({ recoveryCheckpoint }),
     sessionInventory: logSelection.sessions.map((session) => createArchiveSessionManifestEntry({ session })),
-    warnings: [\n      ...logSelection.warnings,\n      ...(logSelection.evidenceIntegrity.validForPublication ? [] : [{\n        code: "DEBUG_TRACE_STREAM_INTEGRITY_FAILED",\n        message: createEvidenceIntegrityFailureMessage(logSelection.evidenceIntegrity),\n      }]),\n    ],
+    warnings: [
+      ...logSelection.warnings,
+      ...(logSelection.evidenceIntegrity.validForPublication ? [] : [{
+        code: "DEBUG_TRACE_STREAM_INTEGRITY_FAILED",
+        message: createEvidenceIntegrityFailureMessage(logSelection.evidenceIntegrity),
+      }]),
+    ],
     duplicateArtifacts: createDuplicateArchiveArtifactGroups({ artifactProvenance }),\n    evidenceIntegrity: logSelection.evidenceIntegrity,
     recoveryFactSequence: recoveryCheckpoint.sequence,
     files: entries,
