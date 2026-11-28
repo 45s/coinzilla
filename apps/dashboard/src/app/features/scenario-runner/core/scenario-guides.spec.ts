@@ -39,7 +39,7 @@ describe('Scenario Runner catalog explanations', () => {
       ['RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001', 'SELL intent persistence fails'],
       ['RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001', 'SELL outcome persistence fails'],
       ['RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001', 'SELL outcome and STOP persistence fail'],
-      ['RS-RUNTIME-SELL-BROKER-EXCEPTION-001', 'simulated broker placement throws'],
+      ['RS-RUNTIME-SELL-BROKER-EXCEPTION-001', 'Simulated broker placement throws'],
       ['RS-RUNTIME-SELL-RESERVATION-FAILURE-001', 'sole-SELL reservation callback fails'],
       ['RS-RUNTIME-SELL-REJECTION-001', 'simulated broker rejects the SELL'],
       ['RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001', 'terminal reconciliation persistence fails'],
