@@ -140,7 +140,7 @@ function resolvePublicationRemote(env) {
   return remote
 }
 
-export async function runHarvesterDebugArchivePublication({
+// This entry point intentionally accepts only a completed archive and publication settings.\nexport async function runHarvesterDebugArchivePublication({
   args = [],
   env = process.env,
   packageDirectory,
