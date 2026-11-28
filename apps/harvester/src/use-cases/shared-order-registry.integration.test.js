@@ -13,6 +13,7 @@ import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { createRecoverySellerAccountingWorkflow } from "./create-recovery-seller-accounting-workflow.js"
+import { createRecoverySellerStopWorkflow } from "./create-recovery-seller-stop-workflow.js"
 import { createHarnessBroker } from "./conservative-trading-engine-harness.js"
 
 const baseAsset = new Asset({
@@ -123,6 +124,7 @@ function createEngineOptions({
   evaluateRecoverySellerTransition,
   recoverySellerPairs,
   recoverySellerWorkflow,
+  recoverySellerStopWorkflow,
 } = {}) {
   return {
     broker: {
@@ -169,6 +171,7 @@ function createEngineOptions({
     evaluateRecoverySellerTransition,
     recoverySellerPairs,
     recoverySellerWorkflow,
+    recoverySellerStopWorkflow,
   }
 }
 
@@ -177,6 +180,7 @@ function createEngine({
   evaluateRecoverySellerTransition,
   recoverySellerPairs = {},
   recoverySellerWorkflow,
+  recoverySellerStopWorkflow,
 }) {
   const brokerState = createHarnessBroker({
     market,
@@ -197,6 +201,7 @@ function createEngine({
     evaluateRecoverySellerTransition,
     recoverySellerPairs,
     recoverySellerWorkflow,
+    recoverySellerStopWorkflow,
   }))
   return {
     engine,
@@ -256,10 +261,25 @@ test("Conservative engine dispatches RS evaluation through the shared account tr
   const recoverySellerWorkflow = createRecoverySellerAccountingWorkflow({
     sharedState: sharedAccountState,
   })
+  const operationalStateStore = {
+    append: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+    readAll: async () => ({
+      ok: true,
+      data: { records: [] },
+    }),
+  }
+  const recoverySellerStopWorkflowResult = await createRecoverySellerStopWorkflow({
+    operationalStateStore,
+  })
+  assert.equal(recoverySellerStopWorkflowResult.ok, true)
   const evaluatedSymbols = []
   const { engine } = createEngine({
     sharedAccountState,
     recoverySellerWorkflow,
+    recoverySellerStopWorkflow: recoverySellerStopWorkflowResult.data,
     recoverySellerPairs: {
       DOGEUSDT: {
         enabled: true,
