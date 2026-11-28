@@ -70,14 +70,14 @@ function wrapGraphText(value: string, maxCharacters: number): readonly string[] 
 
 function createVerticalScenarioGraphViewModel({ graph }: { readonly graph: ScenarioGraph }): ScenarioGraphViewModel {
   const width = 1240;
-  const nodeWidth = 1120;
-  const nodeX = 60;
-  const nodeGap = 64;
-  let nextY = 48;
+  const nodeWidth = 1080;
+  const nodeX = 80;
+  const nodeGap = 44;
+  let nextY = 32;
   const nodes = graph.nodes.map((node): ScenarioGraphViewNode => {
-    const labelLines = wrapGraphText(node.label, 64);
-    const descriptionLines = wrapGraphText(node.description ?? '', 108);
-    const height = Math.max(174, 92 + labelLines.length * 32 + descriptionLines.length * 25);
+    const labelLines = wrapGraphText(node.label, 68);
+    const descriptionLines = wrapGraphText(node.description ?? '', 116);
+    const height = Math.max(150, 78 + labelLines.length * 28 + descriptionLines.length * 22);
     const position = { x: nodeX, y: nextY };
     nextY += height + nodeGap;
 
@@ -118,7 +118,7 @@ function createVerticalScenarioGraphViewModel({ graph }: { readonly graph: Scena
 
   return {
     width,
-    height: Math.max(600, nextY - nodeGap + 48),
+    height: Math.max(520, nextY - nodeGap + 32),
     nodes,
     edges,
   };

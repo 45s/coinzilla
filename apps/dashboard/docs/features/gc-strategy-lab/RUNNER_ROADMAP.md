@@ -10,7 +10,7 @@ Dashboard issue [#1986](https://github.com/45s/coinzilla/issues/1986) adds an op
 
 ## Scenario graph visualization — 2026-11-28
 
-The native SVG viewer uses the framework-independent graph model and projects the currently selected scenario's source-reviewed guide into a read-only vertical flow. Nodes use a wide, centered column, larger typography, wrapped labels/descriptions, clear vertical connectors and a content-sized canvas that grows with the selected guide. The SVG scales to the available panel width; long flows scroll vertically within the available viewport. Changing the scenario changes the graph. The guide contract has no branch topology, so the graph does not infer conditional edges. Actual run status and trace evidence remain separate; no progress is painted onto expected nodes without a verified source mapping. Graph editing is out of scope.
+The native SVG viewer uses the framework-independent graph model and projects the currently selected scenario's source-reviewed guide into a read-only vertical flow. Nodes use a wide, centered column, larger typography, wrapped labels/descriptions, clear vertical connectors and a content-sized canvas that grows with the selected guide. The SVG scales to the available panel width and contributes its complete calculated height to normal document flow. Long scenarios use page-level scrolling; the graph itself has no nested scroll viewport. Changing the scenario changes the graph. The guide contract has no branch topology, so the graph does not infer conditional edges. Actual run status and trace evidence remain separate; no progress is painted onto expected nodes without a verified source mapping. Graph editing is out of scope.
 
 ## Current status — 2026-11-27
 
@@ -176,3 +176,11 @@ The Scenario Runner catalogue now needs a source-reviewed explanation before exe
 - No Harvester trading behavior or runner API execution contract changes are made by this Dashboard presentation increment.
 - Source audit: `apps/harvester/src/infrastructure/scenario-runner/rs-runtime-scenario.js` and the helper-only `RS-004-011` adapter in `apps/harvester/src/infrastructure/scenario-runner/rs-scenario-adapter.js`.
 - Tracking: [issue #1984](https://github.com/45s/coinzilla/issues/1984), [PR #1988](https://github.com/45s/coinzilla/pull/1988).
+
+## Dashboard Scenario Runner compact layout — 2026-11-28
+
+Issue [#2001](https://github.com/45s/coinzilla/issues/2001) / PR [#2002](https://github.com/45s/coinzilla/pull/2002) removes the redundant page heading/subtitle in favor of the existing breadcrumb, expands the runner to the available Dashboard width, and places guide context beside the vertical expected-flow graph on desktop. Graph typography and node geometry are reduced modestly from the initial readability pass. Mobile remains single-column. This changes presentation only; scenario intent, source mapping, readiness, limitations, and actual run evidence remain separate and unchanged.
+
+## Dashboard navigation and compact scenario workspace — 2026-11-28
+
+Issue [#2005](https://github.com/45s/coinzilla/issues/2005) / PR [#2006](https://github.com/45s/coinzilla/pull/2006) moves the Dashboard primary navigation into the horizontal top bar and retains breadcrumbs and section tabs. Scenario selection now gives most available width to the scenario identifier, with a compact strategy selector and the GitHub develop snapshot revision displayed beside its checkbox. The duplicate guide availability badge and separate readiness panel are removed; source mapping, execution status, scenario intent limitations and actual run evidence remain. The SVG canvas expands to its full content height, so long scenarios scroll with the page rather than inside the graph.

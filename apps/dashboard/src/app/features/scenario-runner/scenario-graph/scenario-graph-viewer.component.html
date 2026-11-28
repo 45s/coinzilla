@@ -1,16 +1,4 @@
 <section class="graph-viewer" aria-label="Selected scenario graph">
-  <header class="graph-heading">
-    <div>
-      <p class="graph-eyebrow">READ ONLY · EXPECTED SCENARIO FLOW</p>
-      <h3>{{ graph().title }}</h3>
-      @if (graph().description) {
-        <p>{{ graph().description }}</p>
-      }
-    </div>
-    <span class="graph-status">Documented flow</span>
-  </header>
-
-  <div class="graph-scroll">
     <svg
       class="graph-canvas"
       [attr.viewBox]="'0 0 ' + viewModel().width + ' ' + viewModel().height"
@@ -50,19 +38,17 @@
           <text class="node-kind" x="28" y="38">{{ node.properties['guideKind'] ?? node.type }}</text>
           <text class="node-label">
             @for (line of node.labelLines; track $index; let lineIndex = $index) {
-              <tspan x="28" [attr.y]="78 + lineIndex * 34">{{ line }}</tspan>
+              <tspan x="28" [attr.y]="64 + lineIndex * 28">{{ line }}</tspan>
             }
           </text>
           <text class="node-description">
             @for (line of node.descriptionLines; track $index; let lineIndex = $index) {
-              <tspan x="28" [attr.y]="88 + node.labelLines.length * 34 + lineIndex * 26">{{ line }}</tspan>
+              <tspan x="28" [attr.y]="74 + node.labelLines.length * 28 + lineIndex * 22">{{ line }}</tspan>
             }
           </text>
         </g>
       }
     </svg>
-  </div>
-
   <div class="graph-legend" aria-label="Graph legend">
     <span><i data-kind="start"></i> Start</span>
     <span><i data-kind="action"></i> Production flow</span>

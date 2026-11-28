@@ -101,7 +101,9 @@ describe('scenario graph editor application', () => {
     expect(view.height, 'canvas height should grow to contain every node').toBeGreaterThan(500);
     expect(view.nodes[0].position.x, 'nodes should share a centered vertical column').toBe(view.nodes[1].position.x);
     expect(view.nodes[1].position.y, 'each next node should appear below the previous node').toBeGreaterThan(view.nodes[0].position.y);
-    expect(view.nodes[0].width, 'vertical nodes should use the available canvas width').toBe(1120);
+    expect(view.nodes[0].width, 'vertical nodes should use the available canvas width').toBe(1080);
+    expect(view.nodes[0].height, 'compact nodes should avoid the previous oversized minimum height').toBe(150);
+    expect(view.nodes[1].position.y - view.nodes[0].position.y, 'vertical node spacing should use the compact gap').toBe(194);
     expect(view.nodes[0].labelLines, 'node labels should be laid out as readable lines').toEqual(['Start']);
     expect(view.edges[0].curve.start.x, 'vertical edges should leave from the bottom center').toBe(view.nodes[0].position.x + view.nodes[0].width / 2);
     expect(view.edges[0].curve.end.x, 'vertical edges should enter at the top center').toBe(view.nodes[1].position.x + view.nodes[1].width / 2);

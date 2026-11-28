@@ -528,3 +528,210 @@
     min-height: 38px;
   }
 }
+
+
+.page-content-wide {
+  width: 100%;
+  max-width: none;
+  padding: 16px 24px 12px;
+}
+
+@media (max-width: 900px) {
+  .page-content-wide {
+    padding: 16px 20px 12px;
+  }
+}
+
+@media (max-width: 560px) {
+  .page-content-wide {
+    padding: 14px 13px 10px;
+  }
+}
+
+
+/* Horizontal workspace shell: primary navigation sits beside the brand. */
+.sidebar {
+  display: none;
+}
+
+.main-panel {
+  margin-left: 0;
+}
+
+.topbar {
+  min-height: 66px;
+  gap: 12px;
+  padding: 8px 22px;
+}
+
+.brand {
+  flex: 0 0 auto;
+  padding: 0;
+  gap: 9px;
+}
+
+.brand-mark {
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
+}
+
+.brand-copy strong {
+  font-size: 14px;
+}
+
+.brand-copy small {
+  font-size: 8px;
+}
+
+.primary-nav {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.nav-item {
+  width: auto;
+  min-height: 38px;
+  flex: 0 0 auto;
+  gap: 7px;
+  padding: 0 9px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.nav-icon {
+  width: 15px;
+  font-size: 15px;
+}
+
+.breadcrumb {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.topbar-actions {
+  flex: 0 0 auto;
+}
+
+.section-nav,
+.context-subnav {
+  position: relative;
+  top: auto;
+  padding-right: 24px;
+  padding-left: 24px;
+}
+
+@media (max-width: 1250px) {
+  .topbar {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    padding: 8px 20px 0;
+  }
+
+  .brand {
+    order: 1;
+  }
+
+  .breadcrumb {
+    order: 2;
+    margin-left: auto;
+  }
+
+  .topbar-actions {
+    order: 3;
+  }
+
+  .primary-nav {
+    order: 4;
+    flex-basis: 100%;
+    justify-content: flex-start;
+    min-height: 42px;
+  }
+
+  .section-nav,
+  .context-subnav {
+    position: relative;
+    top: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    gap: 7px 10px;
+    padding: 9px 14px 0;
+  }
+
+  .topbar-actions {
+    margin-left: auto;
+    gap: 6px;
+  }
+
+  .topbar-actions .environment-pill,
+  .topbar-actions .demo-pill,
+  .avatar {
+    display: none;
+  }
+
+  .breadcrumb {
+    order: 3;
+    flex-basis: 100%;
+    margin: 0;
+    padding: 3px 0;
+  }
+
+  .primary-nav {
+    order: 4;
+    gap: 4px;
+    min-height: 42px;
+    margin: 0 -4px;
+  }
+
+  .nav-item {
+    min-height: 34px;
+    padding: 0 8px;
+    font-size: 10px;
+  }
+
+  .nav-icon {
+    display: none;
+  }
+
+  .section-nav,
+  .context-subnav {
+    gap: 18px;
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .section-nav-item {
+    min-height: 42px;
+  }
+
+  .context-subnav-item {
+    min-height: 38px;
+  }
+
+  .page-content {
+    padding: 18px 14px 14px;
+  }
+}
+
+@media (max-width: 420px) {
+  .brand-copy small {
+    display: none;
+  }
+
+  .theme-picker select {
+    max-width: 112px;
+  }
+
+  .nav-item {
+    padding: 0 7px;
+  }
+}
