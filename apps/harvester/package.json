@@ -20,6 +20,7 @@
   "config": {
     "targetedTestFiles": [
       "scripts/archive-debug-session.test.js",
+      "scripts/archive-debug-publication.test.js",
       "scripts/assert-harvester-process-stopped.test.js",
       "scripts/archive-testnet-session.test.js",
       "scripts/capture-harvester-archive-process-identity.test.js",
@@ -222,6 +223,7 @@
     "archive:push": "node --env-file=.env.development scripts/archive-testnet-session.js",
     "archive:debug": "node --env-file=.env.development scripts/archive-debug-session.js",
     "scenarios:conservative": "node scripts/run-conservative-scenarios.js",
-    "recovery:account-blockers": "node scripts/recovery-account-blockers.js"
+    "recovery:account-blockers": "node scripts/recovery-account-blockers.js",
+    "archive:debug:publish": "node --env-file=.env.development scripts/archive-debug-publish.js"
   }
 }

@@ -4,12 +4,11 @@ This runbook covers the local TESTNET development workflow only. It does not aut
 
 ## Required environment
 
-- `TRADING_MODE=testnet` in `.env.development`.
-- `HARVESTER_ARCHIVE_REMOTE=https://github.com/45s/coinzilla-archive.git` in `.env.development`.
-- Git access to the private `45s/coinzilla-archive` repository.
+- `TRADING_MODE=testnet` in `.env.development` is required for collection.
+- `HARVESTER_ARCHIVE_REMOTE=https://github.com/45s/coinzilla-archive.git` and Git access are required for `archive:push` and `archive:debug:publish`, not for local debug collection.
 - Run commands from `apps/harvester`.
 
-The archive command rejects LIVE or unspecified `TRADING_MODE`, validates the private destination, and refuses to run while any Harvester process lock exists.
+`archive:push` and `archive:debug:publish` validate the private destination. `archive:debug` is a local TESTNET collection command and refuses to run while any Harvester process lock exists.
 
 ## Start and stop a DEV session
 
@@ -45,23 +44,65 @@ LIVE production database files and sidecars are never copied. Unclassified top-l
 
 The snapshot is a raw folder copy, not a transactional SQLite backup. Stop Harvester before archiving so SQLite files and recovery facts are quiescent.
 
-## Publish a lightweight debug archive
+## Collect and publish a lightweight debug archive
 
-For focused debugging, run this after Harvester has stopped:
+Debug archive collection and publication are separate commands with different safety boundaries.
+
+### 1. Collect a completed local snapshot
+
+Run this only after Harvester has stopped:
 
 ```bash
 pnpm run archive:debug
 ```
 
-This uses the same TESTNET session selection, recovery-facts ledger-integrity checks, manifest, checksums, and verified directory-based publication as `archive:push`. The archive folder keeps the normal timestamp/ID format with a `_debug` suffix. The log session and latest recovery-facts checkpoint are recorded as separate evidence sources. If their `runtimeSessionId` values differ, the command emits a warning but still publishes both independently valid sources; `manifest.json` records `runtimeIdentity.status: "mismatched"` and `runtimeIdentity.correlation: "independent-evidence-do-not-correlate"`. Do not infer that the two sources belong to one runtime session. Invalid or inconsistent recovery-facts ledgers still fail closed.
+Collection requires `TRADING_MODE=testnet` and refuses an active Harvester process lock. It reads the TESTNET session evidence and Operational State Store, rejects symlinks and unsupported filesystem entries, preserves the recovery-facts integrity checks, and creates a uniquely named completed snapshot in the ignored `archive-output/` directory. The command does not contact GitHub or publish anything.
 
-The debug archive includes only:
+A collection is complete only after `manifest.json` and all SHA-256 checksums have been written and verified. An interrupted/incomplete directory is not eligible for publication.
 
-- `logs/sessions/`: newest completed TESTNET session, gzip-compressed.
+### 2. Publish an existing completed snapshot
+
+```bash
+pnpm run archive:debug:publish
+```
+
+The publisher selects the latest valid completed archive. To publish a specific archive instead:
+
+```bash
+pnpm run archive:debug:publish -- --archive ./archive-output/<archive-directory>
+```
+
+Publication validates the manifest, exact file inventory, sizes and SHA-256 checksums before contacting the configured private destination. It copies the completed archive into a private temporary snapshot, validates that copy again, and publishes only the verified temporary copy to `https://github.com/45s/coinzilla-archive`. The temporary copy is removed after the attempt; the original archive is never changed. Publication then verifies the remote commit and every published file blob.
+
+**Publication does not inspect the Harvester process, read or remove process locks, require `TRADING_MODE`, stop trading, access live operational directories, collect additional evidence, or modify the source archive.** It can therefore be retried while Harvester is actively trading. A retry of an already-published archive verifies the existing remote contents and does not create a duplicate archive.
+
+Collection and publication flow:
+
+```mermaid
+flowchart TD
+    A[Harvester stopped] --> B[archive:debug]
+    B --> C[Copy eligible TESTNET logs and recovery-facts]
+    C --> D[Write manifest and SHA-256 checksums]
+    D --> E{Local archive verifies?}
+    E -->|No| F[Keep incomplete local evidence; do not publish]
+    E -->|Yes| G[Completed immutable archive]
+    G --> H[archive:debug:publish]
+    H --> I[Validate manifest and checksums]
+    I --> J{Already published?}
+    J -->|Yes| K[Verify remote inventory and blobs]
+    J -->|No| L[Commit and push archive]
+    L --> M[Verify remote commit and blobs]
+    K --> N[Publication complete]
+    M --> N
+```
+
+The debug archive retains the existing timestamp/ID naming convention with the `_debug` suffix. Its manifest preserves the log-session and recovery-facts identities independently; a mismatch is explicitly reported and must not be interpreted as proof that the sources belong to one runtime. The archive contains only:
+
+- `logs/sessions/`: identified TESTNET session evidence, gzip-compressed.
 - `recovery-facts/`: complete Operational State Store facts and manifest.
 - `data_commit_hash` and `manifest.json`: checkpoint identity, file inventory, sizes, and SHA-256 checksums.
 
-It deliberately excludes all of `data/` (including TESTNET/LIVE databases and backups) and all of `logs/cumulative/`. The regular `archive:push` command remains unchanged and continues to publish the fuller evidence archive.
+It excludes all of `data/` (databases and backups) and all of `logs/cumulative/`. The regular `archive:push` workflow is unchanged.
 
 ## Reset only local Operational State history
 

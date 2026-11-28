@@ -6,6 +6,7 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  rename,
   rm,
   stat,
   writeFile,
@@ -27,7 +28,7 @@ const SOURCE_DIRECTORIES = Object.freeze(["logs", "recovery-facts"])
 const EXCLUDED_ARCHIVE_PATHS = Object.freeze(["data/** (all databases and backups)", "logs/cumulative/**"])
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-function validateArchiveRemote(remote) {
+export function validateArchiveRemote(remote) {
   if (typeof remote !== "string" || remote.trim() !== remote || remote.length === 0) {
     throw new TypeError("HARVESTER_ARCHIVE_REMOTE must be a non-empty GitHub repository URL.")
   }
@@ -128,7 +129,44 @@ async function assertRealDirectory(directory) {
   }
 }
 
-async function copyRegularTree({
+async function copyStableFile({ sourcePath, destinationPath } = {}) {
+  const before = await lstat(sourcePath)
+  if (before.isSymbolicLink() || !before.isFile()) {
+    throw new Error(`Refusing to snapshot a non-regular file: ${sourcePath}`)
+  }
+  const sourceSha256Before = await sha256File(sourcePath)
+  const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
+  try {
+    await copyFile(sourcePath, temporaryPath)
+    const after = await lstat(sourcePath)
+    const sourceSha256After = await sha256File(sourcePath)
+    const copiedSha256 = await sha256File(temporaryPath)
+    if (
+      after.isSymbolicLink()
+      || !after.isFile()
+      || before.dev !== after.dev
+      || before.ino !== after.ino
+      || before.size !== after.size
+      || before.mtimeMs !== after.mtimeMs
+      || before.ctimeMs !== after.ctimeMs
+      || sourceSha256Before !== sourceSha256After
+      || sourceSha256Before !== copiedSha256
+    ) {
+      throw new Error(`Source file changed while the debug snapshot was being collected: ${sourcePath}`)
+    }
+    const copied = await lstat(temporaryPath)
+    if (copied.size !== after.size) {
+      throw new Error(`Snapshot copy size changed while collecting: ${sourcePath}`)
+    }
+    await rename(temporaryPath, destinationPath)
+    return after.size
+  } catch (error) {
+    await rm(temporaryPath, { force: true })
+    throw error
+  }
+}
+
+export async function copyRegularTree({
   sourceDirectory,
   destinationDirectory,
   relative = "",
@@ -160,10 +198,13 @@ async function copyRegularTree({
         onFileCopied,
       })
     } else if (sourceStats.isFile()) {
-      await copyFile(sourcePath, destinationPath)
+      const copiedSize = await copyStableFile({
+        sourcePath,
+        destinationPath,
+      })
       await onFileCopied?.({
         relativePath: path.join(relative, entry.name).split(path.sep).join("/"),
-        size: sourceStats.size,
+        size: copiedSize,
       })
     } else {
       throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
@@ -171,14 +212,72 @@ async function copyRegularTree({
   }
 }
 
-async function copyCompressedTree({ sourceDirectory, destinationDirectory, relative = "", onFileCopied } = {}) {
+async function copyCompressedFile({
+  sourcePath,
+  destinationPath,
+  childRelative,
+  onFileCopied,
+} = {}) {
+  const sourceBefore = await lstat(sourcePath)
+  if (sourceBefore.isSymbolicLink() || !sourceBefore.isFile()) {
+    throw new Error(`Refusing to compress a non-regular source file: ${sourcePath}`)
+  }
+  const sourceSha256Before = await sha256File(sourcePath)
+  const compressedRelative = `${childRelative}.gz`
+  const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
+  let sourceSha256After
+  try {
+    await pipeline(
+      createReadStream(sourcePath),
+      createGzip({ level: 6 }),
+      createWriteStream(temporaryPath, {
+        flags: "wx",
+        mode: 0o600,
+      }),
+    )
+    const sourceAfter = await lstat(sourcePath)
+    sourceSha256After = await sha256File(sourcePath)
+    const sourceChanged = sourceSha256Before !== sourceSha256After
+      || sourceAfter.isSymbolicLink()
+      || !sourceAfter.isFile()
+      || sourceBefore.dev !== sourceAfter.dev
+      || sourceBefore.ino !== sourceAfter.ino
+      || sourceBefore.size !== sourceAfter.size
+      || sourceBefore.mtimeMs !== sourceAfter.mtimeMs
+      || sourceBefore.ctimeMs !== sourceAfter.ctimeMs
+    if (sourceChanged) {
+      throw new Error(`Source file changed while the debug snapshot was being collected: ${sourcePath}`)
+    }
+    await rename(temporaryPath, destinationPath)
+  } catch (error) {
+    await rm(temporaryPath, { force: true })
+    throw error
+  }
+  const archiveStats = await stat(destinationPath)
+  await onFileCopied?.({
+    relativePath: compressedRelative.split(path.sep).join("/"),
+    sourceRelativePath: childRelative.split(path.sep).join("/"),
+    sourceSize: sourceBefore.size,
+    sourceSha256: sourceSha256After,
+    size: archiveStats.size,
+    archiveSha256: await sha256File(destinationPath),
+  })
+}
+
+async function copyCompressedTree({
+  sourceDirectory,
+  destinationDirectory,
+  relative = "",
+  onFileCopied,
+} = {}) {
   const source = relative ? path.join(sourceDirectory, relative) : sourceDirectory
   const destination = relative ? path.join(destinationDirectory, relative) : destinationDirectory
   await mkdir(destination, {
     recursive: true,
     mode: 0o700,
   })
-  for (const entry of await readdir(source, { withFileTypes: true })) {
+  const entries = await readdir(source, { withFileTypes: true })
+  for (const entry of entries) {
     const childRelative = relative ? path.join(relative, entry.name) : entry.name
     const sourcePath = path.join(sourceDirectory, childRelative)
     const sourceStats = await lstat(sourcePath)
@@ -193,24 +292,11 @@ async function copyCompressedTree({ sourceDirectory, destinationDirectory, relat
         onFileCopied,
       })
     } else if (sourceStats.isFile()) {
-      const compressedRelative = `${childRelative}.gz`
-      const destinationPath = path.join(destinationDirectory, compressedRelative)
-      await pipeline(
-        createReadStream(sourcePath),
-        createGzip({ level: 6 }),
-        createWriteStream(destinationPath, {
-          flags: "w",
-          mode: 0o600,
-        }),
-      )
-      const archiveStats = await stat(destinationPath)
-      await onFileCopied?.({
-        relativePath: compressedRelative.split(path.sep).join("/"),
-        sourceRelativePath: childRelative.split(path.sep).join("/"),
-        sourceSize: sourceStats.size,
-        sourceSha256: await sha256File(sourcePath),
-        size: archiveStats.size,
-        archiveSha256: await sha256File(destinationPath),
+      await copyCompressedFile({
+        sourcePath,
+        destinationPath: path.join(destinationDirectory, `${childRelative}.gz`),
+        childRelative,
+        onFileCopied,
       })
     } else {
       throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
@@ -624,7 +710,7 @@ async function copySelectedLogs({
 }
 
 
-async function listRegularFiles({ directory, relative = "" } = {}) {
+export async function listRegularFiles({ directory, relative = "" } = {}) {
   const current = relative ? path.join(directory, relative) : directory
   const entries = await readdir(current, { withFileTypes: true })
   const files = []
@@ -905,7 +991,7 @@ async function createArchiveManifest({
 }
 
 
-async function verifyArchive({ directory, manifest } = {}) {
+export async function verifyArchive({ directory, manifest } = {}) {
   const expectedPaths = manifest.files.map((entry) => entry.path).sort()
   const actualPaths = (await listRegularFiles({ directory }))
     .filter((filename) => filename !== "manifest.json")
@@ -1043,7 +1129,7 @@ async function publishNewArchive({
   }
 }
 
-async function publishArchive({
+export async function publishArchive({
   directory,
   archiveName,
   remote,
@@ -1171,6 +1257,14 @@ async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive
     destinationDirectory: path.join(localArchive, "recovery-facts"),
     onFileCopied,
   })
+  const recoveryCheckpointAfterCopy = await readLatestRecoveryCheckpoint(recoverySource.sourceDirectory)
+  if (
+    recoveryCheckpointAfterCopy.sequence !== recoveryCheckpoint.sequence
+    || recoveryCheckpointAfterCopy.dataCommitHash !== recoveryCheckpoint.dataCommitHash
+    || recoveryCheckpointAfterCopy.runtimeSessionId !== recoveryCheckpoint.runtimeSessionId
+  ) {
+    throw new Error("Operational State Store changed while the debug snapshot was being collected; refusing to create a mixed-time archive.")
+  }
   reportProgress(onProgress, `Evidence copy complete: ${retainedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
   return logSelection
 }
@@ -1228,33 +1322,23 @@ async function writeAndVerifyLocalArchive({
 }
 
 
-function resolveArchiveRemote({ env, args } = {}) {
+function assertCollectionArguments({ env, args } = {}) {
   if (env.TRADING_MODE !== "testnet") {
-    throw new Error("Archive publication requires TRADING_MODE=testnet. LIVE and unspecified modes are rejected.")
+    throw new Error("Debug archive collection requires TRADING_MODE=testnet. LIVE and unspecified modes are rejected.")
   }
   if (args.length !== 0) {
     throw new TypeError("Usage: archive:debug")
   }
-  const remote = validateArchiveRemote(env.HARVESTER_ARCHIVE_REMOTE)
-  const canonicalRemote = remote
-    .replace(/\.git$/, "")
-    .replace(/\/$/, "")
-  if (canonicalRemote !== "https://github.com/45s/coinzilla-archive") {
-    throw new Error("HARVESTER_ARCHIVE_REMOTE must target the private https://github.com/45s/coinzilla-archive repository.")
-  }
-  return remote
 }
 
-async function publishPreparedArchive({
+async function collectPreparedArchive({
   sourcePaths,
   packageDirectory,
   localArchive,
   archiveName,
   createdAt,
-  remote,
-  runGit,
-  publishArchiveFn,
   onProgress,
+  onArchiveCreatedFn,
 }) {
   try {
     await mkdir(localArchive, {
@@ -1273,20 +1357,14 @@ async function publishPreparedArchive({
       logSelection,
       onProgress,
     })
-    const published = await publishArchiveFn({
+    await onArchiveCreatedFn?.({
       directory: localArchive,
       archiveName,
-      remote,
-      runGit,
-      onProgress,
     })
-    reportProgress(onProgress, "Remote archive verified successfully.")
+    reportProgress(onProgress, "Local debug archive collected and verified.")
     return {
       archiveName,
       localArchive,
-      remote,
-      remoteCommit: published.commit,
-      fileCount: published.fileCount,
       createdAt,
       matchingTradingLogsAvailable: logSelection.matchingTradingLogsAvailable,
       unmatchedRuntimeSessionId: logSelection.unmatchedRuntimeSessionId,
@@ -1295,7 +1373,7 @@ async function publishPreparedArchive({
     }
   } catch (error) {
     throw new Error(
-      `Archive ${archiveName} was not published. The source folders were left unchanged; any local archive files were retained at ${localArchive}. ${error.message}`,
+      `Debug archive ${archiveName} was not completed. The source folders were left unchanged; any partial local archive remains at ${localArchive}. ${error.message}`,
       { cause: error },
     )
   }
@@ -1304,15 +1382,14 @@ async function publishPreparedArchive({
 export async function runHarvesterDebugArchive({
   args = process.argv.slice(2),
   env = process.env,
-  runGit = runGitDefault,
   packageDirectory = PACKAGE_DIRECTORY,
   now = () => new Date(),
   createArchiveId = randomUUID,
-  publishArchiveFn = publishArchive,
-  onProgress = (message) => process.stdout.write(`${message}\n`),
+  onArchiveCreatedFn,
+  onProgress = (message) => process.stdout.write(`${message}\\n`),
   lockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
 } = {}) {
-  const remote = resolveArchiveRemote({
+  assertCollectionArguments({
     env,
     args,
   })
@@ -1336,16 +1413,14 @@ export async function runHarvesterDebugArchive({
   })
   await assertRealDirectory(outputDirectory)
   const localArchive = path.join(outputDirectory, archiveName)
-  return publishPreparedArchive({
+  return collectPreparedArchive({
     sourcePaths,
     packageDirectory,
     localArchive,
     archiveName,
     createdAt,
-    remote,
-    runGit,
-    publishArchiveFn,
     onProgress,
+    onArchiveCreatedFn,
   })
 }
 
@@ -1377,8 +1452,8 @@ async function main() {
   process.stdout.write(`${createArchiveCliIdentity()}\n`)
   const result = await runHarvesterDebugArchive({ args })
   const summary = [
-    "Harvester lightweight debug archive published and remotely verified.",
-    `Archive: archives/${result.archiveName}`,
+    "Harvester lightweight debug archive collected and locally verified.",
+    `Archive: ${result.archiveName}`,
     `Created: ${result.createdAt}`,
     `Matching trading logs available: ${result.matchingTradingLogsAvailable}`,
     result.matchingTradingLogsAvailable
@@ -1386,9 +1461,7 @@ async function main() {
       : `Unmatched recovery runtime: ${result.unmatchedRuntimeSessionId}`,
     "Included: all identified TESTNET session evidence as separate sessions, recovery-facts/ and data_commit_hash",
     "Excluded: all data/ (databases/backups), all logs/cumulative/ and unclassified log-root entries",
-    `Remote commit: ${result.remoteCommit}`,
-    `Local copy: ${result.localArchive}`,
-    `Files verified: ${result.fileCount}`,
+    `Local archive: ${result.localArchive}`,
   ].join("\n")
   process.stdout.write(`${summary}\n`)
 }
@@ -1397,7 +1470,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     await main()
   } catch (error) {
-    process.stderr.write(`Harvester debug archive publication failed: ${error.message}\n`)
+    process.stderr.write(`Harvester debug archive collection failed: ${error.message}\n`)
     process.exitCode = 1
   }
 }
