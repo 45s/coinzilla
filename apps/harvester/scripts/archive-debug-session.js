@@ -134,10 +134,13 @@ async function copyStableFile({ sourcePath, destinationPath } = {}) {
   if (before.isSymbolicLink() || !before.isFile()) {
     throw new Error(`Refusing to snapshot a non-regular file: ${sourcePath}`)
   }
+  const sourceSha256Before = await sha256File(sourcePath)
   const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
   try {
     await copyFile(sourcePath, temporaryPath)
     const after = await lstat(sourcePath)
+    const sourceSha256After = await sha256File(sourcePath)
+    const copiedSha256 = await sha256File(temporaryPath)
     if (
       after.isSymbolicLink()
       || !after.isFile()
@@ -146,6 +149,8 @@ async function copyStableFile({ sourcePath, destinationPath } = {}) {
       || before.size !== after.size
       || before.mtimeMs !== after.mtimeMs
       || before.ctimeMs !== after.ctimeMs
+      || sourceSha256Before !== sourceSha256After
+      || sourceSha256Before !== copiedSha256
     ) {
       throw new Error(`Source file changed while the debug snapshot was being collected: ${sourcePath}`)
     }
@@ -217,6 +222,7 @@ async function copyCompressedFile({
   if (sourceBefore.isSymbolicLink() || !sourceBefore.isFile()) {
     throw new Error(`Refusing to compress a non-regular source file: ${sourcePath}`)
   }
+  const sourceSha256Before = await sha256File(sourcePath)
   const compressedRelative = `${childRelative}.gz`
   const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
   try {
@@ -229,7 +235,9 @@ async function copyCompressedFile({
       }),
     )
     const sourceAfter = await lstat(sourcePath)
-    const sourceChanged = sourceAfter.isSymbolicLink()
+    const sourceSha256After = await sha256File(sourcePath)
+    const sourceChanged = sourceSha256Before !== sourceSha256After
+      || sourceAfter.isSymbolicLink()
       || !sourceAfter.isFile()
       || sourceBefore.dev !== sourceAfter.dev
       || sourceBefore.ino !== sourceAfter.ino
@@ -249,7 +257,7 @@ async function copyCompressedFile({
     relativePath: compressedRelative.split(path.sep).join("/"),
     sourceRelativePath: childRelative.split(path.sep).join("/"),
     sourceSize: sourceBefore.size,
-    sourceSha256: await sha256File(sourcePath),
+    sourceSha256: sourceSha256After,
     size: archiveStats.size,
     archiveSha256: await sha256File(destinationPath),
   })
