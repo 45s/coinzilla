@@ -515,7 +515,7 @@ export async function prepareHarvesterStartupState({ dependencies, resolved } = 
   } = await resolveStartupOptionsForProcessRecovery({
     resolved,
     operationalStateStore,
-    logger,
+    logger: dependencies.logger,
     recoverySellerEnabled,
   })
   let recoverySellerStopWorkflow
