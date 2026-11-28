@@ -279,38 +279,33 @@ test("preserves TESTNET session inventory and recovery facts without changing so
   }
 })
 
-test("publishes mismatched log and recovery evidence as independent sources with an explicit warning", async (t) => {
+test("retains mismatched log and recovery evidence only as local diagnostic evidence", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, {
-    recursive: true,
-    force: true
-  }))
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
   const filename = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
   const facts = (await readFile(filename, "utf8")).trim().split("\n").map((line) => JSON.parse(line))
   facts.at(-1).runtimeSessionId = OTHER_SESSION_ID
   const mismatchedFactsContent = jsonLines(facts)
   await writeFile(filename, mismatchedFactsContent, "utf8")
-  const progressMessages = []
-  const result = await runHarvesterDebugArchive({
-    ...archiveDependencies({
-      fixture,
-      expectedIdentityStatus: "mismatched",
+  let diagnosticDirectory
+  await assert.rejects(
+    runHarvesterDebugArchive({
+      ...archiveDependencies({ fixture }),
+      onArchiveCreatedFn: async ({ directory }) => {
+        diagnosticDirectory = directory
+        const manifest = await readArchiveManifest(directory)
+        assert.equal(manifest.runtimeIdentity.status, "mismatched", "The diagnostic archive must identify the runtime mismatch.")
+        assert.equal(manifest.evidenceIntegrity.validForPublication, false, "Mismatched evidence must not be publishable.")
+      },
     }),
-    onProgress: (message) => progressMessages.push(message),
-  })
-  assert.equal(result.archiveName, "2026-11-24T18-30-00Z_123e4567_debug", "Mismatched but valid evidence must still be collected")
-  assert.ok(
-    progressMessages.some((message) => message.includes("WARNING: matchingTradingLogsAvailable=false")),
-    "The operator must be told explicitly that no matching trading-runtime logs are available.",
+    /mismatched|evidence integrity/i,
+    "Mismatched runtime evidence must fail collection after retaining local diagnostics",
   )
-  assert.equal(
-    await readFile(filename, "utf8"),
-    mismatchedFactsContent,
-    "Publishing mismatched evidence must leave the original recovery-facts source unchanged",
-  )
+  assert.ok(diagnosticDirectory, "The diagnostic archive must remain available locally.")
+  assert.equal(await readFile(filename, "utf8"), mismatchedFactsContent, "Collection must leave source recovery facts unchanged.")
 })
 
-test("still rejects an invalid recovery-facts checkpoint instead of publishing mismatched evidence", async (t) => {
+test("still rejects an invalid recovery-facts checkpointtest("still rejects an invalid recovery-facts checkpoint instead of publishing mismatched evidence", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
@@ -526,70 +521,47 @@ test("selects the exact trading-runtime session instead of a newer unrelated TES
   assert.equal(result.matchingTradingLogsAvailable, true, "The archive command result must expose exact runtime log coverage.")
 })
 
-test("reports no matching trading logs and preserves a mismatched session independently", async (t) => {
+test("fails collection when only an unrelated runtime's log streams are available", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, {
-    recursive: true,
-    force: true,
-  }))
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
   const factsPath = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
   const facts = (await readFile(factsPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line))
   facts.at(-1).runtimeSessionId = OTHER_SESSION_ID
   await writeFile(factsPath, jsonLines(facts), "utf8")
-
-  const result = await runHarvesterDebugArchive(archiveWithoutPublishing({
-    fixture,
-    inspectArchive: async ({ directory }) => {
-      const manifest = await readArchiveManifest(directory)
-      assert.equal(manifest.matchingTradingLogsAvailable, false, "A different runtime ID must not be reported as trading-log coverage.")
-      assert.equal(manifest.logRuntimeSessionId, null, "A mismatched session must never be assigned to the trading-facts runtime.")
-      assert.equal(manifest.runtimeIdentity.status, "mismatched", "The manifest must classify retained unrelated logs as mismatched evidence.")
-      assert.ok(
-        manifest.warnings.some(({ code }) => code === "NO_MATCHING_TRADING_LOG_SESSION"),
-        "The manifest must explicitly warn that the durable trading runtime has no matching log session.",
-      )
-      const independentSession = manifest.sessionInventory.find(({ runtimeSessionId }) => runtimeSessionId === RUNTIME_SESSION_ID)
-      assert.equal(independentSession.selectionReason, "independent-evidence-no-runtime-match", "The mismatched runtime must remain independently identified.")
-      await readFile(path.join(directory, "logs/sessions/2026-11-24_testnet/terminal.log.gz"))
-    },
-  }))
-  assert.equal(result.matchingTradingLogsAvailable, false, "The command result must not imply log coverage when runtime identities differ.")
-  assert.equal(result.unmatchedRuntimeSessionId, OTHER_SESSION_ID, "The command result must name the runtime whose matching logs are unavailable.")
+  await assert.rejects(
+    runHarvesterDebugArchive(archiveWithoutPublishing({
+      fixture,
+      inspectArchive: async ({ directory }) => {
+        const manifest = await readArchiveManifest(directory)
+        assert.equal(manifest.evidenceIntegrity.status, "mismatched", "The local diagnostic must distinguish mismatched from missing logs.")
+        assert.equal(manifest.evidenceIntegrity.expectedRuntimeId, OTHER_SESSION_ID, "Expected runtime must come from recovery facts.")
+        assert.ok(manifest.evidenceIntegrity.mismatches.some(({ actualRuntimeId }) => actualRuntimeId === RUNTIME_SESSION_ID), "Every unrelated stream owner must be identified.")
+      },
+    })),
+    /mismatched|evidence integrity/i,
+    "The collector must not complete an archive with another runtime's logs",
+  )
 })
 
-test("marks multiple exact runtime candidates ambiguous instead of choosing the newest one", async (t) => {
+test("marks multiple exact runtime candidates ambiguoustest("fails closed when two session directories claim the same runtime identity", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, {
-    recursive: true,
-    force: true,
-  }))
-  await writeTestnetSession({
-    fixture,
-    sessionName: "2026-11-25_duplicate-runtime",
-    runtimeSessionId: RUNTIME_SESSION_ID,
-  })
-
-  await runHarvesterDebugArchive(archiveWithoutPublishing({
-    fixture,
-    inspectArchive: async ({ directory }) => {
-      const manifest = await readArchiveManifest(directory)
-      assert.equal(manifest.matchingTradingLogsAvailable, false, "Multiple complete sessions for one runtime ID must not be silently reduced to one candidate.")
-      assert.equal(manifest.logRuntimeSessionId, null, "An ambiguous runtime match must not expose a selected log runtime ID.")
-      assert.equal(manifest.runtimeIdentity.status, "ambiguous", "The archive must distinguish ambiguous matching sessions from a missing session.")
-      assert.equal(manifest.matchingSessionCandidates.length, 2, "Every exact runtime candidate must be named for manual forensic review.")
-      assert.ok(
-        await readFile(path.join(directory, "logs/sessions/2026-11-24_testnet/terminal.log.gz")),
-        "The first candidate must remain archived as evidence.",
-      )
-      assert.ok(
-        await readFile(path.join(directory, "logs/sessions/2026-11-25_duplicate-runtime/terminal.log.gz")),
-        "The second candidate must remain archived as separate evidence.",
-      )
-    },
-  }))
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  await writeTestnetSession({ fixture, sessionName: "2026-11-25_duplicate-runtime", runtimeSessionId: RUNTIME_SESSION_ID })
+  await assert.rejects(
+    runHarvesterDebugArchive(archiveWithoutPublishing({
+      fixture,
+      inspectArchive: async ({ directory }) => {
+        const manifest = await readArchiveManifest(directory)
+        assert.equal(manifest.evidenceIntegrity.status, "unverifiable", "Ambiguous runtime ownership must be unverifiable.")
+        assert.equal(manifest.matchingSessionCandidates.length, 2, "Both competing owners must remain named in the diagnostic.")
+      },
+    })),
+    /evidence integrity|COLLECTION FAILED/i,
+    "Ambiguous ownership must never create a publishable archive",
+  )
 })
 
-test("detects identical source log content while retaining every source path", async (t) => {
+test("detects identical source log contenttest("detects identical source log content while retaining every source path", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
@@ -627,67 +599,30 @@ test("detects identical source log content while retaining every source path", a
   }))
 })
 
-test("reports missing durable process identity, source revision, and session identity explicitly", async (t) => {
+test("reports missing durable process identity as unverifiable diagnostic evidence", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, {
-    recursive: true,
-    force: true,
-  }))
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
   const factsPath = path.join(fixture.packageDirectory, "recovery-facts/facts.jsonl")
   const facts = (await readFile(factsPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line))
   delete facts[0].data.processIdentity
   await writeFile(factsPath, jsonLines(facts), "utf8")
-  const missingIdentityDirectory = path.join(fixture.packageDirectory, "logs/sessions/2026-11-26-missing-identity")
-  await mkdir(missingIdentityDirectory, { recursive: true })
-  await writeFile(path.join(missingIdentityDirectory, "terminal.log"), "unclassified source evidence", "utf8")
-  const incompleteMetadataDirectory = path.join(fixture.packageDirectory, "logs/sessions/2026-11-26-incomplete-metadata")
-  await mkdir(incompleteMetadataDirectory, { recursive: true })
-  await writeFile(path.join(incompleteMetadataDirectory, "process-identity.json"), JSON.stringify({
-    application: "harvester",
-    formatVersion: 1,
-    environment: "testnet",
-    runtimeSessionId: "123e4567-e89b-12d3-a456-426614174000",
-    source: {
-      commit: null,
-      workingTree: "unknown",
-    },
-  }), "utf8")
-  await writeFile(path.join(incompleteMetadataDirectory, "terminal.log"), "incomplete metadata source evidence", "utf8")
-
-  await runHarvesterDebugArchive(archiveWithoutPublishing({
-    fixture,
-    inspectArchive: async ({ directory }) => {
-      const manifest = await readArchiveManifest(directory)
-      assert.equal(manifest.tradingRuntime.processIdentity, null, "Missing process identity must remain null rather than being inferred from the archive command.")
-      assert.ok(
-        manifest.warnings.some(({ code }) => code === "TRADING_RUNTIME_PROCESS_IDENTITY_MISSING"),
-        "The missing durable process identity must be an explicit manifest warning.",
-      )
-      assert.ok(
-        manifest.warnings.some(({ code }) => code === "TRADING_RUNTIME_SOURCE_REVISION_MISSING"),
-        "The unavailable trading-runtime source revision must be an explicit manifest warning.",
-      )
-      const unknownSession = manifest.sessionInventory.find(({ sessionName }) => sessionName === "2026-11-26-missing-identity")
-      assert.equal(unknownSession.completionStatus, "identity-missing", "A session without process identity must be inventoried as unclassified.")
-      assert.ok(
-        unknownSession.missingFieldWarnings.includes("PROCESS_IDENTITY_MISSING"),
-        "A session without identity must carry a specific missing-field warning.",
-      )
-      const incompleteMetadataSession = manifest.sessionInventory.find(({ sessionName }) => sessionName === "2026-11-26-incomplete-metadata")
-      assert.equal(incompleteMetadataSession.completionStatus, "incomplete")
-      for (const warning of ["PROCESS_ID_MISSING", "START_TIMESTAMP_MISSING", "SOURCE_REVISION_MISSING", "COMPLETION_RECORD_MISSING"]) {
-        assert.ok(incompleteMetadataSession.missingFieldWarnings.includes(warning), `Missing session metadata must report ${warning}.`)
-      }
-    },
-  }))
+  await assert.rejects(
+    runHarvesterDebugArchive(archiveWithoutPublishing({
+      fixture,
+      inspectArchive: async ({ directory }) => {
+        const manifest = await readArchiveManifest(directory)
+        assert.equal(manifest.evidenceIntegrity.status, "unverifiable", "Missing durable process identity must block publication.")
+        assert.equal(manifest.tradingRuntime.processIdentity, null, "No identity may be inferred from session metadata.")
+      },
+    })),
+    /unverifiable|evidence integrity/i,
+    "Missing process identity must fail closed",
+  )
 })
 
-test("preserves incomplete failed-startup logs but does not count them as matching trading logs", async (t) => {
+test("preserves incomplete failed-startup logstest("retains incomplete failed-startup logs only in a non-publishable diagnostic archive", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, {
-    recursive: true,
-    force: true,
-  }))
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
   const completionPath = path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/process-completed.json")
   await writeFile(completionPath, JSON.stringify({
     runtimeSessionId: RUNTIME_SESSION_ID,
@@ -696,32 +631,24 @@ test("preserves incomplete failed-startup logs but does not count them as matchi
     signal: null,
     logStreamsComplete: false,
   }), "utf8")
-  const truncatedTerminal = "ERROR startup failed before the final diagnostic was written"
-  await writeFile(path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/terminal.log"), truncatedTerminal, "utf8")
-
-  await runHarvesterDebugArchive(archiveWithoutPublishing({
-    fixture,
-    inspectArchive: async ({ directory }) => {
-      const manifest = await readArchiveManifest(directory)
-      assert.equal(manifest.matchingTradingLogsAvailable, false, "A session with incomplete log streams cannot prove matching trading-log coverage.")
-      const incompleteSession = manifest.sessionInventory.find(({ sessionName }) => sessionName === "2026-11-24_testnet")
-      assert.equal(incompleteSession.completionStatus, "incomplete", "The session inventory must expose incomplete stream capture.")
-      assert.equal(incompleteSession.processOutcome.status, "failed", "The process exit failure must remain distinct from log-stream completeness.")
-      assert.ok(
-        incompleteSession.missingFieldWarnings.includes("LOG_STREAMS_INCOMPLETE"),
-        "Incomplete terminal capture must be an explicit session warning.",
-      )
-      assert.equal(
-        gunzipSync(await readFile(path.join(directory, "logs/sessions/2026-11-24_testnet/terminal.log.gz"))).toString("utf8"),
-        truncatedTerminal,
-        "Incomplete source bytes must be preserved unchanged for forensic review.",
-      )
-    },
-  }))
+  let diagnosticDirectory
+  await assert.rejects(
+    runHarvesterDebugArchive({
+      ...archiveDependencies({ fixture }),
+      onArchiveCreatedFn: async ({ directory }) => {
+        diagnosticDirectory = directory
+        const manifest = await readArchiveManifest(directory)
+        assert.equal(manifest.evidenceIntegrity.status, "incomplete", "Incomplete log stream closure must make evidence incomplete.")
+        assert.equal(manifest.evidenceIntegrity.validForPublication, false, "Incomplete logs must never be publishable.")
+      },
+    }),
+    /incomplete|evidence integrity/i,
+    "A crashed or unflushed process must not produce a completed archive",
+  )
+  assert.ok(diagnosticDirectory, "The incomplete evidence must remain available locally.")
 })
 
-
-test("retains a mismatched runtime archive only as diagnostic evidence and fails collection", async (t) => {
+test("retains a mismatched runtime archive only as diagnostic evidencetest("retains a mismatched runtime archive only as diagnostic evidence and fails collection", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
