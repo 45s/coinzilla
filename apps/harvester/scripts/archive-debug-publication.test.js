@@ -749,5 +749,5 @@ test("publishes a verified active-runtime snapshot without process-completion fi
     },
   })
   assert.equal(publisherCalled, true, "A verified immutable active snapshot must be publishable while the process remains active.")
-  assert.equal(result.commit, "f".repeat(40))
+  assert.equal(result.remoteCommit, "f".repeat(40))
 })
