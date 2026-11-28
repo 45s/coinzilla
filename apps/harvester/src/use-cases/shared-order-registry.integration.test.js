@@ -117,26 +117,14 @@ function createSharedAccountState() {
   }).get("test-provider").state
 }
 
-function createEngine({
+function createEngineOptions({
   sharedAccountState,
+  brokerState,
   evaluateRecoverySellerTransition,
-  recoverySellerPairs = {},
+  recoverySellerPairs,
   recoverySellerWorkflow,
-}) {
-  const brokerState = createHarnessBroker({
-    market,
-    baseAsset,
-    quoteAsset,
-    marketMetadata,
-    baseFreeBalance: "0",
-    quoteFreeBalance: "1000",
-    quoteCashFlowBaseline: "0",
-    portfolioBaseQuantityBaseline: "0",
-    additionalTrackedBaseQuantityBaseline: "0",
-    committedQuoteBalanceBaseline: "0",
-    committedBaseBalanceBaseline: "0",
-  })
-  const engine = makeConservativeTradingEngine({
+} = {}) {
+  return {
     broker: brokerState.broker,
     strategyPolicy: conservativeStrategyPolicy,
     appConfig,
@@ -176,7 +164,35 @@ function createEngine({
     evaluateRecoverySellerTransition,
     recoverySellerPairs,
     recoverySellerWorkflow,
+  }
+}
+
+function createEngine({
+  sharedAccountState,
+  evaluateRecoverySellerTransition,
+  recoverySellerPairs = {},
+  recoverySellerWorkflow,
+}) {
+  const brokerState = createHarnessBroker({
+    market,
+    baseAsset,
+    quoteAsset,
+    marketMetadata,
+    baseFreeBalance: "0",
+    quoteFreeBalance: "1000",
+    quoteCashFlowBaseline: "0",
+    portfolioBaseQuantityBaseline: "0",
+    additionalTrackedBaseQuantityBaseline: "0",
+    committedQuoteBalanceBaseline: "0",
+    committedBaseBalanceBaseline: "0",
   })
+  const engine = makeConservativeTradingEngine(createEngineOptions({
+    sharedAccountState,
+    brokerState,
+    evaluateRecoverySellerTransition,
+    recoverySellerPairs,
+    recoverySellerWorkflow,
+  }))
   return {
     engine,
     brokerState,
