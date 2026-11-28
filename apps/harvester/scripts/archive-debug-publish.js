@@ -33,14 +33,14 @@ async function main() {
     args,
     packageDirectory: PACKAGE_DIRECTORY,
   })
-  process.stdout.write([
+  process.stdout.write(`${[
     "Harvester debug archive published and remotely verified.",
     `Archive: archives/${result.archiveName}`,
     `Remote commit: ${result.remoteCommit}`,
     `Files verified: ${result.fileCount}`,
     `Already published: ${result.alreadyPublished}`,
     `Local source: ${result.directory}`,
-  ].join("\n") + "\n")
+  ].join("\n")}\n`)
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
