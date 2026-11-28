@@ -64,6 +64,27 @@ function summarizeOrderHistoryProjectionFailure({ data, message } = {}) {
   }
 }
 
+function summarizeCataloguedFailure({ data } = {}) {
+  const diagnostic = resolveHarvesterErrorDiagnostic({
+    errorCode: data.errorCode,
+    stage: data.errorStage ?? data.stage,
+    errorMessage: data.errorMessage,
+  })
+  if (!diagnostic) {
+    return null
+  }
+  return {
+    message: diagnostic.title,
+    diagnostic,
+    details: {
+      diagnosticId: diagnostic.diagnosticId,
+      stage: diagnostic.stage,
+      cause: diagnostic.cause,
+      action: diagnostic.operatorAction,
+    },
+  }
+}
+
 function summarizeConsoleData({ data, shutdownPresentation } = {}) {
   if (shutdownPresentation) {
     return {
@@ -93,22 +114,9 @@ function summarizeConsoleData({ data, shutdownPresentation } = {}) {
       details: {},
     }
   }
-  const diagnostic = resolveHarvesterErrorDiagnostic({
-    errorCode: data.errorCode,
-    stage: data.errorStage ?? data.stage,
-    errorMessage: data.errorMessage,
-  })
-  if (diagnostic) {
-    return {
-      message: diagnostic.title,
-      diagnostic,
-      details: {
-        diagnosticId: diagnostic.diagnosticId,
-        stage: diagnostic.stage,
-        cause: diagnostic.cause,
-        action: diagnostic.operatorAction,
-      },
-    }
+  const cataloguedFailure = summarizeCataloguedFailure({ data })
+  if (cataloguedFailure) {
+    return cataloguedFailure
   }
   const details = Object.fromEntries(
     CONSOLE_DETAIL_KEYS
