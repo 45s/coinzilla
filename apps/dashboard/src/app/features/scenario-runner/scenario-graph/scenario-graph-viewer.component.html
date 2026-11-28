@@ -1,0 +1,77 @@
+<section class="graph-viewer" aria-label="Selected scenario graph">
+  <header class="graph-heading">
+    <div>
+      <p class="graph-eyebrow">READ ONLY · EXPECTED SCENARIO FLOW</p>
+      <h3>{{ graph().title }}</h3>
+      @if (graph().description) {
+        <p>{{ graph().description }}</p>
+      }
+    </div>
+    <span class="graph-status">Documented flow</span>
+  </header>
+
+  <div class="graph-scroll">
+    <svg
+      class="graph-canvas"
+      [attr.viewBox]="'0 0 ' + viewModel().width + ' ' + viewModel().height"
+      [attr.width]="viewModel().width"
+      [attr.height]="viewModel().height"
+      role="img"
+      [attr.aria-label]="'Expected flow for ' + graph().title"
+    >
+      <defs>
+        <pattern id="scenario-view-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+          <circle cx="1" cy="1" r="1" class="grid-dot" />
+        </pattern>
+        <marker id="scenario-view-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 z" class="edge-arrow" />
+        </marker>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#scenario-view-grid)" />
+
+      @for (edge of viewModel().edges; track trackEdge($index, edge)) {
+        <g class="graph-edge">
+          <path [attr.d]="edgePath(edge)" marker-end="url(#scenario-view-arrow)" />
+          @if (edge.label) {
+            <text [attr.x]="edge.labelPosition.x" [attr.y]="edge.labelPosition.y">{{ edge.label }}</text>
+          }
+        </g>
+      }
+
+      @for (node of viewModel().nodes; track trackNode($index, node)) {
+        <g
+          class="graph-node"
+          [attr.transform]="'translate(' + node.position.x + ',' + node.position.y + ')'"
+          [attr.data-kind]="node.type"
+          [attr.data-guide-kind]="node.properties['guideKind'] ?? node.type"
+        >
+          <title>{{ node.label }} — {{ node.description ?? '' }}</title>
+          <rect class="node-card" [attr.width]="node.width" [attr.height]="node.height" rx="10" />
+          <text class="node-kind" x="14" y="22">{{ node.properties['guideKind'] ?? node.type }}</text>
+          <text class="node-label" x="14" y="47" textLength="162" lengthAdjust="spacingAndGlyphs">{{ node.label }}</text>
+          <text class="node-description" x="14" y="66" textLength="162" lengthAdjust="spacingAndGlyphs">{{ node.description ?? '' }}</text>
+        </g>
+      }
+    </svg>
+  </div>
+
+  <div class="graph-legend" aria-label="Graph legend">
+    <span><i data-kind="start"></i> Start</span>
+    <span><i data-kind="action"></i> Production flow</span>
+    <span><i data-kind="decision"></i> Decision point</span>
+    <span><i data-kind="wait"></i> Condition</span>
+    <span><i data-kind="block"></i> Injected failure</span>
+    <span><i data-kind="end"></i> Outcome</span>
+  </div>
+
+  @if (graph().limitations.length) {
+    <details class="graph-limitations">
+      <summary>Flow scope and limitations</summary>
+      <ul>
+        @for (limitation of graph().limitations; track limitation) {
+          <li>{{ limitation }}</li>
+        }
+      </ul>
+    </details>
+  }
+</section>

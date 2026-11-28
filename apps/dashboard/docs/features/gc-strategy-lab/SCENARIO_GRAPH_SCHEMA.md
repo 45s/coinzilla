@@ -1,14 +1,14 @@
 # Scenario Graph Schema
 
-**Status:** version 1, visual-authoring contract
+**Status:** version 1, read-only visual representation contract
 **Owner:** Dashboard / Scenario Runner
 **Tracking:** [Issue #1992](https://github.com/45s/coinzilla/issues/1992)
 
 ## Purpose and trust boundary
 
-This schema describes a graph for human authoring and explanation. It is deliberately separate from the Harvester executable scenario catalogue and input schema.
+This schema describes a read-only graph projection for scenario explanation. It is deliberately separate from the Harvester executable scenario catalogue and input schema. Scenario-guide graphs are derived from the ordered steps in the selected source-reviewed guide; they do not invent branch topology.
 
-Every document has `status: "visual-only"`. The graph editor has no execution, persistence, or promotion-to-executable operation. A graph being structurally valid means only that its visual topology is internally consistent; it does not mean that it is an approved or executable test scenario.
+Every document has `status: "visual-only"`. The graph viewer has no editing, execution, persistence, or promotion-to-executable operation. A graph being structurally valid means only that its visual topology is internally consistent; it does not mean that it is an approved or executable test scenario.
 
 The graph contains declarative node metadata only. It cannot contain JavaScript, expressions, shell commands, callbacks, dynamic imports, or other executable payloads. Do not evaluate graph data.
 
@@ -21,7 +21,7 @@ The graph contains declarative node metadata only. It cannot contain JavaScript,
 | `id` | string | Stable graph identity. |
 | `title` | string | Human-readable title. |
 | `description` | string, optional | Graph-level explanation. |
-| `source` | object | `kind` and source `reference`. |
+| `source` | object | `kind` (`manual`, `rs-domain-specification`, or `scenario-guide`) and source `reference`. |
 | `limitations` | string array | Explicit behavior not represented or not proven by the graph. |
 | `nodes` | node array | Visual nodes and positions. |
 | `edges` | edge array | Directed connections between declared ports. |

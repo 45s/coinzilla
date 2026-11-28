@@ -59,17 +59,21 @@
         </section>
       </div>
       <section class="guide-diagram" aria-label="Scenario intent flow diagram">
-        <h3>Expected path</h3>
-        <ol class="guide-flow">
-          @for (step of guide.steps; track step.id) {
-            <li class="guide-flow-item" [attr.data-kind]="step.kind">
-              <span class="guide-step-kind">{{ step.kind }}</span>
-              <strong>{{ step.label }}</strong>
-              <p>{{ step.detail }}</p>
-            </li>
-          }
-        </ol>
+        <h3>Scenario flow</h3>
+        <p class="guide-flow-caption">Source-reviewed steps for the selected scenario, in documented order. This is scenario intent, not a fabricated execution trace or an editable graph.</p>
+        @if (selectedScenarioGraph; as graph) {
+          <app-scenario-graph-viewer [graph]="graph" />
+        }
       </section>
+      @if (run(); as activeRun) {
+        @if (activeRun.strategyId === strategyId() && activeRun.scenarioId === scenarioId()) {
+          <p class="scenario-flow-evidence" role="status">Actual execution for this scenario: <strong>{{ activeRun.status }}</strong> · {{ trace().length }} trace events received. Actual events and their source evidence are shown separately in the Run story below.</p>
+        } @else {
+          <p class="scenario-flow-evidence" role="note">The selected run belongs to {{ activeRun.strategyId }} · {{ activeRun.scenarioId }}, not the currently selected scenario. Its trace below is not evidence for the flow above.</p>
+        }
+      } @else {
+        <p class="scenario-flow-evidence">No run selected. The flow above describes the selected scenario's documented expected path.</p>
+      }
       <section class="guide-result">
         <h3>Expected result</h3>
         <p>{{ guide.expectedOutcome }}</p>
@@ -88,9 +92,6 @@
       <h2>Scenario explanation unavailable</h2>
       <p>No source-reviewed explanation is published for {{ selectedScenario.id }}. No generic strategy flow is substituted.</p>
     </section>
-  }
-  @if (strategyId() === 'RS') {
-    <app-scenario-graph-editor />
   }
   <label class="input-label">Run input (JSON)
     <textarea rows="8" [disabled]="useGitHubDevelopCatalog() || selectedScenario?.executable !== true" [value]="inputJson()" (input)="updateInput($any($event.target).value)"></textarea>

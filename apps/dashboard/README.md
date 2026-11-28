@@ -35,9 +35,9 @@ pnpm --filter @coinzilla/dashboard test
 pnpm --filter @coinzilla/dashboard test:coverage
 ```
 
-## Scenario Graph Editor
+## Scenario graph visualization
 
-The Scenario Runner includes a native SVG visual graph editor for the Recovery Seller lifecycle. Nodes can be dragged, selected, edited, added and removed; connections can be created from output ports to input ports and removed independently. The versioned graph schema, validation, editing operations and renderer-neutral geometry are framework-independent TypeScript. Angular is only the current presentation adapter. Graphs are local visual drafts and cannot be executed or saved as Harvester runtime scenarios. See the [Scenario Graph Schema](docs/features/gc-strategy-lab/SCENARIO_GRAPH_SCHEMA.md).
+The Scenario Runner renders a dependency-free, native SVG graph for the currently selected scenario. Its nodes and ordered connections are projected from that scenario's source-reviewed guide; selecting another scenario rebuilds the graph from the new guide. The framework-independent graph schema, validation and geometry remain plain TypeScript, with Angular limited to the read-only SVG presentation adapter. The guide publishes ordered steps rather than branch topology, so the viewer does not invent YES/NO branches. Actual run status and source trace remain separate evidence; they are not projected onto expected nodes without an explicit verified mapping. Scenarios without a reviewed guide show an unavailable explanation rather than a generic graph. See the [Scenario Graph Schema](docs/features/gc-strategy-lab/SCENARIO_GRAPH_SCHEMA.md).
 
 ## Bots workspace
 

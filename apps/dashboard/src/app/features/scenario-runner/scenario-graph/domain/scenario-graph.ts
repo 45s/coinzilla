@@ -36,7 +36,7 @@ export interface ScenarioGraphEdge {
 }
 
 export interface ScenarioGraphSource {
-  readonly kind: 'manual' | 'rs-domain-specification';
+  readonly kind: 'manual' | 'rs-domain-specification' | 'scenario-guide';
   readonly reference: string;
 }
 
@@ -123,7 +123,7 @@ function assertGraphShape(value: unknown): asserts value is ScenarioGraph {
   const source = value['source'];
   assertAllowedKeys(source, ['kind', 'reference'], 'SCENARIO_GRAPH_SOURCE_INVALID');
   if (
-    (source['kind'] !== 'manual' && source['kind'] !== 'rs-domain-specification')
+    (source['kind'] !== 'manual' && source['kind'] !== 'rs-domain-specification' && source['kind'] !== 'scenario-guide')
     || typeof source['reference'] !== 'string'
   ) {
     throw new Error('SCENARIO_GRAPH_SOURCE_INVALID');
