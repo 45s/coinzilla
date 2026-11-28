@@ -477,18 +477,35 @@ function writeCataloguedDiagnosticRecord({
   const prefix = `${time} ${levelLabel}[${diagnostic.diagnosticId}] stage=${diagnostic.stage}`
   const action = `action=${diagnostic.operatorAction}`
   const causePrefix = "cause="
-  const causeBudget = Math.max(0, MAX_CONSOLE_LINE_LENGTH - prefix.length - causePrefix.length - action.length - 4)
-  const cause = String(diagnostic.cause ?? diagnostic.meaning).replace(/[\r\n]+/g, " ")
-  const boundedCause = cause.length > causeBudget && causeBudget > 3
-    ? `${cause.slice(0, causeBudget - 3)}...`
-    : cause.slice(0, causeBudget)
-  const line = `${prefix} ${causePrefix}${boundedCause} | ${action}`
+  const cause = String(diagnostic.cause ?? diagnostic.meaning).replace(/[\\r\\n]+/g, " ")
+  const causeBudget = Math.max(1, MAX_CONSOLE_LINE_LENGTH - prefix.length - causePrefix.length - action.length - 4)
+  const needsContinuation = cause.length > causeBudget
+  const firstCauseLength = needsContinuation ? Math.max(0, causeBudget - 3) : cause.length
+  const firstCause = needsContinuation
+    ? `${cause.slice(0, firstCauseLength)}...`
+    : cause
+  const line = `${prefix} ${causePrefix}${firstCause} | ${action}`
   output.write(`${formatConsoleLine({
     line,
     level,
     method,
     color,
-  })}\n`)
+  })}\\n`)
+
+  if (needsContinuation) {
+    const continuationPrefix = `${time} ${levelLabel}cause+`
+    const continuationBudget = Math.max(1, MAX_CONSOLE_LINE_LENGTH - continuationPrefix.length)
+    const remainingCause = cause.slice(firstCauseLength)
+    for (let offset = 0; offset < remainingCause.length; offset += continuationBudget) {
+      const continuationLine = `${continuationPrefix}${remainingCause.slice(offset, offset + continuationBudget)}`
+      output.write(`${formatConsoleLine({
+        line: continuationLine,
+        level,
+        method,
+        color,
+      })}\\n`)
+    }
+  }
 }
 
 function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary, strategyId } = {}) {
