@@ -28,3 +28,25 @@
 .graph-limitations summary{cursor:pointer;font-weight:700}
 .graph-limitations ul{display:grid;gap:7px;padding-left:22px;line-height:1.5}
 @media(max-width:760px){.graph-viewer{padding:10px}.graph-heading{flex-direction:column}.graph-heading h3{font-size:20px}.graph-scroll{max-height:62vh}.graph-canvas{min-width:680px}}
+
+
+/* The document owns vertical scrolling; the SVG always contributes its full height. */
+.graph-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-bg, #0c1420);
+}
+
+.graph-viewer {
+  overflow: visible;
+}
+
+@media (max-width: 760px) {
+  .graph-canvas {
+    min-width: 0;
+  }
+}
