@@ -114,15 +114,15 @@ function createRsOnlyStartupBroker({ calls }) {
       data: {
         sourceTime: accountSnapshotSourceTime,
         balances: accountAssets.map((asset) => new Balance({
-        free: new Quantity({
-          amount: "100000",
-          asset,
-        }),
-        locked: new Quantity({
-          amount: "0",
-          asset,
-        }),
-      })),
+          free: new Quantity({
+            amount: "100000",
+            asset,
+          }),
+          locked: new Quantity({
+            amount: "0",
+            asset,
+          }),
+        })),
       },
     }
   }
