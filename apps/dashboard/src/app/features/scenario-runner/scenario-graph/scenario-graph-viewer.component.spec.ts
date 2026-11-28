@@ -20,10 +20,11 @@ const guide: ScenarioGuide = {
 
 describe('scenario guide graph projection', () => {
   it('builds a scenario-specific read-only graph from published guide steps', () => {
-    const graph = createScenarioGuideGraph({ scenarioId: 'RS-EXAMPLE-001', guide });
+    const graph = createScenarioGuideGraph({ scenarioId: 'RS-EXAMPLE-001', scenarioName: 'Example recovery scenario', guide });
     const view = createScenarioGraphViewModel({ graph });
 
     expect(graph.id).toBe('scenario-guide-RS-EXAMPLE-001');
+    expect(graph.title).toBe('Example recovery scenario');
     expect(graph.nodes.map((node) => node.label)).toEqual(['Seed state', 'Broker rejects SELL', 'Fail closed']);
     expect(graph.nodes.map((node) => node.type)).toEqual(['start', 'block', 'end']);
     expect(graph.edges).toHaveLength(2);
