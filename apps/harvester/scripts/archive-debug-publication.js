@@ -34,7 +34,8 @@ function validateManifestHeader(manifest) {
 }
 
 function validateManifestFileEntry(entry, seenPaths) {
-  const validEntry = entry !== null && typeof entry === "object"\n  const pathSegments = validEntry && typeof entry.path === "string" ? entry.path.split("/") : []
+  const validEntry = entry !== null && typeof entry === "object"
+  const pathSegments = validEntry && typeof entry.path === "string" ? entry.path.split("/") : []
   const safePath = validEntry && pathSegments.length > 0
     && !entry.path.includes("\\")
     && !path.posix.isAbsolute(entry.path)
