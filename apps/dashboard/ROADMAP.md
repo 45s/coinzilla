@@ -10,9 +10,9 @@
 - **Scenario Runner / GC Strategy Lab:** active production-flow work is tracked in [#1836](https://github.com/45s/coinzilla/issues/1836) and the [dedicated feature roadmap](./docs/features/gc-strategy-lab/RUNNER_ROADMAP.md). Foundation [PR #1837](https://github.com/45s/coinzilla/pull/1837) is merged into `develop`; the full production adapter/catalogue and trusted OS-level sandbox launcher remain incomplete. Keep execution fail-closed.
 - Keep backend/API integration authoritative. Do not add UI-only pause state or call exchange APIs from the browser.
 
-## Scenario flow visualization — 2026-11-28
+## Scenario graph visualization — 2026-11-28
 
-The Scenario Runner uses the selected scenario's source-reviewed guide as its read-only expected-flow representation. Actual execution status and trace evidence remain a separate view and are never inferred from the expected path. No scenario editor, authoring schema, graph persistence or graph execution is in scope. Scenarios without a published guide are explicitly marked unavailable.
+Issue [#1992](https://github.com/45s/coinzilla/issues/1992) introduced the framework-independent graph model and native SVG rendering. PR [#1996](https://github.com/45s/coinzilla/pull/1996) keeps the graph representation and replaces its editor UI with a read-only graph generated from the currently selected scenario's reviewed guide. Ordered guide steps are connected; no unsupported branch topology or execution progress is invented. The actual run trace remains separate evidence.
 
 ## Recently completed
 
