@@ -75,6 +75,12 @@ describe('ScenarioRunnerComponent run details', () => {
     expect(nativeElement.querySelector('h1'), 'the breadcrumb already identifies the Scenario Runner page').toBeNull();
   });
 
+  it('removes redundant readiness and availability labels while retaining scenario evidence', () => {
+    expect(nativeElement.querySelector('.readiness'), 'the redundant readiness and limitations panel must not consume scenario workspace space').toBeNull();
+    expect(nativeElement.querySelector('.guide-availability'), 'execution availability must be represented by the actual execution control, not a duplicate badge').toBeNull();
+    expect(nativeElement.querySelector('.scenario-meta'), 'source mapping and execution status must remain visible').not.toBeNull();
+  });
+
   it('exposes the GitHub develop checkbox and switches to a pinned read-only scenario snapshot', async () => {
     const checkbox = nativeElement.querySelector<HTMLInputElement>('.catalog-source-toggle input');
     expect(checkbox).not.toBeNull();
@@ -84,6 +90,10 @@ describe('ScenarioRunnerComponent run details', () => {
     expect(component.catalog()[0].scenarios[0].id).toBe('RS-NEW-001');
     expect(component.catalogSourceRevision()).toBe('a'.repeat(40));
     expect(component.catalog()[0].scenarios[0].executable).toBe(false);
+    fixture.detectChanges();
+    const sourceRow = nativeElement.querySelector('.catalog-source-row');
+    expect(sourceRow, 'the pinned GitHub snapshot revision must share one compact row with its source checkbox').not.toBeNull();
+    expect(sourceRow?.textContent, 'the inline snapshot row must retain the immutable revision').toContain('a'.repeat(40));
   });
 
   it('explains the fixture without conflating execution, partial order execution, cycle, safety or provenance', () => {
