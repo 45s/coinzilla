@@ -8,6 +8,7 @@ export interface ScenarioGuideStep {
 }
 
 export interface ScenarioGuide {
+  readonly title: string;
   readonly availability: 'EXECUTABLE' | 'PRELIMINARY';
   readonly purpose: string;
   readonly startingState: string;
@@ -23,11 +24,13 @@ const runtimeLimitations = Object.freeze([
 ]);
 
 function runtimeGuide({
+  title,
   purpose,
   injectedCondition,
   expectedOutcome,
   path,
 }: {
+  title: string;
   purpose: string;
   injectedCondition: string;
   expectedOutcome: string;
@@ -37,24 +40,25 @@ function runtimeGuide({
     {
       id: 'seed',
       kind: 'start',
-      label: 'Seed isolated scenario state',
-      detail: 'Create the run-local market, account snapshot, filled recovery BUY/fill, legacy position, accounting workflow and simulated infrastructure.',
+      label: 'Set up the example',
+      detail: 'Prepare a simulated market and account with an existing recovery BUY, the configured legacy position and enough information to evaluate a possible SELL. No live account or exchange is used.',
     },
     {
       id: 'evaluate',
       kind: 'production-flow',
-      label: 'Evaluate through production Recovery Seller flow',
-      detail: 'Dispatch the market observation through the runtime evaluator, action authorizer and SELL planner. The diagram does not reimplement their calculations.',
+      label: 'Run the Recovery Seller decision',
+      detail: 'Pass the market observation through the same production decision and authorization path used by Recovery Seller. The scenario does not replace that logic with a second model.',
     },
     ...path,
     {
       id: 'assertions',
       kind: 'outcome',
-      label: 'Compare actual output with scenario expectations',
+      label: 'Check what happened',
       detail: expectedOutcome,
     },
   ];
   return Object.freeze({
+    title,
     availability: 'EXECUTABLE',
     purpose,
     startingState: 'The runner seeds a filled Recovery Seller BUY and accounted recovery inventory, the configured legacy position, a quote balance, validated market metadata/filters and a fresh market-price observation. The input editor shows the run-local defaults; overrides are validated before execution.',
@@ -72,6 +76,7 @@ function createPreliminaryGuide(): ScenarioGuide {
     { id: 'outcome', kind: 'outcome', label: 'Compare helper output with expected values', detail: 'The single assertion compares the helper result with expected recovery, legacy and cycle profitability breakdowns.' },
   ];
   return Object.freeze({
+    title: 'Check three independent profit requirements',
     availability: 'PRELIMINARY',
     purpose: 'Compare recovery-profitability, legacy-profitability and combined-cycle profitability gates. This candidate calls one pure production calculation only; it does not run the Recovery Seller lifecycle.',
     startingState: 'The input supplies separate recovery cost/proceeds and legacy average-cost/debit/proceeds values plus minProfit as an absolute quote-asset amount.',
@@ -87,6 +92,7 @@ function createPreliminaryGuide(): ScenarioGuide {
 
 const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
   'RS-RUNTIME-SELL-SUBMISSION-001': runtimeGuide({
+    title: 'Submit one recovery SELL',
     purpose: 'Prove that an eligible recovery position produces one authorized SELL and that the normal submission path records and reserves it.',
     injectedCondition: 'No failure is injected. The run-local simulated broker acknowledges the planned SELL.',
     expectedOutcome: 'One SELL intent is submitted; the simulated broker acknowledges it; the outcome is recorded and the SELL-cycle reservation matches the acknowledged order identity.',
@@ -96,6 +102,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     ],
   }),
   'RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001': runtimeGuide({
+    title: 'Cannot save SELL intention — do not place order',
     purpose: 'Prove that the broker is never called when the SELL submission intent cannot be recorded first.',
     injectedCondition: 'The run-local store rejects the ORDER_SUBMISSION_INTENT append.',
     expectedOutcome: 'No broker placement call and no SELL reservation; STOP is recorded and BUY admission is blocked.',
@@ -106,6 +113,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     ],
   }),
   'RS-RUNTIME-SELL-OUTCOME-PERSISTENCE-FAILURE-001': runtimeGuide({
+    title: 'SELL accepted, but its result cannot be saved',
     purpose: 'Prove that a broker-acknowledged SELL is guarded when its submission outcome cannot be recorded.',
     injectedCondition: 'The simulated broker acknowledges the SELL, then the store rejects ORDER_SUBMISSION_OUTCOME.',
     expectedOutcome: 'The reservation remains; STOP is recorded; BUY admission is blocked while SELL admission remains allowed.',
@@ -116,6 +124,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     ],
   }),
   'RS-RUNTIME-SELL-OUTCOME-AND-STOP-PERSISTENCE-FAILURE-001': runtimeGuide({
+    title: 'SELL result and STOP cannot be saved — block trading',
     purpose: 'Prove fail-closed admission when both the broker acknowledgement outcome and the STOP fact cannot be persisted.',
     injectedCondition: 'The store rejects ORDER_SUBMISSION_OUTCOME and also rejects SAFETY_BLOCKER_RAISED.',
     expectedOutcome: 'The SELL reservation remains; both BUY and SELL admission checks are blocked. The failed STOP append is not described as durable.',
@@ -126,6 +135,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     ],
   }),
   'RS-RUNTIME-SELL-BROKER-EXCEPTION-001': runtimeGuide({
+    title: 'Broker response is unknown — keep SELL unresolved',
     purpose: 'Prove that an exception during broker placement is treated as an unknown outcome, not as a safe rejection.',
     injectedCondition: 'The simulated broker throws while placing the SELL, so acceptance is unknown.',
     expectedOutcome: 'The submission remains unresolved; STOP is recorded; reservation is retained; BUY is blocked and SELL remains allowed.',
@@ -136,6 +146,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     ],
   }),
   'RS-RUNTIME-SELL-RESERVATION-FAILURE-001': runtimeGuide({
+    title: 'Cannot reserve the recovery SELL',
     purpose: 'Prove the safety response when the callback that reserves the sole active recovery SELL fails.',
     injectedCondition: 'The scenario-specific onSellReserved callback returns a simulated failure.',
     expectedOutcome: 'Reservation is not reported as retained; STOP is recorded and BUY admission is blocked. Inspect run evidence for the exact broker submission outcome.',
@@ -146,6 +157,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     ],
   }),
   'RS-RUNTIME-SELL-REJECTION-001': runtimeGuide({
+    title: 'Exchange rejects the recovery SELL',
     purpose: 'Prove that an explicit broker rejection is distinguished from acknowledgement and triggers the expected safety response.',
     injectedCondition: 'The simulated broker returns a rejected SELL submission.',
     expectedOutcome: 'No accepted submitted order is reported; STOP evidence is recorded and the reservation is retained as asserted by this scenario.',
@@ -156,6 +168,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     ],
   }),
   'RS-RUNTIME-SELL-PARTIAL-CANCEL-001': runtimeGuide({
+    title: 'SELL partly fills, then is cancelled',
     purpose: 'Prove that a partially executed SELL which later becomes CANCELED is reconciled using its fill, not treated as a zero-fill cancellation.',
     injectedCondition: 'After simulated acknowledgement, the runner supplies a terminal CANCELED order with a 2.5-unit partial fill in the default fixture.',
     expectedOutcome: 'The terminal order is reconciled and accounting is applied for the supplied fill; the cycle remains UNRESOLVED, not complete.',
@@ -167,6 +180,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     ],
   }),
   'RS-RUNTIME-SELL-FILLED-UNDER-TARGET-001': runtimeGuide({
+    title: 'SELL fills, but misses the profit target',
     purpose: 'Prove the behavior when a SELL is fully FILLED but its resulting profitability is below the required target.',
     injectedCondition: 'The runner supplies a terminal FILLED SELL and canonical fill whose resulting profitability is below the configured threshold.',
     expectedOutcome: 'The full fill is reconciled, profitability eligibility is false, and the safety workflow latches STOP.',
@@ -178,6 +192,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     ],
   }),
   'RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001': runtimeGuide({
+    title: 'Cannot save SELL reconciliation — keep cycle unresolved',
     purpose: 'Prove that a FILLED SELL is not treated as reconciled when persisting its terminal reconciliation fact fails.',
     injectedCondition: 'The runner supplies a terminal FILLED SELL, then the store rejects RECOVERY_SELLER_MIXED_SELL_RECONCILED.',
     expectedOutcome: 'Reconciliation is not marked successful; the event workflow fails closed; STOP and market pause are recorded in run state; reservation remains.',
@@ -188,6 +203,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     ],
   }),
   'RS-RUNTIME-SELL-STOP-PERSISTENCE-FAILURE-001': runtimeGuide({
+    title: 'Cannot save STOP after an under-target SELL',
     purpose: 'Prove that failure to persist account STOP after an under-target FILLED SELL does not permit a subsequent action.',
     injectedCondition: 'The runner supplies a fully FILLED SELL below target, the store rejects SAFETY_BLOCKER_RAISED, and a follow-up evaluation is attempted.',
     expectedOutcome: 'The STOP fact is not claimed as persisted; follow-up dispatch is blocked and no second action/order is submitted.',
@@ -199,6 +215,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     ],
   }),
   'RS-RUNTIME-STOP-BLOCK-BUY-ALLOW-SELL-001': runtimeGuide({
+    title: 'STOP blocks BUY, but allows an eligible first SELL',
     purpose: 'Prove the direction-specific STOP rule: new BUY spending is blocked while an eligible first recovery SELL may still be submitted.',
     injectedCondition: 'A STOP is persisted in the run-local store before normal production dispatch is evaluated.',
     expectedOutcome: 'One eligible SELL is submitted; STOP status is STOPPED; BUY admission is blocked and SELL admission is permitted.',
@@ -213,4 +230,8 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
 
 export function getScenarioGuide(scenarioId: string): ScenarioGuide | null {
   return guides[scenarioId] ?? null;
+}
+
+export function getScenarioGuideTitle(scenarioId: string): string | null {
+  return guides[scenarioId]?.title ?? null;
 }
