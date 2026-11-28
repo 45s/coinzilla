@@ -35,6 +35,8 @@ export class ScenarioRunnerComponent {
   readonly error = signal<string | null>(null);
   readonly loading = signal(false);
   readonly copied = signal(false);
+  readonly useGitHubDevelopCatalog = signal(false);
+  readonly catalogSourceRevision = signal<string | null>(null);
 
   constructor() {
     void this.loadCatalog();
@@ -112,6 +114,34 @@ export class ScenarioRunnerComponent {
     }
   }
 
+  async setGitHubCatalogSource(enabled: boolean): Promise<void> {
+    const previousSource = this.useGitHubDevelopCatalog();
+    this.loading.set(true);
+    this.error.set(null);
+    try {
+      if (enabled) {
+        const remote = await this.application.loadDevelopCatalog();
+        this.catalog.set(remote.catalog);
+        this.catalogSourceRevision.set(remote.commitSha);
+      } else {
+        const workspace = await this.application.loadWorkspace();
+        this.catalog.set(workspace.catalog);
+        this.history.set(workspace.history);
+        this.catalogSourceRevision.set(null);
+        this.error.set(workspace.historyError);
+      }
+      this.useGitHubDevelopCatalog.set(enabled);
+      const selection = this.application.selectStrategy({ strategyId: this.strategyId() });
+      this.scenarioId.set(selection.scenarioId);
+      this.inputJson.set(selection.inputJson);
+    } catch (error) {
+      this.useGitHubDevelopCatalog.set(previousSource);
+      this.error.set(error instanceof Error ? error.message : 'Scenario catalogue refresh failed.');
+    } finally {
+      this.loading.set(false);
+    }
+  }
+
   async refreshHistory(): Promise<void> {
     try {
       this.history.set(await this.application.loadHistory());
@@ -141,6 +171,10 @@ export class ScenarioRunnerComponent {
   }
 
   async execute(): Promise<void> {
+    if (this.useGitHubDevelopCatalog()) {
+      this.error.set('Switch back to the live Harvester catalogue before executing scenarios.');
+      return;
+    }
     this.error.set(null);
     this.loading.set(true);
     try {

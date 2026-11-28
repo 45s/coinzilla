@@ -25,7 +25,7 @@ export function parseGitHubScenarioCatalog({ sources, commitSha }: {
         continue;
       }
       if (scenarios.has(id)) {
-        throw new TypeError(\`GitHub scenario catalogue contains duplicate scenario ID: \${id}\`);
+        throw new TypeError('GitHub scenario catalogue contains duplicate scenario ID: ' + id);
       }
       scenarios.set(id, {
         id,

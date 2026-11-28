@@ -59,6 +59,7 @@ describe('ScenarioRunnerApi HTTP gateway', () => {
     const response = api.loadDevelopCatalog();
     const ref = http.expectOne('https://api.github.com/repos/45s/coinzilla/git/ref/heads/develop');
     ref.flush({ object: { sha: 'a'.repeat(40) } });
+    await Promise.resolve();
     const sourcePaths = [
       'apps/harvester/src/infrastructure/scenario-runner/rs-scenario-adapter.js',
       'apps/harvester/src/infrastructure/scenario-runner/rs-runtime-scenario.js',
