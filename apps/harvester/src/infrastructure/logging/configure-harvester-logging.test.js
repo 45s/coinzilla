@@ -319,7 +319,7 @@ test("retains the machine-readable Journal error code in compact console output"
   assert.ok(written.includes("WARN [JOURNAL_DIRECTORY_LOCKED]"))
   assert.ok(written.includes("stage=JOURNAL_WRITER_ACQUISITION"))
   assert.ok(written.includes("action=Verify no active writer before removing only the stale lock."))
-  assert.ok(written.trim().split("\\n").every((line) => line.length <= 200))
+  assert.ok(written.trim().split("\n").every((line) => line.length <= 200), "Every continuation line must remain bounded.")
   output.destroy()
 })
 
@@ -1048,12 +1048,14 @@ test("prints catalog code, exact stage, cause and remediation without cutting of
     },
   })
 
-  const line = written.trim()
-  assert.ok(line.length <= 200, "The operator diagnostic must respect the terminal line budget")
+  const lines = written.trim().split("\n")
+  const line = lines[0]
+  assert.ok(lines.every((candidate) => candidate.length <= 200), "Every operator diagnostic line must respect the terminal line budget.")
   assert.match(line, /HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED/)
   assert.match(line, /RELATIONAL_MIGRATION_V5/)
   assert.match(line, /SQLITE_ERROR: no such column/)
   assert.match(line, /do not reset DB/)
+  assert.ok(lines.length > 1, "A long concrete migration cause must be preserved on continuation lines.")
   output.destroy()
 })
 
