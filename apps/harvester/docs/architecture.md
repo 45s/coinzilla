@@ -606,12 +606,14 @@ owns the serialized state transition queue; the extracted workflows do not
 create a second concurrency boundary. See the [Harvester roadmap](../ROADMAP.md)
 and the merged [P3 implementation PR #1075](https://github.com/45s/coinzilla/pull/1075).
 
-Only order updates matched to a registered Harvester client order ID may
-mutate the order registry or accounting. TRADE events must contain a canonical
+Only order updates resolved to a registered order by its market-scoped broker
+order ID may mutate the order registry or accounting after acknowledgement.
+The client ID is used for pending-order correlation and as an integrity check;
+when both IDs resolve to registered records, they must identify the same order. TRADE events must contain a canonical
 Fill and pass the durable execution-fact barrier before Portfolio/RecoveryLedger
 state is committed. A partial fill updates actual accounting but does not
 advance the strategy; the engine waits for the order's terminal state.
-Unmatched reports are classified using the current process's generated order-ID namespace, not the generic `h-` prefix. Prior-session and manual/external reports follow the configured external-order policy (diagnostic-only under the default `ignore` policy); an unmatched ID in the current process namespace and malformed/conflicting identities remain fail-closed. A fully
+Unmatched reports are classified using explicit current-process client-ID membership recorded by the submission use case, never by parsing the ID. Prior-session and manual/external reports follow the configured external-order policy (diagnostic-only under the default `ignore` policy); an unmatched ID recorded by the current process remains fail-closed. A fully
 filled order triggers immediate strategy reevaluation from the latest known
 price.
 
@@ -742,8 +744,8 @@ distinction. Price and quantity remain exact decimal strings.
 
 For `order.submitted`, `order.updated`, `order.cancelled`, and
 `order.cancel_failed`, the publisher resolves ownership from the current
-OrderRegistry entry using the exact client-order ID, broker-order ID, and market
-ID. When present, the DTO carries only the registered strategy ID, Position ID,
+OrderRegistry entry by market-scoped broker-order ID after acknowledgement,
+with client-order ID retained for pending correlation and consistency checks. When present, the DTO carries only the registered strategy ID, Position ID,
 purpose, and optional cycle ID. An absent or mismatched ownership record is
 omitted; ownership is never inferred from the symbol, current configuration,
 timestamp, or client-ID shape. This enriches the non-authoritative Journal and
@@ -910,9 +912,13 @@ The process entry point in `src/index.js` composes process identity/logging, Eve
 
 ## Client order identity
 
-The Conservative order executor creates one random process-local namespace at engine construction using a UUID-derived 22-hex-character value (88 bits), then increments a local sequence for each submitted order. Client IDs use the `h-<namespace>-<sequence>` shape; preflight validation uses a separate `preflight` marker within the same namespace. This avoids predictable counter-only identifiers being reused when a new process starts.
+Harvester generates an opaque 32-character hexadecimal `clientOrderId` for each submission. It is a broker-supported correlation value used before acknowledgement and, where the provider supports it, to find an accepted order when the placement acknowledgement is lost. It is not the permanent order identity, and its spelling never establishes ownership. Preflight validation uses a local-only placeholder and does not allocate a broker client ID.
 
-A unique client ID is an identity/correlation aid, **not** permission to retry an ambiguous submission. If the broker outcome is unknown, keep the order UNKNOWN, retain its commitment, pause the market and reconcile the original identity; never create a replacement order merely because an acknowledgement was lost. Durable cross-process retry idempotency and process-restart state restoration are not implemented.
+Once the broker acknowledges the order, its native `brokerOrderId` is the canonical identity for subsequent order updates, cancellation, fill attribution, reconciliation and accounting. Scope it by provider instance/type, account and market because provider order IDs may be market-local. Retain `clientOrderId` as a correlation and integrity-check attribute; while an order is pending it is the provisional lookup key, but it must not compete with the broker ID after acknowledgement. If both identifiers are present, they must resolve to the same registered order.
+
+Current-process ownership is explicit runtime metadata: the execution use case records the client IDs it generated and exposes a membership check to the order-event workflow. An unmatched event carrying one of those IDs remains fail-closed. An ID from a previous process or an external actor is not current-process ownership and follows the configured external-order policy. No ownership decision parses an `h-` prefix or another client-ID format.
+
+A unique client ID is a correlation aid, **not** permission to retry an ambiguous submission. If the broker outcome is unknown, keep the order UNKNOWN, retain its commitment, pause the market and reconcile the original client ID when the provider supports that lookup; never blindly resubmit. This does not implement process-restart restoration or durable cross-process retry idempotency.
 
 ## Recovery failure classification and retry contract
 
@@ -973,7 +979,7 @@ single-flight reconciliation and durable audit barriers before readiness can
 
 Account-wide open-order audits always record every observed order and leave unmatched orders unowned and untouched. Every unmatched startup order is external to the current process, including orders whose client-order ID begins with Harvester's reserved `h-` prefix. Each pair may set `externalOrdersPolicy` to one of the named `EXTERNAL_ORDERS_POLICIES` values (`IGNORE` or `BLOCK`) from `src/domain/external-orders-policy.js`; the serialized values are `"ignore"` (default) and `"block"`. Under `"ignore"`, unmatched startup orders do not defer that pair. Under `"block"`, any unmatched startup order blocks evaluation and submission only for its own symbol. A newly observed unmatched manual execution report under `"block"` immediately installs a provisional guard for only that symbol and requests a fresh account-wide open-order snapshot. The event remains unowned and is not applied to Portfolio or RecoveryLedger; it does not close global user-data readiness. The provisional guard is replaced only after the complete snapshot has crossed the existing durable Journal barrier: an order still open in the snapshot remains a same-symbol blocker, while an empty/closed result releases the provisional guard. A failed read or durability barrier retains the provisional guard. The policy is checked during strategy evaluation and again at the final broker-submission boundary.
 
-An unmatched execution report is classified against the current process's generated order-ID namespace. A prior-session `h-` ID is external to this process and follows the configured external-order policy; only an unmatched ID in the current process namespace remains fail-closed. No prior-session/external execution is attributed to this process or applied to Portfolio/RecoveryLedger. Unknown/malformed current-session identities remain fail-closed. Harvester never adopts, cancels, or modifies unmatched startup orders. This policy does not make process-restart recovery safe.
+An unmatched execution report is classified using explicit current-process client-ID membership recorded by the submission use case, not by parsing the client ID. An unmatched ID generated by this process remains fail-closed; prior-process and external IDs follow the configured external-order policy. No prior-session/external execution is attributed to this process or applied to Portfolio/RecoveryLedger. Harvester never adopts, cancels, or modifies unmatched startup orders. This policy does not make process-restart recovery safe.
 
 Manual trading can still change exchange free balances or inventory; Harvester uses authoritative free balances and may receive normal exchange insufficient-balance rejections. Such manual activity is not attributed to Harvester strategy PnL.
 

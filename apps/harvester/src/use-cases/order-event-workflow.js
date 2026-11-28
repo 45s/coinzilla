@@ -19,9 +19,22 @@ function resolveRegisteredOrder({ state, order }) {
   if (!(order instanceof CanonicalOrder)) {
     return order
   }
-  return state.registry?.getOrder?.({
-    clientOrderId: order.clientOrderId,
-  }) ?? order
+  const byBrokerOrderId = order.brokerOrderId === undefined
+    ? undefined
+    : state.registry?.getOrderByBrokerOrderId?.({
+      brokerOrderId: order.brokerOrderId,
+      marketId: order.market.id,
+    })
+  const byClientOrderId = order.clientOrderId === undefined
+    ? undefined
+    : state.registry?.getOrder?.({
+      clientOrderId: order.clientOrderId,
+    })
+  if (byBrokerOrderId && byClientOrderId &&
+      byBrokerOrderId.clientOrderId !== byClientOrderId.clientOrderId) {
+    throw new Error("Order event brokerOrderId and clientOrderId identify different registered orders")
+  }
+  return byBrokerOrderId ?? byClientOrderId ?? order
 }
 
 function createBrokerOrderCacheKey({ marketId, brokerOrderId }) {
@@ -304,7 +317,7 @@ function createWorkflowUserDataEventTransition({
   publishRecoveryCycleNotCompleted,
   isStopping,
   onUnownedExternalOrderObserved,
-  currentProcessOrderIdNamespace,
+  isCurrentProcessClientOrderId,
   processExecutionFillTransition,
   reconcileTerminalOrderFills,
   reconcileRecoverySellerMixedSell,
@@ -324,7 +337,7 @@ function createWorkflowUserDataEventTransition({
     publishRecoveryCycleNotCompleted,
     isStopping,
     onUnownedExternalOrderObserved,
-    currentProcessOrderIdNamespace,
+    isCurrentProcessClientOrderId,
     processExecutionFillTransition,
     reconcileTerminalOrderFills,
     reconcileRecoverySellerMixedSell,
