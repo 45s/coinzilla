@@ -1,4 +1,5 @@
 import { lstat, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises"
+import { gunzipSync } from "node:zlib"
 import os from "node:os"
 import path from "node:path"
 import {
@@ -54,13 +55,56 @@ function assertManifestRuntimeCorrelation({ manifest, integrity, expectedRuntime
 
 function assertUniqueCompletedRuntimeSession({ manifest, expectedRuntimeId } = {}) {
   const matchingSessions = (manifest.sessionInventory ?? []).filter((session) =>
-    session.runtimeSessionId === expectedRuntimeId && session.completionStatus === "complete"
+    session.runtimeSessionId === expectedRuntimeId
+      && session.completionStatus === "complete"
+      && session.loggerCompletionStatus === "complete"
   )
   if (matchingSessions.length !== 1) {
     throw new Error(`Debug archive runtime ownership is ambiguous or incomplete: expected exactly one completed process identity for runtime ${expectedRuntimeId}; found ${matchingSessions.length}.`)
   }
 }
 
+async function readArchivedSessionJson({ directory, manifest, sourcePath } = {}) {
+  const entry = manifest.files.find((file) => file.sourcePath === sourcePath)
+  if (!entry) {
+    throw new Error(`Archive is missing required process lifecycle evidence: ${sourcePath}.`)
+  }
+  const compressed = await readFile(path.join(directory, entry.path))
+  return JSON.parse(gunzipSync(compressed).toString("utf8"))
+}
+
+async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
+  const expectedRuntimeId = manifest.recoveryRuntimeSessionId
+  const [session] = manifest.sessionInventory.filter((candidate) =>
+    candidate.runtimeSessionId === expectedRuntimeId && candidate.completionStatus === "complete"
+    && candidate.loggerCompletionStatus === "complete"
+  )
+  if (!session) {
+    throw new Error(`Debug archive has no unique completed process/logger session for runtime ${expectedRuntimeId}.`)
+  }
+  const [identity, completion, loggerCompletion] = await Promise.all([
+    readArchivedSessionJson({ directory, manifest, sourcePath: session.processIdentityPath }),
+    readArchivedSessionJson({ directory, manifest, sourcePath: session.processCompletionPath }),
+    readArchivedSessionJson({ directory, manifest, sourcePath: session.loggerCompletionPath }),
+  ])
+  const identityMatches = identity.application === "harvester"
+    && identity.environment === "testnet"
+    && identity.runtimeSessionId === expectedRuntimeId
+    && identity.startedAt === session.startedAt
+  const processCompletionMatches = completion.runtimeSessionId === expectedRuntimeId
+    && completion.logStreamsComplete === true
+    && completion.loggerStreamsComplete !== false
+  const loggerCompletionMatches = loggerCompletion.runtimeSessionId === expectedRuntimeId
+    && loggerCompletion.logStreamsComplete === true
+    && loggerCompletion.streams?.harvesterLog === true
+    && loggerCompletion.streams?.traceLog === true
+  if (!identityMatches || !processCompletionMatches || !loggerCompletionMatches) {
+    throw new Error(`Archived process identity/completion metadata does not prove one complete runtime ${expectedRuntimeId}: identity=${identity.runtimeSessionId ?? "missing"}; process completion=${completion.runtimeSessionId ?? "missing"}; logger completion=${loggerCompletion.runtimeSessionId ?? "missing"}.`)
+  }
+  if (identity.processId && completion.processId && identity.processId !== completion.processId) {
+    throw new Error(`Process ID mismatch in lifecycle evidence for runtime ${expectedRuntimeId}: identity=${identity.processId}; completion=${completion.processId}.`)
+  }
+}
 function isInvalidStreamFile({ file, manifestFile, expectedRuntimeId } = {}) {
   return file.actualRuntimeId !== expectedRuntimeId
     || typeof file.sourcePath !== "string"
@@ -226,6 +270,7 @@ async function validateCompletedArchive(directory) {
   validateManifestHeader(manifest)
   const seenPaths = validateManifestFileEntries(manifest)
   await validateRecoveryFactsRuntime({ directory, manifest })
+  await validateSessionLifecycleEvidence({ directory, manifest })
   validateEvidenceIntegrity(manifest)
   await verifyArchive({
     directory,
