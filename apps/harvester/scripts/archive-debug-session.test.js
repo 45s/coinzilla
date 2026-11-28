@@ -6,6 +6,7 @@ import {
   readFile,
   readdir,
   rm,
+  symlink,
   writeFile
 } from "node:fs/promises"
 import os from "node:os"
