@@ -2,7 +2,8 @@ import { JsonPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { ScenarioRunnerApi } from './api';
 import { createScenarioRunnerApplication, type ScenarioCatalogItem, type ScenarioRunSnapshot } from './application';
-import type { ScenarioGraphModel, ScenarioRunRecord, ScenarioTraceStep } from './core/run-contract';
+import { createScenarioRunPresentation, type ScenarioRunPresentation, type ScenarioRunPresentationStep } from './core/create-scenario-run-presentation';
+import type { ScenarioRunRecord, ScenarioTraceStep } from './core/run-contract';
 
 @Component({
   selector: 'app-scenario-runner',
@@ -26,10 +27,12 @@ export class ScenarioRunnerComponent {
   readonly scenarioId = signal('');
   readonly run = signal<ScenarioRunRecord | null>(null);
   readonly trace = signal<readonly ScenarioTraceStep[]>([]);
+  readonly presentation = signal<ScenarioRunPresentation | null>(null);
+  readonly selectedStepId = signal<string | null>(null);
+  readonly rawSearch = signal('');
   readonly inputJson = signal('{}');
   readonly error = signal<string | null>(null);
   readonly loading = signal(false);
-  readonly graph = signal<ScenarioGraphModel>({ nodes: [], edges: [] });
   readonly copied = signal(false);
 
   constructor() {
@@ -224,6 +227,82 @@ export class ScenarioRunnerComponent {
     return ['Completed', 'Failed', 'Cancelled', 'Timed out'].includes(this.run()?.status ?? '');
   }
 
+  get selectedStep(): ScenarioRunPresentationStep | null {
+    const current = this.presentation();
+    const selectedId = this.selectedStepId();
+    return current?.steps.find((step) => step.key === selectedId) ?? null;
+  }
+
+  get selectedStepJson(): string {
+    const evidence = this.selectedStep?.sourceEvidence;
+    return evidence === undefined ? '' : JSON.stringify(evidence, null, 2);
+  }
+
+  get rawJson(): string {
+    return this.presentation()?.rawJson ?? '';
+  }
+
+  get rawSearchMatches(): number | null {
+    const query = this.rawSearch().trim().toLocaleLowerCase();
+    if (!query) {
+      return null;
+    }
+    const source = this.rawJson.toLocaleLowerCase();
+    let count = 0;
+    let offset = 0;
+    while (offset < source.length) {
+      const match = source.indexOf(query, offset);
+      if (match < 0) {
+        break;
+      }
+      count += 1;
+      offset = match + query.length;
+    }
+    return count;
+  }
+
+  selectStep(stepId: string): void {
+    this.selectedStepId.set(stepId);
+  }
+
+  async copySelectedStepEvidence(): Promise<void> {
+    if (!this.selectedStep) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(this.selectedStepJson);
+      this.copied.set(true);
+    } catch (error) {
+      this.error.set(error instanceof Error ? error.message : 'Step evidence could not be copied.');
+    }
+  }
+
+  async copyOriginalJson(): Promise<void> {
+    if (!this.rawJson) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(this.rawJson);
+      this.copied.set(true);
+    } catch (error) {
+      this.error.set(error instanceof Error ? error.message : 'Original JSON could not be copied.');
+    }
+  }
+
+  downloadOriginalJson(): void {
+    if (!this.rawJson) {
+      return;
+    }
+    const runId = this.presentation()?.identity.runId ?? 'unknown';
+    const blob = new Blob([this.rawJson], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `scenario-run-${runId}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   async copyDebugPackage(): Promise<void> {
     const current = this.run();
     if (!current) {
@@ -246,7 +325,11 @@ export class ScenarioRunnerComponent {
   private applyRunSnapshot(snapshot: ScenarioRunSnapshot): void {
     this.run.set(snapshot.run);
     this.trace.set(snapshot.trace);
-    this.graph.set(snapshot.graph);
+    const presentation = createScenarioRunPresentation(snapshot.run);
+    this.presentation.set(presentation);
+    this.selectedStepId.set(presentation.steps[0]?.key ?? null);
+    this.rawSearch.set('');
+    this.copied.set(false);
     this.history.set(snapshot.history);
     this.error.set(snapshot.historyError);
   }

@@ -1,7 +1,7 @@
 <section class="runner">
-  <header>
+  <header class="runner-header">
     <h1>Strategy Scenario Runner</h1>
-    <p>Scenarios run in a separate Harvester worker with simulated broker/order dependencies. Windows uses Node API guards, not OS-level isolation. Exact replay remains blocked until trusted build-artifact verification is available.</p>
+    <p>Explore real scenario execution evidence, decisions, order lifecycle and results. Technical source data remains available for investigation.</p>
   </header>
   @if (error()) {
     <p class="error" role="alert">{{ error() }}</p>
@@ -45,12 +45,12 @@
       @if (canReplay) {
         <button type="button" [disabled]="loading()" (click)="replay()">Replay exact revision</button>
       }
-      <button type="button" (click)="copyDebugPackage()">Copy available debug evidence</button>
-      @if (copied()) {
-        <p role="status">Debug package copied.</p>
-      }
+      <button type="button" (click)="copyDebugPackage()">Copy generated debug package</button>
     }
   </div>
+  @if (copied()) {
+    <p role="status" class="copy-status">Evidence copied to clipboard.</p>
+  }
   @if (history().length) {
     <section class="history">
       <h2>Recent runs</h2>
@@ -63,41 +63,187 @@
       }
     </section>
   }
-  @if (run()) {
+  @if (run(); as currentRun) {
     <section class="run-summary">
-      <h2>Run {{ run()?.runId }}</h2>
-      <p>Status: <strong>{{ run()?.status }}</strong></p>
-      <p>Source revision: <code>{{ run()?.sourceRevision ?? 'unknown' }}</code></p>
-      @if (run()?.replayOfRunId) {
-        <p>Replay of: <code>{{ run()?.replayOfRunId }}</code></p>
+      <h2>Run {{ currentRun.runId }}</h2>
+      <p>Execution status: <strong>{{ currentRun.status }}</strong></p>
+      <p>Source revision: <code>{{ currentRun.sourceRevision ?? 'unknown' }}</code></p>
+      @if (currentRun.replayOfRunId) {
+        <p>Replay of: <code>{{ currentRun.replayOfRunId }}</code></p>
       }
-      <pre>{{ run()?.diagnostics | json }}</pre>
+      @if (currentRun.diagnostics.length) {
+        <h3>Diagnostics</h3>
+        <pre>{{ currentRun.diagnostics | json }}</pre>
+      }
     </section>
   }
-  @if (graph().nodes.length) {
-    <section>
-      <h2>Execution trace</h2>
-      <div class="trace-graph">
-        @for (node of graph().nodes; track node.id; let i = $index) {
-          <article class="trace-node">
-            <small>{{ node.kind }}</small>
-            <strong>{{ node.label }}</strong>
-            <details>
-              <summary>Inspect</summary>
-              <pre>{{ node.step | json }}</pre>
-            </details>
-          </article>
-          @if (i < graph().nodes.length - 1) {
-            <span class="trace-edge" aria-hidden="true">↓</span>
-          }
+  @if (presentation(); as view) {
+    <section class="run-story" aria-label="Scenario run explanation">
+      <header class="story-heading">
+        <div>
+          <h2>Run story</h2>
+          <p>{{ view.identity.strategyId ?? 'Unknown strategy' }} · {{ view.identity.scenarioId ?? 'Unknown scenario' }}</p>
+          <p>{{ view.identity.symbol ?? 'Market unavailable' }} · {{ view.identity.venue ?? 'Venue unavailable' }}</p>
+        </div>
+        @if (view.identity.executionMode === 'simulation-only') {
+          <span class="mode-note">SIMULATION ONLY · NO REAL EXCHANGE ORDER</span>
         }
-      </div>
+      </header>
+
+      <section class="outcome-grid" aria-label="Independent run outcomes">
+        <article class="outcome-card">
+          <h3>Execution</h3>
+          <strong>{{ view.outcomes.execution.status ?? 'Unavailable' }}</strong>
+          <small>{{ view.outcomes.execution.outcome ?? 'Outcome not supplied' }}</small>
+        </article>
+        <article class="outcome-card">
+          <h3>Assertions</h3>
+          @if (view.outcomes.assertions; as assertions) {
+            <strong>{{ assertions.passed }} / {{ assertions.total }} passed</strong>
+            <small>{{ assertions.failed }} failed · does not establish production readiness</small>
+          } @else {
+            <strong>Unavailable</strong>
+            <small>No assertion results were supplied</small>
+          }
+        </article>
+        <article class="outcome-card">
+          <h3>Trading lifecycle</h3>
+          <strong>{{ view.outcomes.lifecycle.orderCount }} orders · {{ view.outcomes.lifecycle.partiallyExecutedOrderCount }} partial terminal executions</strong>
+          <small>Order state is separate from run execution status</small>
+        </article>
+        <article class="outcome-card">
+          <h3>Accounting / cycle</h3>
+          <strong>{{ view.outcomes.accounting.cycleStatus }}</strong>
+          <small>{{ view.outcomes.accounting.complete === true ? 'Cycle completed' : view.outcomes.accounting.complete === false ? 'Cycle is not complete' : 'Completion not established' }}</small>
+        </article>
+        <article class="outcome-card">
+          <h3>Safety</h3>
+          <strong>{{ view.outcomes.safety.stopRecorded === true ? 'STOP recorded' : view.outcomes.safety.stopRecorded === false ? 'No STOP recorded' : 'STOP status unavailable' }}</strong>
+          <small>BUY {{ view.outcomes.safety.buyAdmissionBlocked === true ? 'blocked' : view.outcomes.safety.buyAdmissionBlocked === false ? 'permitted' : 'unknown' }} · SELL {{ view.outcomes.safety.sellAdmissionBlocked === true ? 'blocked' : view.outcomes.safety.sellAdmissionBlocked === false ? 'permitted' : 'unknown' }}</small>
+          @if (view.outcomes.safety.marketPaused === true) {
+            <small>Market paused</small>
+          }
+        </article>
+        <article class="outcome-card">
+          <h3>Provenance</h3>
+          <strong>{{ view.outcomes.provenance.verified === true ? 'Verified' : view.outcomes.provenance.verified === false ? 'Unverified' : 'Unavailable' }}</strong>
+          <small>Catalog: {{ view.outcomes.provenance.catalogStatus ?? 'unknown' }} · build artifact: {{ view.outcomes.provenance.buildArtifactSha256 === null ? 'unavailable' : view.outcomes.provenance.buildArtifactSha256 ?? 'unknown' }}</small>
+        </article>
+      </section>
+
+      <section class="configuration-summary">
+        <h3>Configuration used</h3>
+        <div class="config-pills">
+          @if (view.configuration && typeof view.configuration === 'object') {
+            @for (field of ['investment', 'orderQuantity', 'sellQuantity', 'keepQuantity', 'minProfit', 'marketPrice']; track field) {
+              @if (view.configuration[field] !== undefined) {
+                <span><small>{{ field }}</small><strong>{{ view.configuration[field] }}</strong></span>
+              }
+            }
+          }
+        </div>
+        <details>
+          <summary>Inspect complete configuration</summary>
+          <pre>{{ view.configuration | json }}</pre>
+        </details>
+      </section>
+
+      @if (view.decision) {
+        <section class="decision-summary">
+          <h3>Strategy decision</h3>
+          <p><strong>{{ view.decision['outcome'] ?? 'Decision recorded' }}</strong> · {{ view.decision['explanation'] ?? 'No human-readable explanation supplied' }}</p>
+          <p>Reason code: <code>{{ view.decision['reasonCode'] ?? 'not supplied' }}</code></p>
+        </section>
+      }
+
+      @if (view.orders.length) {
+        <section class="orders-summary">
+          <h3>Orders and lifecycle</h3>
+          @for (order of view.orders; track order.clientOrderId ?? order.brokerOrderId ?? $index) {
+            <article class="order-card">
+              <div class="order-heading">
+                <strong>{{ order.side ?? 'Unknown side' }} · {{ order.purpose ?? 'Purpose unavailable' }}</strong>
+                <span>{{ order.terminalStatus ?? order.initialStatus ?? 'Status unavailable' }}</span>
+              </div>
+              <p>{{ order.quantity ?? 'Quantity unavailable' }} @ {{ order.price ?? 'Price unavailable' }} · {{ order.orderType ?? 'Type unavailable' }}</p>
+              @if (order.executedQuantity !== null) {
+                <p>Executed: <strong>{{ order.executedQuantity }}</strong> · terminal status: {{ order.terminalStatus ?? 'not supplied' }}</p>
+              }
+              <p>Submission: {{ order.submissionOutcome ?? 'Acknowledgement evidence unavailable' }}</p>
+              <p>Broker order ID: <code>{{ order.brokerOrderId ?? 'not supplied' }}</code></p>
+              <p>Client order ID: <code>{{ order.clientOrderId ?? 'not supplied' }}</code></p>
+              @if (order.terminalReconciled === true) {
+                <small>Terminal reconciliation confirmed</small>
+              } @else if (order.terminalReconciled === false) {
+                <small>Terminal reconciliation failed</small>
+              }
+            </article>
+          }
+        </section>
+      }
+
+      <section class="timeline-section">
+        <h3>What happened</h3>
+        @if (view.steps.length) {
+          <ol class="timeline-list" aria-label="Ordered source trace">
+            @for (step of view.steps; track step.key) {
+              <li>
+                <button type="button" class="timeline-step" [class.selected]="selectedStepId() === step.key" [attr.aria-pressed]="selectedStepId() === step.key" (click)="selectStep(step.key)">
+                  <span class="step-kind">{{ step.kind ?? 'Unknown event type' }}</span>
+                  <strong>{{ step.label ?? 'No source label supplied' }}</strong>
+                  <small>Source trace item {{ step.sourceIndex + 1 }} · {{ step.id ?? 'ID unavailable' }}</small>
+                </button>
+              </li>
+            }
+          </ol>
+        } @else {
+          <p class="empty-evidence">No trace steps were supplied. No lifecycle steps have been inferred.</p>
+        }
+        @if (view.edges.length) {
+          <section class="branch-list" aria-label="Source-declared branches">
+            <h4>Source-declared branches</h4>
+            @for (edge of view.edges; track edge.from + ':' + edge.to) {
+              <button type="button" (click)="selectStep(edge.to)">
+                {{ edge.from }} → {{ edge.to }}{{ edge.label ? ' · ' + edge.label : '' }}
+              </button>
+            }
+          </section>
+        }
+        @if (selectedStep; as step) {
+          <section class="step-inspector" aria-live="polite">
+            <div class="inspector-heading">
+              <div>
+                <h4>{{ step.label ?? 'Selected source step' }}</h4>
+                <small>{{ step.kind ?? 'Unknown kind' }} · {{ step.id ?? 'Source ID unavailable' }}</small>
+              </div>
+              <button type="button" (click)="copySelectedStepEvidence()">Copy step evidence</button>
+            </div>
+            <pre>{{ selectedStepJson }}</pre>
+          </section>
+        }
+      </section>
+
+      <section class="technical-inspection">
+        <details>
+          <summary>Technical investigation · complete original JSON</summary>
+          <p>The view model above is a projection only. This source payload remains available with unknown fields, explicit nulls and false values intact.</p>
+          <label>Search JSON fields and values
+            <input type="search" [value]="rawSearch()" (input)="rawSearch.set($any($event.target).value)" placeholder="Search field names or values" />
+          </label>
+          @if (rawSearchMatches !== null) {
+            <p role="status">{{ rawSearchMatches }} matching occurrences in the source JSON</p>
+          }
+          <div class="actions">
+            <button type="button" (click)="copyOriginalJson()">Copy original JSON</button>
+            <button type="button" (click)="downloadOriginalJson()">Download original JSON</button>
+          </div>
+          <textarea class="raw-json" readonly [value]="rawJson" rows="22" aria-label="Complete original JSON payload"></textarea>
+        </details>
+      </section>
+
+      @if (view.outcomes.provenance.verified === false) {
+        <p class="trust-warning" role="note">Replay/build provenance is unverified. Passing assertions and a completed scenario run do not establish production readiness.</p>
+      }
     </section>
-  }
-  @if (run()) {
-    <details open>
-      <summary>Available AI debug evidence (incomplete provenance)</summary>
-      <pre>{{ debugText }}</pre>
-    </details>
   }
 </section>
