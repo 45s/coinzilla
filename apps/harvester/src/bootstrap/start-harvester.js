@@ -1613,6 +1613,7 @@ async function subscribeHarvesterMarketData({ startup, portfolio, resources, mar
   const pairs = resolveStrategyMarketDataPairs({
     pairs: marketDataPairs,
     strategyPolicy: conservativeStrategyPolicy,
+    executionRoutes: startup.executionRoutes,
     hasUnownedOpenOrdersForSymbol: startup.accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
     logger: startup.logger,
   })
@@ -2340,8 +2341,9 @@ export async function startHarvester(options = {}) {
 function resolveStrategyMarketDataPairs({
   pairs,
   strategyPolicy,
+  executionRoutes = [],
   hasUnownedOpenOrdersForSymbol,
-  logger
+  logger,
 } = {}) {
   const marketDataSubscriptionSymbols = new Set(
     strategyPolicy.getMarketDataSubscriptionSymbols({
@@ -2349,13 +2351,22 @@ function resolveStrategyMarketDataPairs({
       hasUnownedOpenOrdersForSymbol,
     }),
   )
+  const strategyIdsBySymbol = new Map()
+  for (const route of executionRoutes) {
+    const strategyIds = strategyIdsBySymbol.get(route.symbol) ?? new Set()
+    strategyIds.add(route.strategyId)
+    strategyIdsBySymbol.set(route.symbol, strategyIds)
+  }
   const strategyBlockedMarketSymbols = Object.entries(pairs)
     .filter(([symbol, pairConfig]) => pairConfig.enabled === true && !marketDataSubscriptionSymbols.has(symbol))
     .map(([symbol]) => symbol)
   if (logger && strategyBlockedMarketSymbols.length > 0) {
+    const strategyIds = [...new Set(strategyBlockedMarketSymbols.flatMap((symbol) => [
+      ...(strategyIdsBySymbol.get(symbol) ?? []),
+    ]))]
     logger.info?.({
       message: "Market data subscriptions skipped for strategy-blocked markets",
-      strategy: "CG_coinGrabber",
+      strategyIds: strategyIds.length > 0 ? strategyIds : [StrategyId.COIN_GRABBER],
       symbols: strategyBlockedMarketSymbols,
       reason: "EXTERNAL_ORDERS_POLICY_BLOCK",
     })
