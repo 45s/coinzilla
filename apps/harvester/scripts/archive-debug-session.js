@@ -738,8 +738,11 @@ function createEvidenceIntegrity({ selection, artifactProvenance } = {}) {
   const recoveryProcessIdentityStatus = !selection.recoveryProcessIdentity
     ? "missing"
     : selection.recoveryProcessIdentity.runtimeSessionId === selection.recoveryRuntimeSessionId ? "matched" : "mismatched"
+  const unverifiableSessions = selection.sessions
+    .filter((session) => session.completionStatus === "identity-missing")
+    .map((session) => session.relativePath)
   let status = selection.status
-  if (status === "ambiguous") {
+  if (status === "ambiguous" || unverifiableSessions.length > 0) {
     status = "unverifiable"
   } else if (status === "mismatched" || recoveryProcessIdentityStatus === "mismatched") {
     status = "mismatched"
@@ -763,6 +766,7 @@ function createEvidenceIntegrity({ selection, artifactProvenance } = {}) {
     validForPublication: status === "matched",
     expectedRuntimeId: selection.recoveryRuntimeSessionId,
     recoveryProcessIdentityStatus,
+    unverifiableSessions,
     streams,
     mismatches,
   }
@@ -778,7 +782,7 @@ function formatStreamCollectionFailure({ stream, integrity } = {}) {
 }
 
 function createEvidenceIntegrityFailureMessage(integrity) {
-  const summary = "DEBUG ARCHIVE EVIDENCE INTEGRITY FAILED: expected runtime=" + integrity.expectedRuntimeId + "; status=" + integrity.status + "; recovery process identity=" + integrity.recoveryProcessIdentityStatus + "."
+  const summary = "DEBUG ARCHIVE EVIDENCE INTEGRITY FAILED: expected runtime=" + integrity.expectedRuntimeId + "; status=" + integrity.status + "; recovery process identity=" + integrity.recoveryProcessIdentityStatus + "; unverifiable session paths=" + (integrity.unverifiableSessions.join(", ") || "none") + "."
   const streamReports = LOG_STREAM_DEFINITIONS.map((definition) => formatStreamCollectionFailure({
     stream: integrity.streams[definition.key],
     integrity,
