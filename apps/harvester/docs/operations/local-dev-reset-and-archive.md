@@ -53,7 +53,7 @@ Debug archive collection and publication are separate commands with different sa
 Run this directly; do not stop Harvester just to collect debug evidence:
 
 ```bash
-pnpm run archive:debug
+TRADING_MODE=testnet pnpm run archive:debug
 ```
 
 Collection requires `TRADING_MODE=testnet`. It reads the TESTNET session inventory and Operational State Store, rejects symlinks and unsupported filesystem entries, and writes a uniquely named local archive directory. If Harvester is running, the collector verifies the live PID/host/start-time from the process lock against the session's process identity and durable `PROCESS_STARTED` fact. The lock is read-only: collection never stops the process, reclaims/deletes the lock, or waits for shutdown. Append-only files are copied only through the byte length observed at the snapshot boundary; source replacement, truncation, or mutation of the captured prefix fails closed. The copied recovery-facts checkpoint is validated inside the archive. The command does not contact GitHub or publish anything.
@@ -62,7 +62,7 @@ A publishable collection requires one unique process identity whose immutable ru
 
 If identity is missing/ambiguous, either stream is missing/empty, completion is absent/incomplete without a verified active snapshot, the active lock changes during copying, or any stream belongs to another runtime, the collector retains a local diagnostic archive with `evidenceIntegrity.validForPublication=false`, prints the expected runtime, discovered owners and paths, and exits non-zero. That directory is not a completed archive and must not be published. A warning is not an acceptable substitute for the non-zero failure.
 
-### 2. Publish an existing completed snapshot
+### 2. Publish an existing verified snapshot
 
 ```bash
 pnpm run archive:debug:publish
