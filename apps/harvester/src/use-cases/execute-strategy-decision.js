@@ -136,8 +136,7 @@ function createExecutionContext({ options } = {}) {
     onDurableSubmissionOutcome,
     requireDurableSubmission,
   })
-  const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
-  let orderSequence = 0
+  const currentProcessClientOrderIds = new Set()
   const providerIdentity = resolveProviderIdentity({
     broker,
     onDurableSubmissionIntent,
@@ -153,8 +152,12 @@ function createExecutionContext({ options } = {}) {
     onOrderValidationFailure,
     onSubmissionDeferred,
     getSubmissionDeferral: createSubmissionDeferralResolver({ canSubmit }),
-    orderIdNamespace,
-    nextClientOrderId: () => `h-${  orderIdNamespace  }-${  ++orderSequence}`,
+    isCurrentProcessClientOrderId: (clientOrderId) => currentProcessClientOrderIds.has(clientOrderId),
+    nextClientOrderId: () => {
+      const clientOrderId = randomUUID().replaceAll("-", "")
+      currentProcessClientOrderIds.add(clientOrderId)
+      return clientOrderId
+    },
   }
 }
 
@@ -222,7 +225,7 @@ async function validateDecision({ context, decision, marketMetadata, notifyValid
       const candidate = createPendingOrderCandidate({
         action,
         marketMetadata,
-        clientOrderId: `h-${  context.orderIdNamespace  }-preflight-${  index}`,
+        clientOrderId: `preflight-${  index}`,
         providerIdentity: context.providerIdentity,
       })
       try {
@@ -831,7 +834,7 @@ export function makeExecuteStrategyDecision(options = {}) {
       decision,
       marketMetadata,
     })
-  execute.orderIdNamespace = context.orderIdNamespace
+  execute.isCurrentProcessClientOrderId = context.isCurrentProcessClientOrderId
   execute.validate = async ({ decision, marketMetadata, notifyValidationFailure = true } = {}) =>
     validateDecision({
       context,
