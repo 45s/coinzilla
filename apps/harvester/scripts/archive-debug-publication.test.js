@@ -820,14 +820,14 @@ test("publishes a stopped-runtime snapshot while preserving unconfirmed completi
       "Only byte-stable post-exit files are included.",
     ],
   }
-  const markerContent = `${JSON.stringify(marker, null, 2)}\\n`
+  const markerContent = `${JSON.stringify(marker, null, 2)}\n`
   await writeFile(path.join(fixture.archiveDirectory, session.stoppedSnapshotPath), markerContent)
   manifest.files.push({
     path: session.stoppedSnapshotPath,
     size: Buffer.byteLength(markerContent),
     sha256: createHash("sha256").update(markerContent).digest("hex"),
   })
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\\n`)
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 
   let publisherCalled = false
   const result = await runHarvesterDebugArchivePublication({
