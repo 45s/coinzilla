@@ -117,7 +117,7 @@ function createSharedAccountState() {
   }).get("test-provider").state
 }
 
-function createEngine({ sharedAccountState, evaluateRecoverySellerTransition }) {
+function createEngine({ sharedAccountState, evaluateRecoverySellerTransition, recoverySellerPairs = {} }) {
   const brokerState = createHarnessBroker({
     market,
     baseAsset,
@@ -161,6 +161,7 @@ function createEngine({ sharedAccountState, evaluateRecoverySellerTransition }) 
     initialState: { orderRegistry: sharedAccountState.orderRegistry },
     sharedAccountState,
     evaluateRecoverySellerTransition,
+    recoverySellerPairs,
   })
   return {
     engine,
@@ -220,6 +221,11 @@ test("Conservative engine dispatches RS evaluation through the shared account tr
   const evaluatedSymbols = []
   const { engine } = createEngine({
     sharedAccountState,
+    recoverySellerPairs: {
+      DOGEUSDT: {
+        enabled: true,
+      },
+    },
     evaluateRecoverySellerTransition: async ({ symbol }) => {
       evaluatedSymbols.push(symbol)
       return {
