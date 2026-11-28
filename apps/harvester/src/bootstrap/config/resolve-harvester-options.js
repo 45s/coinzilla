@@ -53,31 +53,52 @@ function validateExecutionSymbolList({ executionSymbols, routeSymbols } = {}) {
   }
 }
 
-function getDisabledRecoveryOnlySymbols({
-  configuredAppConfig,
-  executionRoutes,
-} = {}) {
+function getConfiguredRecoveryOnlySymbols({ configuredAppConfig } = {}) {
   const recoverySellerSymbols = Object.keys(configuredAppConfig.strategies?.RS_recoverySeller?.pairs ?? {})
   const conservativeSymbols = new Set(Object.keys(configuredAppConfig.strategies?.CG_coinGrabber?.pairs ?? {}))
-  const disabledRecoveryOnlySymbols = new Set(
-    recoverySellerSymbols.filter((symbol) => !conservativeSymbols.has(symbol)),
-  )
-  if (!Array.isArray(executionRoutes)) {
-    return disabledRecoveryOnlySymbols
-  }
+  return new Set(recoverySellerSymbols.filter((symbol) => !conservativeSymbols.has(symbol)))
+}
 
+function getRoutedConservativeSymbols({ executionRoutes } = {}) {
   const routedConservativeSymbols = new Set()
   for (const route of executionRoutes) {
     if (route?.strategyId === StrategyId.COIN_GRABBER) {
       routedConservativeSymbols.add(route.symbol)
     }
   }
+  return routedConservativeSymbols
+}
+
+function addRecoveryOnlyRouteSymbols({
+  disabledRecoveryOnlySymbols,
+  executionRoutes,
+  routedConservativeSymbols,
+} = {}) {
   for (const route of executionRoutes) {
-    if (route?.strategyId === StrategyId.RECOVERY_SELLER &&
-        !routedConservativeSymbols.has(route.symbol)) {
+    if (route?.strategyId !== StrategyId.RECOVERY_SELLER) {
+      continue
+    }
+    if (!routedConservativeSymbols.has(route.symbol)) {
       disabledRecoveryOnlySymbols.add(route.symbol)
     }
   }
+}
+
+function getDisabledRecoveryOnlySymbols({
+  configuredAppConfig,
+  executionRoutes,
+} = {}) {
+  const disabledRecoveryOnlySymbols = getConfiguredRecoveryOnlySymbols({ configuredAppConfig })
+  if (!Array.isArray(executionRoutes)) {
+    return disabledRecoveryOnlySymbols
+  }
+
+  const routedConservativeSymbols = getRoutedConservativeSymbols({ executionRoutes })
+  addRecoveryOnlyRouteSymbols({
+    disabledRecoveryOnlySymbols,
+    executionRoutes,
+    routedConservativeSymbols,
+  })
   return disabledRecoveryOnlySymbols
 }
 
@@ -87,7 +108,10 @@ function resolveEffectiveExecutionInputs({
   executionRoutes,
 } = {}) {
   if (configuredAppConfig.components?.recovery?.enabled !== false) {
-    return { executionSymbols, executionRoutes }
+    return {
+      executionSymbols,
+      executionRoutes,
+    }
   }
 
   const disabledRecoveryOnlySymbols = getDisabledRecoveryOnlySymbols({
