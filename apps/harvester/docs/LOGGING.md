@@ -48,7 +48,18 @@ Non-interactive output remains plain text. The terminal is intentionally a
 summary, not a second diagnostic dump: it prints the event message plus a
 small allowlist of actionable fields (including the stable `diagnosticId`
 for catalogued startup failures), omits stacks/fingerprints/audit internals,
-and caps each line at 200 characters.
+and caps ordinary lines at 200 characters. Catalogued failures use a dedicated
+operator format: stable `diagnosticId`, exact failure `stage`, the concrete
+`cause`, and a short `action` are prioritized in that order. The cause is
+bounded only to preserve the action within the line budget; the complete
+original error and nested cause/stack remain in the DEBUG/TRACE session files.
+The catalog source is
+[`harvester-error-catalog.js`](../src/infrastructure/logging/harvester-error-catalog.js);
+its tests enforce unique codes and complete operator guidance. Relational
+history preparation reports a stable Harvester error code separately from
+the native SQLite `causeCode`, and identifies connection, migration, and
+backup stages. A persistence-projection failure does not authorize database
+deletion, reset, or repair.
 
 Order-history projection failures additionally show the safe validation `field`,
 market `symbol`, affected `clientOrderId`, and stable `errorCode`. Those fields
