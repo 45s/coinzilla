@@ -293,6 +293,7 @@ duplicate: false } }),
   updateRecoverySellerAccounting,
   reconcileRecoverySellerMixedSell,
   latchRecoverySellerStop,
+  currentProcessOrderIdNamespace,
 } = {}) {
   const calls = createWorkflowCalls()
   const state = createWorkflowState({ updateResult,
@@ -316,6 +317,7 @@ activeOrders })
     ...dependencies,
     logger,
     requireProviderProvenance,
+    currentProcessOrderIdNamespace,
   })
   return { workflow,
 state,
@@ -443,6 +445,35 @@ test("keeps an unmatched order from the current Harvester process fail-closed", 
   assert.equal(result.failure.stage, "ORDER_REGISTRY_MATCH", "The current-session ownership failure must retain its stable stage.")
   assert.equal(calls.pauses[0]?.reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT", "An unresolved current-session order must pause its market.")
   assert.deepEqual(calls.accounting, [], "An unresolved current-session order must not be accounted.")
+})
+
+test("keeps an unmatched current-process order fail-closed even when the registry is empty", async () => {
+  const order = makeOrder({
+    clientOrderId: "h-currentprocessnamespace-2",
+    brokerOrderId: "current-session-order-2",
+    status: "OPEN",
+    executedQuantity: "0",
+  })
+  const {
+    workflow,
+    calls,
+  } = makeWorkflow({
+    registry: new OrderRegistry({ orders: [] }),
+    currentProcessOrderIdNamespace: "currentprocessnamespace",
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: order,
+      clientOrderId: order.clientOrderId,
+    },
+  })
+
+  assert.equal(result.ok, false, "An unmatched ID from the active process namespace must remain fail-closed without a registered-order hint.")
+  assert.equal(result.failure.stage, "ORDER_REGISTRY_MATCH", "The active-process ownership failure must retain its stable stage.")
+  assert.equal(calls.pauses[0]?.reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT", "An unresolved active-process order must pause its market.")
+  assert.deepEqual(calls.accounting, [], "An unresolved active-process order must not mutate strategy accounting.")
 })
 
 test("applies partial BUY fills without advancing strategy evaluation", async () => {
