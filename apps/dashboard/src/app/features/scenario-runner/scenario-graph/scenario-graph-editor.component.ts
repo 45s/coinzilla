@@ -106,7 +106,6 @@ export class ScenarioGraphEditorComponent {
     event.preventDefault();
     event.stopPropagation();
     this.pendingConnection.set({ nodeId, portId });
-    this.capturePointer(event);
   }
 
   onInputPointerUp(event: PointerEvent, nodeId: string): void {
