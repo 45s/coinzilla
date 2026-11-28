@@ -1646,6 +1646,7 @@ async function collectPreparedArchive({
   createdAt,
   onProgress,
   onArchiveCreatedFn,
+  activeProcessOwner,
 }) {
   try {
     await mkdir(localArchive, {
