@@ -479,6 +479,32 @@ function createHarvesterLogCloseHandler({ logger, sessionPaths, processIdentity 
  * @param {{ logger?: object, directory?: string, output?: NodeJS.WritableStream, processIdentity?: { startedAt: string, runtimeSessionId: string } }} input
  * @returns {Promise<{ directory: string, cumulativeDirectory: string, sessionPaths: object, close: () => Promise<void> }>}
  */
+function assertHarvesterLoggerSupportsTransports(logger) {
+  const supportsTransports = typeof logger?.addTransport === "function"
+    && typeof logger?.removeTransport === "function"
+    && typeof logger?.setLevel === "function"
+  if (!supportsTransports) {
+    throw new TypeError(
+      "Harvester logging requires @coinzilla/utils Logger transport support; update the shared utils dependency first",
+    )
+  }
+}
+
+async function attachHarvesterLogTransports({ logger, output, cumulativeDirectory, sessionPaths, errorBuffer } = {}) {
+  logger.addTransport(errorBuffer.transport)
+  try {
+    await registerHarvesterLogTransports({
+      logger,
+      consoleTransport: createHarvesterConsoleTransport({ output }),
+      cumulativeDirectory,
+      sessionPaths,
+    })
+  } catch (error) {
+    await logger.removeTransport(RUNTIME_ERROR_TRANSPORT_NAME)
+    throw error
+  }
+}
+
 export async function configureHarvesterLogging({
   logger = defaultLogger,
   directory = path.resolve(process.cwd(), "logs"),
@@ -488,16 +514,7 @@ export async function configureHarvesterLogging({
     runtimeSessionId: randomUUID(),
   },
 } = {}) {
-  if (
-    typeof logger?.addTransport !== "function"
-    || typeof logger?.removeTransport !== "function"
-    || typeof logger?.setLevel !== "function"
-  ) {
-    throw new TypeError(
-      "Harvester logging requires @coinzilla/utils Logger transport support; update the shared utils dependency first",
-    )
-  }
-
+  assertHarvesterLoggerSupportsTransports(logger)
   const sessionPaths = createHarvesterLogSessionPaths({
     directory,
     startedAt: processIdentity.startedAt,
@@ -517,19 +534,13 @@ export async function configureHarvesterLogging({
     processIdentity,
   })
   const errorBuffer = createHarvesterRuntimeErrorBuffer({ logger })
-  logger.addTransport(errorBuffer.transport)
-  try {
-    await registerHarvesterLogTransports({
-      logger,
-      consoleTransport: createHarvesterConsoleTransport({ output }),
-      cumulativeDirectory,
-      sessionPaths,
-    })
-  } catch (error) {
-    await logger.removeTransport(RUNTIME_ERROR_TRANSPORT_NAME)
-    throw error
-  }
-
+  await attachHarvesterLogTransports({
+    logger,
+    output,
+    cumulativeDirectory,
+    sessionPaths,
+    errorBuffer,
+  })
   return Object.freeze({
     directory,
     cumulativeDirectory,
