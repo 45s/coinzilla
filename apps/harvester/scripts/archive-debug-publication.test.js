@@ -68,7 +68,7 @@ function createLifecycleSourceFileEntries(runtimeId) {
     {
       sourcePath: "logs/sessions/fixture/log-streams-completed.json",
       archivePath: "logs/sessions/fixture/log-streams-completed.json.gz",
-      content: JSON.stringify({
+      content: `${JSON.stringify({
         formatVersion: 1,
         application: "harvester",
         runtimeSessionId: runtimeId,
@@ -80,6 +80,7 @@ function createLifecycleSourceFileEntries(runtimeId) {
         },
       })}\n`,
     },
+  ]
 }
 
 function createRecoveryFixture(runtimeId) {
