@@ -61,15 +61,9 @@
       <section class="guide-diagram" aria-label="Scenario intent flow diagram">
         <h3>Scenario flow</h3>
         <p class="guide-flow-caption">Source-reviewed steps for the selected scenario, in documented order. This is scenario intent, not a fabricated execution trace or an editable graph.</p>
-        <ol class="guide-flow">
-          @for (step of guide.steps; track step.id) {
-            <li class="guide-flow-item" [attr.data-kind]="step.kind">
-              <span class="guide-step-kind">{{ step.kind }}</span>
-              <strong>{{ step.label }}</strong>
-              <p>{{ step.detail }}</p>
-            </li>
-          }
-        </ol>
+        @if (selectedScenarioGraph; as graph) {
+          <app-scenario-graph-viewer [graph]="graph" />
+        }
       </section>
       @if (run(); as activeRun) {
         @if (activeRun.strategyId === strategyId() && activeRun.scenarioId === scenarioId()) {
