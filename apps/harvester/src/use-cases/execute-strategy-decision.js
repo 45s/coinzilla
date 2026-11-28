@@ -153,11 +153,8 @@ function createExecutionContext({ options } = {}) {
     onSubmissionDeferred,
     getSubmissionDeferral: createSubmissionDeferralResolver({ canSubmit }),
     isCurrentProcessClientOrderId: (clientOrderId) => currentProcessClientOrderIds.has(clientOrderId),
-    nextClientOrderId: () => {
-      const clientOrderId = randomUUID().replaceAll("-", "")
-      currentProcessClientOrderIds.add(clientOrderId)
-      return clientOrderId
-    },
+    markCurrentProcessClientOrderId: (clientOrderId) => currentProcessClientOrderIds.add(clientOrderId),
+    nextClientOrderId: () => randomUUID().replaceAll("-", ""),
   }
 }
 
@@ -499,6 +496,7 @@ async function persistPreparedSubmission({ context, candidate } = {}) {
       })
     }
   }
+  context.markCurrentProcessClientOrderId(candidate.pendingOrder.clientOrderId)
   return toResult({
     data: {
       ready: true,
