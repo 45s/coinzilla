@@ -53,11 +53,11 @@ strategy-scenario-explorer/
 
 Names/layout are illustrative; responsibility and dependency direction are mandatory. Domain/application core owns behavior and contracts; adapters implement ports; UI framework code depends inward, never the reverse.
 
-## 2.1.1 Visual graph authoring contract
+## 2.1.1 Scenario flow visualization
 
-Issue [#1992](https://github.com/45s/coinzilla/issues/1992) adds a dependency-free, native SVG editor for visual scenario graphs. The editor is a separate authoring/explanation surface; it does not replace the existing execution trace graph or pre-run scenario intent guide.
+The Scenario Runner displays a read-only, source-reviewed expected flow for the currently selected scenario. The flow is derived from that scenario's published guide; it must never fall back to a hard-coded RS example or invent missing steps/branches. A scenario without a reviewed guide is explicitly reported as unavailable.
 
-The graph document uses a versioned, framework-neutral JSON contract defined in [Scenario Graph Schema](./SCENARIO_GRAPH_SCHEMA.md). Domain invariants, validation, graph operations, serialization and renderer-neutral geometry live in plain TypeScript domain/application modules. Angular is only the current SVG presentation adapter. A future React/Vue presentation must reuse the same graph schema, core modules and tests unchanged.
+Expected scenario intent is distinct from actual execution evidence. Run status and trace events are displayed separately and must not be projected onto expected steps unless the source data provides an explicit, verified mapping. The visualization has no editing, persistence, graph schema, or execution capability.
 
 All authored graph documents are explicitly `visual-only`. They are not Harvester executable scenario definitions, cannot be submitted to the runner, and are not persisted as executable runtime scenarios. Existing Harvester catalogue validation, simulation-only execution and fail-closed safety gates remain authoritative.
 
