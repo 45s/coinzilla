@@ -1929,34 +1929,7 @@ function assertHistoryCursorFailureDiagnostics({
 
 test("logs partial startup history diagnostics when an order cursor write fails", async () => {
 
-test("skips startup account-history synchronization when the master recovery component is disabled", async () => {
-  const calls = []
-  const fixture = createHistoryCursorFailureFixture({ calls })
-  const configuredApp = {
-    ...appConfig,
-    components: { recovery: { enabled: false } },
-  }
-  const runtime = await startHarvesterForTest({
-    loadConfig: async () => configuredApp,
-    env: binanceEnv,
-    providerIdentity: {
-      providerInstanceId: "binanceTestnet",
-      providerType: "binance",
-      accountId: "binance-primary",
-    },
-    orderHistoryPersistence: fixture.orderHistoryPersistence,
-    brokerAdapterFactory: () => fixture.broker,
-    logger: { info() {}, warn() {}, error() {} },
-  })
 
-  try {
-    assert.equal(calls.some((call) => call.startsWith("history:")), false, "Disabled recovery must not fetch or synchronize historical exchange orders or fills.")
-    assert.equal(fixture.persistedOrders.length, 0, "Disabled recovery must not backfill historical orders into relational persistence.")
-    assert.equal(fixture.persistedFills.length, 0, "Disabled recovery must not backfill historical fills into relational persistence.")
-  } finally {
-    await runtime.stop()
-  }
-})
   const calls = []
   const fixture = createHistoryCursorFailureFixture({ calls })
   const errors = []
@@ -2388,5 +2361,34 @@ test("restores a persisted RS STOP and keeps a restarted runtime observation-onl
       recursive: true,
       force: true,
     })
+  }
+})
+
+test("skips startup account-history synchronization when the master recovery component is disabled", async () => {
+  const calls = []
+  const fixture = createHistoryCursorFailureFixture({ calls })
+  const configuredApp = {
+    ...appConfig,
+    components: { recovery: { enabled: false } },
+  }
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => configuredApp,
+    env: binanceEnv,
+    providerIdentity: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    },
+    orderHistoryPersistence: fixture.orderHistoryPersistence,
+    brokerAdapterFactory: () => fixture.broker,
+    logger: { info() {}, warn() {}, error() {} },
+  })
+
+  try {
+    assert.equal(calls.some((call) => call.startsWith("history:")), false, "Disabled recovery must not fetch or synchronize historical exchange orders or fills.")
+    assert.equal(fixture.persistedOrders.length, 0, "Disabled recovery must not backfill historical orders into relational persistence.")
+    assert.equal(fixture.persistedFills.length, 0, "Disabled recovery must not backfill historical fills into relational persistence.")
+  } finally {
+    await runtime.stop()
   }
 })
