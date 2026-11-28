@@ -15,6 +15,7 @@ test("catalog codes are unique and every entry has operator guidance", () => {
     assert.ok(entry.subsystem, `${entry.errorCode} needs an owning subsystem`)
     assert.ok(entry.failureStage, `${entry.errorCode} needs a failure stage`)
     assert.ok(entry.severity, `${entry.errorCode} needs a severity`)
+    assert.ok(["ERROR", "WARN"].includes(entry.severity), `${entry.errorCode} must use a supported operator severity`)
     assert.ok(entry.stopBehavior, `${entry.errorCode} needs explicit stop behavior`)
     assert.ok(entry.meaning, `${entry.errorCode} needs a concise meaning`)
     assert.ok(entry.operatorAction, `${entry.errorCode} needs a concrete operator action`)
