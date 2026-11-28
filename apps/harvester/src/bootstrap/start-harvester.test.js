@@ -129,6 +129,30 @@ function createRsOnlyStartupBroker({ calls, includeBitcoin = false }) {
   return broker
 }
 
+function trackInitialPriceRequests(broker) {
+  const requests = []
+  const getPrices = broker.getPrices.bind(broker)
+  broker.getPrices = async (request) => {
+    requests.push(request.symbol)
+    return getPrices(request)
+  }
+  return requests
+}
+
+function assertFreshCurrentSessionTrading({ result, calls, startupLogs, initialPriceRequests }) {
+  assert.equal(result.tradingEnabled, true, "A prior process must not disable fresh current-session trading when recovery is disabled.")
+  assert.equal(result.executionEnabled, true, "The current process must retain its configured execution route.")
+  assert.equal(result.userDataReady, true, "Fresh PREFLIGHT and current-process user-data readiness must open the gate.")
+  assert.ok(calls.includes("subscribe:LINEAUSDT"), "The new process must establish its market-price subscription.")
+  assert.ok(initialPriceRequests.includes("LINEAUSDT"), "Trading readiness must seed an initial ticker price.")
+  assert.ok(calls.includes("subscribe:book:LINEAUSDT"), "Trading mode must establish its required book stream.")
+  assert.ok(startupLogs.some((record) =>
+    record.reason === "PROCESS_RESTART_RECOVERY_DISABLED" &&
+    record.previousProcessStarted === true &&
+    record.tradingEnabled === true
+  ), "Startup must report that prior process history remains external while current-session trading is enabled.")
+}
+
 function createRsOnlyStartupConfig({
   enableVolatilityProtection = false,
   processRecoveryEnabled = true,
@@ -339,12 +363,7 @@ test("starts a fresh current-process trading session when process recovery is di
   const calls = []
   const startupLogs = []
   const broker = createRsOnlyStartupBroker({ calls })
-  const initialPriceRequests = []
-  const getPrices = broker.getPrices.bind(broker)
-  broker.getPrices = async (request) => {
-    initialPriceRequests.push(request.symbol)
-    return getPrices(request)
-  }
+  const initialPriceRequests = trackInitialPriceRequests(broker)
   try {
     const result = await startHarvesterForTest({
       loadConfig: async () => config,
@@ -367,23 +386,12 @@ test("starts a fresh current-process trading session when process recovery is di
       },
     })
 
-    assert.equal(result.tradingEnabled, true,
-      "A prior PROCESS_STARTED fact must not disable a fresh current-session strategy when process recovery is explicitly disabled.")
-    assert.equal(result.executionEnabled, true,
-      "The current process must retain its configured execution route without restoring prior-session trading state.")
-    assert.equal(result.userDataReady, true,
-      "Fresh current-session PREFLIGHT and user-data readiness must open the existing gate.")
-    assert.ok(calls.includes("subscribe:LINEAUSDT"),
-      "The new process must establish its own market-price subscription.")
-    assert.ok(initialPriceRequests.includes("LINEAUSDT"),
-      "Trading readiness must seed an initial ticker price instead of leaving market.price stale.")
-    assert.ok(calls.includes("subscribe:book:LINEAUSDT"),
-      "Trading mode must establish the required book stream instead of silently remaining in read-only intake.")
-    assert.ok(startupLogs.some((record) =>
-      record.reason === "PROCESS_RESTART_RECOVERY_DISABLED" &&
-      record.previousProcessStarted === true &&
-      record.tradingEnabled === true
-    ), "Startup must explicitly report that prior process history is external while fresh current-session trading is enabled.")
+    assertFreshCurrentSessionTrading({
+      result,
+      calls,
+      startupLogs,
+      initialPriceRequests,
+    })
     await result.stop()
   } finally {
     await rm(directory, {
