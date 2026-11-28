@@ -53,15 +53,9 @@ strategy-scenario-explorer/
 
 Names/layout are illustrative; responsibility and dependency direction are mandatory. Domain/application core owns behavior and contracts; adapters implement ports; UI framework code depends inward, never the reverse.
 
-## 2.1.1 Visual graph authoring contract
+## 2.1.1 Scenario graph visualization
 
-Issue [#1992](https://github.com/45s/coinzilla/issues/1992) adds a dependency-free, native SVG editor for visual scenario graphs. The editor is a separate authoring/explanation surface; it does not replace the existing execution trace graph or pre-run scenario intent guide.
-
-The graph document uses a versioned, framework-neutral JSON contract defined in [Scenario Graph Schema](./SCENARIO_GRAPH_SCHEMA.md). Domain invariants, validation, graph operations, serialization and renderer-neutral geometry live in plain TypeScript domain/application modules. Angular is only the current SVG presentation adapter. A future React/Vue presentation must reuse the same graph schema, core modules and tests unchanged.
-
-All authored graph documents are explicitly `visual-only`. They are not Harvester executable scenario definitions, cannot be submitted to the runner, and are not persisted as executable runtime scenarios. Existing Harvester catalogue validation, simulation-only execution and fail-closed safety gates remain authoritative.
-
-The initial Recovery Seller graph is a source-reviewed visual adapter over the [RS Domain Specification](../../../../../apps/harvester/docs/domain/recovery-seller-domain-specification.md). It must preserve the sole SELL lifecycle, reconciliation barriers, profitability gates, investment-only STOP behavior and unresolved terminal outcomes. It must not imply unspecified retry/replacement policy or exchange authorization.
+The Scenario Runner displays a read-only native SVG graph for the currently selected scenario. A framework-independent adapter projects the source-reviewed guide's ordered steps into graph nodes and connections; Angular only renders the graph. The guide does not publish branch topology, so the projection must not invent YES/NO branches. The graph model/schema is visual-only and separate from Harvester's executable scenario contract. Actual run status and source trace remain separate evidence and are never inferred from expected steps. Scenarios without a reviewed guide show an unavailable state. Graph editing, persistence and graph execution are out of scope.
 
 ## 2.2 Strategy-neutral execution architecture and MVP flow
 

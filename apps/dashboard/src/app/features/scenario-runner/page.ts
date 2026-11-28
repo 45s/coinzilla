@@ -2,7 +2,8 @@ import { JsonPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { ScenarioRunnerApi } from './api';
 import { JsonTreeComponent } from './json-tree.component';
-import { ScenarioGraphEditorComponent } from './scenario-graph/scenario-graph-editor.component';
+import { createScenarioGuideGraph } from './scenario-graph/adapters/scenario-guide-graph';
+import { ScenarioGraphViewerComponent } from './scenario-graph/scenario-graph-viewer.component';
 import { getScenarioGuide, type ScenarioGuide } from './core/scenario-guides';
 import { createScenarioRunnerApplication, type ScenarioCatalogItem, type ScenarioRunSnapshot } from './application';
 import { createScenarioRunPresentation, type ScenarioRunPresentation, type ScenarioRunPresentationStep } from './core/create-scenario-run-presentation';
@@ -11,7 +12,7 @@ import type { ScenarioRunRecord, ScenarioTraceStep } from './core/run-contract';
 @Component({
   selector: 'app-scenario-runner',
   standalone: true,
-  imports: [JsonPipe, JsonTreeComponent, ScenarioGraphEditorComponent],
+  imports: [JsonPipe, JsonTreeComponent, ScenarioGraphViewerComponent],
   templateUrl: './page.html',
   styleUrl: './page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -381,6 +382,14 @@ export class ScenarioRunnerComponent {
 
   get selectedScenarioGuide(): ScenarioGuide | null {
     return this.selectedScenario ? getScenarioGuide(this.selectedScenario.id) : null;
+  }
+
+  get selectedScenarioGraph() {
+    const guide = this.selectedScenarioGuide;
+    const scenario = this.selectedScenario;
+    return guide && scenario
+      ? createScenarioGuideGraph({ scenarioId: scenario.id, scenarioName: scenario.name, guide })
+      : null;
   }
 
   get scenarios(): ScenarioCatalogItem['scenarios'] {

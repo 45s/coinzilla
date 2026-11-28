@@ -8,9 +8,9 @@
 
 Dashboard issue [#1986](https://github.com/45s/coinzilla/issues/1986) adds an opt-in checkbox that reads the RS scenario declarations from two source files at a single pinned `develop` commit and displays their IDs, names, layer and mapping status without restarting Harvester. This is a metadata preview only: downloaded JavaScript is never evaluated, all remote entries are forced non-executable, and scenario submission remains disabled until the operator switches back to the live Harvester catalogue. The live `/catalog` endpoint remains authoritative for execution. A refresh failure preserves the previously displayed catalogue and reports the error.
 
-## Visual graph editor — 2026-11-28
+## Scenario graph visualization — 2026-11-28
 
-Issue [#1992](https://github.com/45s/coinzilla/issues/1992) introduces a dependency-free native SVG graph editor. The framework-neutral schema/domain/application contract is documented in [SCENARIO_GRAPH_SCHEMA.md](./SCENARIO_GRAPH_SCHEMA.md); Angular remains a replaceable presentation adapter. Authored graphs are visual-only and cannot be submitted to Harvester or bypass the executable catalogue. The first source adapter visualizes the RS recovery cycle and retains its explicit limitations. Implementation and exact-head verification are in progress on `feat/framework-independent-scenario-graph-editor-1992`.
+The native SVG viewer uses the framework-independent graph model and projects the currently selected scenario's source-reviewed guide into read-only nodes and ordered connections. Changing the scenario changes the graph. The guide contract has no branch topology, so the graph does not infer conditional edges. Actual run status and trace evidence remain separate; no progress is painted onto expected nodes without a verified source mapping. Graph editing is out of scope.
 
 ## Current status — 2026-11-27
 

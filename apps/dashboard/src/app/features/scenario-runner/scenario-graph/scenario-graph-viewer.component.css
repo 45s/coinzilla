@@ -1,0 +1,30 @@
+:host{display:block;min-width:0}
+.graph-viewer{display:grid;gap:12px;min-width:0;border:1px solid var(--line);border-radius:12px;padding:16px;background:var(--surface,#101925)}
+.graph-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.graph-heading h3{margin:0}
+.graph-heading p{margin:5px 0;color:var(--muted);line-height:1.45}
+.graph-eyebrow{font-size:10px;font-weight:800;letter-spacing:.07em;color:var(--muted)}
+.graph-status{flex:0 0 auto;border:1px solid var(--line);border-radius:999px;padding:6px 10px;font-size:11px;font-weight:700;color:var(--accent,#65d6ad)}
+.graph-scroll{min-width:0;max-height:620px;overflow:auto;border:1px solid var(--line);border-radius:9px;background:var(--panel-bg,#0c1420)}
+.graph-canvas{display:block;max-width:none}
+.grid-dot{fill:var(--muted);opacity:.35}
+.edge-arrow{fill:var(--muted)}
+.graph-edge path{fill:none;stroke:var(--muted);stroke-width:2;opacity:.85}
+.graph-edge text{fill:var(--muted);font-size:11px;font-weight:800;text-anchor:middle}
+.node-card{fill:var(--control-bg,#151e2b);stroke:var(--line);stroke-width:1.5}
+.graph-node[data-kind="start"] .node-card,.graph-node[data-kind="end"] .node-card{stroke:#3b9b70}
+.graph-node[data-kind="wait"] .node-card{stroke:#c49a43}
+.graph-node[data-kind="block"] .node-card{stroke:#c36b57}
+.node-kind{fill:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em;pointer-events:none}
+.node-label{fill:var(--text,#e7edf5);font-size:13px;font-weight:700;pointer-events:none}
+.node-description{fill:var(--muted);font-size:9px;pointer-events:none}
+.graph-legend{display:flex;flex-wrap:wrap;gap:12px;color:var(--muted);font-size:11px}
+.graph-legend span{display:flex;align-items:center;gap:5px}
+.graph-legend i{width:9px;height:9px;border:2px solid var(--line);border-radius:3px}
+.graph-legend i[data-kind="start"],.graph-legend i[data-kind="end"]{border-color:#3b9b70}
+.graph-legend i[data-kind="wait"],.graph-legend i[data-kind="decision"]{border-color:#c49a43}
+.graph-legend i[data-kind="block"]{border-color:#c36b57}
+.graph-limitations{border-top:1px solid var(--line);padding-top:9px;color:var(--muted);font-size:12px}
+.graph-limitations summary{cursor:pointer}
+.graph-limitations ul{display:grid;gap:5px;padding-left:20px;line-height:1.4}
+@media(max-width:560px){.graph-heading{flex-direction:column}}
