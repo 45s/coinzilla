@@ -516,7 +516,10 @@ test("resolves the configured default LINEA and ARB RS markets when CG process r
   ]
   const fixture = createFixture({
     cfg,
-    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+    env: {
+      TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET,
+      TELEGRAM_USER_ID: "123456789",
+    },
   })
   const result = await resolveHarvesterOptions({
     ...fixture.input,
