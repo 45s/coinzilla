@@ -483,7 +483,12 @@ function writeCataloguedDiagnosticRecord({
     ? `${cause.slice(0, causeBudget - 3)}...`
     : cause.slice(0, causeBudget)
   const line = `${prefix} ${causePrefix}${boundedCause} | ${action}`
-  output.write(`${formatConsoleLine({ line, level, method, color })}\n`)
+  output.write(`${formatConsoleLine({
+    line,
+    level,
+    method,
+    color,
+  })}\n`)
 }
 
 function writeStandardConsoleRecord({ output, color, timestamp, level, method, summary, strategyId } = {}) {
@@ -567,31 +572,15 @@ function flushSuppressedConsoleRecords({ output, color, state } = {}) {
   state.suppressedCount = 0
 }
 
-function writeConsoleTransportEntry({ entry, output, color, state } = {}) {
-  const {
-    timestamp,
-    level,
-    method = level,
-    data,
-  } = entry
-  const presentation = createConsoleRecordPresentation({
-    timestamp,
-    level,
-    method,
-    data,
-  })
-  const strategyFingerprint = `${presentation.fingerprint}:${data?.strategyId ?? "SYSTEM"}`
-  if (strategyFingerprint === state.previousFingerprint) {
-    state.suppressedCount += 1
-    return
-  }
-  flushSuppressedConsoleRecords({
-    output,
-    color,
-    state,
-  })
-  state.previousFingerprint = strategyFingerprint
-  state.previousTimestamp = timestamp
+function writeSpecialConsoleRecord({
+  presentation,
+  output,
+  color,
+  timestamp,
+  level,
+  method,
+  data,
+} = {}) {
   if (presentation.shutdownPresentation) {
     output.write(`${formatConsoleLine({
       line: presentation.shutdownPresentation.line,
@@ -621,6 +610,45 @@ function writeConsoleTransportEntry({ entry, output, color, state } = {}) {
       method,
       diagnostic: presentation.summary.diagnostic,
     })
+    return
+  }
+  return false
+}
+
+function writeConsoleTransportEntry({ entry, output, color, state } = {}) {
+  const {
+    timestamp,
+    level,
+    method = level,
+    data,
+  } = entry
+  const presentation = createConsoleRecordPresentation({
+    timestamp,
+    level,
+    method,
+    data,
+  })
+  const strategyFingerprint = `${presentation.fingerprint}:${data?.strategyId ?? "SYSTEM"}`
+  if (strategyFingerprint === state.previousFingerprint) {
+    state.suppressedCount += 1
+    return
+  }
+  flushSuppressedConsoleRecords({
+    output,
+    color,
+    state,
+  })
+  state.previousFingerprint = strategyFingerprint
+  state.previousTimestamp = timestamp
+  if (writeSpecialConsoleRecord({
+    presentation,
+    output,
+    color,
+    timestamp,
+    level,
+    method,
+    data,
+  })) {
     return
   }
   writeStandardConsoleRecord({
