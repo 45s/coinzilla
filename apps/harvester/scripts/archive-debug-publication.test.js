@@ -46,7 +46,7 @@ function createSourceFileEntries(runtimeId) {
     {
       sourcePath: "logs/sessions/fixture/process-completed.json",
       archivePath: "logs/sessions/fixture/process-completed.json.gz",
-      content: JSON.stringify({
+      content: `${JSON.stringify({
         formatVersion: 1,
         application: "harvester",
         runtimeSessionId: runtimeId,
@@ -58,7 +58,7 @@ function createSourceFileEntries(runtimeId) {
         loggerStreamsComplete: true,
         terminalCaptureComplete: true,
         logStreamsComplete: true,
-      }) + "\n",
+      })}\n`,
     },
     {
       sourcePath: "logs/sessions/fixture/log-streams-completed.json",
@@ -151,7 +151,13 @@ function createStreamEvidence({ item, runtimeId } = {}) {
   }
 }
 
-async function appendFixtureFile({ archiveDirectory, files, relativePath, sourcePath = relativePath, content } = {}) {
+async function appendFixtureFile({
+  archiveDirectory,
+  files,
+  relativePath,
+  sourcePath = relativePath,
+  content,
+} = {}) {
   const sourceBytes = Buffer.from(content)
   const archiveBytes = relativePath.endsWith(".gz") ? gzipSync(sourceBytes) : sourceBytes
   await writeFile(path.join(archiveDirectory, relativePath), archiveBytes)
@@ -161,6 +167,58 @@ async function appendFixtureFile({ archiveDirectory, files, relativePath, source
     size: archiveBytes.length,
     sha256: createHash("sha256").update(archiveBytes).digest("hex"),
   })
+}
+
+function createSessionInventoryFixture(runtimeId) {
+  return [{
+    sessionName: "fixture",
+    relativePath: "logs/sessions/fixture",
+    processIdentityPath: "logs/sessions/fixture/process-identity.json",
+    processCompletionPath: "logs/sessions/fixture/process-completed.json",
+    loggerCompletionPath: "logs/sessions/fixture/log-streams-completed.json",
+    runtimeSessionId: runtimeId,
+    completionStatus: "complete",
+    loggerCompletionStatus: "complete",
+    startedAt: "2026-11-28T11:00:00.000Z",
+    endedAt: "2026-11-28T11:10:00.000Z",
+    processId: 24680,
+    logStreamsComplete: true,
+    loggerStreamsComplete: true,
+  }]
+}
+
+function createEvidenceIntegrityFixture({ runtimeId, sourceFiles } = {}) {
+  return {
+    status: "matched",
+    validForPublication: true,
+    expectedRuntimeId: runtimeId,
+    recoveryProcessIdentityStatus: "matched",
+    streams: {
+      harvesterLog: {
+        status: "matched",
+        expectedRuntimeId: runtimeId,
+        actualRuntimeIds: [runtimeId],
+        fileCount: 1,
+        totalBytes: Buffer.byteLength(sourceFiles[0].content),
+        files: [createStreamEvidence({
+          item: sourceFiles[0],
+          runtimeId,
+        })],
+      },
+      traceLog: {
+        status: "matched",
+        expectedRuntimeId: runtimeId,
+        actualRuntimeIds: [runtimeId],
+        fileCount: 1,
+        totalBytes: Buffer.byteLength(sourceFiles[1].content),
+        files: [createStreamEvidence({
+          item: sourceFiles[1],
+          runtimeId,
+        })],
+      },
+    },
+    mismatches: [],
+  }
 }
 
 function createArchiveManifest({ runtimeId, recovery, sourceFiles, files } = {}) {
@@ -183,52 +241,11 @@ function createArchiveManifest({ runtimeId, recovery, sourceFiles, files } = {})
       runtimeSessionId: runtimeId,
       processIdentity: recovery.processIdentity,
     },
-    sessionInventory: [{
-      sessionName: "fixture",
-      relativePath: "logs/sessions/fixture",
-      processIdentityPath: "logs/sessions/fixture/process-identity.json",
-      processCompletionPath: "logs/sessions/fixture/process-completed.json",
-      loggerCompletionPath: "logs/sessions/fixture/log-streams-completed.json",
-      runtimeSessionId: runtimeId,
-      completionStatus: "complete",
-      loggerCompletionStatus: "complete",
-      startedAt: "2026-11-28T11:00:00.000Z",
-      endedAt: "2026-11-28T11:10:00.000Z",
-      processId: 24680,
-      logStreamsComplete: true,
-      loggerStreamsComplete: true,
-    }],
-    evidenceIntegrity: {
-      status: "matched",
-      validForPublication: true,
-      expectedRuntimeId: runtimeId,
-      recoveryProcessIdentityStatus: "matched",
-      streams: {
-        harvesterLog: {
-          status: "matched",
-          expectedRuntimeId: runtimeId,
-          actualRuntimeIds: [runtimeId],
-          fileCount: 1,
-          totalBytes: Buffer.byteLength(sourceFiles[0].content),
-          files: [createStreamEvidence({
-            item: sourceFiles[0],
-            runtimeId,
-          })],
-        },
-        traceLog: {
-          status: "matched",
-          expectedRuntimeId: runtimeId,
-          actualRuntimeIds: [runtimeId],
-          fileCount: 1,
-          totalBytes: Buffer.byteLength(sourceFiles[1].content),
-          files: [createStreamEvidence({
-            item: sourceFiles[1],
-            runtimeId,
-          })],
-        },
-      },
-      mismatches: [],
-    },
+    sessionInventory: createSessionInventoryFixture(runtimeId),
+    evidenceIntegrity: createEvidenceIntegrityFixture({
+      runtimeId,
+      sourceFiles,
+    }),
     files,
   }
 }
