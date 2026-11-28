@@ -4,7 +4,7 @@ import { calculateRecoverySellerProfitability } from "../../src/domain/strategie
 
 const recovery = {
   recoveryCostBasis: "10",
-  recoveryNetQuoteProceeds: "10.01",
+  recoveryNetQuoteProceeds: "10.0101",
   minProfit: "0.01",
 }
 
