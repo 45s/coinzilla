@@ -27,7 +27,7 @@ const SOURCE_DIRECTORIES = Object.freeze(["logs", "recovery-facts"])
 const EXCLUDED_ARCHIVE_PATHS = Object.freeze(["data/** (all databases and backups)", "logs/cumulative/**"])
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-function validateArchiveRemote(remote) {
+export function validateArchiveRemote(remote) {
   if (typeof remote !== "string" || remote.trim() !== remote || remote.length === 0) {
     throw new TypeError("HARVESTER_ARCHIVE_REMOTE must be a non-empty GitHub repository URL.")
   }
@@ -624,7 +624,7 @@ async function copySelectedLogs({
 }
 
 
-async function listRegularFiles({ directory, relative = "" } = {}) {
+export async function listRegularFiles({ directory, relative = "" } = {}) {
   const current = relative ? path.join(directory, relative) : directory
   const entries = await readdir(current, { withFileTypes: true })
   const files = []
@@ -905,7 +905,7 @@ async function createArchiveManifest({
 }
 
 
-async function verifyArchive({ directory, manifest } = {}) {
+export async function verifyArchive({ directory, manifest } = {}) {
   const expectedPaths = manifest.files.map((entry) => entry.path).sort()
   const actualPaths = (await listRegularFiles({ directory }))
     .filter((filename) => filename !== "manifest.json")
@@ -1043,7 +1043,7 @@ async function publishNewArchive({
   }
 }
 
-async function publishArchive({
+export async function publishArchive({
   directory,
   archiveName,
   remote,
@@ -1228,32 +1228,21 @@ async function writeAndVerifyLocalArchive({
 }
 
 
-function resolveArchiveRemote({ env, args } = {}) {
+function assertCollectionArguments({ env, args } = {}) {
   if (env.TRADING_MODE !== "testnet") {
-    throw new Error("Archive publication requires TRADING_MODE=testnet. LIVE and unspecified modes are rejected.")
+    throw new Error("Debug archive collection requires TRADING_MODE=testnet. LIVE and unspecified modes are rejected.")
   }
   if (args.length !== 0) {
     throw new TypeError("Usage: archive:debug")
   }
-  const remote = validateArchiveRemote(env.HARVESTER_ARCHIVE_REMOTE)
-  const canonicalRemote = remote
-    .replace(/\.git$/, "")
-    .replace(/\/$/, "")
-  if (canonicalRemote !== "https://github.com/45s/coinzilla-archive") {
-    throw new Error("HARVESTER_ARCHIVE_REMOTE must target the private https://github.com/45s/coinzilla-archive repository.")
-  }
-  return remote
 }
 
-async function publishPreparedArchive({
+async function collectPreparedArchive({
   sourcePaths,
   packageDirectory,
   localArchive,
   archiveName,
   createdAt,
-  remote,
-  runGit,
-  publishArchiveFn,
   onProgress,
 }) {
   try {
@@ -1273,20 +1262,10 @@ async function publishPreparedArchive({
       logSelection,
       onProgress,
     })
-    const published = await publishArchiveFn({
-      directory: localArchive,
-      archiveName,
-      remote,
-      runGit,
-      onProgress,
-    })
-    reportProgress(onProgress, "Remote archive verified successfully.")
+    reportProgress(onProgress, "Local debug archive collected and verified.")
     return {
       archiveName,
       localArchive,
-      remote,
-      remoteCommit: published.commit,
-      fileCount: published.fileCount,
       createdAt,
       matchingTradingLogsAvailable: logSelection.matchingTradingLogsAvailable,
       unmatchedRuntimeSessionId: logSelection.unmatchedRuntimeSessionId,
@@ -1295,7 +1274,7 @@ async function publishPreparedArchive({
     }
   } catch (error) {
     throw new Error(
-      `Archive ${archiveName} was not published. The source folders were left unchanged; any local archive files were retained at ${localArchive}. ${error.message}`,
+      `Debug archive ${archiveName} was not completed. The source folders were left unchanged; any partial local archive remains at ${localArchive}. ${error.message}`,
       { cause: error },
     )
   }
@@ -1304,18 +1283,13 @@ async function publishPreparedArchive({
 export async function runHarvesterDebugArchive({
   args = process.argv.slice(2),
   env = process.env,
-  runGit = runGitDefault,
   packageDirectory = PACKAGE_DIRECTORY,
   now = () => new Date(),
   createArchiveId = randomUUID,
-  publishArchiveFn = publishArchive,
-  onProgress = (message) => process.stdout.write(`${message}\n`),
+  onProgress = (message) => process.stdout.write(`${message}\\n`),
   lockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
 } = {}) {
-  const remote = resolveArchiveRemote({
-    env,
-    args,
-  })
+  assertCollectionArguments({ env, args })
   await assertHarvesterProcessStopped({ lockDirectory })
   const sourcePaths = resolveArchiveSourcePaths({
     packageDirectory,
@@ -1336,15 +1310,12 @@ export async function runHarvesterDebugArchive({
   })
   await assertRealDirectory(outputDirectory)
   const localArchive = path.join(outputDirectory, archiveName)
-  return publishPreparedArchive({
+  return collectPreparedArchive({
     sourcePaths,
     packageDirectory,
     localArchive,
     archiveName,
     createdAt,
-    remote,
-    runGit,
-    publishArchiveFn,
     onProgress,
   })
 }
@@ -1377,8 +1348,8 @@ async function main() {
   process.stdout.write(`${createArchiveCliIdentity()}\n`)
   const result = await runHarvesterDebugArchive({ args })
   const summary = [
-    "Harvester lightweight debug archive published and remotely verified.",
-    `Archive: archives/${result.archiveName}`,
+    "Harvester lightweight debug archive collected and locally verified.",
+    `Archive: ${result.archiveName}`,
     `Created: ${result.createdAt}`,
     `Matching trading logs available: ${result.matchingTradingLogsAvailable}`,
     result.matchingTradingLogsAvailable
@@ -1386,10 +1357,8 @@ async function main() {
       : `Unmatched recovery runtime: ${result.unmatchedRuntimeSessionId}`,
     "Included: all identified TESTNET session evidence as separate sessions, recovery-facts/ and data_commit_hash",
     "Excluded: all data/ (databases/backups), all logs/cumulative/ and unclassified log-root entries",
-    `Remote commit: ${result.remoteCommit}`,
-    `Local copy: ${result.localArchive}`,
-    `Files verified: ${result.fileCount}`,
-  ].join("\n")
+    `Local archive: ${result.localArchive}`,
+  ].join("\\n")
   process.stdout.write(`${summary}\n`)
 }
 
