@@ -56,13 +56,20 @@ async function snapshotDirectory(directory) {
 
 async function createFixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "harvester-archive-publication-"))
-  t.after(() => rm(root, {\n    recursive: true,\n    force: true,\n  }))
+  t.after(() => rm(root, {
+    recursive: true,
+    force: true,
+  }))
   const archiveDirectory = await createArchiveFixture(root)
   const lockDirectory = path.join(root, "process-locks")
   await mkdir(lockDirectory)
   const lockPath = path.join(lockDirectory, ".binance-harvester-trading-test.lock")
   await writeFile(lockPath, "active trading process lock")
-  return {\n    root,\n    archiveDirectory,\n    lockPath,\n  }
+  return {
+    root,
+    archiveDirectory,
+    lockPath,
+  }
 }
 
 
@@ -83,7 +90,8 @@ test("publishes to a temporary Git remote, retries an interrupted push, and veri
 
   const sourceBefore = await snapshotDirectory(fixture.archiveDirectory)
   let interrupted = false
-  const failFirstPush = async (...parameters) => {\n    const [args, options = {}] = parameters
+  const failFirstPush = async (...parameters) => {
+    const [args, options = {}] = parameters
     if (args[0] === "push" && !interrupted) {
       interrupted = true
       throw new Error("simulated connection loss during push")
