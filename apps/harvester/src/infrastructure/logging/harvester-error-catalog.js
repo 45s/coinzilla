@@ -13,7 +13,7 @@ export const HARVESTER_ERROR_CATALOG = Object.freeze({
     severity: "WARN",
     stopBehavior: "TRADING_CONTINUES_WITH_LEGACY_HISTORY",
     meaning: "The optional relational trading-history projection could not be prepared.",
-    operatorAction: "Inspect the full cause in the session DEBUG log; do not delete or reset the database.",
+    operatorAction: "See session DEBUG cause chain; never delete/reset the database.",
   }),
   HARVESTER_STARTUP_FAILED: Object.freeze({
     errorCode: "HARVESTER_STARTUP_FAILED",
