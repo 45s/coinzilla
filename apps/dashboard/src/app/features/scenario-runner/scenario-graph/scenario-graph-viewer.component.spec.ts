@@ -7,6 +7,7 @@ import { validateScenarioGraph } from './domain/scenario-graph';
 import type { ScenarioGuide } from '../core/scenario-guides';
 
 const guide: ScenarioGuide = {
+  title: 'Example scenario',
   availability: 'EXECUTABLE',
   purpose: 'Prove the expected scenario path.',
   startingState: 'A seeded state.',
