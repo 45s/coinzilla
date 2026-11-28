@@ -23,7 +23,7 @@
         <option value="end">End / outcome</option>
       </select>
     </label>
-    <button type="button" (click)="addNode()">Add node</button>
+    <button type="button" [disabled]="addNodeType() === 'start' && !canAddStart()" (click)="addNode()">Add node</button>
     <button type="button" (click)="resetExample()">Reset RS example</button>
   </div>
 
