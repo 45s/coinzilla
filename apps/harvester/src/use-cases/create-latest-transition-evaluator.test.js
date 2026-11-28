@@ -172,7 +172,10 @@ test("does not dispatch RS for a market without an RS execution route", async ()
   let recoverySellerCalls = 0
   dependencies.evaluateRecoverySellerTransition = async () => {
     recoverySellerCalls += 1
-    return { ok: true, data: {} }
+    return {
+      ok: true,
+      data: {},
+    }
   }
   const evaluate = createLatestTransitionEvaluator(dependencies)
 
