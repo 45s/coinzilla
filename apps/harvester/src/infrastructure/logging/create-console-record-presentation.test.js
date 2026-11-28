@@ -116,6 +116,6 @@ test("preserves the full concrete cause and remediation for catalogued persisten
 
   assert.equal(record.summary.diagnostic.diagnosticId, "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED")
   assert.equal(record.summary.diagnostic.stage, "RELATIONAL_MIGRATION_V5")
-  assert.equal(record.summary.diagnostic.cause, "SQLITE_ERROR: no such column: broker_order_id")
+  assert.equal(record.summary.diagnostic.cause, "ERR_SQLITE_ERROR: SQLITE_ERROR: no such column: broker_order_id")
   assert.match(record.summary.details.action, /do not reset/)
 })
