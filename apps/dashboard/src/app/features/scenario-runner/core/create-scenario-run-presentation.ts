@@ -41,13 +41,14 @@ export interface ScenarioRunPresentation {
     readonly executionMode: string | null;
   };
   readonly configuration: unknown;
+  readonly configurationSummary: readonly { readonly key: string; readonly value: unknown }[];
   readonly steps: readonly ScenarioRunPresentationStep[];
   readonly edges: readonly {
     readonly from: string;
     readonly to: string;
     readonly label?: string;
   }[];
-  readonly decision: unknown;
+  readonly decision: { readonly outcome: string | null; readonly explanation: string | null; readonly reasonCode: string | null } | null;
   readonly action: unknown;
   readonly orders: readonly ScenarioRunPresentationOrder[];
   readonly cycle: {
@@ -85,7 +86,7 @@ export interface ScenarioRunPresentation {
     readonly provenance: {
       readonly verified: boolean | null;
       readonly catalogStatus: string | null;
-      readonly buildArtifactSha256: unknown;
+      readonly buildArtifactSha256: string | null | undefined;
       readonly workerIsolation: string | null;
       readonly missing: readonly unknown[];
       readonly traceCompleteness: string | null;
@@ -277,6 +278,14 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
     hasSafetyFact ? true : null,
   );
   const orders = buildOrders(runtimeOutput);
+  const decisionSource = readRecord(runtimeOutput, 'decision');
+  const configurationSummary = ['investment', 'orderQuantity', 'sellQuantity', 'keepQuantity', 'minProfit', 'marketPrice']
+    .filter((key) => input !== null && Object.prototype.hasOwnProperty.call(input, key))
+    .map((key) => ({ key, value: input?.[key] }));
+  const artifactHashValue = provenanceIdentity?.['buildArtifactSha256'];
+  const buildArtifactSha256 = typeof artifactHashValue === 'string' || artifactHashValue === null
+    ? artifactHashValue
+    : undefined;
   const steps = readTrace(root, runOutput).map((value, index): ScenarioRunPresentationStep => {
     const step = asRecord(value);
     const id = readString(step, 'id');
@@ -316,9 +325,14 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
       executionMode,
     },
     configuration: input,
+    configurationSummary,
     steps,
     edges: readEdges(root, runOutput),
-    decision: runtimeOutput?.['decision'] ?? null,
+    decision: decisionSource ? {
+      outcome: readString(decisionSource, 'outcome'),
+      explanation: readString(decisionSource, 'explanation'),
+      reasonCode: readString(decisionSource, 'reasonCode'),
+    } : null,
     action: runtimeOutput?.['action'] ?? null,
     orders,
     cycle: {
@@ -361,7 +375,7 @@ export function createScenarioRunPresentation(rawPayload: unknown): ScenarioRunP
       provenance: {
         verified: provenanceVerified,
         catalogStatus: readString(catalog, 'status'),
-        buildArtifactSha256: provenanceIdentity?.['buildArtifactSha256'],
+        buildArtifactSha256,
         workerIsolation: readString(execution, 'workerIsolation'),
         missing: asArray(replayProvenance?.['missing']),
         traceCompleteness: readString(root, 'traceCompleteness'),

@@ -134,12 +134,8 @@
       <section class="configuration-summary">
         <h3>Configuration used</h3>
         <div class="config-pills">
-          @if (view.configuration && typeof view.configuration === 'object') {
-            @for (field of ['investment', 'orderQuantity', 'sellQuantity', 'keepQuantity', 'minProfit', 'marketPrice']; track field) {
-              @if (view.configuration[field] !== undefined) {
-                <span><small>{{ field }}</small><strong>{{ view.configuration[field] }}</strong></span>
-              }
-            }
+          @for (field of view.configurationSummary; track field.key) {
+            <span><small>{{ field.key }}</small><strong>{{ field.value }}</strong></span>
           }
         </div>
         <details>
@@ -151,8 +147,8 @@
       @if (view.decision) {
         <section class="decision-summary">
           <h3>Strategy decision</h3>
-          <p><strong>{{ view.decision['outcome'] ?? 'Decision recorded' }}</strong> · {{ view.decision['explanation'] ?? 'No human-readable explanation supplied' }}</p>
-          <p>Reason code: <code>{{ view.decision['reasonCode'] ?? 'not supplied' }}</code></p>
+          <p><strong>{{ view.decision.outcome ?? 'Decision recorded' }}</strong> · {{ view.decision.explanation ?? 'No human-readable explanation supplied' }}</p>
+          <p>Reason code: <code>{{ view.decision.reasonCode ?? 'not supplied' }}</code></p>
         </section>
       }
 

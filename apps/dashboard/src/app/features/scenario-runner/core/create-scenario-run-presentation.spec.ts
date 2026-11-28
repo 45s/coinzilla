@@ -7,6 +7,7 @@ describe('createScenarioRunPresentation', () => {
     const presentation = createScenarioRunPresentation(fixture);
 
     expect(presentation.rawPayload, 'the original payload must remain available by reference').toBe(fixture);
+    expect(JSON.parse(presentation.rawJson), 'serialization must retain the complete source JSON data').toEqual(fixture);
     expect(presentation.identity, 'run identity and simulation mode must come from the source').toEqual({
       runId: '2e1936d6-e980-4751-9c22-966d063269ab',
       strategyId: 'RS',
