@@ -92,8 +92,8 @@ function resolveEffectiveExecutionInputs({
 
   return {
     executionRoutes: filteredRoutes,
-    executionSymbols: executionSymbols === undefined
-      ? undefined
+    executionSymbols: executionSymbols === undefined || !Array.isArray(executionSymbols)
+      ? executionSymbols
       : executionSymbols.filter((symbol) => !disabledRecoveryOnlySymbols.has(symbol)),
   };
 }
