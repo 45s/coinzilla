@@ -497,6 +497,33 @@ test("retains CG ownership for the legacy single-strategy route", async () => {
   }, "The existing CG-only startup path must keep its canonical strategy attribution.")
 })
 
+test("rejects enabled RS configuration when provider execution routes are missing", async () => {
+  const baseConfig = config({ enabledSymbols: ["BTCUSDT"] })
+  const cfg = {
+    ...baseConfig,
+    strategies: {
+      ...baseConfig.strategies,
+      RS_recoverySeller: {
+        enabled: true,
+        pairs: { ETHUSDT: recoverySellerPair() },
+      },
+    },
+  }
+  const fixture = createFixture({
+    cfg,
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
+
+  await assert.rejects(
+    () => resolveHarvesterOptions({
+      ...fixture.input,
+      executionSymbols: ["BTCUSDT"],
+    }),
+    /Enabled RS markets require explicit strategy\/market execution routes/,
+    "Enabled RS markets must fail closed instead of silently disappearing when provider routes are absent.",
+  )
+})
+
 test("keeps enabled RS execution routes when CG process recovery is disabled", async () => {
   const baseConfig = config({ enabledSymbols: ["BTCUSDT"] })
   const cfg = {
