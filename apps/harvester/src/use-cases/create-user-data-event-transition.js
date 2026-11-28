@@ -15,6 +15,8 @@ import { publishLifecycleEvent } from "../application/events/publish-lifecycle-e
 import { failureResult, withFailure } from "./recovery-failure.js"
 
 
+const HARVESTER_GENERATED_CLIENT_ORDER_ID_PATTERN = /^h-[a-f0-9]{22}-(?:\\d+|preflight-\\d+)$/i
+
 function hasCurrentSessionHarvesterIdentity({
   currentProcessOrderIdNamespace,
   order,
@@ -29,11 +31,16 @@ function hasCurrentSessionHarvesterIdentity({
     event.clientOrderId,
     event.originalClientOrderId,
   ]
+  const hasReservedIdentity = clientOrderIds.some(isHarvesterClientOrderId)
   if (!prefix) {
-    return clientOrderIds.some(isHarvesterClientOrderId)
+    return hasReservedIdentity
   }
-  return clientOrderIds.some((clientOrderId) =>
+  const hasCurrentProcessIdentity = clientOrderIds.some((clientOrderId) =>
     typeof clientOrderId === "string" && clientOrderId.startsWith(prefix))
+  const hasMalformedHarvesterIdentity = clientOrderIds.some((clientOrderId) =>
+    isHarvesterClientOrderId(clientOrderId) &&
+    !HARVESTER_GENERATED_CLIENT_ORDER_ID_PATTERN.test(clientOrderId))
+  return hasCurrentProcessIdentity || hasMalformedHarvesterIdentity
 }
 
 function isIgnorableExternalOrder({ hasCurrentSessionIdentity, externalOrdersPolicy } = {}) {
