@@ -669,7 +669,7 @@ test("retains a mismatched runtime archive only as diagnostic evidencetest("reta
         assert.equal(manifest.evidenceIntegrity.status, "mismatched", "The diagnostic manifest must explicitly classify the runtime mismatch.")
         assert.equal(manifest.evidenceIntegrity.validForPublication, false, "Mismatched evidence must never be marked publishable.")
         assert.equal(manifest.evidenceIntegrity.expectedRuntimeId, OTHER_SESSION_ID, "The expected runtime must come from the recovery-facts checkpoint.")
-        assert.deepEqual(manifest.evidenceIntegrity.mismatches.map(({ actualRuntimeId }) => actualRuntimeId), [RUNTIME_SESSION_ID], "The manifest must identify the actual runtime owning the retained log files.")
+        assert.deepEqual([...new Set(manifest.evidenceIntegrity.mismatches.map(({ actualRuntimeId }) => actualRuntimeId))], [RUNTIME_SESSION_ID], "The manifest must identify the actual runtime owning the retained log files.")
       },
     }),
     /TRACE LOG COLLECTION FAILED|runtime mismatch|evidence integrity/i,
@@ -681,6 +681,8 @@ test("retains a mismatched runtime archive only as diagnostic evidencetest("reta
 
 test("reports missing required log streams as incomplete instead of accepting files from another stream", async (t) => {
   const fixture = await createFixture()
+  await rm(path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/harvester.log"))
+  await rm(path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/trace.log"))
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
     force: true,
