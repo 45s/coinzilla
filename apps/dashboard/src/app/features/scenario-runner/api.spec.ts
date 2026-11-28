@@ -63,20 +63,43 @@ describe('ScenarioRunnerApi HTTP gateway', () => {
     const sourcePaths = [
       'apps/harvester/src/infrastructure/scenario-runner/rs-scenario-adapter.js',
       'apps/harvester/src/infrastructure/scenario-runner/rs-runtime-scenario.js',
+      'apps/harvester/src/infrastructure/scenario-runner/cg-conservative-scenario-catalog.part-one.js',
+      'apps/harvester/src/infrastructure/scenario-runner/cg-conservative-scenario-catalog.part-two.js',
+      'apps/harvester/src/infrastructure/scenario-runner/cg-conservative-scenario-catalog.part-three.js',
+      'apps/harvester/src/infrastructure/scenario-runner/cg-conservative-scenario-catalog.part-four.js',
     ];
     for (const path of sourcePaths) {
       const request = http.expectOne(`https://raw.githubusercontent.com/45s/coinzilla/${'a'.repeat(40)}/${path}`);
       expect(request.request.responseType).toBe('text');
-      request.flush(path.endsWith('rs-runtime-scenario.js')
-        ? 'Object.freeze({ id: "RS-001-002", name: "Second scenario", layer: "APPLICATION", status: "PARTIAL", executionStatus: "EXECUTABLE" })'
-        : 'Object.freeze({ id: "RS-001-001", name: "Test scenario", layer: "APPLICATION", status: "PARTIAL", executionStatus: "EXECUTABLE" })');
+      if (path.endsWith('rs-runtime-scenario.js')) {
+        request.flush('Object.freeze({ id: "RS-001-002", name: "Second scenario", layer: "APPLICATION", status: "PARTIAL", executionStatus: "EXECUTABLE" })');
+      } else if (path.endsWith('rs-scenario-adapter.js')) {
+        request.flush('Object.freeze({ id: "RS-001-001", name: "Test scenario", layer: "APPLICATION", status: "PARTIAL", executionStatus: "EXECUTABLE" })');
+      } else {
+        const partName = path.endsWith('part-one.js') ? 'ONE'
+          : path.endsWith('part-two.js') ? 'TWO'
+            : path.endsWith('part-three.js') ? 'THREE' : 'FOUR';
+        const records = partName === 'ONE'
+          ? [{ id: 'CON-BUY-001', title: 'Conservative BUY lifecycle', coverageStatus: 'TEST-MAPPED' }]
+          : [];
+        request.flush('export const CG_CONSERVATIVE_SCENARIO_DETAILS_PART_' + partName + ' = ' + JSON.stringify(records));
+      }
     }
     await expect(response).resolves.toMatchObject({
       commitSha: 'a'.repeat(40),
-      catalog: [{ strategyId: 'RS', scenarios: [
-        { id: 'RS-001-001', executable: false, executionStatus: 'BLOCKED' },
-        { id: 'RS-001-002', executable: false, executionStatus: 'BLOCKED' },
-      ] }],
+      catalog: [
+        { strategyId: 'RS', scenarios: [
+          { id: 'RS-001-001', executable: false, executionStatus: 'BLOCKED' },
+          { id: 'RS-001-002', executable: false, executionStatus: 'BLOCKED' },
+        ] },
+        { strategyId: 'CG-conservative', strategyName: 'Conservative', scenarios: [{
+          id: 'CON-BUY-001',
+          status: 'TEST-MAPPED',
+          executable: false,
+          executionStatus: 'BLOCKED',
+          details: { expectedAccounting: {}, inputEvents: [{ type: 'BUY_FILLED', sequence: 1 }] },
+        }] },
+      ],
     });
   });
 

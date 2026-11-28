@@ -12,7 +12,7 @@ The current inventory is test-mapped metadata, not a set of executable Runner in
 
 ## GitHub `develop` catalogue preview
 
-Dashboard issue [#1986](https://github.com/45s/coinzilla/issues/1986) adds an opt-in checkbox that reads the RS scenario declarations from two source files at a single pinned `develop` commit and displays their IDs, names, layer and mapping status without restarting Harvester. This is a metadata preview only: downloaded JavaScript is never evaluated, all remote entries are forced non-executable, and scenario submission remains disabled until the operator switches back to the live Harvester catalogue. The live `/catalog` endpoint remains authoritative for execution. A refresh failure preserves the previously displayed catalogue and reports the error.
+Dashboard issue [#1986](https://github.com/45s/coinzilla/issues/1986) adds an opt-in checkbox that reads the RS declarations and the four static `CG-conservative` metadata parts from one pinned `develop` commit. It displays both strategy catalogues without restarting Harvester. The snapshot is metadata only: downloaded JavaScript is never evaluated, Conservative arrays are parsed as JSON literals, all remote entries are forced non-executable, and scenario submission remains disabled until the operator switches back to the live Harvester catalogue.
 
 ## Scenario graph visualization — 2026-11-28
 
