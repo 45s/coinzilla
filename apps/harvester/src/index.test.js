@@ -2702,9 +2702,10 @@ test("does not initialize the optional trading-history API when its pre-launch c
   )
 })
 
-test("does not construct or inject recovery storage when the master recovery component is disabled", async () => {
+test("does not construct recovery storage when process recovery and RS are both disabled", async () => {
   const configuredApp = createTestAppConfig()
   configuredApp.components.recovery = { enabled: false }
+  configuredApp.strategies.RS_recoverySeller.enabled = false
   let storeFactoryCalls = 0
   let startupInput
 
@@ -2712,7 +2713,7 @@ test("does not construct or inject recovery storage when the master recovery com
     loadConfig: async () => configuredApp,
     createOperationalStateStore: () => {
       storeFactoryCalls += 1
-      throw new Error("The master recovery switch must prevent store construction.")
+      throw new Error("Disabled process recovery and RS must prevent store construction.")
     },
     start: async (input) => {
       startupInput = input
@@ -2730,6 +2731,6 @@ test("does not construct or inject recovery storage when the master recovery com
     },
   })
 
-  assert.equal(storeFactoryCalls, 0, "The disabled master switch must not construct the Operational State Store.")
-  assert.equal(startupInput.operationalStateStore, undefined, "The disabled master switch must not inject an existing recovery store.")
+  assert.equal(storeFactoryCalls, 0, "Disabled process recovery and RS must not construct the Operational State Store.")
+  assert.equal(startupInput.operationalStateStore, undefined, "Disabled process recovery and RS must not inject an existing recovery store.")
 })
