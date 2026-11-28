@@ -15,32 +15,66 @@ const REMOTE = "https://github.com/45s/coinzilla-archive.git"
 
 async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME } = {}) {
   const archiveDirectory = path.join(root, "archive-output", archiveName)
-  await mkdir(path.join(archiveDirectory, "logs", "sessions", "fixture"), {
-    recursive: true,
+  const sessionDirectory = path.join(archiveDirectory, "logs", "sessions", "fixture")
+  await mkdir(sessionDirectory, { recursive: true })
+  await mkdir(path.join(archiveDirectory, "recovery-facts"), { recursive: true })
+  const runtimeId = "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c"
+  const sourceFiles = [
+    { sourcePath: "logs/sessions/fixture/harvester.log", archivePath: "logs/sessions/fixture/harvester.log.gz", content: "debug stream evidence\n" },
+    { sourcePath: "logs/sessions/fixture/trace.log", archivePath: "logs/sessions/fixture/trace.log.gz", content: "trace stream evidence\n" },
+    { sourcePath: "logs/sessions/fixture/terminal.log", archivePath: "logs/sessions/fixture/terminal.log.gz", content: "terminal session evidence\n" },
+  ]
+  const files = []
+  for (const item of sourceFiles) {
+    await writeFile(path.join(archiveDirectory, item.archivePath), item.content)
+    files.push({
+      path: item.archivePath,
+      size: Buffer.byteLength(item.content),
+      sha256: createHash("sha256").update(item.content).digest("hex"),
+    })
+  }
+  const streamEvidence = (item) => ({
+    sourcePath: item.sourcePath,
+    archivePath: item.archivePath,
+    actualRuntimeId: runtimeId,
+    sourceSize: Buffer.byteLength(item.content),
+    archiveSize: Buffer.byteLength(item.content),
+    sourceSha256: createHash("sha256").update(item.content).digest("hex"),
+    archiveSha256: createHash("sha256").update(item.content).digest("hex"),
+    compression: "source-gzip-preserved",
+    rotationIndex: 0,
+    result: "collected",
+    reason: null,
   })
-  await mkdir(path.join(archiveDirectory, "recovery-facts"), {
-    recursive: true,
-  })
-  const content = "immutable completed session evidence\n"
-  await writeFile(path.join(archiveDirectory, "logs", "sessions", "fixture", "terminal.log.gz"), content)
-  const files = [{
-    path: "logs/sessions/fixture/terminal.log.gz",
-    size: Buffer.byteLength(content),
-    sha256: createHash("sha256").update(content).digest("hex"),
-  }]
   const manifest = {
-    formatVersion: 1,
+    formatVersion: 2,
     application: "harvester",
     commandTradingMode: "testnet",
     createdAt: "2026-11-28T12:00:00.000Z",
     includedDirectories: ["logs", "recovery-facts"],
     excludedPaths: ["data/** (all databases and backups)", "logs/cumulative/**"],
+    recoveryRuntimeSessionId: runtimeId,
+    logRuntimeSessionId: runtimeId,
+    matchingTradingLogsAvailable: true,
+    runtimeIdentity: { status: "matched", correlation: "same-runtime-session" },
+    tradingRuntime: { runtimeSessionId: runtimeId, processIdentity: { runtimeSessionId: runtimeId } },
+    sessionInventory: [{ runtimeSessionId: runtimeId, completionStatus: "complete" }],
+    evidenceIntegrity: {
+      status: "matched",
+      validForPublication: true,
+      expectedRuntimeId: runtimeId,
+      recoveryProcessIdentityStatus: "matched",
+      streams: {
+        harvesterLog: { status: "matched", expectedRuntimeId: runtimeId, actualRuntimeIds: [runtimeId], fileCount: 1, totalBytes: Buffer.byteLength(sourceFiles[0].content), files: [streamEvidence(sourceFiles[0])] },
+        traceLog: { status: "matched", expectedRuntimeId: runtimeId, actualRuntimeIds: [runtimeId], fileCount: 1, totalBytes: Buffer.byteLength(sourceFiles[1].content), files: [streamEvidence(sourceFiles[1])] },
+      },
+      mismatches: [],
+    },
     files,
   }
-  await writeFile(path.join(archiveDirectory, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`)
+  await writeFile(path.join(archiveDirectory, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n")
   return archiveDirectory
 }
-
 async function snapshotDirectory(directory) {
   const files = new Map()
   async function visit({ current, relative = "" } = {}) {
