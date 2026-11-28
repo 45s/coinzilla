@@ -127,5 +127,7 @@ export async function loadAppConfig(sourceOrOptions = {}) {
       tokenSpecifications,
       tokenSpecificationsPath: options.tokenSpecificationsPath,
     }),
-  })
+  }
+  validateTelegramApplicationConfig(effectiveConfig)
+  return validateAppConfig(effectiveConfig)
 }
