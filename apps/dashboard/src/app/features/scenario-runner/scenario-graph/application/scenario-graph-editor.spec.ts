@@ -66,6 +66,6 @@ describe('scenario graph editor application', () => {
     const editor = createScenarioGraphEditor({ createId: () => 'unused' });
     const view = editor.viewModel({ graph: createGraph() });
     expect(view.nodes[0].width, 'the view model must expose node geometry to any renderer').toBeGreaterThan(0);
-    expect(view.edges[0].path, 'the view model must expose renderer-neutral connector geometry').toContain('C');
+    expect(view.edges[0].curve.control1, 'the view model must expose renderer-neutral connector control points').toEqual({ x: 150, y: 41 });
   });
 });

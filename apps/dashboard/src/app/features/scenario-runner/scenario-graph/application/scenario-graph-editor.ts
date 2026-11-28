@@ -29,7 +29,12 @@ export interface ScenarioGraphViewNode extends ScenarioGraphNode {
 }
 
 export interface ScenarioGraphViewEdge extends ScenarioGraphEdge {
-  readonly path: string;
+  readonly curve: {
+    readonly start: { readonly x: number; readonly y: number };
+    readonly control1: { readonly x: number; readonly y: number };
+    readonly control2: { readonly x: number; readonly y: number };
+    readonly end: { readonly x: number; readonly y: number };
+  };
   readonly labelPosition: { readonly x: number; readonly y: number };
 }
 
@@ -73,7 +78,7 @@ export function createScenarioGraphViewModel({ graph }: { readonly graph: Scenar
     const controlX = startX + Math.max(36, (endX - startX) / 2);
     return [{
       ...edge,
-      path: `M ${startX} ${sourceY} C ${controlX} ${sourceY}, ${controlX} ${targetY}, ${endX} ${targetY}`,
+      curve: {\n        start: { x: startX, y: sourceY },\n        control1: { x: controlX, y: sourceY },\n        control2: { x: controlX, y: targetY },\n        end: { x: endX, y: targetY },\n      },
       labelPosition: { x: (startX + endX) / 2, y: (sourceY + targetY) / 2 - 10 },
     }];
   });
