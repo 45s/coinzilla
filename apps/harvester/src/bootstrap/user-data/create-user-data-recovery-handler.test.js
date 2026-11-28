@@ -84,6 +84,34 @@ logs }
 }
 
 test("waits for user-data startup completion before beginning recovery", () => {
+
+test("does not run REST reconciliation when user-data recovery is disabled", () => {
+  const state = createState()
+  const warnings = []
+  let dependencyCalls = 0
+  const start = createUserDataRecoveryHandler({
+    enabled: false,
+    state,
+    isStopped: () => false,
+    getUserDataSubscription: () => { dependencyCalls += 1 },
+    getTradingEngine: () => { dependencyCalls += 1 },
+    broker: { getOpenOrders: async () => { dependencyCalls += 1 } },
+    refreshAccountSnapshot: async () => { dependencyCalls += 1 },
+    publishAccountSnapshot: async () => { dependencyCalls += 1 },
+    publishOpenOrdersSnapshot: async () => { dependencyCalls += 1 },
+    logger: { warn: (record) => warnings.push(record) },
+  })
+
+  start()
+  start()
+  assert.equal(dependencyCalls, 0, "Disabled user-data recovery must not read broker orders, account snapshots, or the trading engine.")
+  assert.equal(state.ready, false, "A recovered transport must not reopen trading readiness without application reconciliation.")
+  assert.equal(warnings.length, 1, "A disabled recovery generation must produce one bounded diagnostic.")
+
+  state.recoveryGeneration += 1
+  start()
+  assert.equal(warnings.length, 2, "A new broker recovery generation must receive its own diagnostic.")
+})
   const state = createState({ startupComplete: false })
   const fixture = createRecovery({ state })
   fixture.start()

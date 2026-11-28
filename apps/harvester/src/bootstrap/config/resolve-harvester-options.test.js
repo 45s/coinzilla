@@ -64,6 +64,32 @@ function recoverySellerPair(overrides = {}) {
 }
 
 test("selects CG and RS markets independently while preserving strategy-owned pair maps", async () => {
+
+test("suppresses Recovery Seller routes when the master recovery component is disabled", async () => {
+  const baseConfig = config({ enabledSymbols: ["BTCUSDT"] })
+  const cfg = {
+    ...baseConfig,
+    components: { recovery: { enabled: false } },
+    strategies: {
+      ...baseConfig.strategies,
+      RS_recoverySeller: {
+        enabled: true,
+        pairs: { ETHUSDT: recoverySellerPair() },
+      },
+    },
+  }
+  const fixture = createFixture({
+    cfg,
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
+  const result = await resolveHarvesterOptions({
+    ...fixture.input,
+    executionSymbols: ["BTCUSDT"],
+  })
+
+  assert.equal(result.appConfig.strategies.RS_recoverySeller.enabled, false, "The master recovery switch must suppress Recovery Seller in the effective runtime config.")
+  assert.deepEqual(result.appConfig.strategies.RS_recoverySeller.pairs, {}, "Disabled recovery must not leave Recovery Seller markets in the effective runtime config.")
+})
   const cfg = {
     ...config({ enabledSymbols: ["BTCUSDT"] }),
     strategies: {

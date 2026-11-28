@@ -576,6 +576,21 @@ test("rejects malformed execution routes and non-boolean provider required flags
 })
 
 test("validates the pre-launch trading-history API component selection", () => {
+
+test("validates the master recovery component selection", () => {
+  const config = createAppConfig()
+  config.components = { recovery: { enabled: false } }
+  assert.equal(validateAppConfig(config), config, "The master recovery component must accept an explicit disabled setting.")
+
+  config.components.recovery.enabled = "false"
+  assert.throws(
+    () => validateAppConfig(config),
+    (error) => error instanceof ConfigValidationError &&
+      error.path === "components.recovery.enabled" &&
+      error.expected === "a boolean",
+    "The master recovery component must reject string booleans.",
+  )
+})
   assert.equal(
     appConfig.components.tradingHistoryApi.enabled,
     true,
