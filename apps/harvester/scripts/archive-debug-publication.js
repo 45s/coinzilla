@@ -1,6 +1,8 @@
-import { lstat, readdir, readFile } from "node:fs/promises"
+import { lstat, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises"
+import os from "node:os"
 import path from "node:path"
 import {
+  copyRegularTree,
   listRegularFiles,
   publishArchive,
   validateArchiveRemote,
@@ -167,19 +169,37 @@ export async function runHarvesterDebugArchivePublication({
   const directory = path.resolve(selectedDirectory)
   const { archiveName } = await validateCompletedArchive(directory)
   const remote = resolvePublicationRemote(env)
-  const published = await publishArchiveFn({
-    directory,
-    archiveName,
-    remote,
-    runGit,
-    onProgress,
-  })
-  return {
-    archiveName,
-    directory,
-    remote,
-    remoteCommit: published.commit,
-    fileCount: published.fileCount,
-    alreadyPublished: published.alreadyPublished === true,
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), ".harvester-debug-publish-"))
+  const immutableSnapshot = path.join(temporaryRoot, archiveName)
+  try {
+    await mkdir(immutableSnapshot, {
+      recursive: false,
+      mode: 0o700,
+    })
+    await copyRegularTree({
+      sourceDirectory: directory,
+      destinationDirectory: immutableSnapshot,
+    })
+    await validateCompletedArchive(immutableSnapshot)
+    const published = await publishArchiveFn({
+      directory: immutableSnapshot,
+      archiveName,
+      remote,
+      runGit,
+      onProgress,
+    })
+    return {
+      archiveName,
+      directory,
+      remote,
+      remoteCommit: published.commit,
+      fileCount: published.fileCount,
+      alreadyPublished: published.alreadyPublished === true,
+    }
+  } finally {
+    await rm(temporaryRoot, {
+      recursive: true,
+      force: true,
+    })
   }
 }
