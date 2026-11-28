@@ -29,6 +29,7 @@ const catalog: readonly ScenarioCatalogItem[] = [{
     status: 'PARTIAL',
     executionStatus: 'EXECUTABLE',
     executable: true,
+    readinessReasons: ['Refresh the live catalogue before execution.'],
     defaultInput: runRecord.input,
   }, {
     id: 'RS-RUNTIME-SELL-SUBMISSION-001',
