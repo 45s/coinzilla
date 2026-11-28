@@ -30,7 +30,6 @@ Every AI agent and automated contributor must follow the canonical documents bel
 | Repository documentation entry point | [docs/README.md](docs/README.md) |
 | Harvester execution priority | [apps/harvester/docs/TRADING_FIRST.md](apps/harvester/docs/TRADING_FIRST.md) |
 
-
 ## Trading reliability testing is first-class work — mandatory for every AI agent
 
 **The goal of trading-system development is to prove that trading is correct, safe, and reliable—not merely to implement trading behavior. Testing, auditing, scenario-matrix construction, regression coverage, invariant verification, and failure/interleaving analysis are first-class trading-reliability work and may be necessary before, during, or independently of production implementation.**
