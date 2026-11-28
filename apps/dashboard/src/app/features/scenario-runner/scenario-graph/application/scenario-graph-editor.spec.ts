@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createScenarioGraphEditor, createScenarioGraphIdGenerator } from './scenario-graph-editor';
+import { createScenarioGraphEditor, createScenarioGraphIdGenerator, createScenarioGraphViewModel } from './scenario-graph-editor';
 import { createScenarioGraph, type ScenarioGraph } from '../domain/scenario-graph';
 
 function createGraph(): ScenarioGraph {
@@ -92,6 +92,20 @@ describe('scenario graph editor application', () => {
       nodeId: 'start',
       serializedProperties: '{"count":4}',
     }), 'non-string property values must be rejected').toThrow('SCENARIO_GRAPH_PROPERTIES_INVALID');
+  });
+
+  it('lays out scenario viewer nodes vertically with readable text and full-height geometry', () => {
+    const view = createScenarioGraphViewModel({ graph: createGraph(), orientation: 'vertical' });
+
+    expect(view.width, 'vertical graphs should use a wide canvas').toBe(1240);
+    expect(view.height, 'canvas height should grow to contain every node').toBeGreaterThan(500);
+    expect(view.nodes[0].position.x, 'nodes should share a centered vertical column').toBe(view.nodes[1].position.x);
+    expect(view.nodes[1].position.y, 'each next node should appear below the previous node').toBeGreaterThan(view.nodes[0].position.y);
+    expect(view.nodes[0].width, 'vertical nodes should use the available canvas width').toBe(1120);
+    expect(view.nodes[0].labelLines, 'node labels should be laid out as readable lines').toEqual(['Start']);
+    expect(view.edges[0].curve.start.x, 'vertical edges should leave from the bottom center').toBe(view.nodes[0].position.x + view.nodes[0].width / 2);
+    expect(view.edges[0].curve.end.x, 'vertical edges should enter at the top center').toBe(view.nodes[1].position.x + view.nodes[1].width / 2);
+    expect(view.edges[0].curve.end.y, 'vertical connectors should point down the canvas').toBeGreaterThan(view.edges[0].curve.start.y);
   });
 
   it('builds renderer-neutral geometry without importing a rendering framework', () => {

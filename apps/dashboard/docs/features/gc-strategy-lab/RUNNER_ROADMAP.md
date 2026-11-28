@@ -10,7 +10,7 @@ Dashboard issue [#1986](https://github.com/45s/coinzilla/issues/1986) adds an op
 
 ## Scenario graph visualization — 2026-11-28
 
-The native SVG viewer uses the framework-independent graph model and projects the currently selected scenario's source-reviewed guide into read-only nodes and ordered connections. Changing the scenario changes the graph. The guide contract has no branch topology, so the graph does not infer conditional edges. Actual run status and trace evidence remain separate; no progress is painted onto expected nodes without a verified source mapping. Graph editing is out of scope.
+The native SVG viewer uses the framework-independent graph model and projects the currently selected scenario's source-reviewed guide into a read-only vertical flow. Nodes use a wide, centered column, larger typography, wrapped labels/descriptions, clear vertical connectors and a content-sized canvas that grows with the selected guide. The SVG scales to the available panel width; long flows scroll vertically within the available viewport. Changing the scenario changes the graph. The guide contract has no branch topology, so the graph does not infer conditional edges. Actual run status and trace evidence remain separate; no progress is painted onto expected nodes without a verified source mapping. Graph editing is out of scope.
 
 ## Current status — 2026-11-27
 
