@@ -323,21 +323,14 @@ test("retains CG and RS execution routes and subscriptions when process recovery
 })
 
 test("starts a fresh current-process trading session when process recovery is disabled despite prior process history", async () => {
-  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-fresh-session-recovery-disabled-"))
   const config = createRsOnlyStartupConfig({ processRecoveryEnabled: false })
-  const baseline = await recordConfigurationBaseline({
-    operationalStateStore: store,
-    appConfig: config,
+  await shared.createPriorProcessHistory({
+    directory,
+    runtimeSessionId: "prior-rs-only-session",
+    priorAppConfig: config,
+    clean: true,
   })
-  assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
-  const started = await recordProcessStarted({
-    operationalStateStore: store,
-    configurationFingerprint: baseline.data.fingerprint,
-    strategyName: baseline.data.strategyName,
-    markets: baseline.data.markets,
-    tradingEnabled: true,
-  })
-  assert.equal(started.ok, true, started.errors?.[0]?.message)
 
   const restartStore = createFileOperationalStateStore({
     directory,
