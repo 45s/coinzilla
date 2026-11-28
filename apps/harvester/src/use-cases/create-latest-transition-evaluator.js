@@ -435,6 +435,63 @@ function combineStrategyTransitionResults({ conservativeResult, recoverySellerRe
   })
 }
 
+async function runRecoverySellerTransition({
+  dependencies,
+  options,
+  logger,
+} = {}) {
+  return dependencies.evaluateRecoverySellerTransition({
+    ...options,
+    state: dependencies.state,
+    hasBlockingOpenOrdersForSymbol: dependencies.hasBlockingOpenOrdersForSymbol,
+    authorizeRecoverySellerAction: dependencies.authorizeRecoverySellerAction,
+    recoverySellerPairs: dependencies.recoverySellerPairs,
+    recoverySellerWorkflow: dependencies.recoverySellerWorkflow,
+    recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
+    submitRecoverySellerOrder: dependencies.submitRecoverySellerOrder,
+    getRecoverySellerMarketMetadata: dependencies.getRecoverySellerMarketMetadata,
+    getPortfolio: dependencies.getPortfolio,
+    getRecoveryLedger: dependencies.getRecoveryLedger,
+    getCurrentMarketMetadata: dependencies.getCurrentMarketMetadata,
+    getAccountSnapshot: dependencies.getAccountSnapshot,
+    getAdditionalTrackedBaseQuantity: dependencies.getAdditionalTrackedBaseQuantity,
+    getAdditionalTrackedQuoteCashFlow: dependencies.getAdditionalTrackedQuoteCashFlow,
+    pause: dependencies.pause,
+    eventPublisher: dependencies.eventPublisher,
+    submit: dependencies.submit,
+    canTrade: dependencies.canTrade,
+    isStopping: dependencies.isStopping,
+    isMarketPriceFresh: dependencies.isMarketPriceFresh,
+    isMarketBookFresh: dependencies.isMarketBookFresh,
+    logger,
+  })
+}
+
+function handleRecoverySellerTransitionResult({
+  conservativeResult,
+  recoverySellerResult,
+  logger,
+  symbol,
+} = {}) {
+  if (recoverySellerResult?.ok !== true) {
+    logRecoverySellerEvaluationFailed({
+      logger,
+      symbol,
+      error: recoverySellerResult?.errors?.[0],
+    })
+    return recoverySellerResult
+  }
+  logRecoverySellerEvaluationCompleted({
+    logger,
+    symbol,
+    result: recoverySellerResult,
+  })
+  return combineStrategyTransitionResults({
+    conservativeResult,
+    recoverySellerResult,
+  })
+}
+
 async function evaluateRecoverySellerTransitionForMarket({
   dependencies,
   options,
@@ -454,47 +511,16 @@ async function evaluateRecoverySellerTransitionForMarket({
     symbol,
   })
   try {
-    const recoverySellerResult = await dependencies.evaluateRecoverySellerTransition({
-      ...options,
-      state: dependencies.state,
-      hasBlockingOpenOrdersForSymbol: dependencies.hasBlockingOpenOrdersForSymbol,
-      authorizeRecoverySellerAction: dependencies.authorizeRecoverySellerAction,
-      recoverySellerPairs: dependencies.recoverySellerPairs,
-      recoverySellerWorkflow: dependencies.recoverySellerWorkflow,
-      recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
-      submitRecoverySellerOrder: dependencies.submitRecoverySellerOrder,
-      getRecoverySellerMarketMetadata: dependencies.getRecoverySellerMarketMetadata,
-      getPortfolio: dependencies.getPortfolio,
-      getRecoveryLedger: dependencies.getRecoveryLedger,
-      getCurrentMarketMetadata: dependencies.getCurrentMarketMetadata,
-      getAccountSnapshot: dependencies.getAccountSnapshot,
-      getAdditionalTrackedBaseQuantity: dependencies.getAdditionalTrackedBaseQuantity,
-      getAdditionalTrackedQuoteCashFlow: dependencies.getAdditionalTrackedQuoteCashFlow,
-      pause: dependencies.pause,
-      eventPublisher: dependencies.eventPublisher,
-      submit: dependencies.submit,
-      canTrade: dependencies.canTrade,
-      isStopping: dependencies.isStopping,
-      isMarketPriceFresh: dependencies.isMarketPriceFresh,
-      isMarketBookFresh: dependencies.isMarketBookFresh,
+    const recoverySellerResult = await runRecoverySellerTransition({
+      dependencies,
+      options,
       logger,
     })
-    if (recoverySellerResult?.ok !== true) {
-      logRecoverySellerEvaluationFailed({
-        logger,
-        symbol,
-        error: recoverySellerResult?.errors?.[0],
-      })
-      return recoverySellerResult
-    }
-    logRecoverySellerEvaluationCompleted({
-      logger,
-      symbol,
-      result: recoverySellerResult,
-    })
-    return combineStrategyTransitionResults({
+    return handleRecoverySellerTransitionResult({
       conservativeResult,
       recoverySellerResult,
+      logger,
+      symbol,
     })
   } catch (error) {
     logRecoverySellerEvaluationFailed({
