@@ -543,9 +543,9 @@ test("fails closed without verification when an existing partial ledger cannot b
   assert.equal(verificationCalls, 0, "A partial ledger must fail before ordinary verification or runtime startup.")
 })
 
-test("skips all operational-state access when the master recovery component is disabled", async () => {
+test("skips operational-state access when process recovery and RS are disabled", async () => {
   let calls = 0
-  const appConfig = config({ recoverySeller: true })
+  const appConfig = config({ recoverySeller: false })
   appConfig.components = { recovery: { enabled: false } }
 
   const result = await prepareProcessOperationalStateStore({
@@ -557,6 +557,6 @@ test("skips all operational-state access when the master recovery component is d
     },
   })
 
-  assert.equal(result, undefined, "Disabled recovery must not return an Operational State Store.")
-  assert.equal(calls, 0, "Disabled recovery must not create, initialize, or verify recovery-facts storage.")
+  assert.equal(result, undefined, "Neither process recovery nor RS requires an Operational State Store.")
+  assert.equal(calls, 0, "No recovery store may be created when both independent features are disabled.")
 })
