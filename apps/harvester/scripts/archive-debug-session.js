@@ -1462,7 +1462,7 @@ async function main() {
     "Included: all identified TESTNET session evidence as separate sessions, recovery-facts/ and data_commit_hash",
     "Excluded: all data/ (databases/backups), all logs/cumulative/ and unclassified log-root entries",
     `Local archive: ${result.localArchive}`,
-  ].join("\\n")
+  ].join("\n")
   process.stdout.write(`${summary}\n`)
 }
 
@@ -1470,7 +1470,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     await main()
   } catch (error) {
-    process.stderr.write(`Harvester debug archive publication failed: ${error.message}\n`)
+    process.stderr.write(`Harvester debug archive collection failed: ${error.message}\n`)
     process.exitCode = 1
   }
 }
