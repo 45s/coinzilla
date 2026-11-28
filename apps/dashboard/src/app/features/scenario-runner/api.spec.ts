@@ -80,7 +80,7 @@ describe('ScenarioRunnerApi HTTP gateway', () => {
           : path.endsWith('part-two.js') ? 'TWO'
             : path.endsWith('part-three.js') ? 'THREE' : 'FOUR';
         const records = partName === 'ONE'
-          ? [{ id: 'CON-BUY-001', title: 'Conservative BUY lifecycle', coverageStatus: 'TEST-MAPPED' }]
+          ? [{ id: 'CON-BUY-001', title: 'Conservative BUY lifecycle', coverageStatus: 'TEST-MAPPED', inputEvents: [{ type: 'BUY_FILLED', sequence: 1 }] }]
           : [];
         request.flush('export const CG_CONSERVATIVE_SCENARIO_DETAILS_PART_' + partName + ' = ' + JSON.stringify(records));
       }

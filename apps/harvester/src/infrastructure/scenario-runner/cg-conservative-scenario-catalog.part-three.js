@@ -307,7 +307,24 @@ export const CG_CONSERVATIVE_SCENARIO_DETAILS_PART_THREE = [
       "src/application/operator/create-harvester-readiness-report.js"
     ],
     "coverageStatus": "TEST-MAPPED",
-    "coverageReason": "Mapped offline crash/restart tests prove the candidate remains reconciliation-required and runtime restoration remains disabled; startup tests separately prove that a fresh process derives readiness from its own PREFLIGHT while prior-session orders/fills remain external."
+    "coverageReason": "Mapped offline crash/restart tests prove the candidate remains reconciliation-required and runtime restoration remains disabled; startup tests separately prove that a fresh process derives readiness from its own PREFLIGHT while prior-session orders/fills remain external.",
+    "relatedExistingTests": [
+      {
+        "path": "test/recovery/operational-state-crash-matrix.test.js",
+        "name": "reopens the real append-only ledger across partial/final fills, duplicate delivery, and two unclean process restarts",
+        "kind": "integration"
+      },
+      {
+        "path": "test/recovery/operational-state-crash-matrix.test.js",
+        "name": "replays a fill that races an uncertain cancellation without losing execution evidence",
+        "kind": "integration"
+      },
+      {
+        "path": "test/recovery/startup-history-gate.test.js",
+        "name": "starts fresh current-session trading after prior process history when recovery is disabled",
+        "kind": "normal"
+      }
+    ]
   },
   {
     "id": "CON-PERSIST-003",
@@ -392,6 +409,49 @@ export const CG_CONSERVATIVE_SCENARIO_DETAILS_PART_THREE = [
       "src/infrastructure/operational-state/project-harvester.js"
     ],
     "coverageStatus": "TEST-MAPPED",
-    "coverageReason": "Mapped tests prove that recovery-disabled restarts create a fresh current-process session after PREFLIGHT, prior-session orders/fills remain external, recovery-enabled unclean history remains blocked, clean recovery-enabled restart remains observation-only, the durable account-level RS STOP latch: RS STOP stays strategy-scoped, and unresolved ACCOUNT blockers remain fail-closed. Runtime state restoration remains disabled."
+    "coverageReason": "Mapped tests prove that recovery-disabled restarts create a fresh current-process session after PREFLIGHT, prior-session orders/fills remain external, recovery-enabled unclean history remains blocked, clean recovery-enabled restart remains observation-only, the durable account-level RS STOP latch: RS STOP stays strategy-scoped, and unresolved ACCOUNT blockers remain fail-closed. Runtime state restoration remains disabled.",
+    "relatedExistingTests": [
+      {
+        "path": "test/recovery/startup-history-gate.test.js",
+        "name": "starts fresh current-session trading after prior process history when recovery is disabled",
+        "kind": "normal"
+      },
+      {
+        "path": "test/recovery/startup-history-gate.test.js",
+        "name": "rejects recovery-enabled restart before broker connection when prior process session is unclean",
+        "kind": "failure"
+      },
+      {
+        "path": "test/recovery/startup-history-gate.test.js",
+        "name": "allows a clean observation-only restart without enabling trading",
+        "kind": "normal"
+      },
+      {
+        "path": "src/bootstrap/start-harvester.test.js",
+        "name": "starts a fresh current-process trading session when process recovery is disabled despite prior process history",
+        "kind": "integration"
+      },
+      {
+        "path": "src/bootstrap/start-harvester.test.js",
+        "name": "keeps persisted RS STOP strategy-scoped when CG process recovery is disabled",
+        "kind": "normal"
+      },
+      {
+        "path": "src/bootstrap/start-harvester.test.js",
+        "name": "restores a persisted RS STOP and keeps a restarted runtime observation-only",
+        "kind": "normal"
+      },
+      {
+        "path": "test/bootstrap/process-lifecycle-recovery.test.js",
+        "name": "starts a fresh current-session runtime after a clean prior process when restart recovery is disabled",
+        "kind": "normal"
+      },
+      {
+        "path": "test/bootstrap/process-lifecycle-recovery.test.js",
+        "name": "starts a fresh current-session runtime after an unclean prior process when restart recovery is disabled",
+        "kind": "normal"
+      }
+    ]
   }
 ]
+
