@@ -132,7 +132,7 @@ async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
       && marker.processId === identity.processId
       && marker.processId === manifest.tradingRuntime.processIdentity.processId
       && typeof marker.hostname === "string"
-      && typeof marker.lockStartedAt === "string"
+      && marker.lockStartedAt === identity.startedAt
       && !Number.isNaN(Date.parse(marker.capturedAt))
       && marker.streams?.harvesterLog === true
       && marker.streams?.traceLog === true
