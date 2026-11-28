@@ -58,6 +58,12 @@ function createMatchingTestnetFixtureFiles() {
       signal: null,
       logStreamsComplete: true,
     }),
+    "logs/sessions/2026-11-24_testnet/log-streams-completed.json": JSON.stringify({
+      runtimeSessionId: RUNTIME_SESSION_ID,
+      endedAt: "2026-11-24T18:29:00.000Z",
+      logStreamsComplete: true,
+      streams: { harvesterLog: true, traceLog: true },
+    }),
   }
 }
 
@@ -442,6 +448,12 @@ async function writeTestnetSession({
   await writeFile(path.join(sessionDirectory, "terminal.log"), terminalContent, "utf8")
   await writeFile(path.join(sessionDirectory, "harvester.log"), "debug stream for " + runtimeSessionId, "utf8")
   await writeFile(path.join(sessionDirectory, "trace.log"), "trace stream for " + runtimeSessionId, "utf8")
+  await writeFile(path.join(sessionDirectory, "log-streams-completed.json"), JSON.stringify({
+    runtimeSessionId,
+    endedAt: "2026-11-25T18:29:00.000Z",
+    logStreamsComplete: true,
+    streams: { harvesterLog: true, traceLog: true },
+  }), "utf8")
   if (includeIdentity) {
     await writeFile(path.join(sessionDirectory, "process-identity.json"), JSON.stringify({
       formatVersion: 1,
