@@ -80,8 +80,8 @@ data: makeAcknowledgement(order) } } },
   assert.equal(result.ok, true)
   assert.equal(submitted.length, 1)
   assert.equal(submitted[0].status, "OPEN")
-  assert.match(calls[0], /^pending:h-[0-9a-f]{22}-1$/)
-  assert.match(calls[1].clientOrderId, /^h-[0-9a-f]{22}-1$/)
+  assert.match(calls[0], /^pending:[0-9a-f]{32}$/)
+  assert.match(calls[1].clientOrderId, /^[0-9a-f]{32}$/)
 })
 
 test("validates the complete exchange order before calling the broker", async () => {
@@ -115,7 +115,7 @@ test("registers a pending order before reporting a thrown submission as unknown"
       marketMetadata,
     })
   assert.equal(result.ok, false)
-  assert.match(calls[0], /^h-[0-9a-f]{22}-1$/)
+  assert.match(calls[0], /^[0-9a-f]{32}$/)
   assert.equal(calls[1], "UNKNOWN")
 })
 
@@ -206,11 +206,11 @@ data: makeAcknowledgement(order) }
   const firstId = await createExecutor().run()
   const secondId = await createExecutor().run()
 
-  assert.match(firstId, /^h-[0-9a-f]{22}-1$/)
-  assert.match(secondId, /^h-[0-9a-f]{22}-1$/)
+  assert.match(firstId, /^[0-9a-f]{32}$/)
+  assert.match(secondId, /^[0-9a-f]{32}$/)
   assert.notEqual(firstId, secondId)
-  assert.ok(firstId.length <= 36)
-  assert.ok(secondId.length <= 36)
+  assert.equal(firstId.length, 32)
+  assert.equal(secondId.length, 32)
 })
 
 test("preserves explicit strategy purpose through every submission-gate check without sending it to the broker", async () => {
@@ -1437,3 +1437,26 @@ test("persists the registered CG strategy purpose for an ordinary Conservative B
 })
 
 
+
+
+test("tracks current-process client IDs explicitly without encoding ownership in the ID", async () => {
+  let submittedOrder
+  const execute = makeExecuteStrategyDecision({
+    broker: { placeOrder: async ({ order }) => {
+      submittedOrder = order
+      return { ok: true, data: makeAcknowledgement(order) }
+    } },
+    onPendingOrder: async () => {},
+    onAcknowledgedOrder: async () => {},
+    onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
+  })
+
+  assert.equal(execute.isCurrentProcessClientOrderId("foreign-client-id"), false,
+    "An unrelated client ID must not be treated as current-process ownership.")
+  const result = await execute({ decision, marketMetadata })
+  assert.equal(result.ok, true, "The valid order must be acknowledged.")
+  assert.equal(execute.isCurrentProcessClientOrderId(submittedOrder.clientOrderId), true,
+    "A generated submission ID must be recorded as current-process metadata.")
+  assert.equal(execute.isCurrentProcessClientOrderId("h-legacy-prior-process-id"), false,
+    "Legacy ID spelling must not confer current-process ownership.")
+})
