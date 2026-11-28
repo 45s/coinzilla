@@ -62,6 +62,7 @@ function assertUniqueCompletedRuntimeSession({ manifest, expectedRuntimeId } = {
   if (matchingSessions.length !== 1) {
     throw new Error(`Debug archive runtime ownership is ambiguous or incomplete: expected exactly one completed or verified active process identity for runtime ${expectedRuntimeId}; found ${matchingSessions.length}.`)
   }
+  return matchingSessions[0]
 }
 
 async function readArchivedSessionJson({ directory, manifest, sourcePath } = {}) {
@@ -102,6 +103,8 @@ function assertArchivedProcessId({ identity, completion, manifest, expectedRunti
 }
 
 function isValidActiveSnapshotMarker({ marker, identity, manifest, expectedRuntimeId } = {}) {
+  const identityStartedAt = Date.parse(identity.startedAt)
+  const lockStartedAt = Date.parse(marker.lockStartedAt)
   return marker.formatVersion === 1
     && marker.snapshotType === "active-harvester-process"
     && marker.runtimeSessionId === expectedRuntimeId
@@ -109,7 +112,9 @@ function isValidActiveSnapshotMarker({ marker, identity, manifest, expectedRunti
     && marker.processId === manifest.tradingRuntime.processIdentity.processId
     && typeof marker.hostname === "string"
     && marker.processStartedAt === identity.startedAt
-    && Number.isFinite(Date.parse(marker.lockStartedAt))
+    && Number.isFinite(lockStartedAt)
+    && Number.isFinite(identityStartedAt)
+    && Math.abs(lockStartedAt - identityStartedAt) <= 30_000
     && marker.recoveryDataCommitHash === manifest.dataCommitHash
     && Number.isFinite(Date.parse(marker.capturedAt))
     && Date.parse(marker.capturedAt) >= Date.parse(marker.lockStartedAt)
@@ -118,21 +123,68 @@ function isValidActiveSnapshotMarker({ marker, identity, manifest, expectedRunti
 }
 
 function assertNoRuntimeMismatches({ integrity, expectedRuntimeId } = {}) {
-  assertNoRuntimeMismatches({
-    integrity,
+  const mismatches = Array.isArray(integrity?.mismatches) ? integrity.mismatches : []
+  if (mismatches.length > 0) {
+    const details = mismatches.map((entry) =>
+      `${entry.stream ?? "stream"}:${entry.actualRuntimeId ?? "unknown"}@${entry.sourcePath ?? "unknown"}`
+    ).join("; ")
+    throw new Error(`Debug archive contains runtime-mismatched log evidence for expected runtime ${expectedRuntimeId}: ${details}.`)
+  }
+}
+async function validateActiveSessionSnapshot({ directory, manifest, session, identity, expectedRuntimeId } = {}) {
+  const markerPath = session.activeSnapshotPath
+  const markerEntry = manifest.files.find((entry) => entry.path === markerPath)
+  if (!markerEntry || typeof markerPath !== "string") {
+    throw new Error(`Active runtime ${expectedRuntimeId} is missing its snapshot provenance marker.`)
+  }
+  const marker = JSON.parse(await readFile(path.join(directory, markerPath), "utf8"))
+  if (!isValidActiveSnapshotMarker({
+    marker,
+    identity,
+    manifest,
+    expectedRuntimeId,
+  })) {
+    throw new Error(`Active process snapshot provenance is invalid for runtime ${expectedRuntimeId}.`)
+  }
+}
+
+async function validateCompletedSessionLifecycle({ directory, manifest, session, identity, expectedRuntimeId } = {}) {
+  const [completion, loggerCompletion] = await Promise.all([
+    readArchivedSessionJson({
+      directory,
+      manifest,
+      sourcePath: session.processCompletionPath,
+    }),
+    readArchivedSessionJson({
+      directory,
+      manifest,
+      sourcePath: session.loggerCompletionPath,
+    }),
+  ])
+  const lifecycleMatches = isMatchingArchivedProcessCompletion({
+    completion,
+    expectedRuntimeId,
+  }) && isMatchingArchivedLoggerCompletion({
+    loggerCompletion,
+    expectedRuntimeId,
+  })
+  if (!lifecycleMatches) {
+    throw new Error(`Archived process completion metadata does not prove complete runtime ${expectedRuntimeId}: process completion=${completion.runtimeSessionId ?? "missing"}; logger completion=${loggerCompletion.runtimeSessionId ?? "missing"}.`)
+  }
+  assertArchivedProcessId({
+    identity,
+    completion,
+    manifest,
     expectedRuntimeId,
   })
 }
+
 async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
   const expectedRuntimeId = manifest.recoveryRuntimeSessionId
-  const [session] = manifest.sessionInventory.filter((candidate) =>
-    candidate.runtimeSessionId === expectedRuntimeId
-      && ["complete", "active"].includes(candidate.completionStatus)
-      && ["complete", "active"].includes(candidate.loggerCompletionStatus)
-  )
-  if (!session) {
-    throw new Error(`Debug archive has no unique completed or active process snapshot for runtime ${expectedRuntimeId}.`)
-  }
+  const session = assertUniqueCompletedRuntimeSession({
+    manifest,
+    expectedRuntimeId,
+  })
   const identity = await readArchivedSessionJson({
     directory,
     manifest,
@@ -147,49 +199,20 @@ async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
     throw new Error(`Archived process identity does not prove runtime ${expectedRuntimeId}.`)
   }
   if (session.completionStatus === "active") {
-    const markerPath = session.activeSnapshotPath
-    const markerEntry = manifest.files.find((entry) => entry.path === markerPath)
-    if (!markerEntry || typeof markerPath !== "string") {
-      throw new Error(`Active runtime ${expectedRuntimeId} is missing its snapshot provenance marker.`)
-    }
-    const marker = JSON.parse(await readFile(path.join(directory, markerPath), "utf8"))
-    if (!isValidActiveSnapshotMarker({
-      marker,
-      identity,
+    await validateActiveSessionSnapshot({
+      directory,
       manifest,
+      session,
+      identity,
       expectedRuntimeId,
-    })) {
-      throw new Error(`Active process snapshot provenance is invalid for runtime ${expectedRuntimeId}.`)
-    }
+    })
     return
   }
-  const [completion, loggerCompletion] = await Promise.all([
-    readArchivedSessionJson({
-      directory,
-      manifest,
-      sourcePath: session.processCompletionPath,
-    }),
-    readArchivedSessionJson({
-      directory,
-      manifest,
-      sourcePath: session.loggerCompletionPath,
-    }),
-  ])
-  const lifecycleMatches = isMatchingArchivedProcessCompletion({
-      completion,
-      expectedRuntimeId,
-    })
-    && isMatchingArchivedLoggerCompletion({
-      loggerCompletion,
-      expectedRuntimeId,
-    })
-  if (!lifecycleMatches) {
-    throw new Error(`Archived process completion metadata does not prove complete runtime ${expectedRuntimeId}: process completion=${completion.runtimeSessionId ?? "missing"}; logger completion=${loggerCompletion.runtimeSessionId ?? "missing"}.`)
-  }
-  assertArchivedProcessId({
-    identity,
-    completion,
+  await validateCompletedSessionLifecycle({
+    directory,
     manifest,
+    session,
+    identity,
     expectedRuntimeId,
   })
 }
@@ -206,7 +229,7 @@ function isInvalidStreamFile({ file, manifestFile, expectedRuntimeId } = {}) {
     || manifestFile.sha256 !== file.archiveSha256
 }
 
-function isCompleteStream(stream, expectedRuntimeId) {
+function isCompleteStream({ stream, expectedRuntimeId } = {}) {
   return stream?.status === "matched"
     && stream.expectedRuntimeId === expectedRuntimeId
     && stream.fileCount >= 1
@@ -216,7 +239,7 @@ function isCompleteStream(stream, expectedRuntimeId) {
 }
 
 function assertCompleteStreamEvidence({ stream, streamLabel, expectedRuntimeId, manifestFiles } = {}) {
-  if (!isCompleteStream(stream, expectedRuntimeId)) {
+  if (!isCompleteStream({ stream, expectedRuntimeId })) {
     throw new Error(`${streamLabel} evidence is not complete for runtime ${expectedRuntimeId}: status=${stream?.status ?? "missing"}; files=${stream?.fileCount ?? 0}; bytes=${stream?.totalBytes ?? 0}.`)
   }
   for (const file of stream.files) {
