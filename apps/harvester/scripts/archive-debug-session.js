@@ -984,7 +984,10 @@ function resolveOverallEvidenceStatus({ selection, recoveryProcessIdentityStatus
   if (selection.status === "matched") {
     return Object.values(streams).every((stream) => stream.status === "matched") ? "matched" : "incomplete"
   }
-  if (unverifiableSessions.length > 0) {
+  if (selection.status === "incomplete") {
+    return "incomplete"
+  }
+  if (selection.status === "missing" && unverifiableSessions.length > 0) {
     return "unverifiable"
   }
   return selection.status
