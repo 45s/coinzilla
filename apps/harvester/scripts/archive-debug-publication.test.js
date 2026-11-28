@@ -34,14 +34,14 @@ function createSourceFileEntries(runtimeId) {
     {
       sourcePath: "logs/sessions/fixture/process-identity.json",
       archivePath: "logs/sessions/fixture/process-identity.json.gz",
-      content: JSON.stringify({
+      content: `${JSON.stringify({
         formatVersion: 1,
         application: "harvester",
         environment: "testnet",
         runtimeSessionId: runtimeId,
         startedAt: "2026-11-28T11:00:00.000Z",
         processId: 24680,
-      }) + "\n",
+      })}\n`,
     },
     {
       sourcePath: "logs/sessions/fixture/process-completed.json",
@@ -69,7 +69,10 @@ function createSourceFileEntries(runtimeId) {
         runtimeSessionId: runtimeId,
         endedAt: "2026-11-28T11:10:00.000Z",
         logStreamsComplete: true,
-        streams: { harvesterLog: true, traceLog: true },
+        streams: {
+          harvesterLog: true,
+          traceLog: true,
+        },
       }) + "\n",
     },
   ]
@@ -105,8 +108,16 @@ function createRecoveryFixture(runtimeId) {
     }),
   ]
   const checkpoints = [
-    JSON.stringify({ sequence: "0", recordCount: "1", lastCommittedDigest: "0".repeat(64) }),
-    JSON.stringify({ sequence: "1", recordCount: "2", lastCommittedDigest: recoveryDigest }),
+    JSON.stringify({
+      sequence: "0",
+      recordCount: "1",
+      lastCommittedDigest: "0".repeat(64),
+    }),
+    JSON.stringify({
+      sequence: "1",
+      recordCount: "2",
+      lastCommittedDigest: recoveryDigest,
+    }),
   ]
   return {
     processIdentity,
@@ -119,7 +130,7 @@ function createRecoveryFixture(runtimeId) {
   }
 }
 
-function createStreamEvidence(item, runtimeId) {
+function createStreamEvidence({ item, runtimeId } = {}) {
   const sourceBytes = Buffer.from(item.content)
   const archiveBytes = gzipSync(sourceBytes)
   const sourceSize = sourceBytes.length
@@ -199,7 +210,10 @@ function createArchiveManifest({ runtimeId, recovery, sourceFiles, files } = {})
           actualRuntimeIds: [runtimeId],
           fileCount: 1,
           totalBytes: Buffer.byteLength(sourceFiles[0].content),
-          files: [createStreamEvidence(sourceFiles[0], runtimeId)],
+          files: [createStreamEvidence({
+            item: sourceFiles[0],
+            runtimeId,
+          })],
         },
         traceLog: {
           status: "matched",
@@ -207,7 +221,10 @@ function createArchiveManifest({ runtimeId, recovery, sourceFiles, files } = {})
           actualRuntimeIds: [runtimeId],
           fileCount: 1,
           totalBytes: Buffer.byteLength(sourceFiles[1].content),
-          files: [createStreamEvidence(sourceFiles[1], runtimeId)],
+          files: [createStreamEvidence({
+            item: sourceFiles[1],
+            runtimeId,
+          })],
         },
       },
       mismatches: [],
@@ -225,12 +242,28 @@ async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME } = {}) {
   const recovery = createRecoveryFixture(runtimeId)
   const files = []
   for (const item of sourceFiles) {
-    await appendFixtureFile({ archiveDirectory, files, relativePath: item.archivePath, sourcePath: item.sourcePath, content: item.content })
+    await appendFixtureFile({
+      archiveDirectory,
+      files,
+      relativePath: item.archivePath,
+      sourcePath: item.sourcePath,
+      content: item.content,
+    })
   }
   for (const item of recovery.files) {
-    await appendFixtureFile({ archiveDirectory, files, relativePath: item.path, content: item.content })
+    await appendFixtureFile({
+      archiveDirectory,
+      files,
+      relativePath: item.path,
+      content: item.content,
+    })
   }
-  const manifest = createArchiveManifest({ runtimeId, recovery, sourceFiles, files })
+  const manifest = createArchiveManifest({
+    runtimeId,
+    recovery,
+    sourceFiles,
+    files,
+  })
   await writeFile(path.join(archiveDirectory, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`)
   return archiveDirectory
 }
@@ -557,7 +590,10 @@ test("rejects an archive with a missing required stream before invoking the publ
       env: { HARVESTER_ARCHIVE_REMOTE: REMOTE },
       publishArchiveFn: async () => {
         publisherCalled = true
-        return { commit: "f".repeat(40), fileCount: 1 }
+        return {
+          commit: "f".repeat(40),
+          fileCount: 1,
+        }
       },
     }),
     /TRACE LOG evidence is not complete/i,
