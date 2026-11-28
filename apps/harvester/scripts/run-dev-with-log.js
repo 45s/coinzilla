@@ -217,16 +217,39 @@ if (cliArguments.length === 1 && cliArguments[0] === "--version") {
     }
 
     const logStreamsClosed = await closeLogStreams()
+    let loggerStreamsComplete = false
+    try {
+      const loggerCompletion = JSON.parse(await readFile(
+        resolve(sessionPaths.sessionDirectory, "log-streams-completed.json"),
+        "utf8",
+      ))
+      loggerStreamsComplete = loggerCompletion.runtimeSessionId === runtimeSessionId
+        && loggerCompletion.logStreamsComplete === true
+        && loggerCompletion.streams?.harvesterLog === true
+        && loggerCompletion.streams?.traceLog === true
+    } catch {
+      loggerStreamsComplete = false
+    }
+    const terminalCaptureComplete = childStarted
+      && !logStreamFailed
+      && !outputForwardingFailed
+      && logStreamsClosed
 
     try {
       await writeFile(
         resolve(sessionPaths.sessionDirectory, "process-completed.json"),
         `${JSON.stringify({
+          formatVersion: 1,
+          application: "harvester",
           runtimeSessionId,
+          startedAt: sessionStartedAt,
           endedAt: new Date().toISOString(),
+          processId: childProcess.current.pid ?? null,
           exitCode: code,
           signal,
-          logStreamsComplete: childStarted && !logStreamFailed && !outputForwardingFailed && logStreamsClosed,
+          loggerStreamsComplete,
+          terminalCaptureComplete,
+          logStreamsComplete: loggerStreamsComplete && terminalCaptureComplete,
         }, null, 2)}\n`,
         {
           encoding: "utf8",
