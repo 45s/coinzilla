@@ -616,7 +616,7 @@ export async function createHarvesterStartupContext({ options } = {}) {
     marketSymbols: resolved.marketSymbols,
     recoverySellerPairs: resolved.recoverySellerPairs,
     evaluateRecoverySellerTransition: dependencies.evaluateRecoverySellerTransition,
-    executionRoutes: Object.freeze([...(dependencies.executionRoutes ?? [])]),
+    executionRoutes: Object.freeze([...(resolved.executionRoutes ?? [])]),
     marketDataSources: dependencies.marketDataSources,
     marketDataProviderTypes: dependencies.marketDataProviderTypes,
     marketDataProviderIdentities: dependencies.marketDataProviderIdentities,
