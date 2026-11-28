@@ -349,7 +349,7 @@ async function updateLegacyHarvesterSessionIdentity({ identityPath, existing, id
       ...existing,
       processId: identity.processId,
       version: identity.version,
-    }, null, 2)}\\n`, {
+    }, null, 2)}\n`, {
       encoding: "utf8",
       flag: "wx",
       mode: 0o600,
@@ -368,7 +368,7 @@ async function persistHarvesterSessionIdentity({ sessionPaths, processIdentity }
     environment: process.env.TRADING_MODE ?? "unknown",
   })
   try {
-    await writeFile(identityPath, `${JSON.stringify(identity, null, 2)}\\n`, {
+    await writeFile(identityPath, `${JSON.stringify(identity, null, 2)}\n`, {
       encoding: "utf8",
       flag: "wx",
       mode: 0o600,
