@@ -43,10 +43,15 @@ describe('scenario graph editor application', () => {
   });
 
   it('creates connection identities through the injected ID generator', () => {
-    const editor = createScenarioGraphEditor({ createId: () => 'edge-2' });
-    const graph = editor.connect({
+    const ids = ['extra-node', 'edge-2'];
+    const editor = createScenarioGraphEditor({ createId: () => ids.shift() ?? 'unexpected-id' });
+    const expanded = editor.addNode({
       graph: createGraph(),
-      from: { nodeId: 'start', portId: 'next' },
+      node: { type: 'action', label: 'Extra step', position: { x: 120, y: 100 }, properties: {} },
+    });
+    const graph = editor.connect({
+      graph: expanded,
+      from: { nodeId: 'extra-node', portId: 'next' },
       to: { nodeId: 'end', portId: 'in' },
     });
     expect(graph.edges[1]?.id, 'the application boundary must generate connection identities').toBe('edge-2');

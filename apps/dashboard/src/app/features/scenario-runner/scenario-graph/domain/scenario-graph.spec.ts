@@ -55,10 +55,20 @@ describe('scenario graph domain', () => {
 
   it('connects compatible ports and preserves explicit decision branch labels', () => {
     const graph = createValidGraph();
-    const connected = connectGraphNodes(graph, {
+    const extended = createScenarioGraph({
+      ...graph,
+      nodes: [...graph.nodes, {
+        id: 'extra',
+        type: 'action',
+        label: 'Extra step',
+        position: { x: 900, y: 200 },
+        properties: {},
+      }],
+    });
+    const connected = connectGraphNodes(extended, {
       id: 'e6',
-      from: { nodeId: 'yes', portId: 'next' },
-      to: { nodeId: 'no', portId: 'in' },
+      from: { nodeId: 'extra', portId: 'next' },
+      to: { nodeId: 'end', portId: 'in' },
     });
     expect(connected.edges.some((edge) => edge.id === 'e6'), 'a valid output-to-input edge must be added').toBe(true);
     expect(() => connectGraphNodes(graph, {
