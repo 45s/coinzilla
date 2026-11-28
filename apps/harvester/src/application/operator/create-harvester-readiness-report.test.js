@@ -285,6 +285,11 @@ test("does not block a fresh current-process session when prior process recovery
   assert.equal(restoration.code, "PROCESS_RESTART_RECOVERY_DISABLED", "The report must identify the explicit recovery configuration.")
   assert.equal(restoration.blocksTrading, false, "A deliberately disabled restoration check must not gate current-session trading.")
   assert.equal(report.tradingEnabled, true, "Fresh current-session trading remains eligible after its own readiness checks pass.")
+  assert.equal(report.tradingGateOpen, true, "The current-process PREFLIGHT/user-data gate must be open.")
+  assert.ok(report.checks.filter(({ id }) => id === "market.price").every(({ status }) => status === "PASS"),
+    "Fresh initial-price seeds must clear market.price health checks.")
+  assert.ok(report.checks.filter(({ id }) => id === "market.engine-safety").every(({ status }) => status === "PASS"),
+    "With current-session readiness established, market engine-safety checks must report their actual blockers.")
 })
 
 test("keeps prior-process trading blocked when process recovery is enabled but restoration is not accepted", () => {
