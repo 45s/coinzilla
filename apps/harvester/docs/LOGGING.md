@@ -24,7 +24,6 @@ logs/
         ├── log-streams-completed.json  # written after DEBUG/TRACE transport close
         ├── process-completed.json     # written after process completion
         └── <UTC timestamp>-<runtime session ID>.jsonl
-        └── <UTC timestamp>-<runtime session ID>.jsonl
 ```
 
 The DEBUG, TRACE and terminal files use short, stable names inside the same
