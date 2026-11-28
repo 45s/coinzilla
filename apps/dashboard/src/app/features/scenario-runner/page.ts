@@ -388,7 +388,7 @@ export class ScenarioRunnerComponent {
     const guide = this.selectedScenarioGuide;
     const scenario = this.selectedScenario;
     return guide && scenario
-      ? createScenarioGuideGraph({ scenarioId: scenario.id, guide })
+      ? createScenarioGuideGraph({ scenarioId: scenario.id, scenarioName: scenario.name, guide })
       : null;
   }
 
