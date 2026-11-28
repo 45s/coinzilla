@@ -162,6 +162,7 @@ describe('ScenarioRunnerComponent run details', () => {
     expect(JSON.parse(component.rawJson), 'export source must preserve the complete run record data').toEqual(runRecord);
     expect(nativeElement.querySelector('.raw-json'), 'the full JSON fallback must remain available').not.toBeNull();
   });
+
   it('shows a plain-language scenario title while keeping the stable ID separately visible', () => {
     const selector = nativeElement.querySelector<HTMLSelectElement>('.scenario-control select');
     const selectedOption = selector?.selectedOptions[0];
