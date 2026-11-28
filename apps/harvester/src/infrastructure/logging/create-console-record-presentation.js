@@ -1,4 +1,5 @@
 import { createShutdownPhaseConsolePresentation } from "./create-shutdown-phase-console-presentation.js"
+import { resolveHarvesterErrorDiagnostic } from "./harvester-error-catalog.js"
 
 const ORDER_HISTORY_FAILURE_DETAIL_LIMITS = Object.freeze({
   field: 64,
@@ -8,6 +9,9 @@ const ORDER_HISTORY_FAILURE_DETAIL_LIMITS = Object.freeze({
 })
 
 const CONSOLE_DETAIL_KEYS = Object.freeze([
+  "diagnosticId",
+  "stage",
+  "operatorAction",
   "correlationId",
   "interactionType",
   "action",
@@ -89,13 +93,30 @@ function summarizeConsoleData({ data, shutdownPresentation } = {}) {
       details: {},
     }
   }
+  const diagnostic = resolveHarvesterErrorDiagnostic({
+    errorCode: data.errorCode,
+    stage: data.errorStage ?? data.stage,
+    errorMessage: data.errorMessage,
+  })
+  if (diagnostic) {
+    return {
+      message: diagnostic.title,
+      diagnostic,
+      details: {
+        diagnosticId: diagnostic.diagnosticId,
+        stage: diagnostic.stage,
+        cause: diagnostic.cause,
+        action: diagnostic.operatorAction,
+      },
+    }
+  }
   const details = Object.fromEntries(
     CONSOLE_DETAIL_KEYS
       .filter((key) => data[key] !== undefined && data[key] !== null)
       .map((key) => {
         const value = data[key]
         if (typeof value === "string") {
-          const maxLength = key === "errorMessage" ? 72 : 100
+          const maxLength = key === "errorMessage" ? 160 : 100
           if (value.length > maxLength) {
             return [key, `${value.slice(0, maxLength - 3)}...`]
           }
