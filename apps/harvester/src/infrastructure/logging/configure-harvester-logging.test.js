@@ -105,6 +105,11 @@ level: "trace" })
     assert.equal(JSON.parse((await readFile(sessionTracePath, "utf8")).trim()).level, "trace", "each run must receive a matching timestamped TRACE session file")
 
     await logging.close()
+    const completion = JSON.parse(await readFile(path.join(path.dirname(sessionDebugPath), "process-completed.json"), "utf8"))
+    assert.equal(completion.runtimeSessionId, "session-one", "Completion metadata must retain the immutable process identity.")
+    assert.equal(completion.logStreamsComplete, true, "Completion is written only after both DEBUG and TRACE transports flush successfully.")
+    assert.equal(completion.processId, process.pid, "The completion record must identify the owning process.")
+    assert.ok(Date.parse(completion.endedAt) >= Date.parse(completion.startedAt), "The completion record must retain its lifecycle end time.")
     assert.deepEqual(
       (await readdir(directory)).sort(),
       ["cumulative", "sessions"],

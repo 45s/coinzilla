@@ -20,6 +20,8 @@ logs/
         ├── harvester.log
         ├── trace.log
         ├── terminal.log       # development runner only
+        ├── process-identity.json
+        ├── process-completed.json  # written only after DEBUG/TRACE flush
         └── <UTC timestamp>-<runtime session ID>.jsonl
 ```
 
@@ -29,7 +31,7 @@ using the same UTC timestamp and runtime session ID in its filename. Its
 records are application events, not copies of diagnostic log lines. The
 directory name, structured log files, terminal capture and
 `harvester.process_started` event all share one immutable process identity.
-Session files are created exclusively and are never overwritten.
+Session files are created exclusively and are never overwritten. `process-completed.json` is written exclusively by the logging close handler only after both DEBUG and TRACE transports close successfully. It records the same runtime-session ID, process ID, start/end timestamps, exit code/signal metadata and `logStreamsComplete=true`. If stream closure fails or the process crashes before the close handler completes, the completion record is absent and the archive collector marks the session incomplete.
 
 When the Operational State Store is enabled, its durable `PROCESS_STARTED` fact also records the allowlisted process identity (PID, runtime-session ID, original start time, package version, source revision, and worktree state). Existing facts without this optional provenance field remain readable; new production starts include it when the entrypoint process identity is available. Debug archive tooling matches recovery facts only to a completed TESTNET session with the exact same runtime-session ID. If no unique complete match exists, it reports `matchingTradingLogsAvailable=false` and preserves unrelated sessions as separate evidence; it never substitutes the newest session.
 
