@@ -473,7 +473,8 @@ function writeCataloguedDiagnosticRecord({
     second: "2-digit",
     hour12: false,
   })
-  const levelLabel = `${String(method ?? level).toUpperCase()} `
+  const diagnosticLevel = String(diagnostic.severity ?? method ?? level).toLowerCase()
+  const levelLabel = `${String(diagnostic.severity ?? method ?? level).toUpperCase()} `
   const prefix = `${time} ${levelLabel}[${diagnostic.diagnosticId}] stage=${diagnostic.stage}`
   const action = `action=${diagnostic.operatorAction}`
   const causePrefix = "cause="
@@ -487,8 +488,8 @@ function writeCataloguedDiagnosticRecord({
   const line = `${prefix} ${causePrefix}${firstCause} | ${action}`
   output.write(`${formatConsoleLine({
     line,
-    level,
-    method,
+    level: diagnosticLevel,
+    method: diagnosticLevel,
     color,
   })}\n`)
 
