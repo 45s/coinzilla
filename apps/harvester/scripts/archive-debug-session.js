@@ -591,6 +591,7 @@ function resolveArchiveSessionCompletionStatus({
   }
   const stoppedRuntimeIsProven = identity.runtimeSessionId === recoveryCheckpoint?.runtimeSessionId
     && processId === recoveryCheckpoint?.processIdentity?.processId
+    && identity.startedAt === recoveryCheckpoint?.processIdentity?.startedAt
     && Number.isSafeInteger(processId)
     && processId > 0
     && activeProcessOwner === null
