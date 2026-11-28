@@ -35,6 +35,40 @@ level })) }
   }
 }
 
+function assertCataloguedConsoleEntry({ lines, entry } = {}) {
+  const lineIndex = lines.findIndex((candidate) => candidate.includes(entry.errorCode))
+  const line = lines[lineIndex]
+  assert.ok(line, `Console output must retain catalog identifier ${entry.errorCode}.`)
+  assert.ok(line.length <= 200, `Console output for ${entry.errorCode} must fit the configured line budget.`)
+  assert.ok(line.includes(entry.failureStage), `Console output for ${entry.errorCode} must identify its failure stage.`)
+  assert.ok(line.includes(entry.operatorAction), `Console output for ${entry.errorCode} must preserve operator remediation.`)
+  const firstCause = line.match(/cause=(.*?) \| action=/)?.[1]
+  assert.ok(firstCause, `Console output for ${entry.errorCode} must preserve its concrete cause.`)
+  const continuationLines = []
+  for (let index = lineIndex + 1; index < lines.length && lines[index].includes("cause+"); index += 1) {
+    continuationLines.push(lines[index])
+  }
+  for (const continuationLine of continuationLines) {
+    assert.ok(continuationLine.length <= 200, "Every cause continuation must respect the console line budget.")
+  }
+  const continuationCause = continuationLines
+    .map((continuationLine) => continuationLine.slice(continuationLine.indexOf("cause+") + 6))
+    .join("")
+  const initialCause = firstCause.endsWith("...") ? firstCause.slice(0, -3) : firstCause
+  let expectedCause = `concrete cause for ${entry.errorCode}`
+  if (entry.errorCode === "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED") {
+    expectedCause = `ERR_SQLITE_ERROR: concrete cause for ${entry.errorCode}`
+  }
+  if (entry.errorCode === "HARVESTER_STARTUP_FAILED") {
+    expectedCause = `ERR_PROVIDER_HANDSHAKE: concrete cause for ${entry.errorCode}`
+  }
+  assert.equal(
+    `${initialCause}${continuationCause}`,
+    expectedCause,
+    `Console output for ${entry.errorCode} must preserve the complete concrete cause.`,
+  )
+}
+
 test("configures independent DEBUG and TRACE JSONL files and INFO console threshold", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-logs-"))
   const logger = createLogger()
@@ -1051,35 +1085,7 @@ test("renders every catalogued startup and degraded failure in bounded console o
   }
   const lines = written.trim().split("\n")
   for (const entry of Object.values(HARVESTER_ERROR_CATALOG)) {
-    const lineIndex = lines.findIndex((candidate) => candidate.includes(entry.errorCode))
-    const line = lines[lineIndex]
-    assert.ok(line, `Console output must retain catalog identifier ${entry.errorCode}.`)
-    assert.ok(line.length <= 200, `Console output for ${entry.errorCode} must fit the configured line budget.`)
-    assert.ok(line.includes(entry.failureStage), `Console output for ${entry.errorCode} must identify its failure stage.`)
-    assert.ok(line.includes(entry.operatorAction), `Console output for ${entry.errorCode} must preserve operator remediation.`)
-    const firstCause = line.match(/cause=(.*?) \| action=/)?.[1]
-    assert.ok(firstCause, `Console output for ${entry.errorCode} must preserve its concrete cause.`)
-    const continuationLines = []
-    for (let index = lineIndex + 1; index < lines.length && lines[index].includes("cause+"); index += 1) {
-      continuationLines.push(lines[index])
-    }
-    for (const continuationLine of continuationLines) {
-      assert.ok(continuationLine.length <= 200, "Every cause continuation must respect the console line budget.")
-    }
-    const continuationCause = continuationLines
-      .map((continuationLine) => continuationLine.slice(continuationLine.indexOf("cause+") + 6))
-      .join("")
-    const initialCause = firstCause.endsWith("...") ? firstCause.slice(0, -3) : firstCause
-    const expectedCause = entry.errorCode === "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED"
-      ? `ERR_SQLITE_ERROR: concrete cause for ${entry.errorCode}`
-      : entry.errorCode === "HARVESTER_STARTUP_FAILED"
-        ? `ERR_PROVIDER_HANDSHAKE: concrete cause for ${entry.errorCode}`
-        : `concrete cause for ${entry.errorCode}`
-    assert.equal(
-      `${initialCause}${continuationCause}`,
-      expectedCause,
-      `Console output for ${entry.errorCode} must preserve the complete concrete cause.`,
-    )
+    assertCataloguedConsoleEntry({ lines, entry })
   }
   output.destroy()
 })
