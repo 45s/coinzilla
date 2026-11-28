@@ -415,13 +415,13 @@ test("ignores unmatched orders from a prior Harvester process under the default 
 
 test("keeps an unmatched order from the current Harvester process fail-closed", async () => {
   const registeredOrder = makeOrder({
-    clientOrderId: "h-0123456789abcdef012345-1",
+    clientOrderId: "0123456789abcdef0123456789abcdef",
     brokerOrderId: "current-session-order-1",
     status: "OPEN",
     executedQuantity: "0",
   })
   const unmatchedCurrentSessionOrder = makeOrder({
-    clientOrderId: "h-0123456789abcdef012345-2",
+    clientOrderId: "fedcba9876543210fedcba9876543210",
     brokerOrderId: "current-session-order-2",
     status: "OPEN",
     executedQuantity: "0",
