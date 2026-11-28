@@ -35,68 +35,86 @@ function validateManifestHeader(manifest) {
   }
 }
 
-function validateEvidenceIntegrity(manifest) {
-  const integrity = manifest.evidenceIntegrity
-  const expectedRuntimeId = manifest.recoveryRuntimeSessionId
-  if (
-    integrity?.status !== "matched"
-    || integrity.validForPublication !== true
-    || integrity.expectedRuntimeId !== expectedRuntimeId
-    || manifest.matchingTradingLogsAvailable !== true
-    || manifest.logRuntimeSessionId !== expectedRuntimeId
-    || manifest.runtimeIdentity?.status !== "matched"
-    || manifest.runtimeIdentity?.correlation !== "same-runtime-session"
-    || manifest.tradingRuntime?.runtimeSessionId !== expectedRuntimeId
-    || manifest.tradingRuntime?.processIdentity?.runtimeSessionId !== expectedRuntimeId
-  ) {
+function assertManifestRuntimeCorrelation({ manifest, integrity, expectedRuntimeId } = {}) {
+  const invalid = [
+    integrity?.status !== "matched",
+    integrity.validForPublication !== true,
+    integrity.expectedRuntimeId !== expectedRuntimeId,
+    manifest.matchingTradingLogsAvailable !== true,
+    manifest.logRuntimeSessionId !== expectedRuntimeId,
+    manifest.runtimeIdentity?.status !== "matched",
+    manifest.runtimeIdentity?.correlation !== "same-runtime-session",
+    manifest.tradingRuntime?.runtimeSessionId !== expectedRuntimeId,
+    manifest.tradingRuntime?.processIdentity?.runtimeSessionId !== expectedRuntimeId,
+  ].some(Boolean)
+  if (invalid) {
     throw new Error(`Debug archive evidence integrity is not publishable: expected runtime=${expectedRuntimeId ?? "unknown"}; status=${integrity?.status ?? "unverifiable"}; matchingTradingLogsAvailable=${manifest.matchingTradingLogsAvailable}.`)
   }
+}
+
+function assertUniqueCompletedRuntimeSession({ manifest, expectedRuntimeId } = {}) {
   const matchingSessions = (manifest.sessionInventory ?? []).filter((session) =>
-    session.runtimeSessionId === expectedRuntimeId
-    && session.completionStatus === "complete"
+    session.runtimeSessionId === expectedRuntimeId && session.completionStatus === "complete"
   )
   if (matchingSessions.length !== 1) {
     throw new Error(`Debug archive runtime ownership is ambiguous or incomplete: expected exactly one completed process identity for runtime ${expectedRuntimeId}; found ${matchingSessions.length}.`)
   }
-  const manifestFiles = new Map(manifest.files.map((entry) => [entry.path, entry]))
-  for (const [streamKey, streamLabel] of [
-    ["harvesterLog", "HARVESTER LOG"],
-    ["traceLog", "TRACE LOG"],
-  ]) {
-    const stream = integrity.streams?.[streamKey]
-    if (
-      stream?.status !== "matched"
-      || stream.expectedRuntimeId !== expectedRuntimeId
-      || stream.fileCount < 1
-      || stream.totalBytes < 1
-      || !Array.isArray(stream.files)
-      || stream.files.length < 1
-    ) {
-      throw new Error(`${streamLabel} evidence is not complete for runtime ${expectedRuntimeId}: status=${stream?.status ?? "missing"}; files=${stream?.fileCount ?? 0}; bytes=${stream?.totalBytes ?? 0}.`)
-    }
-    for (const file of stream.files) {
-      const manifestFile = manifestFiles.get(file.archivePath)
-      if (
-        file.actualRuntimeId !== expectedRuntimeId
-        || typeof file.sourcePath !== "string"
-        || file.sourceSize < 1
-        || file.archiveSize < 1
-        || !/^[a-f0-9]{64}$/.test(file.sourceSha256 ?? "")
-        || !/^[a-f0-9]{64}$/.test(file.archiveSha256 ?? "")
-        || !manifestFile
-        || manifestFile.size !== file.archiveSize
-        || manifestFile.sha256 !== file.archiveSha256
-      ) {
-        throw new Error(`${streamLabel} evidence ownership or checksum metadata is invalid for runtime ${expectedRuntimeId}: ${file.sourcePath ?? "unknown source"}.`)
-      }
+}
+
+function isInvalidStreamFile({ file, manifestFile, expectedRuntimeId } = {}) {
+  return file.actualRuntimeId !== expectedRuntimeId
+    || typeof file.sourcePath !== "string"
+    || file.sourceSize < 1
+    || file.archiveSize < 1
+    || !/^[a-f0-9]{64}$/.test(file.sourceSha256 ?? "")
+    || !/^[a-f0-9]{64}$/.test(file.archiveSha256 ?? "")
+    || !manifestFile
+    || manifestFile.size !== file.archiveSize
+    || manifestFile.sha256 !== file.archiveSha256
+}
+
+function assertCompleteStreamEvidence({ stream, streamLabel, expectedRuntimeId, manifestFiles } = {}) {
+  const incomplete = stream?.status !== "matched"
+    || stream.expectedRuntimeId !== expectedRuntimeId
+    || stream.fileCount < 1
+    || stream.totalBytes < 1
+    || !Array.isArray(stream.files)
+    || stream.files.length < 1
+  if (incomplete) {
+    throw new Error(`${streamLabel} evidence is not complete for runtime ${expectedRuntimeId}: status=${stream?.status ?? "missing"}; files=${stream?.fileCount ?? 0}; bytes=${stream?.totalBytes ?? 0}.`)
+  }
+  for (const file of stream.files) {
+    const manifestFile = manifestFiles.get(file.archivePath)
+    if (isInvalidStreamFile({ file, manifestFile, expectedRuntimeId })) {
+      throw new Error(`${streamLabel} evidence ownership or checksum metadata is invalid for runtime ${expectedRuntimeId}: ${file.sourcePath ?? "unknown source"}.`)
     }
   }
+}
+
+function validateEvidenceIntegrity(manifest) {
+  const integrity = manifest.evidenceIntegrity
+  const expectedRuntimeId = manifest.recoveryRuntimeSessionId
+  assertManifestRuntimeCorrelation({ manifest, integrity, expectedRuntimeId })
+  assertUniqueCompletedRuntimeSession({ manifest, expectedRuntimeId })
+  const manifestFiles = new Map(manifest.files.map((entry) => [entry.path, entry]))
+  assertCompleteStreamEvidence({
+    stream: integrity.streams?.harvesterLog,
+    streamLabel: "HARVESTER LOG",
+    expectedRuntimeId,
+    manifestFiles,
+  })
+  assertCompleteStreamEvidence({
+    stream: integrity.streams?.traceLog,
+    streamLabel: "TRACE LOG",
+    expectedRuntimeId,
+    manifestFiles,
+  })
   if ((integrity.mismatches ?? []).length > 0) {
     throw new Error(`Debug archive contains mismatched runtime log files for expected runtime ${expectedRuntimeId}; refusing publication.`)
   }
 }
 
-async function validateRecoveryFactsRuntime(directory, manifest) {
+async function readArchiveRecoveryFacts({ directory } = {}) {
   const factsContent = await readFile(path.join(directory, "recovery-facts", "facts.jsonl"), "utf8")
   const checkpointContent = await readFile(path.join(directory, "recovery-facts", "manifest.jsonl"), "utf8")
   const factLines = factsContent.split("\n").filter((line) => line.length > 0)
@@ -106,32 +124,46 @@ async function validateRecoveryFactsRuntime(directory, manifest) {
   }
   const facts = factLines.map((line) => JSON.parse(line))
   const checkpoints = checkpointLines.map((line) => JSON.parse(line))
+  const dataCommitHash = (await readFile(path.join(directory, "data_commit_hash"), "utf8")).trim()
+  return { facts, checkpoints, factCount: factLines.length, dataCommitHash }
+}
+
+function assertRecoveryCheckpointIntegrity({ facts, checkpoints, factCount, dataCommitHash, manifest } = {}) {
   const latestFact = facts.at(-1)
   const latestCheckpoint = checkpoints.at(-1)
-  const dataCommitHash = (await readFile(path.join(directory, "data_commit_hash"), "utf8")).trim()
   const checkpointMatches = latestFact.digest === latestCheckpoint.lastCommittedDigest
     && String(latestFact.sequence) === String(latestCheckpoint.sequence)
-    && Number(latestCheckpoint.recordCount) === factLines.length
+    && Number(latestCheckpoint.recordCount) === factCount
     && latestCheckpoint.lastCommittedDigest === dataCommitHash
     && manifest.dataCommitHash === dataCommitHash
   if (!checkpointMatches) {
     throw new Error("Recovery-facts manifest, data_commit_hash and final fact record do not identify the same committed checkpoint.")
   }
+}
+
+function assertManifestRecoveryRuntimeIdentity({ facts, manifest } = {}) {
+  const latestFact = facts.at(-1)
   const expectedRuntimeId = latestFact.runtimeSessionId
   if (manifest.recoveryRuntimeSessionId !== expectedRuntimeId) {
-    throw new Error("Debug archive runtime identity does not match the latest committed recovery-facts runtime: expected=" + expectedRuntimeId + "; manifest=" + manifest.recoveryRuntimeSessionId + ".")
+    throw new Error(`Debug archive runtime identity does not match the latest committed recovery-facts runtime: expected=${expectedRuntimeId}; manifest=${manifest.recoveryRuntimeSessionId}.`)
   }
   const processStartFacts = facts.filter((fact) => fact.factType === "PROCESS_STARTED" && fact.runtimeSessionId === expectedRuntimeId)
   if (processStartFacts.length !== 1) {
-    throw new Error("Recovery-facts process identity is missing or ambiguous for runtime " + expectedRuntimeId + ": PROCESS_STARTED facts=" + processStartFacts.length + ".")
+    throw new Error(`Recovery-facts process identity is missing or ambiguous for runtime ${expectedRuntimeId}: PROCESS_STARTED facts=${processStartFacts.length}.`)
   }
   const processIdentity = processStartFacts[0].data?.processIdentity
   if (processIdentity?.runtimeSessionId !== expectedRuntimeId) {
-    throw new Error("Durable PROCESS_STARTED identity does not prove ownership of recovery runtime " + expectedRuntimeId + ".")
+    throw new Error(`Durable PROCESS_STARTED identity does not prove ownership of recovery runtime ${expectedRuntimeId}.`)
   }
   if (JSON.stringify(manifest.tradingRuntime?.processIdentity) !== JSON.stringify(processIdentity)) {
-    throw new Error("Archive tradingRuntime process identity does not match the authoritative PROCESS_STARTED recovery fact for runtime " + expectedRuntimeId + ".")
+    throw new Error(`Archive tradingRuntime process identity does not match the authoritative PROCESS_STARTED recovery fact for runtime ${expectedRuntimeId}.`)
   }
+}
+
+async function validateRecoveryFactsRuntime({ directory, manifest } = {}) {
+  const recoveryFacts = await readArchiveRecoveryFacts({ directory })
+  assertRecoveryCheckpointIntegrity({ ...recoveryFacts, manifest })
+  assertManifestRecoveryRuntimeIdentity({ facts: recoveryFacts.facts, manifest })
 }
 
 function isSafeManifestPath(filePath) {
