@@ -602,10 +602,32 @@ function resolveArchiveSessionLoggerCompletionStatus({ identity, loggerCompletio
     : "incomplete"
 }
 
-function resolveArchiveSessionProcessId({ identity } = {}) {
-  return Number.isSafeInteger(identity?.processId) && identity.processId > 0
-    ? identity.processId
-    : null
+function resolveArchiveSessionProcessId({ identity, recoveryCheckpoint } = {}) {
+  if (identity?.processId !== undefined) {
+    const { processId: sessionProcessId } = identity
+    if (!Number.isSafeInteger(sessionProcessId) || sessionProcessId <= 0) {
+      return null
+    }
+    return sessionProcessId
+  }
+  const durableIdentity = recoveryCheckpoint?.processIdentity
+  if (!durableIdentity || !identity) {
+    return null
+  }
+  if (durableIdentity.runtimeSessionId !== recoveryCheckpoint.runtimeSessionId) {
+    return null
+  }
+  if (identity.runtimeSessionId !== recoveryCheckpoint.runtimeSessionId) {
+    return null
+  }
+  if (durableIdentity.startedAt !== identity.startedAt) {
+    return null
+  }
+  const { processId: durableProcessId } = durableIdentity
+  if (!Number.isSafeInteger(durableProcessId) || durableProcessId <= 0) {
+    return null
+  }
+  return durableProcessId
 }
 
 function resolveArchiveSessionRuntimeSessionId(identity) {
