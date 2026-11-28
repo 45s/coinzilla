@@ -139,7 +139,7 @@ async function copyStableFile({ sourcePath, destinationPath } = {}) {
   try {
     await copyFile(sourcePath, temporaryPath)
     const after = await lstat(sourcePath)
-    const sourceSha256After = await sha256File(sourcePath)
+    sourceSha256After = await sha256File(sourcePath)
     const copiedSha256 = await sha256File(temporaryPath)
     if (
       after.isSymbolicLink()
@@ -225,6 +225,7 @@ async function copyCompressedFile({
   const sourceSha256Before = await sha256File(sourcePath)
   const compressedRelative = `${childRelative}.gz`
   const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
+  let sourceSha256After
   try {
     await pipeline(
       createReadStream(sourcePath),
