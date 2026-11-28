@@ -96,6 +96,44 @@ function validateEvidenceIntegrity(manifest) {
   }
 }
 
+async function validateRecoveryFactsRuntime(directory, manifest) {
+  const factsContent = await readFile(path.join(directory, "recovery-facts", "facts.jsonl"), "utf8")
+  const checkpointContent = await readFile(path.join(directory, "recovery-facts", "manifest.jsonl"), "utf8")
+  const factLines = factsContent.split("\n").filter((line) => line.length > 0)
+  const checkpointLines = checkpointContent.split("\n").filter((line) => line.length > 0)
+  if (factLines.length === 0 || checkpointLines.length === 0 || factLines.length !== checkpointLines.length) {
+    throw new Error("Recovery-facts evidence is missing or has an incomplete committed checkpoint.")
+  }
+  const facts = factLines.map((line) => JSON.parse(line))
+  const checkpoints = checkpointLines.map((line) => JSON.parse(line))
+  const latestFact = facts.at(-1)
+  const latestCheckpoint = checkpoints.at(-1)
+  const dataCommitHash = (await readFile(path.join(directory, "data_commit_hash"), "utf8")).trim()
+  const checkpointMatches = latestFact.digest === latestCheckpoint.lastCommittedDigest
+    && String(latestFact.sequence) === String(latestCheckpoint.sequence)
+    && Number(latestCheckpoint.recordCount) === factLines.length
+    && latestCheckpoint.lastCommittedDigest === dataCommitHash
+    && manifest.dataCommitHash === dataCommitHash
+  if (!checkpointMatches) {
+    throw new Error("Recovery-facts manifest, data_commit_hash and final fact record do not identify the same committed checkpoint.")
+  }
+  const expectedRuntimeId = latestFact.runtimeSessionId
+  if (manifest.recoveryRuntimeSessionId !== expectedRuntimeId) {
+    throw new Error("Debug archive runtime identity does not match the latest committed recovery-facts runtime: expected=" + expectedRuntimeId + "; manifest=" + manifest.recoveryRuntimeSessionId + ".")
+  }
+  const processStartFacts = facts.filter((fact) => fact.factType === "PROCESS_STARTED" && fact.runtimeSessionId === expectedRuntimeId)
+  if (processStartFacts.length !== 1) {
+    throw new Error("Recovery-facts process identity is missing or ambiguous for runtime " + expectedRuntimeId + ": PROCESS_STARTED facts=" + processStartFacts.length + ".")
+  }
+  const processIdentity = processStartFacts[0].data?.processIdentity
+  if (processIdentity?.runtimeSessionId !== expectedRuntimeId) {
+    throw new Error("Durable PROCESS_STARTED identity does not prove ownership of recovery runtime " + expectedRuntimeId + ".")
+  }
+  if (JSON.stringify(manifest.tradingRuntime?.processIdentity) !== JSON.stringify(processIdentity)) {
+    throw new Error("Archive tradingRuntime process identity does not match the authoritative PROCESS_STARTED recovery fact for runtime " + expectedRuntimeId + ".")
+  }
+}
+
 function isSafeManifestPath(filePath) {
   if (typeof filePath !== "string") {
     return false
