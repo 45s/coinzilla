@@ -365,6 +365,13 @@ function createProcessRestorationCheck({ inputs, runtime, observedAt } = {}) {
     code = "PROCESS_CONTINUITY_STORE_NOT_CONFIGURED"
     message = "No durable process-continuity store is configured; prior-process history is unknown."
     remediation = "Configure the approved durable operational-state store if process continuity is required."
+  } else if (processState.recoveryEnabled === false) {
+    status = "NOT_APPLICABLE"
+    code = "PROCESS_RESTART_RECOVERY_DISABLED"
+    message = processState.previousProcessStarted === true
+      ? "Prior process history exists, but process restoration is disabled; the current process starts fresh after its own PREFLIGHT and treats prior-session orders/fills as external."
+      : "Process-restart recovery is disabled by configuration."
+    remediation = "Do not restore prior-session state. Verify fresh account PREFLIGHT, current-process user-data readiness and the configured per-market external-order policy; unresolved ACCOUNT safety blockers remain blocking."
   } else if (processState.previousProcessStarted === true && processState.restorationEnabled !== true) {
     code = "PROCESS_RESTART_RESTORATION_DISABLED"
     message = "A prior process session was detected. Runtime restoration remains disabled."
@@ -381,13 +388,16 @@ function createProcessRestorationCheck({ inputs, runtime, observedAt } = {}) {
     status,
     code,
     message,
-    expected: "No unresolved prior process session; automatic restoration remains disabled.",
+    expected: "When process recovery is disabled, a fresh process uses its own PREFLIGHT and current-process readiness; when recovery is enabled, prior process state must be accepted before trading.",
     remediation,
     observedAt,
     details: {
       storeConfigured: processState.storeConfigured === true,
       previousProcessStarted: processState.storeConfigured === true
         ? processState.previousProcessStarted ?? null
+        : null,
+      recoveryEnabled: typeof processState.recoveryEnabled === "boolean"
+        ? processState.recoveryEnabled
         : null,
       restorationEnabled: processState.restorationEnabled === true,
     },
