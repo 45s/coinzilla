@@ -807,7 +807,7 @@ async function addStoppedSnapshotMarker({ archiveDirectory, manifest, session } 
       "Only byte-stable post-exit files are included.",
     ],
   }
-  const markerContent = `${JSON.stringify(marker, null, 2)}\\n`
+  const markerContent = `${JSON.stringify(marker, null, 2)}\n`
   await writeFile(path.join(archiveDirectory, session.stoppedSnapshotPath), markerContent)
   manifest.files.push({
     path: session.stoppedSnapshotPath,
