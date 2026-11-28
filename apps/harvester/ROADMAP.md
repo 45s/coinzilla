@@ -123,3 +123,15 @@ If the current implementation cannot execute the simulation workflow on Windows,
 The Harvester API now selects a dedicated Node child-process worker by default on Windows, without requiring a Linux sandbox environment variable. The worker uses a minimal environment and the existing Node module/network/filesystem guards. The host distinguishes this guarded simulation boundary from a verified OS sandbox: it supports local functional testing of repository-owned RS scenarios with simulated broker/order and run-local state, but it is not an OS security boundary, does not provide OS-enforced resource limits, and must not execute arbitrary user-supplied code. Linux Bubblewrap/prlimit/cgroup remains optional hardening. The Windows integration job passed on code checkpoint `981513c13b40d5c3dcd17ff80b7e1bb288c2cfa6` (workflow run [46042533828](https://github.com/45s/coinzilla/actions/runs/46042533828)). It starts the real local Harvester HTTP API on Windows, executes all twelve current RS runtime scenarios, and verifies completed status, assertions, trace and run history. This is local functional acceptance only; scenarios remain PARTIAL, Node guards are not OS isolation, and exact replay remains fail-closed pending trusted artifact verification. Production acceptance remains PARTIAL and exact replay remains fail-closed pending trusted artifact verification.
 
 The Linux sandbox acceptance workflow is manual-dispatch only (not triggered by pull requests). It is an optional OS-hardening check, not a required PR status or a prerequisite for Windows local functional acceptance. Do not wait for a self-hosted Linux runner to continue Scenario Runner feature development.
+
+## Bootstrap runtime setup responsibility audit — 2026-11-27
+
+[PR #1951](https://github.com/45s/coinzilla/pull/1951) splits the former 582-line harvester-runtime-setup.js by its existing responsibilities:
+
+- harvester-user-data-runtime.js — user-data state, readiness, and event operations.
+- harvester-candle-history-service.js — market-specific candle broker routing and provider identity projection.
+- harvester-trading-engine-composition.js — trading-engine option composition and Recovery Seller/account safety gates.
+- harvester-operational-state-callbacks.js — durable operational-state callback construction.
+- harvester-runtime-setup.js remains a compatibility export facade for the existing bootstrap consumer.
+
+The decomposition is intended to preserve behavior, public exports, strategy/accounting/order contracts, and the existing single bootstrap composition. Exact-head CI is required before this disposition is considered verified. This is one scoped Harvester finding under repository-wide naming/module audit #1582; it does not close the full repository audit.
