@@ -363,7 +363,7 @@ test("collects and marks the exact active runtime without stopping or clearing i
   }
   const lockPath = path.join(fixture.lockDirectory, ".harvester-trading-test.lock")
   await writeFile(lockPath, JSON.stringify(lockOwner), "utf8")
-  const result = await runHarvesterDebugArchive(archiveDependencies({ fixture }))
+  const result = await runHarvesterDebugArchive({ ...archiveDependencies({ fixture }), onArchiveCreatedFn: undefined })
   const manifest = await readArchiveManifest(result.localArchive)
   const matchingSession = manifest.sessionInventory.find(({ runtimeSessionId }) => runtimeSessionId === RUNTIME_SESSION_ID)
   assert.equal(result.matchingTradingLogsAvailable, true, "An active process must not block collection when its process lock and durable runtime identity match.")
