@@ -251,7 +251,7 @@ test("retains CG and RS execution routes and subscriptions when process recovery
   const calls = []
   const broker = createRsOnlyStartupBroker({ calls })
   try {
-    const combinedConfig = createRsOnlyStartupConfig()
+    const combinedConfig = createRsOnlyStartupConfig({ processRecoveryEnabled: false })
     combinedConfig.strategies.CG_coinGrabber = {
       ...combinedConfig.strategies.CG_coinGrabber,
       pairs: {
@@ -308,7 +308,7 @@ test("retains CG and RS execution routes and subscriptions when process recovery
 test("fails RS startup explicitly when its durable Operational State Store is missing", async () => {
   await assert.rejects(
     () => startHarvesterForTest({
-      loadConfig: async () => createRsOnlyStartupConfig(),
+      loadConfig: async () => createRsOnlyStartupConfig({ processRecoveryEnabled: false }),
       env: binanceEnv,
       executionSymbols: ["LINEAUSDT"],
       executionRoutes: [{
@@ -341,7 +341,7 @@ test("fails RS startup explicitly when its Operational State Store is invalid", 
   try {
     await assert.rejects(
       () => startHarvesterForTest({
-        loadConfig: async () => createRsOnlyStartupConfig(),
+        loadConfig: async () => createRsOnlyStartupConfig({ processRecoveryEnabled: false }),
         env: binanceEnv,
         operationalStateStore: invalidStore,
         executionSymbols: ["LINEAUSDT"],
@@ -374,7 +374,7 @@ test("starts an RS-only provider account without a Conservative execution route"
   const broker = createRsOnlyStartupBroker({ calls })
   try {
     const result = await startHarvesterForTest({
-      loadConfig: async () => createRsOnlyStartupConfig(),
+      loadConfig: async () => createRsOnlyStartupConfig({ processRecoveryEnabled: false }),
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
       operationalStateStore: store,
