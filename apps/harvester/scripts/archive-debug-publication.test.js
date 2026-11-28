@@ -698,7 +698,8 @@ test("publishes a verified active-runtime snapshot without process-completion fi
     runtimeSessionId: manifest.recoveryRuntimeSessionId,
     processId: 24680,
     hostname: "test-host",
-    lockStartedAt: "2026-11-28T11:00:00.000Z",
+    lockStartedAt: "2026-11-28T11:00:01.000Z",
+    processStartedAt: "2026-11-28T11:00:00.000Z",
     capturedAt: "2026-11-28T11:05:00.000Z",
     recoveryDataCommitHash: manifest.dataCommitHash,
     streams: {
