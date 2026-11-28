@@ -256,11 +256,7 @@ test("Conservative engine and RS accounting workflow observe one live account Or
 })
 
 
-test("Conservative engine dispatches RS evaluation through the shared account transition", async () => {
-  const sharedAccountState = createSharedAccountState()
-  const recoverySellerWorkflow = createRecoverySellerAccountingWorkflow({
-    sharedState: sharedAccountState,
-  })
+async function createRecoverySellerStopWorkflowForTest() {
   const operationalStateStore = {
     append: async () => ({
       ok: true,
@@ -271,31 +267,46 @@ test("Conservative engine dispatches RS evaluation through the shared account tr
       data: { records: [] },
     }),
   }
-  const recoverySellerStopWorkflowResult = await createRecoverySellerStopWorkflow({
+  const result = await createRecoverySellerStopWorkflow({
     operationalStateStore,
   })
-  assert.equal(recoverySellerStopWorkflowResult.ok, true)
+  assert.equal(result.ok, true)
+  return result.data
+}
+
+function createRecoverySellerTransitionStub({ evaluatedSymbols } = {}) {
+  return async ({ symbol }) => {
+    evaluatedSymbols.push(symbol)
+    return {
+      ok: true,
+      data: {
+        symbol,
+        skipped: true,
+        reason: "RS_POLICY_NOT_READY",
+      },
+    }
+  }
+}
+
+test("Conservative engine dispatches RS evaluation through the shared account transition", async () => {
+  const sharedAccountState = createSharedAccountState()
+  const recoverySellerWorkflow = createRecoverySellerAccountingWorkflow({
+    sharedState: sharedAccountState,
+  })
+  const recoverySellerStopWorkflow = await createRecoverySellerStopWorkflowForTest()
   const evaluatedSymbols = []
   const { engine } = createEngine({
     sharedAccountState,
     recoverySellerWorkflow,
-    recoverySellerStopWorkflow: recoverySellerStopWorkflowResult.data,
+    recoverySellerStopWorkflow,
     recoverySellerPairs: {
       DOGEUSDT: {
         enabled: true,
       },
     },
-    evaluateRecoverySellerTransition: async ({ symbol }) => {
-      evaluatedSymbols.push(symbol)
-      return {
-        ok: true,
-        data: {
-          symbol,
-          skipped: true,
-          reason: "RS_POLICY_NOT_READY",
-        },
-      }
-    },
+    evaluateRecoverySellerTransition: createRecoverySellerTransitionStub({
+      evaluatedSymbols,
+    }),
   })
 
   await engine.processBookTicker({
