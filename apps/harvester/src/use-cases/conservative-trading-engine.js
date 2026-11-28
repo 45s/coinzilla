@@ -2838,6 +2838,7 @@ function createLatestTransitionEvaluatorDependencies({ context, dependencies, au
     pairs: context.pairs,
     settings: context.settings,
     logger: dependencies.logger,
+    recoverySellerLogger: dependencies.recoverySellerLogger,
     strategyPolicy: dependencies.strategyPolicy,
     evaluateRecoverySellerTransition: dependencies.evaluateRecoverySellerTransition,
     authorizeRecoverySellerAction,
