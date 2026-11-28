@@ -61,7 +61,7 @@ function assertUniqueCompletedRuntimeSession({ manifest, expectedRuntimeId } = {
       && ["complete", "active", "stopped-unconfirmed"].includes(session.loggerCompletionStatus)
   )
   if (matchingSessions.length !== 1) {
-    throw new Error(`Debug archive runtime ownership is ambiguous or incomplete: expected exactly one completed or verified active process identity for runtime ${expectedRuntimeId}; found ${matchingSessions.length}.`)
+    throw new Error(`Debug archive runtime ownership is ambiguous or incomplete: expected exactly one completed, verified active, or stopped-unconfirmed process identity for runtime ${expectedRuntimeId}; found ${matchingSessions.length}.`)
   }
   return matchingSessions[0]
 }
