@@ -515,8 +515,14 @@ test("filters Recovery Seller execution routes when the master recovery componen
     env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
   })
   const executionRoutes = [
-    { strategyId: "CG_coinGrabber", symbol: "BTCUSDT" },
-    { strategyId: "RS_recoverySeller", symbol: "ETHUSDT" },
+    {
+      strategyId: "CG_coinGrabber",
+      symbol: "BTCUSDT",
+    },
+    {
+      strategyId: "RS_recoverySeller",
+      symbol: "ETHUSDT",
+    },
   ]
   const result = await resolveHarvesterOptions({
     ...fixture.input,
@@ -531,7 +537,10 @@ test("filters Recovery Seller execution routes when the master recovery componen
   assert.deepEqual(result.recoverySellerPairs, {},
     "Disabled recovery must not resolve any Recovery Seller execution markets.")
   assert.deepEqual(result.executionRoutes, [
-    { strategyId: "CG_coinGrabber", symbol: "BTCUSDT" },
+    {
+      strategyId: "CG_coinGrabber",
+      symbol: "BTCUSDT",
+    },
   ], "Disabled recovery routes must be removed before the runtime receives execution routes.")
   assert.deepEqual(result.executionSymbols, ["BTCUSDT"],
     "Markets used only by disabled Recovery Seller routes must be removed from the provider execution symbols.")
