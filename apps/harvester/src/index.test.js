@@ -2803,3 +2803,21 @@ test("preserves nested process error identity while redacting credential-bearing
   }
   assert.ok(diagnostic.stack.includes("[REDACTED]"), "The original stack must remain available with credential fragments masked.")
 })
+
+
+test("describes aggregate and non-Error startup failures", () => {
+  const aggregate = new AggregateError(
+    [new Error("provider A failed"), new Error("provider B failed")],
+    "all configured providers failed",
+  )
+  const diagnostic = describeProcessError(aggregate)
+
+  assert.equal(diagnostic.name, "AggregateError")
+  assert.equal(diagnostic.message, "all configured providers failed")
+  assert.equal(diagnostic.errors.length, 2)
+  assert.equal(diagnostic.errors[0].message, "provider A failed")
+  assert.deepEqual(
+    describeProcessError("startup rejected with a non-Error value"),
+    { message: "startup rejected with a non-Error value" },
+  )
+})
