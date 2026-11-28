@@ -516,18 +516,6 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
     return
   }
 
-  if (summary.diagnostic) {
-    writeCataloguedDiagnosticRecord({
-      output,
-      color,
-      timestamp,
-      level,
-      method,
-      diagnostic: summary.diagnostic,
-    })
-    return
-  }
-
   const plainPrefix = `${time} ${strategyPrefix}${levelLabel}${summaryMessage}`
   const serializedDetails = Object.keys(summary.details ?? {}).length > 0
     ? ` ${JSON.stringify(summary.details)}`
@@ -621,6 +609,17 @@ function writeConsoleTransportEntry({ entry, output, color, state } = {}) {
       level,
       method,
       data,
+    })
+    return
+  }
+  if (presentation.summary.diagnostic) {
+    writeCataloguedDiagnosticRecord({
+      output,
+      color,
+      timestamp,
+      level,
+      method,
+      diagnostic: presentation.summary.diagnostic,
     })
     return
   }
