@@ -523,7 +523,7 @@ function hasCompleteProcessCompletion({ identity, completion } = {}) {
 }
 
 function hasCompleteLoggerCompletion({ identity, loggerCompletion } = {}) {
-  return loggerCompletion?.runtimeSessionId === identity.runtimeSessionId
+  return loggerCompletion?.runtimeSessionId === identity?.runtimeSessionId
     && loggerCompletion?.logStreamsComplete === true
     && loggerCompletion?.streams?.harvesterLog === true
     && loggerCompletion?.streams?.traceLog === true
