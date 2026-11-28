@@ -661,7 +661,7 @@ test("reports missing durable process identity as unverifiable diagnostic eviden
   )
 })
 
-test("preserves incomplete failed-startup logstest("retains incomplete failed-startup logs only in a non-publishable diagnostic archive", async (t) => {
+test("retains incomplete failed-startup logs only in a non-publishable diagnostic archive", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
   const completionPath = path.join(fixture.packageDirectory, "logs/sessions/2026-11-24_testnet/process-completed.json")
@@ -689,7 +689,7 @@ test("preserves incomplete failed-startup logstest("retains incomplete failed-st
   assert.ok(diagnosticDirectory, "The incomplete evidence must remain available locally.")
 })
 
-test("retains a mismatched runtime archive only as diagnostic evidencetest("retains a mismatched runtime archive only as diagnostic evidence and fails collection", async (t) => {
+test("retains a mismatched runtime archive only as diagnostic evidence and fails collection", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
     recursive: true,
