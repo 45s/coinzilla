@@ -352,7 +352,6 @@ Startup's market-data connected summary reports only the subscription count
 console summaries abbreviate Operational State Store as `OSS`; full structured
 records and diagnostic files retain their diagnostic detail.
 
-
 Startup failure descriptions preserve the concrete error name, stable/native
 code, message, stack and nested cause chain. Credential-bearing fragments in
 those message/stack strings are redacted (bot tokens, labelled API keys,
