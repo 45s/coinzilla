@@ -229,6 +229,6 @@ export const scenarios = [
       },
     ],
     coverageStatus: "TEST-MAPPED",
-    coverageReason: "Mapped tests prove that recovery-disabled restarts create a fresh current-process session after PREFLIGHT, prior-session orders/fills remain external, recovery-enabled unclean history remains blocked, clean recovery-enabled restart remains observation-only, the durable account-level RS STOP latch stays strategy-scoped, and unresolved ACCOUNT blockers remain fail-closed. Runtime state restoration remains disabled.",
+    coverageReason: "Mapped tests prove that recovery-disabled restarts create a fresh current-process session after PREFLIGHT, prior-session orders/fills remain external, recovery-enabled unclean history remains blocked, clean recovery-enabled restart remains observation-only, the durable account-level RS STOP latch: RS STOP stays strategy-scoped, and unresolved ACCOUNT blockers remain fail-closed. Runtime state restoration remains disabled.",
   }),
 ]
