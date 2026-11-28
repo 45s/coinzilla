@@ -48,6 +48,28 @@
           <p>{{ guide.injectedCondition }}</p>
         </section>
       </div>
+      @if (selectedScenario?.details; as details) {
+        <section class="guide-domain-classification">
+          <h3>Domain scenario classification</h3>
+          <p>Category: {{ details['category'] ?? 'Not declared' }} · Priority: {{ details['priority'] ?? 'Not declared' }}</p>
+          <p>Coverage: {{ selectedScenario?.status ?? 'UNAVAILABLE' }}</p>
+          <p>{{ details['coverageReason'] ?? 'No coverage explanation was declared.' }}</p>
+        </section>
+        <details class="scenario-contract-details">
+          <summary>Inspect full scenario contract</summary>
+          <pre class="scenario-contract-json">{{ details | json }}</pre>
+        </details>
+      }
+      @if (selectedScenario?.readinessReasons?.length) {
+        <section class="guide-limitations">
+          <h3>Execution readiness</h3>
+          <ul>
+            @for (reason of selectedScenario?.readinessReasons ?? []; track reason) {
+              <li>{{ reason }}</li>
+            }
+          </ul>
+        </section>
+      }
       <section class="guide-diagram" aria-label="Scenario intent flow diagram">
         @if (selectedScenarioGraph; as graph) {
           <app-scenario-graph-viewer [graph]="graph" />

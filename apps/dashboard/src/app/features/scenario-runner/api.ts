@@ -28,6 +28,10 @@ export class ScenarioRunnerApi implements ScenarioRunnerGateway {
     const sourcePaths = [
       'apps/harvester/src/infrastructure/scenario-runner/rs-scenario-adapter.js',
       'apps/harvester/src/infrastructure/scenario-runner/rs-runtime-scenario.js',
+      'apps/harvester/src/infrastructure/scenario-runner/cg-conservative-scenario-catalog.part-one.js',
+      'apps/harvester/src/infrastructure/scenario-runner/cg-conservative-scenario-catalog.part-two.js',
+      'apps/harvester/src/infrastructure/scenario-runner/cg-conservative-scenario-catalog.part-three.js',
+      'apps/harvester/src/infrastructure/scenario-runner/cg-conservative-scenario-catalog.part-four.js',
     ];
     const sources = await Promise.all(sourcePaths.map((path) => firstValueFrom(this.http.get(
       `https://raw.githubusercontent.com/45s/coinzilla/${commitSha}/${path}`,

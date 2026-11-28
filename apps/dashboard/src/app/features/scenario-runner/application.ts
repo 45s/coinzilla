@@ -24,6 +24,7 @@ export interface ScenarioCatalogEntry {
   readonly executable: boolean;
   readonly inputSchema?: ScenarioInputSchema;
   readonly defaultInput?: unknown;
+  readonly details?: Readonly<Record<string, unknown>>;
   readonly readinessReasons?: readonly string[];
 }
 

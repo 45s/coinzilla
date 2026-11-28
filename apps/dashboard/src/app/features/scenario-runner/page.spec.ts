@@ -40,6 +40,58 @@ const catalog: readonly ScenarioCatalogItem[] = [{
     executable: true,
     defaultInput: {},
   }],
+}, {
+  strategyId: 'CG-conservative',
+  strategyName: 'Conservative',
+  scenarios: [
+    ['CON-ACCOUNTING-001', 'TEST-MAPPED'],
+    ['CON-BALANCE-001', 'TEST-MAPPED'],
+    ['CON-BUY-001', 'TEST-MAPPED'],
+    ['CON-CONFIG-001', 'PARTIAL'],
+    ['CON-DECISION-001', 'TEST-MAPPED'],
+    ['CON-ERROR-001', 'TEST-MAPPED'],
+    ['CON-EVENT-001', 'TEST-MAPPED'],
+    ['CON-FEE-001', 'TEST-MAPPED'],
+    ['CON-FILTER-001', 'TEST-MAPPED'],
+    ['CON-MARKET-001', 'TEST-MAPPED'],
+    ['CON-FILL-001', 'TEST-MAPPED'],
+    ['CON-PERSIST-001', 'TEST-MAPPED'],
+    ['CON-PERSIST-002', 'TEST-MAPPED'],
+    ['CON-PERSIST-003', 'TEST-MAPPED'],
+    ['CON-RECOVERY-001', 'TEST-MAPPED'],
+    ['CON-RUNTIME-001', 'TEST-MAPPED'],
+    ['CON-SAFETY-001', 'TEST-MAPPED'],
+    ['CON-SELL-001', 'TEST-MAPPED'],
+  ].map(([id, status]) => ({
+    id,
+    name: `Conservative scenario ${id}`,
+    layer: 'DOMAIN',
+    status,
+    executionStatus: 'BLOCKED',
+    executable: false,
+    readinessReasons: ['No isolated CG production-flow worker or executable input schema is registered.'],
+    details: {
+      id,
+      title: `Conservative scenario ${id}`,
+      category: 'conservative-domain',
+      priority: 'P0',
+      description: `Inspect the source-declared Conservative domain contract for ${id}.`,
+      tags: [],
+      preconditions: ['Use isolated simulation-only state.'],
+      initialState: { strategyId: 'CG-conservative', state: 'declared' },
+      inputEvents: [{ type: 'CG_SCENARIO_EVENT', sequence: 1 }],
+      expectedState: { outcome: 'declared-contract' },
+      expectedOrders: [],
+      expectedAccounting: {},
+      expectedSideEffects: [],
+      invariants: ['Inspection metadata is not execution evidence.'],
+      relatedRequirements: [],
+      relatedCriticalBehaviors: [],
+      relatedSourceFiles: [],
+      coverageStatus: status,
+      coverageReason: 'This page fixture represents catalogue metadata only.',
+    },
+  })),
 }];
 
 describe('ScenarioRunnerComponent run details', () => {
@@ -153,6 +205,53 @@ describe('ScenarioRunnerComponent run details', () => {
       'Reconcile a terminal SELL through production order-event and accounting workflows',
     );
     expect(component.selectedStepJson, 'the selected step must expose its original inputs and outputs').toContain('"orderStatus": "CANCELED"');
+  });
+
+  it('shows all eighteen CG-conservative scenarios for inspection and keeps execution blocked', () => {
+    component.selectStrategy('CG-conservative');
+    fixture.detectChanges();
+
+    const scenarioOptions = Array.from(nativeElement.querySelectorAll<HTMLOptionElement>('.scenario-control option'));
+    expect(scenarioOptions, 'the Conservative strategy selector must expose all eighteen domain scenarios').toHaveLength(18);
+    expect(scenarioOptions.map((option) => option.value), 'the Dashboard must preserve all Conservative domain scenario IDs').toEqual([
+      'CON-ACCOUNTING-001',
+      'CON-BALANCE-001',
+      'CON-BUY-001',
+      'CON-CONFIG-001',
+      'CON-DECISION-001',
+      'CON-ERROR-001',
+      'CON-EVENT-001',
+      'CON-FEE-001',
+      'CON-FILTER-001',
+      'CON-MARKET-001',
+      'CON-FILL-001',
+      'CON-PERSIST-001',
+      'CON-PERSIST-002',
+      'CON-PERSIST-003',
+      'CON-RECOVERY-001',
+      'CON-RUNTIME-001',
+      'CON-SAFETY-001',
+      'CON-SELL-001',
+    ]);
+    expect(nativeElement.textContent, 'Conservative guide must label its diagram as intent rather than actual execution').toContain('SCENARIO INTENT · NOT EXECUTION EVIDENCE');
+    expect(nativeElement.textContent, 'the selected source metadata must expose inspection-only readiness').toContain('No isolated CG production-flow worker or executable input schema is registered.');
+    expect(nativeElement.textContent, 'the full source contract must be available in the Dashboard inspector').toContain('Inspect full scenario contract');
+    expect(component.selectedScenarioGraph?.source.kind, 'CG scenarios must use the dedicated Conservative domain graph, not a flat list of metadata events').toBe('cg-domain-specification');
+    expect(component.selectedScenarioGraph?.nodes.map((node) => node.id), 'CG graph must show the canonical recovery path and its branches').toEqual(expect.arrayContaining([
+      'active-sell',
+      'active-sell-valid',
+      'sellable-check',
+      'terminal-update',
+      'terminal-valid',
+      'profit-retained-check',
+      'next-buy-eligible',
+    ]));
+    expect(component.selectedScenarioGraph?.nodes.some((node) => node.label.startsWith('Declared event')), 'scenario metadata events must not become graph nodes').toBe(false);
+
+    const runButton = nativeElement.querySelector<HTMLButtonElement>('.actions button');
+    expect(runButton?.disabled, 'the Dashboard must not submit a domain coverage record as a production-flow simulation').toBe(true);
+    const inputEditor = nativeElement.querySelector<HTMLTextAreaElement>('.input-label textarea');
+    expect(inputEditor?.disabled, 'non-executable Conservative inspection entries must not accept fake run inputs').toBe(true);
   });
 
   it('keeps the complete source payload searchable and exposes structured field inspection', () => {

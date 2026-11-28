@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto"
 import {
-  copyFile,
   lstat,
+  link,
   mkdir,
   mkdtemp,
   readFile,
@@ -13,15 +13,16 @@ import {
 } from "node:fs/promises"
 import { spawn } from "node:child_process"
 import { createReadStream, createWriteStream } from "node:fs"
+import { Readable, Writable } from "node:stream"
 import { pipeline } from "node:stream/promises"
-import { createGzip } from "node:zlib"
+import { createGzip, createGunzip } from "node:zlib"
 import path from "node:path"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
 import { captureBuildMetadata } from "@coinzilla/utils"
 import packageMetadata from "../package.json" with { type: "json" }
 import { resolveOperationalStateDirectory } from "../src/infrastructure/operational-state/resolve-directory.js"
-import { assertHarvesterProcessStopped } from "./assert-harvester-process-stopped.js"
+import { isHarvesterProcessAlive } from "../src/infrastructure/process-lock/acquire-harvester-process-lock.js"
 
 const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const SOURCE_DIRECTORIES = Object.freeze(["logs", "recovery-facts"])
@@ -129,37 +130,92 @@ async function assertRealDirectory(directory) {
   }
 }
 
+async function sha256FileRange({ filename, size } = {}) {
+  const hash = createHash("sha256")
+  if (size > 0) {
+    for await (const chunk of createReadStream(filename, {
+        start: 0,
+        end: size - 1,
+      })) {
+      hash.update(chunk)
+    }
+  }
+  return hash.digest("hex")
+}
+
+export async function copyFileRange({ sourcePath, destinationPath, size, compressed = false } = {}) {
+  if (size === 0) {
+    if (compressed) {
+      await pipeline(Readable.from([]), createGzip({ level: 6 }), createWriteStream(destinationPath, {
+        flags: "wx",
+        mode: 0o600,
+      }))
+    } else {
+      await writeFile(destinationPath, "", {
+        encoding: "utf8",
+        flag: "wx",
+        mode: 0o600,
+      })
+    }
+    return
+  }
+  // Read only the prefix observed before copying so a live append-only writer can continue safely.
+  const source = createReadStream(sourcePath, {
+    start: 0,
+    end: size - 1,
+  })
+  if (compressed) {
+    await pipeline(source, createGzip({ level: 6 }), createWriteStream(destinationPath, {
+      flags: "wx",
+      mode: 0o600,
+    }))
+    return
+  }
+  await pipeline(source, createWriteStream(destinationPath, {
+      flags: "wx",
+      mode: 0o600,
+    }))
+}
+
 async function copyStableFile({ sourcePath, destinationPath } = {}) {
   const before = await lstat(sourcePath)
   if (before.isSymbolicLink() || !before.isFile()) {
     throw new Error(`Refusing to snapshot a non-regular file: ${sourcePath}`)
   }
-  const sourceSha256Before = await sha256File(sourcePath)
+  const sourceSha256Before = await sha256FileRange({
+      filename: sourcePath,
+      size: before.size,
+    })
   const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
   try {
-    await copyFile(sourcePath, temporaryPath)
+    await copyFileRange({
+      sourcePath,
+      destinationPath: temporaryPath,
+      size: before.size,
+    })
     const after = await lstat(sourcePath)
-    const sourceSha256After = await sha256File(sourcePath)
+    const sourceSha256After = await sha256FileRange({
+      filename: sourcePath,
+      size: before.size,
+    })
     const copiedSha256 = await sha256File(temporaryPath)
     if (
       after.isSymbolicLink()
       || !after.isFile()
       || before.dev !== after.dev
       || before.ino !== after.ino
-      || before.size !== after.size
-      || before.mtimeMs !== after.mtimeMs
-      || before.ctimeMs !== after.ctimeMs
+      || after.size < before.size
       || sourceSha256Before !== sourceSha256After
       || sourceSha256Before !== copiedSha256
     ) {
-      throw new Error(`Source file changed while the debug snapshot was being collected: ${sourcePath}`)
+      throw new Error(`Source file was replaced, truncated, or modified before the snapshot boundary: ${sourcePath}`)
     }
     const copied = await lstat(temporaryPath)
-    if (copied.size !== after.size) {
+    if (copied.size !== before.size) {
       throw new Error(`Snapshot copy size changed while collecting: ${sourcePath}`)
     }
     await rename(temporaryPath, destinationPath)
-    return after.size
+    return before.size
   } catch (error) {
     await rm(temporaryPath, { force: true })
     throw error
@@ -212,43 +268,80 @@ export async function copyRegularTree({
   }
 }
 
-async function copyCompressedFile({
-  sourcePath,
-  destinationPath,
-  childRelative,
-  onFileCopied,
-} = {}) {
+async function writeCompressedTemporaryFile({ sourcePath, temporaryPath, sourceAlreadyCompressed, sourceSize } = {}) {
+  if (sourceAlreadyCompressed) {
+    await copyFileRange({
+      sourcePath,
+      destinationPath: temporaryPath,
+      size: sourceSize,
+    })
+    return
+  }
+  await copyFileRange({
+    sourcePath,
+    destinationPath: temporaryPath,
+    size: sourceSize,
+    compressed: true,
+  })
+}
+
+export async function assertSourceFileStable({ sourcePath, sourceBefore, sourceSha256Before } = {}) {
+  const sourceAfter = await lstat(sourcePath)
+  const sourceSha256After = await sha256FileRange({
+    filename: sourcePath,
+    size: sourceBefore.size,
+  })
+  const sourceChanged = sourceSha256Before !== sourceSha256After
+    || sourceAfter.isSymbolicLink()
+    || !sourceAfter.isFile()
+    || sourceBefore.dev !== sourceAfter.dev
+    || sourceBefore.ino !== sourceAfter.ino
+    || sourceAfter.size < sourceBefore.size
+  if (sourceChanged) {
+    throw new Error(`Source file was replaced, truncated, or modified before the snapshot boundary: ${sourcePath}`)
+  }
+  return sourceSha256After
+}
+
+async function copyCompressedFile({ sourcePath, destinationPath, childRelative, onFileCopied } = {}) {
   const sourceBefore = await lstat(sourcePath)
   if (sourceBefore.isSymbolicLink() || !sourceBefore.isFile()) {
     throw new Error(`Refusing to compress a non-regular source file: ${sourcePath}`)
   }
-  const sourceSha256Before = await sha256File(sourcePath)
-  const compressedRelative = `${childRelative}.gz`
+  const sourceSha256Before = await sha256FileRange({
+    filename: sourcePath,
+    size: sourceBefore.size,
+  })
+  const sourceAlreadyCompressed = /\.gz$/i.test(childRelative)
+  const compressedRelative = sourceAlreadyCompressed ? childRelative : `${childRelative}.gz`
   const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
   let sourceSha256After
   try {
-    await pipeline(
-      createReadStream(sourcePath),
-      createGzip({ level: 6 }),
-      createWriteStream(temporaryPath, {
-        flags: "wx",
-        mode: 0o600,
-      }),
-    )
-    const sourceAfter = await lstat(sourcePath)
-    sourceSha256After = await sha256File(sourcePath)
-    const sourceChanged = sourceSha256Before !== sourceSha256After
-      || sourceAfter.isSymbolicLink()
-      || !sourceAfter.isFile()
-      || sourceBefore.dev !== sourceAfter.dev
-      || sourceBefore.ino !== sourceAfter.ino
-      || sourceBefore.size !== sourceAfter.size
-      || sourceBefore.mtimeMs !== sourceAfter.mtimeMs
-      || sourceBefore.ctimeMs !== sourceAfter.ctimeMs
-    if (sourceChanged) {
-      throw new Error(`Source file changed while the debug snapshot was being collected: ${sourcePath}`)
+    await writeCompressedTemporaryFile({
+      sourcePath,
+      temporaryPath,
+      sourceAlreadyCompressed,
+      sourceSize: sourceBefore.size,
+    })
+    sourceSha256After = await assertSourceFileStable({
+      sourcePath,
+      sourceBefore,
+      sourceSha256Before,
+    })
+    try {
+      // Publish the completed temporary file without ever replacing an existing archive path.
+      // Two source names can normalize to the same .gz destination (for example,
+      // harvester.log and harvester.log.gz); that is an evidence collision, not an overwrite.
+      await link(temporaryPath, destinationPath)
+    } catch (error) {
+      if (error?.code === "EEXIST") {
+        throw new Error(`Archive path collision: multiple source files map to ${destinationPath}.`, {
+          cause: error,
+        })
+      }
+      throw error
     }
-    await rename(temporaryPath, destinationPath)
+    await rm(temporaryPath, { force: true })
   } catch (error) {
     await rm(temporaryPath, { force: true })
     throw error
@@ -261,6 +354,7 @@ async function copyCompressedFile({
     sourceSha256: sourceSha256After,
     size: archiveStats.size,
     archiveSha256: await sha256File(destinationPath),
+    compression: sourceAlreadyCompressed ? "source-gzip-preserved" : "gzip-created",
   })
 }
 
@@ -294,7 +388,7 @@ async function copyCompressedTree({
     } else if (sourceStats.isFile()) {
       await copyCompressedFile({
         sourcePath,
-        destinationPath: path.join(destinationDirectory, `${childRelative}.gz`),
+        destinationPath: path.join(destinationDirectory, /\.gz$/i.test(childRelative) ? childRelative : `${childRelative}.gz`),
         childRelative,
         onFileCopied,
       })
@@ -386,11 +480,33 @@ function createCompletionMissingFieldWarnings({ identity, completion, completion
   return warnings
 }
 
+function createLoggerCompletionMissingFieldWarnings({ identity, loggerCompletion, loggerCompletionError } = {}) {
+  if (!loggerCompletion) {
+    return [loggerCompletionError?.code && loggerCompletionError.code !== "ENOENT"
+      ? "LOGGER_COMPLETION_RECORD_INVALID"
+      : "LOGGER_COMPLETION_RECORD_MISSING"]
+  }
+  const warnings = []
+  if (identity?.runtimeSessionId && loggerCompletion.runtimeSessionId !== identity.runtimeSessionId) {
+    warnings.push("LOGGER_COMPLETION_RUNTIME_ID_MISMATCH")
+  }
+  if (
+    loggerCompletion.logStreamsComplete !== true
+    || loggerCompletion.streams?.harvesterLog !== true
+    || loggerCompletion.streams?.traceLog !== true
+  ) {
+    warnings.push("LOGGER_STREAMS_INCOMPLETE")
+  }
+  return warnings
+}
+
 function createArchiveSessionMissingFieldWarnings({
   identity,
   completion,
+  loggerCompletion,
   identityError,
   completionError,
+  loggerCompletionError,
 } = {}) {
   return [
     ...createProcessIdentityMissingFieldWarnings({
@@ -402,37 +518,94 @@ function createArchiveSessionMissingFieldWarnings({
       completion,
       completionError,
     }),
+    ...createLoggerCompletionMissingFieldWarnings({
+      identity,
+      loggerCompletion,
+      loggerCompletionError,
+    }),
   ]
 }
 
-
-function isHarvesterTestnetSession({ identity } = {}) {
-  return identity?.application === "harvester" &&
-    identity?.formatVersion === 1 &&
-    identity?.environment === "testnet"
+function isHarvesterRuntimeSession({ identity } = {}) {
+  return identity?.application === "harvester"
+    && identity?.formatVersion === 1
+    && ["testnet", "live"].includes(identity?.environment)
 }
 
-function resolveArchiveSessionCompletionStatus({ identity, completion, isHarvesterTestnet } = {}) {
+function hasCompleteProcessCompletion({ identity, completion } = {}) {
+  return completion?.runtimeSessionId === identity.runtimeSessionId
+    && completion?.logStreamsComplete === true
+}
+
+function hasCompleteLoggerCompletion({ identity, loggerCompletion } = {}) {
+  return loggerCompletion?.runtimeSessionId === identity?.runtimeSessionId
+    && loggerCompletion?.logStreamsComplete === true
+    && loggerCompletion?.streams?.harvesterLog === true
+    && loggerCompletion?.streams?.traceLog === true
+}
+
+const ACTIVE_PROCESS_LOCK_START_TOLERANCE_MS = 30_000
+
+function isMatchingActiveProcessOwner({ identity, processId, activeProcessOwner } = {}) {
+  if (!activeProcessOwner || !Number.isSafeInteger(processId)) {
+    return false
+  }
+  const identityStartedAt = Date.parse(identity?.startedAt)
+  const lockOwners = activeProcessOwner.lockOwners ?? [activeProcessOwner]
+  return Number.isFinite(identityStartedAt) && lockOwners.length > 0 && lockOwners.every((owner) => {
+    const lockStartedAt = Date.parse(owner.startedAt)
+    return owner.pid === processId
+      && Number.isFinite(lockStartedAt)
+      && Math.abs(identityStartedAt - lockStartedAt) <= ACTIVE_PROCESS_LOCK_START_TOLERANCE_MS
+  })
+}
+
+function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCompletion, isHarvesterSession, processId, activeProcessOwner } = {}) {
   if (!identity) {
     return "identity-missing"
   }
-  if (!isHarvesterTestnet) {
-    return "non-testnet-or-invalid"
+  if (!isHarvesterSession) {
+    return "unsupported-environment-or-invalid"
   }
-  if (completion?.runtimeSessionId === identity.runtimeSessionId && completion?.logStreamsComplete === true) {
+  if (hasCompleteProcessCompletion({
+    identity,
+    completion,
+  }) && hasCompleteLoggerCompletion({
+    identity,
+    loggerCompletion,
+  })) {
     return "complete"
   }
-  return "incomplete"
+  return isMatchingActiveProcessOwner({
+    identity,
+    processId,
+    activeProcessOwner,
+  })
+    ? "active"
+    : "incomplete"
 }
 
-function resolveArchiveSessionProcessId({ identity, recoveryCheckpoint } = {}) {
-  if (Number.isSafeInteger(identity?.processId) && identity.processId > 0) {
-    return identity.processId
+function resolveArchiveSessionLoggerCompletionStatus({ identity, loggerCompletion, isHarvesterSession, processId, activeProcessOwner } = {}) {
+  if (hasCompleteLoggerCompletion({
+    identity,
+    loggerCompletion,
+  }) && isHarvesterSession) {
+    return "complete"
   }
-  if (identity?.runtimeSessionId === recoveryCheckpoint.runtimeSessionId) {
-    return recoveryCheckpoint.processIdentity?.processId ?? null
-  }
-  return null
+  return isHarvesterSession
+    && isMatchingActiveProcessOwner({
+    identity,
+    processId,
+    activeProcessOwner,
+  })
+    ? "active"
+    : "incomplete"
+}
+
+function resolveArchiveSessionProcessId({ identity } = {}) {
+  return Number.isSafeInteger(identity?.processId) && identity.processId > 0
+    ? identity.processId
+    : null
 }
 
 function resolveArchiveSessionRuntimeSessionId(identity) {
@@ -448,44 +621,97 @@ function resolveArchiveSessionEndTimestamp(completion) {
   return typeof completion?.endedAt === "string" ? completion.endedAt : null
 }
 
+function hasCompleteLoggerStreams(loggerCompletion) {
+  return loggerCompletion?.logStreamsComplete === true
+    && loggerCompletion?.streams?.harvesterLog === true
+    && loggerCompletion?.streams?.traceLog === true
+}
+
+function createArchiveSessionLifecycleFields({ sessionName, identity, completion, loggerCompletion } = {}) {
+  return {
+    relativePath: `logs/sessions/${sessionName}`,
+    processIdentityPath: `logs/sessions/${sessionName}/process-identity.json`,
+    processCompletionPath: `logs/sessions/${sessionName}/process-completed.json`,
+    loggerCompletionPath: `logs/sessions/${sessionName}/log-streams-completed.json`,
+    completionRuntimeSessionId: completion?.runtimeSessionId ?? null,
+    loggerCompletionRuntimeSessionId: loggerCompletion?.runtimeSessionId ?? null,
+    logStreamsComplete: completion?.logStreamsComplete === true,
+    loggerStreamsComplete: hasCompleteLoggerStreams(loggerCompletion),
+    startedAt: resolveArchiveSessionStartTimestamp(identity),
+    endedAt: resolveArchiveSessionEndTimestamp(completion),
+    loggerStreamsEndedAt: loggerCompletion?.endedAt ?? null,
+    processOutcome: resolveProcessOutcome(completion),
+  }
+}
+
+function createArchiveSessionIdentityFields({ identity, processId } = {}) {
+  return {
+    environment: identity?.environment ?? "unknown",
+    runtimeSessionId: resolveArchiveSessionRuntimeSessionId(identity),
+    processId,
+    sourceRevision: identity?.source?.commit ?? null,
+    workingTreeState: identity?.source?.workingTree ?? "unknown",
+  }
+}
+
 function createArchiveSessionEvidenceRecord({
   sessionName,
   identity,
   completion,
+  loggerCompletion,
   processId,
   missingFieldWarnings,
-  isHarvesterTestnet,
+  isHarvesterSession,
+  activeProcessOwner,
 } = {}) {
+  const completionStatus = resolveArchiveSessionCompletionStatus({
+    identity,
+    completion,
+    loggerCompletion,
+    isHarvesterSession,
+    processId,
+    activeProcessOwner,
+  })
+  const loggerCompletionStatus = resolveArchiveSessionLoggerCompletionStatus({
+    identity,
+    loggerCompletion,
+    isHarvesterSession,
+    processId,
+    activeProcessOwner,
+  })
   return {
     sessionName,
-    relativePath: `logs/sessions/${sessionName}`,
-    environment: identity?.environment ?? "unknown",
-    runtimeSessionId: resolveArchiveSessionRuntimeSessionId(identity),
-    processId,
-    startedAt: resolveArchiveSessionStartTimestamp(identity),
-    endedAt: resolveArchiveSessionEndTimestamp(completion),
-    sourceRevision: identity?.source?.commit ?? null,
-    workingTreeState: identity?.source?.workingTree ?? "unknown",
-    completionStatus: resolveArchiveSessionCompletionStatus({
+    activeSnapshotPath: completionStatus === "active"
+      ? `logs/sessions/${sessionName}/active-process-snapshot.json`
+      : null,
+    ...createArchiveSessionLifecycleFields({
+      sessionName,
       identity,
       completion,
-      isHarvesterTestnet,
+      loggerCompletion,
     }),
-    processOutcome: resolveProcessOutcome(completion),
+    ...createArchiveSessionIdentityFields({
+      identity,
+      processId,
+    }),
+    completionStatus,
+    loggerCompletionStatus,
     missingFieldWarnings,
-    include: isHarvesterTestnet,
+    include: isHarvesterSession,
   }
 }
 
-async function readArchiveSessionEvidence({ sessionsDirectory, sessionName, recoveryCheckpoint }) {
+async function readArchiveSessionEvidence({ sessionsDirectory, sessionName, recoveryCheckpoint, activeProcessOwner }) {
   const sessionDirectory = path.join(sessionsDirectory, sessionName)
-  const [identityResult, completionResult] = await Promise.all([
+  const [identityResult, completionResult, loggerCompletionResult] = await Promise.all([
     readOptionalSessionJson(path.join(sessionDirectory, "process-identity.json")),
     readOptionalSessionJson(path.join(sessionDirectory, "process-completed.json")),
+    readOptionalSessionJson(path.join(sessionDirectory, "log-streams-completed.json")),
   ])
   const { value: identity, error: identityError } = identityResult
   const { value: completion, error: completionError } = completionResult
-  const isHarvesterTestnet = isHarvesterTestnetSession({ identity })
+  const { value: loggerCompletion, error: loggerCompletionError } = loggerCompletionResult
+  const isHarvesterSession = isHarvesterRuntimeSession({ identity })
   const processId = resolveArchiveSessionProcessId({
     identity,
     recoveryCheckpoint,
@@ -493,24 +719,27 @@ async function readArchiveSessionEvidence({ sessionsDirectory, sessionName, reco
   const missingFieldWarnings = createArchiveSessionMissingFieldWarnings({
     identity,
     completion,
+    loggerCompletion,
     identityError,
     completionError,
+    loggerCompletionError,
   })
-  if (isHarvesterTestnet && processId === null) {
+  if (isHarvesterSession && processId === null) {
     missingFieldWarnings.push("PROCESS_ID_MISSING")
   }
   return createArchiveSessionEvidenceRecord({
     sessionName,
     identity,
     completion,
+    loggerCompletion,
     processId,
     missingFieldWarnings,
-    isHarvesterTestnet,
+    isHarvesterSession,
+    activeProcessOwner,
   })
 }
 
-
-async function readArchiveSessionInventory({ sessionsDirectory, recoveryCheckpoint } = {}) {
+async function readArchiveSessionInventory({ sessionsDirectory, recoveryCheckpoint, activeProcessOwner } = {}) {
   const sessionNames = (await readdir(sessionsDirectory)).sort()
   const sessions = []
   for (const sessionName of sessionNames) {
@@ -523,6 +752,7 @@ async function readArchiveSessionInventory({ sessionsDirectory, recoveryCheckpoi
       sessionsDirectory,
       sessionName,
       recoveryCheckpoint,
+      activeProcessOwner,
     }))
   }
   return sessions
@@ -540,7 +770,11 @@ function resolveArchiveLogSelectionStatus({ sessions, matchingRuntimeSessions } 
     return "ambiguous"
   }
   if (matchingRuntimeSessions.length === 1) {
-    if (matchingRuntimeSessions[0].completionStatus === "complete") {
+    const [matchingSession] = matchingRuntimeSessions
+    if (!Number.isSafeInteger(matchingSession.processId) || matchingSession.processId <= 0) {
+      return "incomplete"
+    }
+    if (["complete", "active"].includes(matchingSession.completionStatus)) {
       return "matched"
     }
     return "incomplete"
@@ -566,7 +800,7 @@ function assignArchiveSessionSelectionReasons({ sessions, recoveryCheckpoint, st
     if (!session.include) {
       session.selectionReason = session.completionStatus === "identity-missing"
         ? "identity-unavailable"
-        : "excluded-non-testnet"
+        : "excluded-unsupported-environment"
       continue
     }
     if (session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId) {
@@ -590,7 +824,7 @@ function createArchiveLogSelectionWarnings({ sessions, recoveryCheckpoint, statu
   if (status === "ambiguous") {
     warnings.push({
       code: "MULTIPLE_MATCHING_LOG_SESSIONS",
-      message: "Multiple TESTNET log sessions carry the recovery-facts runtime ID; none is selected as the unique matching session.",
+      message: "Multiple Harvester log sessions carry the recovery-facts runtime ID; none is selected as the unique matching session.",
     })
   } else if (status === "incomplete") {
     warnings.push({
@@ -600,7 +834,7 @@ function createArchiveLogSelectionWarnings({ sessions, recoveryCheckpoint, statu
   } else if (status !== "matched") {
     warnings.push({
       code: "NO_MATCHING_TRADING_LOG_SESSION",
-      message: `No unique complete TESTNET log session matches recovery runtime ${recoveryCheckpoint.runtimeSessionId}.`,
+      message: `No unique complete Harvester log session matches recovery runtime ${recoveryCheckpoint.runtimeSessionId}.`,
     })
   }
   for (const session of sessions) {
@@ -616,10 +850,11 @@ function createArchiveLogSelectionWarnings({ sessions, recoveryCheckpoint, statu
   return warnings
 }
 
-async function findArchiveLogSessionSelection({ sessionsDirectory, recoveryCheckpoint } = {}) {
+async function findArchiveLogSessionSelection({ sessionsDirectory, recoveryCheckpoint, activeProcessOwner } = {}) {
   const sessions = await readArchiveSessionInventory({
     sessionsDirectory,
     recoveryCheckpoint,
+    activeProcessOwner,
   })
   const matchingRuntimeSessions = findMatchingArchiveSessions({
     sessions,
@@ -639,6 +874,9 @@ async function findArchiveLogSessionSelection({ sessionsDirectory, recoveryCheck
   return {
     sessions,
     matchingSessionCandidates: matchingRuntimeSessions.map(({ sessionName }) => sessionName),
+    runtimeTradingMode: matchingRuntimeSessions.length === 1
+      ? matchingRuntimeSessions[0].environment
+      : "unknown",
     matchingTradingLogsAvailable,
     logRuntimeSessionId: matchingTradingLogsAvailable ? recoveryCheckpoint.runtimeSessionId : null,
     status,
@@ -648,17 +886,221 @@ async function findArchiveLogSessionSelection({ sessionsDirectory, recoveryCheck
       recoveryCheckpoint,
       status,
     }),
+    activeProcessOwner,
     unmatchedRuntimeSessionId: matchingTradingLogsAvailable ? null : recoveryCheckpoint.runtimeSessionId,
   }
 }
 
 
-async function copySelectedLogs({
-  sourceDirectory,
-  destinationDirectory,
-  recoveryCheckpoint,
-  onFileCopied,
-} = {}) {
+const LOG_STREAM_DEFINITIONS = Object.freeze([
+  {
+    key: "harvesterLog",
+    label: "HARVESTER LOG",
+    pattern: /^harvester\.log(?:\.\d+)*$/i,
+  },
+  {
+    key: "traceLog",
+    label: "TRACE LOG",
+    pattern: /^trace\.log(?:\.\d+)*$/i,
+  },
+])
+
+function resolveLogRotationIndex(filename) {
+  const match = /\.log(?:\.(\d+))?(?:\.gz)?$/i.exec(filename)
+  return match?.[1] ? Number(match[1]) : 0
+}
+
+function compareStreamFiles(...files) {
+  const [left, right] = files
+  return right.rotationIndex - left.rotationIndex || left.sourcePath.localeCompare(right.sourcePath)
+}
+
+function createSessionStreamFileInventory({ selection, artifactProvenance, streamDefinition } = {}) {
+  const allFiles = artifactProvenance
+    .filter((artifact) => {
+      const filename = path.posix.basename(artifact.sourcePath).replace(/\.gz$/i, "")
+      return streamDefinition.pattern.test(filename)
+    })
+    .map((artifact) => {
+      const [,, sessionName] = artifact.sourcePath.split("/")
+      const session = selection.sessions.find((candidate) => candidate.sessionName === sessionName)
+      return {
+        sourcePath: artifact.sourcePath,
+        archivePath: artifact.archivePath,
+        actualRuntimeId: session?.runtimeSessionId ?? null,
+        sourceSize: artifact.sourceSize,
+        archiveSize: artifact.archiveSize,
+        sourceSha256: artifact.sourceSha256,
+        archiveSha256: artifact.archiveSha256,
+        compression: artifact.compression,
+        rotationIndex: resolveLogRotationIndex(path.posix.basename(artifact.sourcePath)),
+        result: artifact.sourceSize > 0 ? "collected" : "empty",
+        reason: artifact.sourceSize > 0 ? null : "empty-log-file",
+      }
+    })
+  allFiles.sort(compareStreamFiles)
+  const expectedRuntimeId = selection.recoveryRuntimeSessionId
+  const matchingFiles = allFiles.filter((file) => file.actualRuntimeId === expectedRuntimeId)
+  const mismatchedFiles = allFiles.filter((file) => file.actualRuntimeId !== expectedRuntimeId)
+  const selectedFiles = matchingFiles.length > 0 ? matchingFiles : allFiles
+  let status = "matched"
+  let reason = null
+  if (matchingFiles.length === 0) {
+    status = mismatchedFiles.length > 0 ? "mismatched" : "missing"
+    reason = mismatchedFiles.length > 0 ? "only-unrelated-runtime-files-discovered" : "no-stream-files-discovered"
+  } else if (matchingFiles.some((file) => file.sourceSize === 0)) {
+    status = "incomplete"
+    reason = "one-or-more-stream-files-are-empty"
+  } else if (selection.status !== "matched") {
+    status = selection.status === "ambiguous" ? "unverifiable" : "incomplete"
+    reason = "runtime-session-completion-or-ownership-not-proven"
+  }
+  let totalBytes = 0
+  for (const file of matchingFiles) {
+    totalBytes += file.sourceSize
+  }
+  return {
+    status,
+    expectedRuntimeId,
+    actualRuntimeIds: [...new Set(selectedFiles.map((file) => file.actualRuntimeId).filter(Boolean))].sort(),
+    sourcePaths: selectedFiles.map((file) => file.sourcePath),
+    searchedDirectories: selection.sessions.map((session) => session.relativePath),
+    fileCount: matchingFiles.length,
+    totalBytes,
+    files: selectedFiles,
+    independentFiles: matchingFiles.length > 0 ? mismatchedFiles : [],
+    reason,
+  }
+}
+
+function resolveRecoveryProcessIdentityStatus(selection) {
+  if (!selection.recoveryProcessIdentity) {
+    return "missing"
+  }
+  if (selection.recoveryProcessIdentity.runtimeSessionId !== selection.recoveryRuntimeSessionId) {
+    return "mismatched"
+  }
+  const matchingSessions = selection.sessions.filter((session) =>
+    session.runtimeSessionId === selection.recoveryRuntimeSessionId
+  )
+  if (
+    matchingSessions.length === 1
+    && Number.isSafeInteger(selection.recoveryProcessIdentity.processId)
+    && matchingSessions[0].processId !== selection.recoveryProcessIdentity.processId
+  ) {
+    return "mismatched"
+  }
+  return "matched"
+}
+
+function resolveOverallEvidenceStatus({ selection, recoveryProcessIdentityStatus, unverifiableSessions, streams } = {}) {
+  if (selection.status === "ambiguous") {
+    return "unverifiable"
+  }
+  if (selection.status === "mismatched" || recoveryProcessIdentityStatus === "mismatched") {
+    return "mismatched"
+  }
+  if (recoveryProcessIdentityStatus === "missing") {
+    return "unverifiable"
+  }
+  if (selection.status === "matched") {
+    return Object.values(streams).every((stream) => stream.status === "matched") ? "matched" : "incomplete"
+  }
+  if (selection.status === "incomplete") {
+    return "incomplete"
+  }
+  if (selection.status === "missing" && unverifiableSessions.length > 0) {
+    return "unverifiable"
+  }
+  return selection.status
+}
+
+function createEvidenceIntegrity({ selection, artifactProvenance } = {}) {
+  const streams = Object.fromEntries(LOG_STREAM_DEFINITIONS.map((streamDefinition) => [
+    streamDefinition.key,
+    createSessionStreamFileInventory({
+      selection,
+      artifactProvenance,
+      streamDefinition,
+    }),
+  ]))
+  const recoveryProcessIdentityStatus = resolveRecoveryProcessIdentityStatus(selection)
+  const unverifiableSessions = selection.sessions
+    .filter((session) => session.completionStatus === "identity-missing")
+    .map((session) => session.relativePath)
+  const status = resolveOverallEvidenceStatus({
+    selection,
+    recoveryProcessIdentityStatus,
+    unverifiableSessions,
+    streams,
+  })
+  const mismatches = Object.values(streams).flatMap((stream) => stream.files
+    .filter((file) => file.actualRuntimeId !== selection.recoveryRuntimeSessionId)
+    .map((file) => ({
+      expectedRuntimeId: selection.recoveryRuntimeSessionId,
+      actualRuntimeId: file.actualRuntimeId,
+      sourcePath: file.sourcePath,
+      streamStatus: stream.status,
+    })))
+  return {
+    status,
+    validForPublication: status === "matched",
+    expectedRuntimeId: selection.recoveryRuntimeSessionId,
+    recoveryProcessIdentityStatus,
+    unverifiableSessions,
+    streams,
+    mismatches,
+  }
+}
+
+function formatStreamCollectionFailure({ stream, integrity, streamKey } = {}) {
+  const matchingFiles = stream.files.filter((file) => file.actualRuntimeId === integrity.expectedRuntimeId)
+  const mismatchedFiles = stream.files.filter((file) => file.actualRuntimeId !== integrity.expectedRuntimeId)
+  const discoveredRuntimeIds = [...new Set(mismatchedFiles.map((file) => file.actualRuntimeId).filter(Boolean))]
+  const missing = stream.status === "missing" ? "missing stream; " : ""
+  const sources = stream.files.map((file) => file.sourcePath).join(", ") || stream.searchedDirectories.join(", ") || "logs/sessions/"
+  const label = streamKey === "traceLog" ? "TRACE LOG" : "HARVESTER LOG"
+  return `${label} COLLECTION FAILED: expected runtime=${integrity.expectedRuntimeId}; discovered runtime=${discoveredRuntimeIds.join(",") || "none"}; matching files=${matchingFiles.length}; mismatched files=${mismatchedFiles.length}; ${missing}looked at: ${sources}; reason=${stream.reason ?? stream.status}`
+}
+
+function createEvidenceIntegrityFailureMessage(integrity) {
+  const summary = `DEBUG ARCHIVE EVIDENCE INTEGRITY FAILED: expected runtime=${integrity.expectedRuntimeId}; status=${integrity.status}; recovery process identity=${integrity.recoveryProcessIdentityStatus}; unverifiable session paths=${integrity.unverifiableSessions.join(", ") || "none"}.`
+  const streamReports = LOG_STREAM_DEFINITIONS.map((definition) => formatStreamCollectionFailure({
+    stream: integrity.streams[definition.key],
+    integrity,
+    streamKey: definition.key,
+  }))
+  return [summary, ...streamReports].join("\n")
+}
+
+async function copyIdentifiedSessionEvidence({ sourceDirectory, destinationDirectory, selection, onFileCopied } = {}) {
+  const artifactProvenance = []
+  for (const session of selection.sessions.filter(({ include }) => include)) {
+    await copyCompressedTree({
+      sourceDirectory,
+      destinationDirectory,
+      relative: path.join("sessions", session.sessionName),
+      onFileCopied: async (artifact) => {
+        const sourcePath = `logs/${artifact.sourceRelativePath}`
+        const archivePath = `logs/${artifact.relativePath}`
+        artifactProvenance.push({
+          sourcePath,
+          archivePath,
+          sourceSize: artifact.sourceSize,
+          sourceSha256: artifact.sourceSha256,
+          archiveSize: artifact.size,
+          archiveSha256: artifact.archiveSha256,
+          compression: artifact.compression,
+        })
+        await onFileCopied?.(artifact)
+      },
+    })
+
+  }
+  return artifactProvenance
+}
+
+async function validateLogRootAndSelectSessions({ sourceDirectory, destinationDirectory, recoveryCheckpoint, activeProcessOwner } = {}) {
   await mkdir(destinationDirectory, {
     recursive: true,
     mode: 0o700,
@@ -675,40 +1117,45 @@ async function copySelectedLogs({
       throw new Error(`Expected logs/${entry.name} to be a real directory.`)
     }
   }
-  const sessionsEntry = entries.find((entry) => entry.name === "sessions")
-  if (!sessionsEntry) {
-    throw new Error("The logs/sessions directory is missing; refusing to publish an archive without session evidence.")
+  if (!entries.some((entry) => entry.name === "sessions")) {
+    throw new Error("The logs/sessions directory is missing; refusing to archive without session evidence.")
   }
-  const selection = await findArchiveLogSessionSelection({
+  return findArchiveLogSessionSelection({
     sessionsDirectory: path.join(sourceDirectory, "sessions"),
     recoveryCheckpoint,
+    activeProcessOwner,
   })
-  const artifactProvenance = []
-  for (const session of selection.sessions.filter(({ include }) => include)) {
-    await copyCompressedTree({
-      sourceDirectory,
-      destinationDirectory,
-      relative: path.join("sessions", session.sessionName),
-      onFileCopied: async (artifact) => {
-        const sourcePath = `logs/${artifact.sourceRelativePath}`
-        const archivePath = `logs/${artifact.relativePath}`
-        artifactProvenance.push({
-          sourcePath,
-          archivePath,
-          sourceSize: artifact.sourceSize,
-          sourceSha256: artifact.sourceSha256,
-          archiveSha256: artifact.archiveSha256,
-        })
-        await onFileCopied?.(artifact)
-      },
-    })
-  }
-  return {
+}
+
+async function copySelectedLogs({ sourceDirectory, destinationDirectory, recoveryCheckpoint, activeProcessOwner, onFileCopied } = {}) {
+  const selection = await validateLogRootAndSelectSessions({
+    sourceDirectory,
+    destinationDirectory,
+    recoveryCheckpoint,
+    activeProcessOwner,
+  })
+  const artifactProvenance = await copyIdentifiedSessionEvidence({
+    sourceDirectory,
+    destinationDirectory,
+    selection,
+    onFileCopied,
+  })
+  const selectionWithRuntime = {
     ...selection,
+    recoveryRuntimeSessionId: recoveryCheckpoint.runtimeSessionId,
+    recoveryProcessIdentity: recoveryCheckpoint.processIdentity,
+    recoveryDataCommitHash: recoveryCheckpoint.dataCommitHash,
+  }
+  const evidenceIntegrity = createEvidenceIntegrity({
+    selection: selectionWithRuntime,
+    artifactProvenance,
+  })
+  return {
+    ...selectionWithRuntime,
+    evidenceIntegrity,
     artifactProvenance,
   }
 }
-
 
 export async function listRegularFiles({ directory, relative = "" } = {}) {
   const current = relative ? path.join(directory, relative) : directory
@@ -912,6 +1359,17 @@ function createArchiveSessionManifestEntry({ session } = {}) {
   return {
     sessionName: session.sessionName,
     relativePath: session.relativePath,
+    processIdentityPath: session.processIdentityPath,
+    processCompletionPath: session.processCompletionPath,
+    loggerCompletionPath: session.loggerCompletionPath,
+    activeSnapshotPath: session.completionStatus === "active"
+      ? `logs/sessions/${session.sessionName}/active-process-snapshot.json`
+      : null,
+    completionRuntimeSessionId: session.completionRuntimeSessionId,
+    loggerCompletionRuntimeSessionId: session.loggerCompletionRuntimeSessionId,
+    logStreamsComplete: session.logStreamsComplete,
+    loggerStreamsComplete: session.loggerStreamsComplete,
+    loggerStreamsEndedAt: session.loggerStreamsEndedAt,
     environment: session.environment,
     runtimeSessionId: session.runtimeSessionId,
     processId: session.processId,
@@ -920,6 +1378,7 @@ function createArchiveSessionManifestEntry({ session } = {}) {
     sourceRevision: session.sourceRevision,
     workingTreeState: session.workingTreeState,
     completionStatus: session.completionStatus,
+    loggerCompletionStatus: session.loggerCompletionStatus,
     processOutcome: session.processOutcome,
     selectionReason: session.selectionReason,
     missingFieldWarnings: session.missingFieldWarnings,
@@ -958,38 +1417,64 @@ async function createArchiveManifest({
   const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(directory, "recovery-facts"))
   const dataCommitHash = (await readFile(path.join(directory, "data_commit_hash"), "utf8")).trim()
   return {
-    formatVersion: 1,
+    formatVersion: 2,
     application: "harvester",
-    commandTradingMode: "testnet",
+    runtimeTradingMode: logSelection.runtimeTradingMode ?? "unknown",
     snapshotType: "runtime-correlated-log-evidence",
     createdAt,
     includedDirectories: [...SOURCE_DIRECTORIES],
     excludedPaths: [...EXCLUDED_ARCHIVE_PATHS],
     logSelection: {
       cumulative: "excluded",
-      sessions: "all-identified-TESTNET-sessions-preserved-independently; exact-runtime-id-match-required; gzip-compressed",
-      selectionReason: logSelection.selectionReason,
+      sessions: "all-identified-Harvester-sessions-preserved-independently; exact-runtime-id-match-required; completed sessions or active-process snapshots; gzip-compressed",
+      selectionReason: logSelection.evidenceIntegrity.status === "matched" ? logSelection.selectionReason : logSelection.evidenceIntegrity.status,
     },
     dataCommitHash,
-    logRuntimeSessionId: logSelection.logRuntimeSessionId,
+    logRuntimeSessionId: logSelection.evidenceIntegrity.validForPublication ? recoveryCheckpoint.runtimeSessionId : null,
     recoveryRuntimeSessionId: recoveryCheckpoint.runtimeSessionId,
-    matchingTradingLogsAvailable: logSelection.matchingTradingLogsAvailable,
+    matchingTradingLogsAvailable: logSelection.evidenceIntegrity.validForPublication,
     matchingSessionCandidates: logSelection.matchingSessionCandidates,
     runtimeIdentity: {
-      status: logSelection.status,
-      correlation: logSelection.status === "matched"
+      status: logSelection.evidenceIntegrity.status,
+      correlation: logSelection.evidenceIntegrity.status === "matched"
         ? "same-runtime-session"
         : "independent-evidence-do-not-correlate",
     },
     tradingRuntime: createTradingRuntimeManifestEntry({ recoveryCheckpoint }),
     sessionInventory: logSelection.sessions.map((session) => createArchiveSessionManifestEntry({ session })),
-    warnings: logSelection.warnings,
+    warnings: [
+      ...logSelection.warnings,
+      ...(logSelection.evidenceIntegrity.validForPublication ? [] : [{
+        code: "DEBUG_TRACE_STREAM_INTEGRITY_FAILED",
+        message: createEvidenceIntegrityFailureMessage(logSelection.evidenceIntegrity),
+      }]),
+    ],
     duplicateArtifacts: createDuplicateArchiveArtifactGroups({ artifactProvenance }),
+    evidenceIntegrity: logSelection.evidenceIntegrity,
     recoveryFactSequence: recoveryCheckpoint.sequence,
     files: entries,
   }
 }
 
+
+async function assertReadableGzipFile({ filename } = {}) {
+  const discardStream = new Writable({
+    write(...writeArguments) {
+      writeArguments.at(-1)()
+    },
+  })
+  try {
+    await pipeline(
+      createReadStream(filename),
+      createGunzip(),
+      discardStream,
+    )
+  } catch (error) {
+    throw new Error(`Compressed archive evidence is not readable gzip data: ${filename}`, {
+      cause: error,
+    })
+  }
+}
 
 export async function verifyArchive({ directory, manifest } = {}) {
   const expectedPaths = manifest.files.map((entry) => entry.path).sort()
@@ -1003,6 +1488,9 @@ export async function verifyArchive({ directory, manifest } = {}) {
     const fileStats = await stat(filename)
     if (fileStats.size !== entry.size || await sha256File(filename) !== entry.sha256) {
       throw new Error(`Archive checksum or size verification failed: ${entry.path}`)
+    }
+    if (/\.gz$/i.test(entry.path)) {
+      await assertReadableGzipFile({ filename })
     }
   }
 }
@@ -1227,10 +1715,291 @@ function resolveArchiveSourcePaths({ packageDirectory, env } = {}) {
   ]
 }
 
-async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive, onProgress } = {}) {
+async function readHarvesterProcessLockEntries({ lockDirectory } = {}) {
+  try {
+    return await readdir(lockDirectory, { withFileTypes: true })
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return []
+    }
+    throw error
+  }
+}
+
+async function readHarvesterProcessLockOwner({ filename, hostname } = {}) {
+  const stats = await lstat(filename)
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    throw new Error(`Cannot snapshot Harvester: invalid lock file ${filename}.`)
+  }
+  let owner
+  try {
+    owner = JSON.parse(await readFile(filename, "utf8"))
+  } catch (error) {
+    throw new Error(`Cannot snapshot Harvester: unreadable lock metadata ${filename}.`, { cause: error })
+  }
+  const validOwner = Number.isSafeInteger(owner?.pid)
+    && owner.pid > 0
+    && typeof owner.hostname === "string"
+    && typeof owner.startedAt === "string"
+    && typeof owner.token === "string"
+    && owner.token.trim().length > 0
+  if (!validOwner) {
+    throw new Error(`Cannot snapshot Harvester: invalid lock metadata ${filename}.`)
+  }
+  if (owner.hostname.toLowerCase() !== hostname.toLowerCase()) {
+    throw new Error(`Cannot snapshot Harvester: lock belongs to another host (${owner.hostname}).`)
+  }
+  return owner
+}
+
+function resolveHarvesterProcessLockNamespace(lockName) {
+  const applicationLock = /^\.harvester-trading-([a-f0-9]{64})\.lock$/i.exec(lockName)
+  if (applicationLock) {
+    return {
+      namespace: "application",
+      fingerprint: applicationLock[1].toLowerCase(),
+    }
+  }
+  const hostLock = /^\.([a-z0-9-]+)-harvester-trading-([a-f0-9]{64})\.lock$/i.exec(lockName)
+  if (hostLock) {
+    return {
+      namespace: "host",
+      broker: hostLock[1].toLowerCase(),
+      fingerprint: hostLock[2].toLowerCase(),
+    }
+  }
+  return null
+}
+
+
+function assertActiveProcessLockNamespacePairs(owners) {
+  const lockPairs = new Map()
+  for (const owner of owners) {
+    const pairKey = `${owner.pid}:${owner.fingerprint}`
+    const namespaces = lockPairs.get(pairKey) ?? new Set()
+    if (namespaces.has(owner.namespace)) {
+      throw new Error(`Cannot snapshot Harvester: duplicate ${owner.namespace} lock for active process ${owner.pid}.`)
+    }
+    namespaces.add(owner.namespace)
+    lockPairs.set(pairKey, namespaces)
+  }
+  for (const [pairKey, namespaces] of lockPairs) {
+    if (!namespaces.has("host") || !namespaces.has("application")) {
+      throw new Error(`Cannot snapshot Harvester: active process lock namespace pair is incomplete for ${pairKey}; both host and application lock namespaces are required.`)
+    }
+  }
+}
+
+
+async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.hostname(), isProcessAlive = isHarvesterProcessAlive } = {}) {
+  const entries = await readHarvesterProcessLockEntries({ lockDirectory })
+  const owners = []
+  const lockEntries = entries
+    .filter((candidate) => candidate.name.endsWith(".lock"))
+    .sort((...sortArguments) => sortArguments[0].name.localeCompare(sortArguments[1].name))
+  for (const entry of lockEntries) {
+    const filename = path.join(lockDirectory, entry.name)
+    const owner = await readHarvesterProcessLockOwner({
+      filename,
+      hostname,
+    })
+    if (isProcessAlive(owner.pid)) {
+      const lockNamespace = resolveHarvesterProcessLockNamespace(entry.name)
+      if (!lockNamespace) {
+        throw new Error(`Cannot snapshot Harvester: unsupported active process lock namespace ${entry.name}.`)
+      }
+      owners.push({
+        ...lockNamespace,
+        lockName: entry.name,
+        pid: owner.pid,
+        hostname: owner.hostname,
+        startedAt: owner.startedAt,
+        token: owner.token,
+      })
+    }
+  }
+  assertActiveProcessLockNamespacePairs(owners)
+  const uniqueOwners = [...new Map(owners.map((owner) => [owner.pid, owner])).values()]
+  if (uniqueOwners.length > 1) {
+    throw new Error(`Cannot snapshot Harvester: multiple active process owners: ${uniqueOwners.map((owner) => owner.pid).join(", ")}.`)
+  }
+  const [activeOwner] = uniqueOwners
+  return activeOwner
+    ? {
+        ...activeOwner,
+        lockOwners: owners,
+      }
+    : null
+}
+
+function createActiveProcessSnapshotMarker({ session, streams, activeProcessOwner, recoveryCheckpoint } = {}) {
+  const lockOwners = activeProcessOwner.lockOwners ?? [activeProcessOwner]
+  return {
+    formatVersion: 1,
+    snapshotType: "active-harvester-process",
+    runtimeSessionId: recoveryCheckpoint.runtimeSessionId,
+    processId: activeProcessOwner.pid,
+    hostname: activeProcessOwner.hostname,
+    lockStartedAt: activeProcessOwner.startedAt,
+    lockFiles: lockOwners.map((owner) => ({
+      name: owner.lockName,
+      namespace: owner.namespace,
+      broker: owner.broker ?? null,
+      fingerprint: owner.fingerprint,
+      startedAt: owner.startedAt,
+    })),
+    processStartedAt: session.startedAt,
+    capturedAt: new Date().toISOString(),
+    recoveryDataCommitHash: recoveryCheckpoint.dataCommitHash,
+    streams: {
+      harvesterLog: streams?.harvesterLog?.status === "matched" && streams.harvesterLog.fileCount > 0,
+      traceLog: streams?.traceLog?.status === "matched" && streams.traceLog.fileCount > 0,
+    },
+  }
+}
+
+
+async function writeActiveProcessSnapshotMarker({ localArchive, logSelection, activeProcessOwner, recoveryCheckpoint } = {}) {
+  const session = logSelection.sessions.find((candidate) =>
+    candidate.runtimeSessionId === recoveryCheckpoint.runtimeSessionId && candidate.completionStatus === "active"
+  )
+  if (!session?.activeSnapshotPath) {
+    throw new Error(`Cannot create an active snapshot marker without one uniquely matched active session for ${recoveryCheckpoint.runtimeSessionId}.`)
+  }
+  const marker = createActiveProcessSnapshotMarker({
+    session,
+    streams: logSelection.evidenceIntegrity?.streams,
+    activeProcessOwner,
+    recoveryCheckpoint,
+  })
+  if (!marker.streams.harvesterLog || !marker.streams.traceLog) {
+    throw new Error(`Cannot create an active snapshot marker without both runtime-matched log streams for ${recoveryCheckpoint.runtimeSessionId}.`)
+  }
+  const markerPath = path.join(localArchive, session.activeSnapshotPath)
+  await mkdir(path.dirname(markerPath), {
+    recursive: true,
+    mode: 0o700,
+  })
+  await writeFile(markerPath, `${JSON.stringify(marker, null, 2)}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o600,
+  })
+}
+function areActiveProcessLockOwnersUnchanged({ initialOwner, currentOwner } = {}) {
+  if (
+    currentOwner?.pid !== initialOwner?.pid
+    || currentOwner?.hostname !== initialOwner?.hostname
+  ) {
+    return false
+  }
+  const initialLockOwners = initialOwner.lockOwners ?? [initialOwner]
+  const currentLockOwners = currentOwner.lockOwners ?? [currentOwner]
+  if (initialLockOwners.length !== currentLockOwners.length) {
+    return false
+  }
+  const currentOwnersByName = new Map(currentLockOwners.map((owner) => [owner.lockName, owner]))
+  return initialLockOwners.every((initialLockOwner) => {
+    const currentLockOwner = currentOwnersByName.get(initialLockOwner.lockName)
+    return currentLockOwner !== undefined
+      && currentLockOwner.pid === initialLockOwner.pid
+      && currentLockOwner.hostname === initialLockOwner.hostname
+      && currentLockOwner.startedAt === initialLockOwner.startedAt
+      && currentLockOwner.token === initialLockOwner.token
+      && currentLockOwner.namespace === initialLockOwner.namespace
+      && currentLockOwner.fingerprint === initialLockOwner.fingerprint
+      && currentLockOwner.broker === initialLockOwner.broker
+  })
+}
+
+
+async function writeIncompleteActiveSnapshotMarker({
+  localArchive,
+  activeProcessOwner,
+  recoveryCheckpoint,
+  reason,
+} = {}) {
+  const lockOwners = activeProcessOwner.lockOwners ?? [activeProcessOwner]
+  const marker = {
+    formatVersion: 1,
+    status: "incomplete",
+    snapshotType: "active-harvester-process",
+    runtimeSessionId: recoveryCheckpoint.runtimeSessionId,
+    processId: activeProcessOwner.pid,
+    hostname: activeProcessOwner.hostname,
+    capturedAt: new Date().toISOString(),
+    recoveryDataCommitHash: recoveryCheckpoint.dataCommitHash,
+    reason,
+    lockFiles: lockOwners.map((owner) => ({
+      name: owner.lockName ?? "unknown",
+      namespace: owner.namespace ?? "unknown",
+      broker: owner.broker ?? null,
+      fingerprint: owner.fingerprint ?? null,
+      startedAt: owner.startedAt,
+    })),
+  }
+  await writeFile(
+    path.join(localArchive, "collection-incomplete.json"),
+    `${JSON.stringify(marker, null, 2)}\n`,
+    {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    },
+  )
+}
+
+
+async function assertActiveSnapshotOwnershipStable({
+  localArchive,
+  activeProcessOwner,
+  lockDirectory,
+  isProcessAlive,
+  recoveryCheckpoint,
+} = {}) {
+  let currentOwner
+  let ownershipReadError
+  try {
+    currentOwner = await readActiveHarvesterProcessOwner({
+      lockDirectory,
+      isProcessAlive,
+    })
+  } catch (error) {
+    ownershipReadError = error
+  }
+  const lockOwnershipUnchanged = !ownershipReadError && areActiveProcessLockOwnersUnchanged({
+    initialOwner: activeProcessOwner,
+    currentOwner,
+  })
+  const processStillAlive = isProcessAlive(activeProcessOwner.pid)
+  if (lockOwnershipUnchanged && processStillAlive) {
+    return
+  }
+  let reason = "process-lock-ownership-changed-during-collection"
+  let failureMessage = "The active Harvester process lock ownership changed or became ambiguous during archive collection"
+  if (!processStillAlive) {
+    reason = "process-exited-during-collection"
+    failureMessage = "The active Harvester process exited during archive collection"
+  } else if (ownershipReadError) {
+    reason = "process-lock-ownership-unverifiable-during-collection"
+  }
+  await writeIncompleteActiveSnapshotMarker({
+    localArchive,
+    activeProcessOwner,
+    recoveryCheckpoint,
+    reason,
+  })
+  throw new Error(`${failureMessage} (PID ${activeProcessOwner.pid}); the snapshot is not publishable.`, {
+    cause: ownershipReadError,
+  })
+}
+
+async function copyArchiveEvidence({
+  sourcePaths, packageDirectory, localArchive, activeProcessOwner,
+  lockDirectory, isProcessAlive, onProgress,
+} = {}) {
   const recoverySource = sourcePaths.find((source) => source.directoryName === "recovery-facts")
   const recoverySize = await getTreeSize(recoverySource.sourceDirectory)
-  const recoveryCheckpoint = await readLatestRecoveryCheckpoint(recoverySource.sourceDirectory)
   let retainedFiles = 0
   let copiedBytes = 0
   const onFileCopied = ({ size }) => {
@@ -1238,11 +2007,21 @@ async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive
     copiedBytes += size
     reportProgress(onProgress, `  retained/copied ${retainedFiles} files — ${formatBytes(copiedBytes)}`)
   }
-  reportProgress(onProgress, "Archive: matching TESTNET process sessions to the latest durable recovery runtime; cumulative logs are excluded...")
+
+  reportProgress(onProgress, `Snapshotting committed recovery-facts/ (${recoverySize.files.length} files, ${formatBytes(recoverySize.totalBytes)})...`)
+  await copyRegularTree({
+    sourceDirectory: recoverySource.sourceDirectory,
+    destinationDirectory: path.join(localArchive, "recovery-facts"),
+    onFileCopied,
+  })
+  const recoveryCheckpoint = await readLatestRecoveryCheckpoint(path.join(localArchive, "recovery-facts"))
+
+  reportProgress(onProgress, "Archive: matching Harvester process sessions to the archived committed recovery runtime; cumulative logs are excluded...")
   const logSelection = await copySelectedLogs({
     sourceDirectory: path.join(packageDirectory, "logs"),
     destinationDirectory: path.join(localArchive, "logs"),
     recoveryCheckpoint,
+    activeProcessOwner,
     onFileCopied,
   })
   if (!logSelection.matchingTradingLogsAvailable) {
@@ -1251,24 +2030,30 @@ async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive
       `WARNING: matchingTradingLogsAvailable=false for recovery runtime ${logSelection.unmatchedRuntimeSessionId}; unrelated sessions are retained only as independent evidence.`,
     )
   }
-  reportProgress(onProgress, `Copying complete recovery-facts/ (${recoverySize.files.length} files, ${formatBytes(recoverySize.totalBytes)})...`)
-  await copyRegularTree({
-    sourceDirectory: recoverySource.sourceDirectory,
-    destinationDirectory: path.join(localArchive, "recovery-facts"),
-    onFileCopied,
-  })
-  const recoveryCheckpointAfterCopy = await readLatestRecoveryCheckpoint(recoverySource.sourceDirectory)
-  if (
-    recoveryCheckpointAfterCopy.sequence !== recoveryCheckpoint.sequence
-    || recoveryCheckpointAfterCopy.dataCommitHash !== recoveryCheckpoint.dataCommitHash
-    || recoveryCheckpointAfterCopy.runtimeSessionId !== recoveryCheckpoint.runtimeSessionId
-  ) {
-    throw new Error("Operational State Store changed while the debug snapshot was being collected; refusing to create a mixed-time archive.")
+  if (activeProcessOwner) {
+    await assertActiveSnapshotOwnershipStable({
+      localArchive,
+      activeProcessOwner,
+      lockDirectory,
+      isProcessAlive,
+      recoveryCheckpoint,
+    })
+    const activeSessionMatches = logSelection.sessions.some((session) =>
+      session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId
+        && session.completionStatus === "active"
+    )
+    if (activeSessionMatches) {
+      await writeActiveProcessSnapshotMarker({
+        localArchive,
+        logSelection,
+        activeProcessOwner,
+        recoveryCheckpoint,
+      })
+    }
   }
-  reportProgress(onProgress, `Evidence copy complete: ${retainedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
+  reportProgress(onProgress, `Evidence snapshot complete: ${retainedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
   return logSelection
 }
-
 
 async function writeAndVerifyLocalArchive({
   localArchive,
@@ -1322,10 +2107,7 @@ async function writeAndVerifyLocalArchive({
 }
 
 
-function assertCollectionArguments({ env, args } = {}) {
-  if (env.TRADING_MODE !== "testnet") {
-    throw new Error("Debug archive collection requires TRADING_MODE=testnet. LIVE and unspecified modes are rejected.")
-  }
+function assertCollectionArguments({ args } = {}) {
   if (args.length !== 0) {
     throw new TypeError("Usage: archive:debug")
   }
@@ -1339,6 +2121,9 @@ async function collectPreparedArchive({
   createdAt,
   onProgress,
   onArchiveCreatedFn,
+  activeProcessOwner,
+  lockDirectory,
+  isProcessAlive,
 }) {
   try {
     await mkdir(localArchive, {
@@ -1349,6 +2134,9 @@ async function collectPreparedArchive({
       sourcePaths,
       packageDirectory,
       localArchive,
+      activeProcessOwner,
+      lockDirectory,
+      isProcessAlive,
       onProgress,
     })
     await writeAndVerifyLocalArchive({
@@ -1361,6 +2149,9 @@ async function collectPreparedArchive({
       directory: localArchive,
       archiveName,
     })
+    if (!logSelection.evidenceIntegrity.validForPublication) {
+      throw new Error(createEvidenceIntegrityFailureMessage(logSelection.evidenceIntegrity))
+    }
     reportProgress(onProgress, "Local debug archive collected and verified.")
     return {
       archiveName,
@@ -1386,14 +2177,15 @@ export async function runHarvesterDebugArchive({
   now = () => new Date(),
   createArchiveId = randomUUID,
   onArchiveCreatedFn,
-  onProgress = (message) => process.stdout.write(`${message}\\n`),
+  onProgress = (message) => process.stdout.write(`${message}\n`),
   lockDirectory = path.join(os.homedir(), ".coinzilla", "harvester", "process-locks"),
+  isProcessAlive = isHarvesterProcessAlive,
 } = {}) {
-  assertCollectionArguments({
-    env,
-    args,
+  assertCollectionArguments({ args })
+  const activeProcessOwner = await readActiveHarvesterProcessOwner({
+    lockDirectory,
+    isProcessAlive,
   })
-  await assertHarvesterProcessStopped({ lockDirectory })
   const sourcePaths = resolveArchiveSourcePaths({
     packageDirectory,
     env,
@@ -1421,6 +2213,9 @@ export async function runHarvesterDebugArchive({
     createdAt,
     onProgress,
     onArchiveCreatedFn,
+    activeProcessOwner,
+    lockDirectory,
+    isProcessAlive,
   })
 }
 
@@ -1459,7 +2254,7 @@ async function main() {
     result.matchingTradingLogsAvailable
       ? `Matched runtime: ${result.logRuntimeSessionId}`
       : `Unmatched recovery runtime: ${result.unmatchedRuntimeSessionId}`,
-    "Included: all identified TESTNET session evidence as separate sessions, recovery-facts/ and data_commit_hash",
+    "Included: all identified testnet/live session evidence as separate sessions, recovery-facts/ and data_commit_hash",
     "Excluded: all data/ (databases/backups), all logs/cumulative/ and unclassified log-root entries",
     `Local archive: ${result.localArchive}`,
   ].join("\n")

@@ -9,7 +9,7 @@ export interface ScenarioGuideStep {
 
 export interface ScenarioGuide {
   readonly title: string;
-  readonly availability: 'EXECUTABLE' | 'PRELIMINARY';
+  readonly availability: 'EXECUTABLE' | 'PRELIMINARY' | 'INSPECTION_ONLY';
   readonly purpose: string;
   readonly startingState: string;
   readonly injectedCondition: string;
@@ -228,8 +228,74 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
   'RS-004-011': createPreliminaryGuide(),
 });
 
-export function getScenarioGuide(scenarioId: string): ScenarioGuide | null {
-  return guides[scenarioId] ?? null;
+function formatInspectionValue(value: unknown): string {
+  return value === undefined ? 'Not declared.' : JSON.stringify(value, null, 2) ?? String(value);
+}
+
+function resolveDeclaredEventType(event: unknown): string {
+  if (typeof event !== 'object' || event === null || Array.isArray(event)) {
+    return 'event';
+  }
+  const eventType = (event as Readonly<Record<string, unknown>>)['type'];
+  return typeof eventType === 'string' ? eventType : 'event';
+}
+
+function createConservativeInspectionGuide(details: Readonly<Record<string, unknown>>): ScenarioGuide {
+  const declaredEvents = Array.isArray(details['inputEvents']) ? details['inputEvents'] : [];
+  const expected = {
+    state: details['expectedState'] ?? 'Not declared.',
+    orders: details['expectedOrders'] ?? 'Not declared.',
+    accounting: details['expectedAccounting'] ?? 'Not declared.',
+    sideEffects: details['expectedSideEffects'] ?? 'Not declared.',
+    invariants: details['invariants'] ?? 'Not declared.',
+  };
+  const steps: ScenarioGuideStep[] = [
+    { id: 'declared-initial-state', kind: 'start', label: 'Declared initial state', detail: formatInspectionValue(details['initialState']) },
+    ...(declaredEvents.length > 0
+      ? declaredEvents.map((event, index) => ({
+        id: `declared-event-${index + 1}`,
+        kind: 'condition' as const,
+        label: `Declared event ${index + 1}: ${resolveDeclaredEventType(event)}`,
+        detail: formatInspectionValue(event),
+      }))
+      : [{
+        id: 'no-declared-events',
+        kind: 'condition' as const,
+        label: 'No input events declared',
+        detail: 'The source scenario defines no ordered input events.',
+      }]),
+    { id: 'declared-expected-outcomes', kind: 'outcome', label: 'Declared expected outcomes', detail: formatInspectionValue(expected) },
+  ];
+  const title = typeof details['title'] === 'string' ? details['title'] : 'Conservative domain scenario';
+  const description = typeof details['description'] === 'string' ? details['description'] : title;
+  return Object.freeze({
+    title,
+    availability: 'INSPECTION_ONLY',
+    purpose: description,
+    startingState: formatInspectionValue(details['initialState']),
+    injectedCondition: formatInspectionValue(details['preconditions']),
+    expectedOutcome: formatInspectionValue(expected),
+    limitations: Object.freeze([
+      'Inspection only: no CG production-flow simulation adapter or executable input schema is registered; Run remains blocked.',
+      'TEST-MAPPED links a test candidate. It does not mean the Dashboard Runner executed that test or independently verified its assertions.',
+      'Declared input events are scenario metadata, not observed runtime events or an execution trace.',
+      'The branched CG strategy flow is derived from the canonical Conservative specification; it is not a per-scenario execution trace.',
+    ]),
+    steps: Object.freeze(steps),
+  });
+}
+export function getScenarioGuide(
+  scenarioId: string,
+  details?: Readonly<Record<string, unknown>>,
+): ScenarioGuide | null {
+  const reviewedGuide = guides[scenarioId];
+  if (reviewedGuide) {
+    return reviewedGuide;
+  }
+  if (scenarioId.startsWith('CON-') && details) {
+    return createConservativeInspectionGuide(details);
+  }
+  return null;
 }
 
 export function getScenarioGuideTitle(scenarioId: string): string | null {

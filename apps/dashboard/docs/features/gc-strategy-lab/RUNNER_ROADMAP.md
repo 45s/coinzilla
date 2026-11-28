@@ -4,9 +4,15 @@
 
 ## Current status — 2026-11-28
 
-### GitHub `develop` catalogue preview
+### CG-conservative Dashboard inspection catalogue — 2026-11-28
 
-Dashboard issue [#1986](https://github.com/45s/coinzilla/issues/1986) adds an opt-in checkbox that reads the RS scenario declarations from two source files at a single pinned `develop` commit and displays their IDs, names, layer and mapping status without restarting Harvester. This is a metadata preview only: downloaded JavaScript is never evaluated, all remote entries are forced non-executable, and scenario submission remains disabled until the operator switches back to the live Harvester catalogue. The live `/catalog` endpoint remains authoritative for execution. A refresh failure preserves the previously displayed catalogue and reports the error.
+Issue [#2007](https://github.com/45s/coinzilla/issues/2007) / PR [#2008](https://github.com/45s/coinzilla/pull/2008) adds the complete eighteen-entry Conservative domain inventory to the live Harvester catalogue under the strategy ID `CG-conservative`. The Dashboard strategy and scenario selectors can inspect each scenario's source-declared preconditions, initial state, ordered input events, expected state/orders/accounting/side effects, invariants, source links and coverage status. The Dashboard uses a dedicated branched CG strategy graph derived from §9 of the canonical Conservative specification, with an RS-style decision tree rather than a linear chain of metadata events. It shows the recovery-SELL admission, cancellation/reconciliation, exchange-filter/dust, terminal-fill and cycle-completion branches. The selected scenario's source contract and mapped tests remain separately inspectable; the strategy graph is visual-only and is not an execution trace.
+
+The current inventory is test-mapped metadata, not a set of executable Runner input scripts. All eighteen entries remain `BLOCKED` / non-executable, including the single `PARTIAL` coverage entry. The Dashboard shows the coverage reason and execution-readiness reason separately and does not permit input editing or Run. No CG worker is registered, so CG cannot fall through to the RS worker. A future CG execution increment must add a fixed isolated adapter that invokes actual Conservative production flow and produces independent assertions/trace evidence. `GC-aggressive` remains reserved for the future aggressive strategy.
+
+## GitHub `develop` catalogue preview
+
+Dashboard issue [#1986](https://github.com/45s/coinzilla/issues/1986) adds an opt-in checkbox that reads the RS declarations and the four static `CG-conservative` metadata parts from one pinned `develop` commit. It displays both strategy catalogues without restarting Harvester. The snapshot is metadata only: downloaded JavaScript is never evaluated, Conservative arrays are parsed as JSON literals, all remote entries are forced non-executable, and scenario submission remains disabled until the operator switches back to the live Harvester catalogue.
 
 ## Scenario graph visualization — 2026-11-28
 

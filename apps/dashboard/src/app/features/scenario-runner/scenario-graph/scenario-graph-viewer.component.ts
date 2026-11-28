@@ -11,7 +11,11 @@ import type { ScenarioGraph } from './domain/scenario-graph';
 })
 export class ScenarioGraphViewerComponent {
   readonly graph = input.required<ScenarioGraph>();
-  readonly viewModel = computed(() => createScenarioGraphViewModel({ graph: this.graph(), orientation: 'vertical' }));
+  readonly viewModel = computed(() => {
+    const graph = this.graph();
+    const orientation = graph.source.kind === 'cg-domain-specification' ? 'tree' : 'vertical';
+    return createScenarioGraphViewModel({ graph, orientation });
+  });
 
   edgePath(edge: ReturnType<typeof createScenarioGraphViewModel>['edges'][number]): string {
     const { start, control1, control2, end } = edge.curve;
