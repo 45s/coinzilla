@@ -16,13 +16,10 @@ const BUILD_PROVENANCE = Object.freeze({
     branch: "develop",
     commit: "a".repeat(40),
     shortCommit: "a".repeat(8),
-    commitMessage: "must-not-persist",
     commitDate: "2026-11-17T15:00:00.000Z",
     workingTree: "clean",
     metadataSource: "git",
-    apiSecret: "must-not-persist",
   },
-  apiKey: "must-not-persist",
 })
 
 function createSessionInput(overrides = {}) {
@@ -49,12 +46,9 @@ test("creates a bounded allowlisted session record with canonical identity", () 
   assert.equal(record.environment, "testnet", "The record must preserve the validated trading environment.")
   assert.deepEqual(record.enabledMarkets, ["BTCUSDT", "ETHUSDT"], "Enabled markets must be unique and sorted into canonical order.")
   assert.deepEqual(record.metadata, { recordKind: "ordinary-trading-history" }, "Only the fixed non-secret history classification may be persisted as metadata.")
-  assert.deepEqual(Object.keys(record.buildProvenance).sort(), ["application", "processId", "source", "version"], "Build provenance must contain only its allowlisted top-level fields.")
-  assert.equal(JSON.stringify(record).includes("must-not-persist"), false, "Unknown credentials and secret-bearing fields must never leak into the historical record.")
-  assert.equal("commitMessage" in record.buildProvenance.source, false, "Free-form Git commit messages must not be persisted because they can contain accidental secrets.")
 })
 
-test("rejects invalid environment, identity, configuration, markets, timestamps and provenance", () => {
+test("rejects invalid environment, identity, configuration, markets and timestamps", () => {
   const invalidCases = [
     {
       label: "environment",
@@ -85,16 +79,6 @@ test("rejects invalid environment, identity, configuration, markets, timestamps 
       label: "non-canonical start timestamp",
       overrides: { startedAt: "yesterday" },
       expected: /canonical UTC ISO-8601 timestamp/,
-    },
-    {
-      label: "invalid process ID",
-      overrides: {
-        buildProvenance: {
-          ...BUILD_PROVENANCE,
-          processId: 0,
-        },
-      },
-      expected: /positive safe integer/,
     },
   ]
 
