@@ -8,6 +8,7 @@ import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { appConfig as defaultAppConfig } from "../config/index.js"
 import { main as startMain } from "./index.js"
+import { describeProcessError } from "./infrastructure/process/describe-process-error.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { UnvalidatedMarketExchangeConstraintsError } from "./domain/market/errors/unvalidated-market-exchange-constraints-error.js"
 import { StrategyId } from "./domain/strategies/strategy-ids.js"
@@ -2759,4 +2760,39 @@ test("keeps unknown native startup codes beside the catalogued startup wrapper",
   } finally {
     process.exitCode = previousExitCode
   }
+})
+
+
+test("preserves nested process error identity while redacting credential-bearing text", () => {
+  const secretBotToken = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+  const nestedCause = Object.assign(
+    new Error("request failed with apiKey=api-secret-value and token=token-secret-value"),
+    { code: "ERR_PROVIDER_HANDSHAKE" },
+  )
+  const original = Object.assign(
+    new Error(`provider failed: bot${secretBotToken} authorization=Bearer bearer-secret-value https://alice:password-secret@private.example/path`, {
+      cause: nestedCause,
+    }),
+    { code: "HARVESTER_PROVIDER_IDENTITY_INVALID" },
+  )
+
+  const diagnostic = describeProcessError(original)
+  const serialized = JSON.stringify(diagnostic)
+
+  assert.equal(diagnostic.name, "Error", "The original error name must be preserved.")
+  assert.equal(diagnostic.code, original.code, "The original stable code must be preserved.")
+  assert.ok(diagnostic.message.includes("[REDACTED]"), "Credential-bearing message fragments must be masked.")
+  assert.equal(diagnostic.cause.name, "Error", "The nested cause name must be preserved.")
+  assert.equal(diagnostic.cause.code, nestedCause.code, "The nested native cause code must be preserved.")
+  assert.ok(diagnostic.cause.message.includes("[REDACTED]"), "Nested cause messages must also be sanitized.")
+  for (const secret of [
+    secretBotToken,
+    "api-secret-value",
+    "token-secret-value",
+    "bearer-secret-value",
+    "password-secret",
+  ]) {
+    assert.equal(serialized.includes(secret), false, `Serialized process diagnostics must not expose ${secret}.`)
+  }
+  assert.ok(diagnostic.stack.includes("[REDACTED]"), "The original stack must remain available with credential fragments masked.")
 })
