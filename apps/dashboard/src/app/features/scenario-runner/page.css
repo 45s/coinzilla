@@ -237,3 +237,64 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:520px;overflow:auto}
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+
+.scenario-id {
+  color: var(--muted);
+}
+
+.scenario-id code {
+  overflow-wrap: anywhere;
+}
+
+
+
+/* Conservative scenario contracts remain readable beside the shared strategy tree. */
+.guide-domain-classification,
+.scenario-contract-details {
+  grid-column: 1;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-bg, transparent);
+}
+
+.guide-domain-classification h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.guide-domain-classification p {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.scenario-contract-details summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.scenario-contract-json {
+  max-height: 460px;
+  overflow: auto;
+  margin: 10px 0 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .guide-domain-classification,
+  .scenario-contract-details {
+    grid-column: 1;
+  }
+}

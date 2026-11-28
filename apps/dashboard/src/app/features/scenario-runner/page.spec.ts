@@ -152,11 +152,11 @@ describe('ScenarioRunnerComponent run details', () => {
   it('explains the fixture without conflating execution, partial order execution, cycle, safety or provenance', () => {
     const text = nativeElement.textContent ?? '';
 
-    expect(text, 'scenario intent must be explained before the run trace').toContain('What this scenario does');
-    expect(text, 'the selected partial-cancel scenario purpose must be readable').toContain('partially executed SELL which later becomes CANCELED');
-    expect(text, 'the deliberate partial-fill condition must be visible in the diagram').toContain('Partial fill, then terminal CANCELED');
+    expect(text, 'scenario intent must be explained before the run trace').toContain('SELL partly fills, then is cancelled');
+    expect(text, 'the selected partial-cancel scenario purpose must be readable').toContain('coins already sold are still counted when the remaining SELL order is later cancelled');
+    expect(text, 'the deliberate partial-fill condition must be visible in the diagram').toContain('Some coins sell; the remaining order is cancelled');
     expect(text, 'scenario intent must be distinguished from observed execution evidence').toContain('NOT EXECUTION EVIDENCE');
-    expect(text, 'scenario limitations must distinguish simulation from production proof').toContain('does not prove real exchange behavior');
+    expect(text, 'scenario limitations must distinguish simulation from production proof').toContain('does not prove behavior on a real exchange');
     expect(text, 'simulation-only execution must be explicit').toContain('SIMULATION ONLY');
     expect(text, 'all passing assertions must be shown as a separate outcome').toContain('16 / 16 passed');
     expect(text, 'the canceled order state must remain visible').toContain('CANCELED');
@@ -178,15 +178,15 @@ describe('ScenarioRunnerComponent run details', () => {
     expect(nativeElement.querySelector('app-scenario-graph-editor')).toBeNull();
     expect(nativeElement.querySelector('app-scenario-graph-viewer')).not.toBeNull();
     expect(nativeElement.querySelectorAll('.graph-node')).toHaveLength(7);
-    expect(nativeElement.textContent).toContain('Partial fill, then terminal CANCELED');
+    expect(nativeElement.textContent).toContain('Some coins sell; the remaining order is cancelled');
 
     component.selectScenario('RS-RUNTIME-SELL-SUBMISSION-001');
     fixture.detectChanges();
 
-    expect(nativeElement.textContent).toContain('Persist intent → broker ACK → persist outcome → reserve cycle');
+    expect(nativeElement.textContent).toContain('Save the SELL request → exchange accepts it → save the result → reserve the cycle');
     expect(nativeElement.querySelector('app-scenario-graph-viewer')).not.toBeNull();
     expect(nativeElement.querySelectorAll('.graph-node')).toHaveLength(5);
-    expect(nativeElement.textContent).not.toContain('Partial fill, then terminal CANCELED');
+    expect(nativeElement.textContent).not.toContain('Some coins sell; the remaining order is cancelled');
     expect(nativeElement.textContent).toContain('not the currently selected scenario');
     expect(nativeElement.querySelector('.editor-toolbar')).toBeNull();
     expect(nativeElement.querySelector('.node-inspector')).toBeNull();
@@ -236,6 +236,17 @@ describe('ScenarioRunnerComponent run details', () => {
     expect(nativeElement.textContent, 'Conservative guide must label its diagram as intent rather than actual execution').toContain('SCENARIO INTENT · NOT EXECUTION EVIDENCE');
     expect(nativeElement.textContent, 'the selected source metadata must expose inspection-only readiness').toContain('No isolated CG production-flow worker or executable input schema is registered.');
     expect(nativeElement.textContent, 'the full source contract must be available in the Dashboard inspector').toContain('Inspect full scenario contract');
+    expect(component.selectedScenarioGraph?.source.kind, 'CG scenarios must use the dedicated Conservative domain graph, not a flat list of metadata events').toBe('cg-domain-specification');
+    expect(component.selectedScenarioGraph?.nodes.map((node) => node.id), 'CG graph must show the canonical recovery path and its branches').toEqual(expect.arrayContaining([
+      'active-sell',
+      'cancel-valid',
+      'sellable-check',
+      'sell-update',
+      'terminal-valid',
+      'profit-check',
+      'next-buy-eligible',
+    ]));
+    expect(component.selectedScenarioGraph?.nodes.some((node) => node.label.startsWith('Declared event')), 'scenario metadata events must not become graph nodes').toBe(false);
 
     const runButton = nativeElement.querySelector<HTMLButtonElement>('.actions button');
     expect(runButton?.disabled, 'the Dashboard must not submit a domain coverage record as a production-flow simulation').toBe(true);
@@ -250,4 +261,17 @@ describe('ScenarioRunnerComponent run details', () => {
     expect(JSON.parse(component.rawJson), 'export source must preserve the complete run record data').toEqual(runRecord);
     expect(nativeElement.querySelector('.raw-json'), 'the full JSON fallback must remain available').not.toBeNull();
   });
+
+  it('shows a plain-language scenario title while keeping the stable ID separately visible', () => {
+    const selector = nativeElement.querySelector<HTMLSelectElement>('.scenario-control select');
+    const selectedOption = selector?.selectedOptions[0];
+
+    expect(selectedOption?.textContent?.trim(), 'the selector must explain the business behavior instead of exposing an opaque ID and implementation-heavy registry name').toBe(
+      'SELL partly fills, then is cancelled',
+    );
+    expect(nativeElement.querySelector('.scenario-id')?.textContent, 'the stable scenario ID must remain available for test and issue traceability').toContain(
+      'RS-RUNTIME-SELL-PARTIAL-CANCEL-001',
+    );
+  });
+
 });

@@ -3,8 +3,9 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { ScenarioRunnerApi } from './api';
 import { JsonTreeComponent } from './json-tree.component';
 import { createScenarioGuideGraph } from './scenario-graph/adapters/scenario-guide-graph';
+import { createConservativeStrategyGraph } from './scenario-graph/adapters/conservative-strategy-graph';
 import { ScenarioGraphViewerComponent } from './scenario-graph/scenario-graph-viewer.component';
-import { getScenarioGuide, type ScenarioGuide } from './core/scenario-guides';
+import { getScenarioGuide, getScenarioGuideTitle, type ScenarioGuide } from './core/scenario-guides';
 import { createScenarioRunnerApplication, type ScenarioCatalogItem, type ScenarioRunSnapshot } from './application';
 import { createScenarioRunPresentation, type ScenarioRunPresentation, type ScenarioRunPresentationStep } from './core/create-scenario-run-presentation';
 import type { ScenarioRunRecord, ScenarioTraceStep } from './core/run-contract';
@@ -158,6 +159,10 @@ export class ScenarioRunnerComponent {
     const selection = this.application.selectStrategy({ strategyId: value });
     this.scenarioId.set(selection.scenarioId);
     this.inputJson.set(selection.inputJson);
+  }
+
+  scenarioTitle(scenarioId: string, fallbackName: string): string {
+    return getScenarioGuideTitle(scenarioId) ?? fallbackName;
   }
 
   selectScenario(value: string): void {
@@ -387,8 +392,11 @@ export class ScenarioRunnerComponent {
   }
 
   get selectedScenarioGraph() {
-    const guide = this.selectedScenarioGuide;
     const scenario = this.selectedScenario;
+    if (this.strategyId() === 'CG-conservative') {
+      return createConservativeStrategyGraph();
+    }
+    const guide = this.selectedScenarioGuide;
     return guide && scenario
       ? createScenarioGuideGraph({ scenarioId: scenario.id, scenarioName: scenario.name, guide })
       : null;

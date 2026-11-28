@@ -19,7 +19,7 @@
     <label class="scenario-control">Scenario
       <select [value]="scenarioId()" (change)="selectScenario($any($event.target).value)">
         @for (item of scenarios; track item.id) {
-          <option [value]="item.id">{{ item.id }} · {{ item.name }}</option>
+          <option [value]="item.id">{{ scenarioTitle(item.id, item.name) }}</option>
         }
       </select>
     </label>
@@ -27,13 +27,14 @@
   <div class="scenario-meta">
     <p class="scenario-status">Source mapping: {{ selectedScenario?.status ?? 'UNAVAILABLE' }}</p>
     <p class="scenario-status">Execution status: {{ selectedScenario?.executionStatus ?? 'UNAVAILABLE' }}</p>
+    <p class="scenario-status scenario-id">Scenario ID: <code>{{ selectedScenario?.id ?? 'UNAVAILABLE' }}</code></p>
   </div>
   @if (selectedScenarioGuide; as guide) {
     <section class="scenario-guide" aria-labelledby="scenario-guide-title">
       <header class="scenario-guide-heading">
         <div>
           <p class="guide-eyebrow">SCENARIO INTENT · NOT EXECUTION EVIDENCE</p>
-          <h2 id="scenario-guide-title">What this scenario does</h2>
+          <h2 id="scenario-guide-title">{{ guide.title }}</h2>
         </div>
       </header>
       <p class="guide-purpose">{{ guide.purpose }}</p>
@@ -43,7 +44,7 @@
           <p>{{ guide.startingState }}</p>
         </section>
         <section>
-          <h3>What is deliberately varied</h3>
+          <h3>What changes in this example</h3>
           <p>{{ guide.injectedCondition }}</p>
         </section>
       </div>
@@ -84,7 +85,7 @@
         <p class="scenario-flow-evidence">No run selected. The flow above describes the selected scenario's documented expected path.</p>
       }
       <section class="guide-result">
-        <h3>Expected result</h3>
+        <h3>What should happen</h3>
         <p>{{ guide.expectedOutcome }}</p>
       </section>
       <section class="guide-limitations">
@@ -124,9 +125,9 @@
       <h2>Recent runs</h2>
       @for (item of history(); track item.runId) {
         <button type="button" (click)="selectHistory(item.runId)">
-          <span>{{ item.strategyId }} · {{ item.scenarioId }}</span>
+          <span>{{ item.strategyId }} · {{ scenarioTitle(item.scenarioId, item.scenarioId) }}</span>
           <strong>{{ item.status }}</strong>
-          <small>{{ item.runId }}</small>
+          <small>Scenario ID: {{ item.scenarioId }} · Run: {{ item.runId }}</small>
         </button>
       }
     </section>
@@ -150,7 +151,8 @@
       <header class="story-heading">
         <div>
           <h2>Run story</h2>
-          <p>{{ view.identity.strategyId ?? 'Unknown strategy' }} · {{ view.identity.scenarioId ?? 'Unknown scenario' }}</p>
+          <p>{{ view.identity.strategyId ?? 'Unknown strategy' }} · {{ scenarioTitle(view.identity.scenarioId ?? '', view.identity.scenarioId ?? 'Unknown scenario') }}</p>
+          <p class="scenario-status">Scenario ID: <code>{{ view.identity.scenarioId ?? 'Unknown' }}</code></p>
           <p>{{ view.identity.symbol ?? 'Market unavailable' }} · {{ view.identity.venue ?? 'Venue unavailable' }}</p>
         </div>
         @if (view.identity.executionMode === 'simulation-only') {

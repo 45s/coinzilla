@@ -110,6 +110,38 @@ describe('scenario graph editor application', () => {
     expect(view.edges[0].curve.end.y, 'vertical connectors should point down the canvas').toBeGreaterThan(view.edges[0].curve.start.y);
   });
 
+  it('lays out CG decision graphs as a readable two-branch tree', () => {
+    const graph = createScenarioGraph({
+      id: 'tree-layout',
+      title: 'Tree layout',
+      source: { kind: 'cg-domain-specification', reference: 'canonical-specification#9' },
+      nodes: [
+        { id: 'start', type: 'start', label: 'Start', position: { x: 1, y: 24 }, properties: {} },
+        { id: 'decision', type: 'decision', label: 'Eligible?', position: { x: 1, y: 260 }, properties: {} },
+        { id: 'yes', type: 'action', label: 'YES path', position: { x: 0, y: 496 }, properties: {} },
+        { id: 'no', type: 'action', label: 'NO path', position: { x: 2, y: 496 }, properties: {} },
+        { id: 'yes-end', type: 'end', label: 'YES end', position: { x: 0, y: 732 }, properties: {} },
+        { id: 'no-end', type: 'end', label: 'NO end', position: { x: 2, y: 732 }, properties: {} },
+      ],
+      edges: [
+        { id: 'start-decision', from: { nodeId: 'start', portId: 'next' }, to: { nodeId: 'decision', portId: 'in' } },
+        { id: 'decision-yes', from: { nodeId: 'decision', portId: 'yes' }, to: { nodeId: 'yes', portId: 'in' }, label: 'YES' },
+        { id: 'decision-no', from: { nodeId: 'decision', portId: 'no' }, to: { nodeId: 'no', portId: 'in' }, label: 'NO' },
+        { id: 'yes-end-edge', from: { nodeId: 'yes', portId: 'next' }, to: { nodeId: 'yes-end', portId: 'in' } },
+        { id: 'no-end-edge', from: { nodeId: 'no', portId: 'next' }, to: { nodeId: 'no-end', portId: 'in' } },
+      ],
+    });
+    const view = createScenarioGraphViewModel({ graph, orientation: 'tree' });
+    const decision = view.nodes.find((node) => node.id === 'decision');
+    const yes = view.nodes.find((node) => node.id === 'yes');
+    const no = view.nodes.find((node) => node.id === 'no');
+    expect(view.width, 'tree layout must leave room for both branch lanes').toBe(1120);
+    expect(yes?.position.x, 'YES must render in the left branch lane').toBeLessThan(decision?.position.x ?? 0);
+    expect(no?.position.x, 'NO must render in the right branch lane').toBeGreaterThan(decision?.position.x ?? 0);
+    expect(view.edges.find((edge) => edge.id === 'decision-yes')?.curve.start.x, 'YES uses its own decision port').toBe((decision?.position.x ?? 0) + 96);
+    expect(view.edges.find((edge) => edge.id === 'decision-no')?.curve.start.x, 'NO uses its own decision port').toBe((decision?.position.x ?? 0) + 224);
+    expect(view.height, 'tree canvas must include every node and both branch outcomes').toBeGreaterThan(800);
+  });
   it('builds renderer-neutral geometry without importing a rendering framework', () => {
     const editor = createScenarioGraphEditor({ createId: () => 'unused' });
     const view = editor.viewModel({ graph: createGraph() });
