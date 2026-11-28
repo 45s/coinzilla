@@ -73,40 +73,70 @@ async function readArchivedSessionJson({ directory, manifest, sourcePath } = {})
   return JSON.parse(gunzipSync(compressed).toString("utf8"))
 }
 
-async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
-  const expectedRuntimeId = manifest.recoveryRuntimeSessionId
-  const [session] = manifest.sessionInventory.filter((candidate) =>
-    candidate.runtimeSessionId === expectedRuntimeId && candidate.completionStatus === "complete"
-    && candidate.loggerCompletionStatus === "complete"
-  )
-  if (!session) {
-    throw new Error(`Debug archive has no unique completed process/logger session for runtime ${expectedRuntimeId}.`)
-  }
-  const [identity, completion, loggerCompletion] = await Promise.all([
-    readArchivedSessionJson({ directory, manifest, sourcePath: session.processIdentityPath }),
-    readArchivedSessionJson({ directory, manifest, sourcePath: session.processCompletionPath }),
-    readArchivedSessionJson({ directory, manifest, sourcePath: session.loggerCompletionPath }),
-  ])
-  const identityMatches = identity.application === "harvester"
+function isMatchingArchivedProcessIdentity({ identity, session, expectedRuntimeId, manifest } = {}) {
+  return identity.application === "harvester"
     && identity.environment === "testnet"
     && identity.runtimeSessionId === expectedRuntimeId
     && identity.startedAt === session.startedAt
     && identity.startedAt === manifest.tradingRuntime.processIdentity.startedAt
-  const processCompletionMatches = completion.runtimeSessionId === expectedRuntimeId
+}
+
+function isMatchingArchivedProcessCompletion({ completion, expectedRuntimeId } = {}) {
+  return completion.runtimeSessionId === expectedRuntimeId
     && completion.logStreamsComplete === true
     && completion.loggerStreamsComplete !== false
-  const loggerCompletionMatches = loggerCompletion.runtimeSessionId === expectedRuntimeId
+}
+
+function isMatchingArchivedLoggerCompletion({ loggerCompletion, expectedRuntimeId } = {}) {
+  return loggerCompletion.runtimeSessionId === expectedRuntimeId
     && loggerCompletion.logStreamsComplete === true
     && loggerCompletion.streams?.harvesterLog === true
     && loggerCompletion.streams?.traceLog === true
-  if (!identityMatches || !processCompletionMatches || !loggerCompletionMatches) {
-    throw new Error(`Archived process identity/completion metadata does not prove one complete runtime ${expectedRuntimeId}: identity=${identity.runtimeSessionId ?? "missing"}; process completion=${completion.runtimeSessionId ?? "missing"}; logger completion=${loggerCompletion.runtimeSessionId ?? "missing"}.`)
-  }
+}
+
+function assertArchivedProcessId({ identity, completion, manifest, expectedRuntimeId } = {}) {
   const expectedProcessId = manifest.tradingRuntime.processIdentity.processId
   if (expectedProcessId && completion.processId !== expectedProcessId) {
     throw new Error(`Process ID mismatch in lifecycle evidence for runtime ${expectedRuntimeId}: identity=${identity.processId}; completion=${completion.processId}.`)
   }
 }
+
+async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
+  const expectedRuntimeId = manifest.recoveryRuntimeSessionId
+  const [session] = manifest.sessionInventory.filter((candidate) =>
+    candidate.runtimeSessionId === expectedRuntimeId
+      && candidate.completionStatus === "complete"
+      && candidate.loggerCompletionStatus === "complete"
+  )
+  if (!session) {
+    throw new Error(`Debug archive has no unique completed process/logger session for runtime ${expectedRuntimeId}.`)
+  }
+  const [identity, completion, loggerCompletion] = await Promise.all([
+    readArchivedSessionJson({
+      directory,
+      manifest,
+      sourcePath: session.processIdentityPath,
+    }),
+    readArchivedSessionJson({
+      directory,
+      manifest,
+      sourcePath: session.processCompletionPath,
+    }),
+    readArchivedSessionJson({
+      directory,
+      manifest,
+      sourcePath: session.loggerCompletionPath,
+    }),
+  ])
+  const lifecycleMatches = isMatchingArchivedProcessIdentity({ identity, session, expectedRuntimeId, manifest })
+    && isMatchingArchivedProcessCompletion({ completion, expectedRuntimeId })
+    && isMatchingArchivedLoggerCompletion({ loggerCompletion, expectedRuntimeId })
+  if (!lifecycleMatches) {
+    throw new Error(`Archived process identity/completion metadata does not prove one complete runtime ${expectedRuntimeId}: identity=${identity.runtimeSessionId ?? "missing"}; process completion=${completion.runtimeSessionId ?? "missing"}; logger completion=${loggerCompletion.runtimeSessionId ?? "missing"}.`)
+  }
+  assertArchivedProcessId({ identity, completion, manifest, expectedRuntimeId })
+}
+
 function isInvalidStreamFile({ file, manifestFile, expectedRuntimeId } = {}) {
   return file.actualRuntimeId !== expectedRuntimeId
     || typeof file.sourcePath !== "string"
@@ -119,19 +149,26 @@ function isInvalidStreamFile({ file, manifestFile, expectedRuntimeId } = {}) {
     || manifestFile.sha256 !== file.archiveSha256
 }
 
+function isCompleteStream(stream, expectedRuntimeId) {
+  return stream?.status === "matched"
+    && stream.expectedRuntimeId === expectedRuntimeId
+    && stream.fileCount >= 1
+    && stream.totalBytes >= 1
+    && Array.isArray(stream.files)
+    && stream.files.length >= 1
+}
+
 function assertCompleteStreamEvidence({ stream, streamLabel, expectedRuntimeId, manifestFiles } = {}) {
-  const incomplete = stream?.status !== "matched"
-    || stream.expectedRuntimeId !== expectedRuntimeId
-    || stream.fileCount < 1
-    || stream.totalBytes < 1
-    || !Array.isArray(stream.files)
-    || stream.files.length < 1
-  if (incomplete) {
+  if (!isCompleteStream(stream, expectedRuntimeId)) {
     throw new Error(`${streamLabel} evidence is not complete for runtime ${expectedRuntimeId}: status=${stream?.status ?? "missing"}; files=${stream?.fileCount ?? 0}; bytes=${stream?.totalBytes ?? 0}.`)
   }
   for (const file of stream.files) {
     const manifestFile = manifestFiles.get(file.archivePath)
-    if (isInvalidStreamFile({ file, manifestFile, expectedRuntimeId })) {
+    if (isInvalidStreamFile({
+      file,
+      manifestFile,
+      expectedRuntimeId,
+    })) {
       throw new Error(`${streamLabel} evidence ownership or checksum metadata is invalid for runtime ${expectedRuntimeId}: ${file.sourcePath ?? "unknown source"}.`)
     }
   }
@@ -140,8 +177,15 @@ function assertCompleteStreamEvidence({ stream, streamLabel, expectedRuntimeId, 
 function validateEvidenceIntegrity(manifest) {
   const integrity = manifest.evidenceIntegrity
   const expectedRuntimeId = manifest.recoveryRuntimeSessionId
-  assertManifestRuntimeCorrelation({ manifest, integrity, expectedRuntimeId })
-  assertUniqueCompletedRuntimeSession({ manifest, expectedRuntimeId })
+  assertManifestRuntimeCorrelation({
+    manifest,
+    integrity,
+    expectedRuntimeId,
+  })
+  assertUniqueCompletedRuntimeSession({
+    manifest,
+    expectedRuntimeId,
+  })
   const manifestFiles = new Map(manifest.files.map((entry) => [entry.path, entry]))
   assertCompleteStreamEvidence({
     stream: integrity.streams?.harvesterLog,
@@ -171,7 +215,12 @@ async function readArchiveRecoveryFacts({ directory } = {}) {
   const facts = factLines.map((line) => JSON.parse(line))
   const checkpoints = checkpointLines.map((line) => JSON.parse(line))
   const dataCommitHash = (await readFile(path.join(directory, "data_commit_hash"), "utf8")).trim()
-  return { facts, checkpoints, factCount: factLines.length, dataCommitHash }
+  return {
+    facts,
+    checkpoints,
+    factCount: factLines.length,
+    dataCommitHash,
+  }
 }
 
 function assertRecoveryCheckpointIntegrity({ facts, checkpoints, factCount, dataCommitHash, manifest } = {}) {
@@ -208,8 +257,14 @@ function assertManifestRecoveryRuntimeIdentity({ facts, manifest } = {}) {
 
 async function validateRecoveryFactsRuntime({ directory, manifest } = {}) {
   const recoveryFacts = await readArchiveRecoveryFacts({ directory })
-  assertRecoveryCheckpointIntegrity({ ...recoveryFacts, manifest })
-  assertManifestRecoveryRuntimeIdentity({ facts: recoveryFacts.facts, manifest })
+  assertRecoveryCheckpointIntegrity({
+    ...recoveryFacts,
+    manifest,
+  })
+  assertManifestRecoveryRuntimeIdentity({
+    facts: recoveryFacts.facts,
+    manifest,
+  })
 }
 
 function isSafeManifestPath(filePath) {
