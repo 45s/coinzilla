@@ -465,6 +465,10 @@ function createArchiveSessionEvidenceRecord({
   return {
     sessionName,
     relativePath: `logs/sessions/${sessionName}`,
+    processIdentityPath: `logs/sessions/${sessionName}/process-identity.json`,
+    processCompletionPath: `logs/sessions/${sessionName}/process-completed.json`,
+    completionRuntimeSessionId: completion?.runtimeSessionId ?? null,
+    logStreamsComplete: completion?.logStreamsComplete === true,
     environment: identity?.environment ?? "unknown",
     runtimeSessionId: resolveArchiveSessionRuntimeSessionId(identity),
     processId,
@@ -722,6 +726,7 @@ function createSessionStreamFileInventory({ selection, artifactProvenance, strea
     expectedRuntimeId,
     actualRuntimeIds: [...new Set(selectedFiles.map((file) => file.actualRuntimeId).filter(Boolean))].sort(),
     sourcePaths: selectedFiles.map((file) => file.sourcePath),
+    searchedDirectories: selection.sessions.map((session) => session.relativePath),
     fileCount: matchingFiles.length,
     totalBytes: matchingFiles.reduce((total, file) => total + file.sourceSize, 0),
     files: selectedFiles,
@@ -777,7 +782,7 @@ function formatStreamCollectionFailure({ stream, integrity } = {}) {
   const mismatchedFiles = stream.files.filter((file) => file.actualRuntimeId !== integrity.expectedRuntimeId)
   const discoveredRuntimeIds = [...new Set(mismatchedFiles.map((file) => file.actualRuntimeId).filter(Boolean))]
   const missing = stream.status === "missing" ? "missing stream; " : ""
-  const sources = stream.files.map((file) => file.sourcePath).join(", ") || "no candidate source paths"
+  const sources = stream.files.map((file) => file.sourcePath).join(", ") || stream.searchedDirectories.join(", ") || "logs/sessions/"
   return `${stream.key === "traceLog" ? "TRACE LOG" : "HARVESTER LOG"} COLLECTION FAILED: expected runtime=${integrity.expectedRuntimeId}; discovered runtime=${discoveredRuntimeIds.join(",") || "none"}; matching files=${matchingFiles.length}; mismatched files=${mismatchedFiles.length}; ${missing}looked at: ${sources}; reason=${stream.reason ?? stream.status}`
 }
 
@@ -1060,6 +1065,10 @@ function createArchiveSessionManifestEntry({ session } = {}) {
   return {
     sessionName: session.sessionName,
     relativePath: session.relativePath,
+    processIdentityPath: session.processIdentityPath,
+    processCompletionPath: session.processCompletionPath,
+    completionRuntimeSessionId: session.completionRuntimeSessionId,
+    logStreamsComplete: session.logStreamsComplete,
     environment: session.environment,
     runtimeSessionId: session.runtimeSessionId,
     processId: session.processId,
