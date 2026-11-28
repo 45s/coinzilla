@@ -301,7 +301,7 @@ async function copyCompressedTree({
     } else if (sourceStats.isFile()) {
       await copyCompressedFile({
         sourcePath,
-        destinationPath: path.join(destinationDirectory, /\\.gz$/i.test(childRelative) ? childRelative : `${childRelative}.gz`),
+        destinationPath: path.join(destinationDirectory, /\.gz$/i.test(childRelative) ? childRelative : `${childRelative}.gz`),
         childRelative,
         onFileCopied,
       })
@@ -668,21 +668,22 @@ const LOG_STREAM_DEFINITIONS = Object.freeze([
   {
     key: "harvesterLog",
     label: "HARVESTER LOG",
-    pattern: /^harvester\\.log(?:\\.\\d+)*$/i,
+    pattern: /^harvester\.log(?:\.\d+)*$/i,
   },
   {
     key: "traceLog",
     label: "TRACE LOG",
-    pattern: /^trace\\.log(?:\\.\\d+)*$/i,
+    pattern: /^trace\.log(?:\.\d+)*$/i,
   },
 ])
 
 function resolveLogRotationIndex(filename) {
-  const match = /\\.log(?:\\.(\\d+))?(?:\\.gz)?$/i.exec(filename)
+  const match = /\.log(?:\.(\d+))?(?:\.gz)?$/i.exec(filename)
   return match?.[1] ? Number(match[1]) : 0
 }
 
-function compareStreamFiles(left, right) {
+function compareStreamFiles(...files) {
+  const [left, right] = files
   return right.rotationIndex - left.rotationIndex || left.sourcePath.localeCompare(right.sourcePath)
 }
 
@@ -709,8 +710,6 @@ function createSessionStreamFileInventory({ selection, artifactProvenance, strea
         reason: artifact.sourceSize > 0 ? null : "empty-log-file",
       }
     })
-  // Array#sort requires a two-argument comparator.
-  // eslint-disable-next-line max-params
   allFiles.sort(compareStreamFiles)
   const expectedRuntimeId = selection.recoveryRuntimeSessionId
   const matchingFiles = allFiles.filter((file) => file.actualRuntimeId === expectedRuntimeId)
