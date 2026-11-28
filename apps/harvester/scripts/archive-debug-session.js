@@ -393,43 +393,61 @@ function createCompletionMissingFieldWarnings({ identity, completion, completion
   return warnings
 }
 
+function createLoggerCompletionMissingFieldWarnings({ identity, loggerCompletion, loggerCompletionError } = {}) {
+  if (!loggerCompletion) {
+    return [loggerCompletionError?.code && loggerCompletionError.code !== "ENOENT"
+      ? "LOGGER_COMPLETION_RECORD_INVALID"
+      : "LOGGER_COMPLETION_RECORD_MISSING"]
+  }
+  const warnings = []
+  if (identity?.runtimeSessionId && loggerCompletion.runtimeSessionId !== identity.runtimeSessionId) {
+    warnings.push("LOGGER_COMPLETION_RUNTIME_ID_MISMATCH")
+  }
+  if (
+    loggerCompletion.logStreamsComplete !== true
+    || loggerCompletion.streams?.harvesterLog !== true
+    || loggerCompletion.streams?.traceLog !== true
+  ) {
+    warnings.push("LOGGER_STREAMS_INCOMPLETE")
+  }
+  return warnings
+}
+
 function createArchiveSessionMissingFieldWarnings({
   identity,
   completion,
+  loggerCompletion,
   identityError,
   completionError,
+  loggerCompletionError,
 } = {}) {
   return [
-    ...createProcessIdentityMissingFieldWarnings({
-      identity,
-      identityError,
-    }),
-    ...createCompletionMissingFieldWarnings({
-      identity,
-      completion,
-      completionError,
-    }),
+    ...createProcessIdentityMissingFieldWarnings({ identity, identityError }),
+    ...createCompletionMissingFieldWarnings({ identity, completion, completionError }),
+    ...createLoggerCompletionMissingFieldWarnings({ identity, loggerCompletion, loggerCompletionError }),
   ]
 }
 
-
 function isHarvesterTestnetSession({ identity } = {}) {
-  return identity?.application === "harvester" &&
-    identity?.formatVersion === 1 &&
-    identity?.environment === "testnet"
+  return identity?.application === "harvester"
+    && identity?.formatVersion === 1
+    && identity?.environment === "testnet"
 }
 
-function resolveArchiveSessionCompletionStatus({ identity, completion, isHarvesterTestnet } = {}) {
+function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCompletion, isHarvesterTestnet } = {}) {
   if (!identity) {
     return "identity-missing"
   }
   if (!isHarvesterTestnet) {
     return "non-testnet-or-invalid"
   }
-  if (completion?.runtimeSessionId === identity.runtimeSessionId && completion?.logStreamsComplete === true) {
-    return "complete"
-  }
-  return "incomplete"
+  const processCompletionMatches = completion?.runtimeSessionId === identity.runtimeSessionId
+    && completion?.logStreamsComplete === true
+  const loggerCompletionMatches = loggerCompletion?.runtimeSessionId === identity.runtimeSessionId
+    && loggerCompletion?.logStreamsComplete === true
+    && loggerCompletion?.streams?.harvesterLog === true
+    && loggerCompletion?.streams?.traceLog === true
+  return processCompletionMatches && loggerCompletionMatches ? "complete" : "incomplete"
 }
 
 function resolveArchiveSessionProcessId({ identity, recoveryCheckpoint } = {}) {
@@ -459,6 +477,7 @@ function createArchiveSessionEvidenceRecord({
   sessionName,
   identity,
   completion,
+  loggerCompletion,
   processId,
   missingFieldWarnings,
   isHarvesterTestnet,
@@ -468,18 +487,31 @@ function createArchiveSessionEvidenceRecord({
     relativePath: `logs/sessions/${sessionName}`,
     processIdentityPath: `logs/sessions/${sessionName}/process-identity.json`,
     processCompletionPath: `logs/sessions/${sessionName}/process-completed.json`,
+    loggerCompletionPath: `logs/sessions/${sessionName}/log-streams-completed.json`,
     completionRuntimeSessionId: completion?.runtimeSessionId ?? null,
+    loggerCompletionRuntimeSessionId: loggerCompletion?.runtimeSessionId ?? null,
     logStreamsComplete: completion?.logStreamsComplete === true,
+    loggerStreamsComplete: loggerCompletion?.logStreamsComplete === true
+      && loggerCompletion?.streams?.harvesterLog === true
+      && loggerCompletion?.streams?.traceLog === true,
     environment: identity?.environment ?? "unknown",
     runtimeSessionId: resolveArchiveSessionRuntimeSessionId(identity),
     processId,
     startedAt: resolveArchiveSessionStartTimestamp(identity),
     endedAt: resolveArchiveSessionEndTimestamp(completion),
+    loggerStreamsEndedAt: loggerCompletion?.endedAt ?? null,
     sourceRevision: identity?.source?.commit ?? null,
     workingTreeState: identity?.source?.workingTree ?? "unknown",
     completionStatus: resolveArchiveSessionCompletionStatus({
       identity,
       completion,
+      loggerCompletion,
+      isHarvesterTestnet,
+    }),
+    loggerCompletionStatus: resolveArchiveSessionCompletionStatus({
+      identity,
+      completion: { runtimeSessionId: identity?.runtimeSessionId, logStreamsComplete: true },
+      loggerCompletion,
       isHarvesterTestnet,
     }),
     processOutcome: resolveProcessOutcome(completion),
@@ -490,22 +522,23 @@ function createArchiveSessionEvidenceRecord({
 
 async function readArchiveSessionEvidence({ sessionsDirectory, sessionName, recoveryCheckpoint }) {
   const sessionDirectory = path.join(sessionsDirectory, sessionName)
-  const [identityResult, completionResult] = await Promise.all([
+  const [identityResult, completionResult, loggerCompletionResult] = await Promise.all([
     readOptionalSessionJson(path.join(sessionDirectory, "process-identity.json")),
     readOptionalSessionJson(path.join(sessionDirectory, "process-completed.json")),
+    readOptionalSessionJson(path.join(sessionDirectory, "log-streams-completed.json")),
   ])
   const { value: identity, error: identityError } = identityResult
   const { value: completion, error: completionError } = completionResult
+  const { value: loggerCompletion, error: loggerCompletionError } = loggerCompletionResult
   const isHarvesterTestnet = isHarvesterTestnetSession({ identity })
-  const processId = resolveArchiveSessionProcessId({
-    identity,
-    recoveryCheckpoint,
-  })
+  const processId = resolveArchiveSessionProcessId({ identity, recoveryCheckpoint })
   const missingFieldWarnings = createArchiveSessionMissingFieldWarnings({
     identity,
     completion,
+    loggerCompletion,
     identityError,
     completionError,
+    loggerCompletionError,
   })
   if (isHarvesterTestnet && processId === null) {
     missingFieldWarnings.push("PROCESS_ID_MISSING")
@@ -514,12 +547,12 @@ async function readArchiveSessionEvidence({ sessionsDirectory, sessionName, reco
     sessionName,
     identity,
     completion,
+    loggerCompletion,
     processId,
     missingFieldWarnings,
     isHarvesterTestnet,
   })
 }
-
 
 async function readArchiveSessionInventory({ sessionsDirectory, recoveryCheckpoint } = {}) {
   const sessionNames = (await readdir(sessionsDirectory)).sort()
@@ -1099,8 +1132,12 @@ function createArchiveSessionManifestEntry({ session } = {}) {
     relativePath: session.relativePath,
     processIdentityPath: session.processIdentityPath,
     processCompletionPath: session.processCompletionPath,
+    loggerCompletionPath: session.loggerCompletionPath,
     completionRuntimeSessionId: session.completionRuntimeSessionId,
+    loggerCompletionRuntimeSessionId: session.loggerCompletionRuntimeSessionId,
     logStreamsComplete: session.logStreamsComplete,
+    loggerStreamsComplete: session.loggerStreamsComplete,
+    loggerStreamsEndedAt: session.loggerStreamsEndedAt,
     environment: session.environment,
     runtimeSessionId: session.runtimeSessionId,
     processId: session.processId,
@@ -1109,6 +1146,7 @@ function createArchiveSessionManifestEntry({ session } = {}) {
     sourceRevision: session.sourceRevision,
     workingTreeState: session.workingTreeState,
     completionStatus: session.completionStatus,
+    loggerCompletionStatus: session.loggerCompletionStatus,
     processOutcome: session.processOutcome,
     selectionReason: session.selectionReason,
     missingFieldWarnings: session.missingFieldWarnings,
@@ -1156,7 +1194,7 @@ async function createArchiveManifest({
     excludedPaths: [...EXCLUDED_ARCHIVE_PATHS],
     logSelection: {
       cumulative: "excluded",
-      sessions: "all-identified-TESTNET-sessions-preserved-independently; exact-runtime-id-match-required; gzip-compressed",
+      sessions: "all-identified-TESTNET-sessions-preserved-independently; exact-runtime-id-match-required; process-and-logger-completion-required; gzip-compressed",
       selectionReason: logSelection.evidenceIntegrity.status === "matched" ? logSelection.selectionReason : logSelection.evidenceIntegrity.status,
     },
     dataCommitHash,
