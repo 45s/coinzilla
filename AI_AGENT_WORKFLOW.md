@@ -12,7 +12,7 @@ Visual workflow diagrams follow the canonical [visual documentation and workflow
 
 ## 0. Understand the task and relevant standards
 
-Read the root and applicable nested `AGENTS.md` instructions, the smallest relevant [Task Workflows](docs/engineering/TASK_WORKFLOWS.md) checklist, and the canonical engineering/domain documents that apply. Understand the issue or request, scope, acceptance criteria, and constraints; inspect relevant source, consumers, documentation, and tests before editing. Then plan and carry out the engineering work, with relevant verification and documentation.
+Read the root `AGENTS.md`, this workflow, `ENGINEERING_STANDARDS.md`, and the [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md). Select the smallest relevant task checklist and read the owning domain's `AGENTS.md` and `ROADMAP.md` when the task affects an application or package. Use the compliance guide's progressive context-loading procedure: linked standards are conditional unless the task touches their subject or they explicitly apply. Do not read every linked document or unrelated domain internals by default. Understand scope and acceptance criteria; inspect relevant source, consumers, documentation, and tests before editing.
 
 Task Preflight is not a required development step. Agents are not required to run `pnpm run task:preflight`, create readiness reports, attest to document reading, or record Preflight evidence on an issue. The validator is optional developer tooling. Independent engineering, security, testing, and documentation requirements remain in force.
 
@@ -24,7 +24,7 @@ For refactoring or code-audit work, follow the canonical [AI Refactoring and Cod
 
 ## 1. The short version
 
-1. Read the repository-root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, this document, and the owning domain's `AGENTS.md` and `ROADMAP.md`.
+1. Read the repository-root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, and this document. Read the owning domain's `AGENTS.md` and `ROADMAP.md` when the task affects that application or package; do not load unrelated domain instructions.
 2. Identify one owning domain and one focused task.
 3. Create a short-lived task branch from the latest `develop`.
 4. Change only files owned by that domain, unless a coordinated cross-domain task explicitly authorizes otherwise.

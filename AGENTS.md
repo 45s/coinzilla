@@ -1,6 +1,6 @@
 # Coding-agent entrypoint
 
-Before any task, read this file, the applicable task checklist, [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md), [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md), and the closest domain `AGENTS.md` and `ROADMAP.md`. Inspect the relevant implementation, consumers, and tests before editing.
+Before any task, read this file, [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md), [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md), and the [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md). Select the smallest applicable task checklist and, when the task affects an application or package, read that owning domain's `AGENTS.md` and `ROADMAP.md`. Load additional canonical standards and source material progressively using the task-context rules in the AI Task Compliance Standard; links in this file are a discovery index, not a requirement to read every linked document. Inspect relevant implementation, consumers, and tests before editing.
 
 Every AI agent and automated contributor must follow the canonical documents below. Repository-wide rules must have one authoritative source; other documents must link to it rather than reproduce or paraphrase it. Local documents may add genuinely domain-specific requirements but must not redefine repository-wide rules. When a rule changes, update its canonical source.
 
@@ -50,7 +50,7 @@ JavaScript control-flow style (including braces on all control statements and no
 
 ## Understand the task and relevant standards
 
-For each task, read this file and the applicable nested `AGENTS.md` instructions. Use the smallest relevant [Task Workflows](docs/engineering/TASK_WORKFLOWS.md) checklist, consult canonical engineering and domain documents that apply, understand the request and acceptance criteria, and inspect the relevant implementation, consumers, documentation, and tests. Plan the work, then implement, test, and document it.
+For each task, read this file and the applicable nested `AGENTS.md` instructions. Use the smallest relevant [Task Workflows](docs/engineering/TASK_WORKFLOWS.md) checklist and follow the progressive context-loading procedure in [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md). Read additional standards only when their subject is touched or their requirements govern the task. Revisit context when scope expands. Inspect the relevant implementation, consumers, documentation, and tests; then implement, test, and document the change.
 
 Task Preflight is not a required development step. No `pnpm run task:preflight` command, readiness report, attestation, or issue-evidence recording is required before work, before a commit, or as a completion gate. The validator may be used voluntarily as developer tooling.
 

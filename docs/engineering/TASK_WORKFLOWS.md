@@ -1,13 +1,14 @@
 # Task-specific agent workflows
 
-All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, applicable [AI task standards and verification guidance](AI_TASK_COMPLIANCE_STANDARD.md), the owning domain's AGENTS.md, and its roadmap. Use the smallest applicable checklist below; high-risk requirements are additive.
+All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, and applicable [AI task standards and verification guidance](AI_TASK_COMPLIANCE_STANDARD.md). Read the owning domain's AGENTS.md and roadmap when that application/package is affected. Use the smallest applicable checklist below; high-risk requirements are additive. Apply progressive context loading: linked standards are conditional unless their subject is touched or they explicitly govern the task.
 
 ## Understand the task and applicable standards
 
-- Read root and applicable nested `AGENTS.md` instructions.
+- Read the root instructions and workflow; read nested `AGENTS.md` files only for affected domains.
 - Understand the request/issue, scope, acceptance criteria, constraints, and dependencies.
-- Consult the smallest applicable checklist and canonical engineering/domain documents.
-- Inspect relevant implementation, consumers, documentation, configuration, and tests.
+- Consult the smallest applicable checklist and load only canonical standards relevant to the affected files and behavior.
+- Inspect relevant implementation, consumers, documentation, configuration, and tests; expand context when evidence shows a cross-domain dependency.
+- Do not read every document linked from an index or unrelated domain internals by default.
 - Plan the change; implement, test, document, and verify it appropriately.
 
 Task Preflight is not required. No `pnpm run task:preflight`, readiness report, attestation, or issue-evidence comment is required before work or as a completion gate. The validator remains optional developer tooling. Preserve independent engineering, security, testing, documentation, and accurate issue/PR requirements.
