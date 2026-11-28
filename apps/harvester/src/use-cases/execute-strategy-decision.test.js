@@ -1444,7 +1444,10 @@ test("tracks current-process client IDs explicitly without encoding ownership in
   const execute = makeExecuteStrategyDecision({
     broker: { placeOrder: async ({ order }) => {
       submittedOrder = order
-      return { ok: true, data: makeAcknowledgement(order) }
+      return {
+        ok: true,
+        data: makeAcknowledgement(order),
+      }
     } },
     onPendingOrder: async () => {},
     onAcknowledgedOrder: async () => {},
@@ -1453,7 +1456,10 @@ test("tracks current-process client IDs explicitly without encoding ownership in
 
   assert.equal(execute.isCurrentProcessClientOrderId("foreign-client-id"), false,
     "An unrelated client ID must not be treated as current-process ownership.")
-  const result = await execute({ decision, marketMetadata })
+  const result = await execute({
+    decision,
+    marketMetadata,
+  })
   assert.equal(result.ok, true, "The valid order must be acknowledged.")
   assert.equal(execute.isCurrentProcessClientOrderId(submittedOrder.clientOrderId), true,
     "A generated submission ID must be recorded as current-process metadata.")
