@@ -75,7 +75,8 @@ export const scenarios = [
       startupSafetyGate: "when recovery is disabled, current-session readiness comes only from fresh PREFLIGHT and current-process user-data; prior-session orders/fills remain external",
     },
     expectedSideEffects: {
-      priorSessionTradingReadiness: false,
+      inferredTradingReadiness: false,
+      currentSessionReadinessFromFreshPreflight: true,
       automaticOrderResumption: false,
     },
     invariants: [
