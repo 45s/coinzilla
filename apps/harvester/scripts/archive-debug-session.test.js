@@ -216,14 +216,20 @@ async function assertCollectedArchive({ directory, expectedIdentityStatus, expec
     "selected runtime session evidence",
     "The selected runtime log must be preserved in gzip form",
   )
-  await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-20_old")), { code: "ENOENT" }, "Older sessions must not be copied into the debug archive")
+  await assert.rejects(readdir(path.join(directory, "logs/sessions/2026-11-20_old")), {
+    code: "ENOENT",
+  }, "Older sessions must not be copied into the debug archive")
   assert.equal(
     gunzipSync(await readFile(path.join(directory, "logs/sessions/2026-11-25_live/terminal.log.gz"))).toString("utf8"),
     "independent LIVE session evidence",
     "An unrelated live session must be preserved separately and never substituted for the selected runtime.",
   )
-  await assert.rejects(readdir(path.join(directory, "logs/cumulative")), { code: "ENOENT" }, "Cumulative logs must be excluded from the debug archive")
-  await assert.rejects(readdir(path.join(directory, "data")), { code: "ENOENT" }, "Database and backup data must be excluded from the debug archive")
+  await assert.rejects(readdir(path.join(directory, "logs/cumulative")), {
+    code: "ENOENT",
+  }, "Cumulative logs must be excluded from the debug archive")
+  await assert.rejects(readdir(path.join(directory, "data")), {
+    code: "ENOENT",
+  }, "Database and backup data must be excluded from the debug archive")
   return {
     commit: REMOTE_COMMIT,
     fileCount: manifest.files.length + 1,
@@ -252,7 +258,10 @@ function archiveDependencies({ fixture, overrides = {}, expectedIdentityStatus =
 
 test("copies only bytes present at the snapshot boundary when an append-only log grows", async (t) => {
   const fixture = await createFixture()
-  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
   const sourcePath = path.join(fixture.packageDirectory, "growing.log")
   const destinationPath = path.join(fixture.packageDirectory, "snapshot.log.gz")
   const snapshotBytes = Buffer.from("bytes present at the snapshot boundary\n")
@@ -266,7 +275,12 @@ test("copies only bytes present at the snapshot boundary when an append-only log
     sourceSha256Before,
   })
   assert.equal(sourceSha256After, sourceSha256Before, "An append must not change the captured prefix hash.")
-  await copyFileRange({ sourcePath, destinationPath, size: sourceBefore.size, compressed: true })
+  await copyFileRange({
+    sourcePath,
+    destinationPath,
+    size: sourceBefore.size,
+    compressed: true,
+  })
   assert.deepEqual(gunzipSync(await readFile(destinationPath)), snapshotBytes)
 })
 
@@ -283,7 +297,11 @@ test("rejects a source file replaced after its snapshot identity was captured", 
   await writeFile(replacementPath, Buffer.from("replaced--content"))
   await rm(sourcePath)
   await rename(replacementPath, sourcePath)
-  await assert.rejects(assertSourceFileStable({ sourcePath, sourceBefore, sourceSha256Before }), /replaced, truncated, or modified/i)
+  await assert.rejects(assertSourceFileStable({
+    sourcePath,
+    sourceBefore,
+    sourceSha256Before,
+  }), /replaced, truncated, or modified/i)
 })
 
 
@@ -540,7 +558,10 @@ test("collects a LIVE runtime without requiring TRADING_MODE", async (t) => {
   const sessionsDirectory = path.join(fixture.packageDirectory, "logs", "sessions")
   const testnetSessionDirectory = path.join(sessionsDirectory, "2026-11-24_testnet")
   const liveSessionDirectory = path.join(sessionsDirectory, "2026-11-24_live")
-  await rm(liveSessionDirectory, { recursive: true, force: true })
+  await rm(liveSessionDirectory, {
+    recursive: true,
+    force: true,
+  })
   await rename(testnetSessionDirectory, liveSessionDirectory)
   const identityPath = path.join(liveSessionDirectory, "process-identity.json")
   const identity = JSON.parse(await readFile(identityPath, "utf8"))
@@ -549,10 +570,15 @@ test("collects a LIVE runtime without requiring TRADING_MODE", async (t) => {
   const dependencies = archiveDependencies({
     fixture,
     expectedTradingMode: "live",
-    overrides: { TRADING_MODE: undefined },
+    overrides: {
+      TRADING_MODE: undefined,
+    },
   })
   const result = await runHarvesterDebugArchive(dependencies)
-  const manifest = JSON.parse(await readFile(path.join(result.localArchive, "manifest.json"), "utf8"))
+  const manifest = JSON.parse(await readFile(
+    path.join(result.localArchive, "manifest.json"),
+    "utf8",
+  ))
   assert.equal(manifest.runtimeTradingMode, "live")
   assert.equal(manifest.logRuntimeSessionId, RUNTIME_SESSION_ID)
   assert.equal(manifest.evidenceIntegrity.validForPublication, true)

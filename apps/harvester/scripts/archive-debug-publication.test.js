@@ -53,7 +53,7 @@ function createSourceFileEntries() {
   ]
 }
 
-function createLifecycleSourceFileEntries(runtimeId, runtimeTradingMode = "testnet") {
+function createLifecycleSourceFileEntries({ runtimeId, runtimeTradingMode = "testnet" } = {}) {
   return [
     {
       sourcePath: "logs/sessions/fixture/process-identity.json",
@@ -202,7 +202,7 @@ async function appendFixtureFile({
   })
 }
 
-function createSessionInventoryFixture(runtimeId, runtimeTradingMode = "testnet") {
+function createSessionInventoryFixture({ runtimeId, runtimeTradingMode = "testnet" } = {}) {
   return [{
     sessionName: "fixture",
     relativePath: "logs/sessions/fixture",
@@ -275,7 +275,7 @@ function createArchiveManifest({ runtimeId, recovery, sourceFiles, files, runtim
       runtimeSessionId: runtimeId,
       processIdentity: recovery.processIdentity,
     },
-    sessionInventory: createSessionInventoryFixture(runtimeId, runtimeTradingMode),
+    sessionInventory: createSessionInventoryFixture({ runtimeId, runtimeTradingMode }),
     evidenceIntegrity: createEvidenceIntegrityFixture({
       runtimeId,
       sourceFiles,
@@ -289,7 +289,7 @@ async function createArchiveFixture({ root, archiveName = ARCHIVE_NAME, runtimeT
   await mkdir(path.join(archiveDirectory, "logs", "sessions", "fixture"), { recursive: true })
   await mkdir(path.join(archiveDirectory, "recovery-facts"), { recursive: true })
   const runtimeId = "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c"
-  const sourceFiles = [...createSourceFileEntries(), ...createLifecycleSourceFileEntries(runtimeId, runtimeTradingMode)]
+  const sourceFiles = [...createSourceFileEntries(), ...createLifecycleSourceFileEntries({ runtimeId, runtimeTradingMode })]
   const recovery = createRecoveryFixture(runtimeId)
   const files = []
   for (const item of sourceFiles) {
@@ -344,13 +344,16 @@ async function snapshotDirectory(directory) {
   return files
 }
 
-async function createFixture(t, { runtimeTradingMode = "testnet" } = {}) {
+async function createFixture({ t, runtimeTradingMode = "testnet" } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "harvester-archive-publication-"))
   t.after(() => rm(root, {
     recursive: true,
     force: true,
   }))
-  const archiveDirectory = await createArchiveFixture({ root, runtimeTradingMode })
+  const archiveDirectory = await createArchiveFixture({
+    root,
+    runtimeTradingMode,
+  })
   const lockDirectory = path.join(root, "process-locks")
   await mkdir(lockDirectory)
   const lockPath = path.join(lockDirectory, ".binance-harvester-trading-test.lock")
@@ -401,7 +404,7 @@ async function createTemporaryArchiveRemote({ root } = {}) {
 }
 
 test("publishes with an active process lock, retries interrupted push, and is idempotent", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ t })
   const bareRemote = await createTemporaryArchiveRemote({
     root: fixture.root,
   })
@@ -445,7 +448,7 @@ test("publishes with an active process lock, retries interrupted push, and is id
 })
 
 test("publication command accepts a completed LIVE runtime archive", async (t) => {
-  const fixture = await createFixture(t, { runtimeTradingMode: "live" })
+  const fixture = await createFixture({ t, runtimeTradingMode: "live" })
   const bareRemote = await createTemporaryArchiveRemote({ root: fixture.root })
   const runGitWithLocalRemote = async (...parameters) => {
     const [args, options = {}] = parameters
@@ -466,7 +469,7 @@ test("publication command accepts a completed LIVE runtime archive", async (t) =
 })
 
 test("publication command publishes to a temporary Git remote while a process lock exists", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ t })
   const bareRemote = await createTemporaryArchiveRemote({
     root: fixture.root,
   })
@@ -499,7 +502,7 @@ test("publication command publishes to a temporary Git remote while a process lo
 })
 
 test("publication leaves source archive bytes unchanged", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ t })
   const before = await snapshotDirectory(fixture.archiveDirectory)
   await runHarvesterDebugArchivePublication({
     archiveDirectory: fixture.archiveDirectory,
@@ -520,7 +523,7 @@ test("publication leaves source archive bytes unchanged", async (t) => {
 })
 
 test("rejects checksum mismatches before calling the publisher", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ t })
   await writeFile(path.join(fixture.archiveDirectory, "logs/sessions/fixture/terminal.log.gz"), "tampered")
   await assert.rejects(
     runHarvesterDebugArchivePublication({
@@ -536,7 +539,7 @@ test("rejects checksum mismatches before calling the publisher", async (t) => {
 })
 
 test("rejects unsafe manifest paths before calling the publisher", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ t })
   const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
   manifest.files[0].path = "../outside.txt"
@@ -555,7 +558,7 @@ test("rejects unsafe manifest paths before calling the publisher", async (t) => 
 })
 
 test("selects the latest completed archive without reading live process state", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ t })
   const latestName = "2026-11-28T13-00-00Z_223e4567_debug"
   await createArchiveFixture({
     root: fixture.root,
@@ -576,7 +579,7 @@ test("selects the latest completed archive without reading live process state", 
 })
 
 test("publisher can run without a trading mode and never invokes trading dependencies", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ t })
   let publisherCalled = false
   await runHarvesterDebugArchivePublication({
     archiveDirectory: fixture.archiveDirectory,
@@ -596,7 +599,7 @@ test("publisher can run without a trading mode and never invokes trading depende
 
 
 test("rejects a mismatched runtime evidence manifest before invoking the publisher", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ t })
   const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
   manifest.runtimeIdentity = {
@@ -648,7 +651,7 @@ test("rejects a mismatched runtime evidence manifest before invoking the publish
 
  
 test("rejects an archive with a missing required stream before invoking the publisher", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ t })
   const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
   manifest.evidenceIntegrity.streams.traceLog.status = "missing"
@@ -675,7 +678,7 @@ test("rejects an archive with a missing required stream before invoking the publ
   assert.equal(publisherCalled, false, "Missing streams must be rejected before Git publication")
 })
 test("rejects a completed archive when session PID disagrees with the committed recovery process identity", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ t })
   const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
   const session = manifest.sessionInventory.find(({ runtimeSessionId }) => runtimeSessionId === manifest.recoveryRuntimeSessionId)
@@ -709,7 +712,7 @@ test("rejects a completed archive when session PID disagrees with the committed 
 
 
 test("publishes a verified active-process snapshot without requiring completion records", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ t })
   const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
   const [session] = manifest.sessionInventory
@@ -772,7 +775,7 @@ test("publishes a verified active-process snapshot without requiring completion 
 
  
 test("publishes a verified active-runtime snapshot without process-completion files", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ t })
   const manifestPath = path.join(fixture.archiveDirectory, "manifest.json")
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"))
   const [session] = manifest.sessionInventory
