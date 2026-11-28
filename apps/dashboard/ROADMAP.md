@@ -27,6 +27,10 @@
 
 Detailed prior roadmap, including completed design decisions and historical runner notes, is preserved in [ROADMAP_HISTORY_2026-11-26.md](../../docs/archive/roadmap-history-2026-11-26.md#dashboard-roadmap).
 
+## Scenario Runner GitHub catalogue refresh — 2026-11-28
+
+Issue [#1986](https://github.com/45s/coinzilla/issues/1986) adds an explicit checkbox to load a read-only Recovery Seller scenario metadata snapshot from the current `develop` commit without restarting Harvester. The snapshot is pinned to one immutable commit SHA and cannot authorize execution; unchecking restores the live Harvester catalogue. GitHub source text is parsed as metadata only and is never evaluated. See the Scenario Runner roadmap for the trust boundary.
+
 ## Scenario Runner run-detail presentation — 2026-11-28
 
 The Dashboard Scenario Runner now has an evidence-linked visual run story in PR [#1983](https://github.com/45s/coinzilla/pull/1983), tracked by [issue #1982](https://github.com/45s/coinzilla/issues/1982). The implementation extends the existing framework-independent Scenario Runner application and Angular presentation rather than adding a second runner.

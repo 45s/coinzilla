@@ -55,6 +55,25 @@ describe('ScenarioRunnerApi HTTP gateway', () => {
     await expect(response).resolves.toEqual(catalog);
   });
 
+  it('loads the GitHub develop catalogue from one immutable commit snapshot', async () => {
+    const response = api.loadDevelopCatalog();
+    const ref = http.expectOne('https://api.github.com/repos/45s/coinzilla/git/ref/heads/develop');
+    ref.flush({ object: { sha: 'a'.repeat(40) } });
+    const sourcePaths = [
+      'apps/harvester/src/infrastructure/scenario-runner/rs-scenario-adapter.js',
+      'apps/harvester/src/infrastructure/scenario-runner/rs-runtime-scenario.js',
+    ];
+    for (const path of sourcePaths) {
+      const request = http.expectOne(`https://raw.githubusercontent.com/45s/coinzilla/${'a'.repeat(40)}/${path}`);
+      expect(request.request.responseType).toBe('text');
+      request.flush('Object.freeze({ id: "RS-001-001", name: "Test scenario", layer: "APPLICATION", status: "PARTIAL", executionStatus: "EXECUTABLE" })');
+    }
+    await expect(response).resolves.toMatchObject({
+      commitSha: 'a'.repeat(40),
+      catalog: [{ strategyId: 'RS', scenarios: [{ id: 'RS-001-001', executable: false, executionStatus: 'BLOCKED' }] }],
+    });
+  });
+
   it('submits a validated scenario run', async () => {
     const input = {
       strategyId: 'RS',

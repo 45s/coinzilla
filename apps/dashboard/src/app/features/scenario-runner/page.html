@@ -6,6 +6,10 @@
   @if (error()) {
     <p class="error" role="alert">{{ error() }}</p>
   }
+  <label class="catalog-source-toggle"><input type="checkbox" [checked]="useGitHubDevelopCatalog()" [disabled]="loading()" (change)="setGitHubCatalogSource($any($event.target).checked)" /> Load scenarios from GitHub develop (read-only)</label>
+  @if (catalogSourceRevision(); as revision) {
+    <p class="scenario-status" role="status">GitHub develop snapshot · <code>{{ revision }}</code> · metadata only; switch off to execute against the live Harvester catalogue.</p>
+  }
   <div class="controls">
     <label>Strategy
       <select [value]="strategyId()" (change)="selectStrategy($any($event.target).value)">
@@ -35,10 +39,10 @@
     </section>
   }
   <label class="input-label">Run input (JSON)
-    <textarea rows="8" [disabled]="selectedScenario?.executable !== true" [value]="inputJson()" (input)="updateInput($any($event.target).value)"></textarea>
+    <textarea rows="8" [disabled]="useGitHubDevelopCatalog() || selectedScenario?.executable !== true" [value]="inputJson()" (input)="updateInput($any($event.target).value)"></textarea>
   </label>
   <div class="actions">
-    <button type="button" [disabled]="loading() || selectedScenario?.executable !== true" (click)="execute()">Run scenario</button>
+    <button type="button" [disabled]="loading() || useGitHubDevelopCatalog() || selectedScenario?.executable !== true" (click)="execute()">Run scenario</button>
     @if (run()) {
       <button type="button" (click)="refresh()">Refresh</button>
       <button type="button" (click)="cancel()">Cancel</button>
