@@ -654,14 +654,14 @@ test("publishes a verified active-process snapshot without requiring completion 
     streams: { harvesterLog: true, traceLog: true },
   }
   const markerPath = path.join(fixture.archiveDirectory, session.activeSnapshotPath)
-  await writeFile(markerPath, `${JSON.stringify(marker, null, 2)}\\n`)
+  await writeFile(markerPath, `${JSON.stringify(marker, null, 2)}\n`)
   const markerBytes = await readFile(markerPath)
   manifest.files.push({
     path: session.activeSnapshotPath,
     size: markerBytes.length,
     sha256: createHash("sha256").update(markerBytes).digest("hex"),
   })
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\\n`)
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 
   let publisherCalled = false
   const result = await runHarvesterDebugArchivePublication({
