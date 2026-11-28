@@ -1,5 +1,13 @@
 # Harvester ordinary persistence
 
+## Trading-session history input boundary
+
+The createTradingSession use case is the application boundary for creating the ordinary process-session history record. It validates and canonicalizes buildProvenance through the application-owned mapTradingSessionInput mapper before the domain record is sent to the repository port.
+
+The mapper accepts only the bounded provenance contract: application/version/process identity and the allowlisted Git source fields. It canonicalizes Git SHAs, validates canonical UTC commit timestamps and metadata-source states, and drops unknown or secret-bearing properties such as API keys and free-form commit messages. The domain factory remains responsible for session identity, configured markets and lifecycle invariants; it receives provenance that has already crossed the application validation boundary.
+
+The repository record remains schema version 1 with the same buildProvenance field shape. This responsibility move requires no database migration and does not change the observer's best-effort history role or trading-readiness authority. The application mapper unit tests and use-case persistence-port tests cover normalization, unavailable Git metadata, malformed input rejection before writes, and secret-field exclusion.
+
 ## Session-scoped runtime errors (#1650) — COMPLETE
 
 Merged [PR #1650](https://github.com/45s/coinzilla/pull/1650) adds the versioned Harvester-owned `runtime_errors` table, bounded pre-database ERROR buffering, a non-blocking structured error observer, allowlisted/redacted searchable fields, and a shutdown drain before SQLite closes. Rows are correlated by the existing `runtime_session_id`; this does not add a `sessions` table or make diagnostics trading/recovery authority. The complete stack/cause record remains in the session DEBUG/TRACE JSONL logs. The history-sync hardening in [PR #1659](https://github.com/45s/coinzilla/pull/1659) supplies record-level history diagnostics to this projection.
