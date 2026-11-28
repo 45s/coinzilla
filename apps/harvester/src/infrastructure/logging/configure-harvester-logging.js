@@ -318,52 +318,80 @@ async function registerHarvesterLogTransports({
   }
 }
 
-async function persistHarvesterSessionIdentity({ sessionPaths, processIdentity } = {}) {
-  const identityPath = path.join(sessionPaths.sessionDirectory, "process-identity.json")
-  const identity = {
+function createHarvesterSessionIdentityRecord({ processIdentity, environment } = {}) {
+  return {
     formatVersion: 1,
     application: "harvester",
-    environment: process.env.TRADING_MODE ?? "unknown",
+    environment,
     startedAt: processIdentity.startedAt,
     runtimeSessionId: processIdentity.runtimeSessionId,
     processId: processIdentity.processId ?? process.pid,
     version: processIdentity.version ?? null,
     source: processIdentity.source ?? null,
   }
+}
+
+function assertExistingHarvesterSessionIdentityMatches({ existing, expected, identityPath, cause } = {}) {
+  const matches = existing.application === "harvester"
+    && existing.runtimeSessionId === expected.runtimeSessionId
+    && existing.startedAt === expected.startedAt
+    && existing.environment === expected.environment
+    && (!existing.processId || existing.processId === expected.processId)
+  if (!matches) {
+    throw new Error(`Existing process identity does not match the active runtime: ${identityPath}`, { cause })
+  }
+}
+
+async function updateLegacyHarvesterSessionIdentity({ identityPath, existing, identity } = {}) {
+  const temporaryPath = `${identityPath}.${randomUUID()}.tmp`
   try {
-    await writeFile(identityPath, `${JSON.stringify(identity, null, 2)}\n`, {
+    await writeFile(temporaryPath, `${JSON.stringify({
+      ...existing,
+      processId: identity.processId,
+      version: identity.version,
+    }, null, 2)}\\n`, {
       encoding: "utf8",
       flag: "wx",
       mode: 0o600,
     })
+    await rename(temporaryPath, identityPath)
+  } catch (error) {
+    await rm(temporaryPath, { force: true })
+    throw error
+  }
+}
+
+async function persistHarvesterSessionIdentity({ sessionPaths, processIdentity } = {}) {
+  const identityPath = path.join(sessionPaths.sessionDirectory, "process-identity.json")
+  const identity = createHarvesterSessionIdentityRecord({
+    processIdentity,
+    environment: process.env.TRADING_MODE ?? "unknown",
+  })
+  try {
+    await writeFile(identityPath, `${JSON.stringify(identity, null, 2)}\\n`, {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    })
+    return
   } catch (error) {
     if (error.code !== "EEXIST") {
       throw error
     }
-    const existing = JSON.parse(await readFile(identityPath, "utf8"))
-    if (
-      existing.application !== "harvester"
-      || existing.runtimeSessionId !== processIdentity.runtimeSessionId
-      || existing.startedAt !== processIdentity.startedAt
-      || existing.environment !== identity.environment
-      || (existing.processId && existing.processId !== identity.processId)
-    ) {
-      throw new Error(`Existing process identity does not match the active runtime: ${identityPath}`, { cause: error })
-    }
-    if (!existing.processId) {
-      const temporaryPath = `${identityPath}.${randomUUID()}.tmp`
-      try {
-        await writeFile(temporaryPath, `${JSON.stringify({ ...existing, processId: identity.processId, version: identity.version }, null, 2)}\n`, {
-          encoding: "utf8",
-          flag: "wx",
-          mode: 0o600,
-        })
-        await rename(temporaryPath, identityPath)
-      } catch (updateError) {
-        await rm(temporaryPath, { force: true })
-        throw updateError
-      }
-    }
+  }
+  const existing = JSON.parse(await readFile(identityPath, "utf8"))
+  assertExistingHarvesterSessionIdentityMatches({
+    existing,
+    expected: identity,
+    identityPath,
+    cause: new Error("The session identity file already exists."),
+  })
+  if (!existing.processId) {
+    await updateLegacyHarvesterSessionIdentity({
+      identityPath,
+      existing,
+      identity,
+    })
   }
 }
 
