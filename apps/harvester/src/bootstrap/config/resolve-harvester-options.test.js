@@ -80,16 +80,16 @@ test("selects CG and RS markets independently while preserving strategy-owned pa
     },
   }
   const executionRoutes = [
-    ...conservativeSymbols.map((symbol) => ({
+    {
       strategyId: "CG_coinGrabber",
-      symbol,
-    })),
-    ...recoverySellerSymbols.map((symbol) => ({
+      symbol: "BTCUSDT",
+    },
+    {
       strategyId: "RS_recoverySeller",
-      symbol,
-    })),
+      symbol: "ETHUSDT",
+    },
   ]
-  const executionSymbols = [...conservativeSymbols, ...recoverySellerSymbols]
+  const executionSymbols = ["BTCUSDT", "ETHUSDT"]
   const fixture = createFixture({
     cfg,
     env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
@@ -591,18 +591,19 @@ test("keeps enabled RS execution routes when CG process recovery is disabled", a
     env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
   })
   const executionRoutes = [
-    {
+    ...conservativeSymbols.map((symbol) => ({
       strategyId: "CG_coinGrabber",
-      symbol: "BTCUSDT",
-    },
-    {
+      symbol,
+    })),
+    ...recoverySellerSymbols.map((symbol) => ({
       strategyId: "RS_recoverySeller",
-      symbol: "ETHUSDT",
-    },
+      symbol,
+    })),
   ]
+  const executionSymbols = [...conservativeSymbols, ...recoverySellerSymbols]
   const result = await resolveHarvesterOptions({
     ...fixture.input,
-    executionSymbols: ["BTCUSDT", "ETHUSDT"],
+    executionSymbols,
     executionRoutes,
   })
 
@@ -610,7 +611,7 @@ test("keeps enabled RS execution routes when CG process recovery is disabled", a
     "The CG process-recovery switch must not disable the independent RS strategy.")
   assert.deepEqual(Object.keys(result.appConfig.strategies.RS_recoverySeller.pairs), recoverySellerSymbols,
     "The enabled RS market must remain in the effective runtime configuration.")
-  assert.deepEqual(Object.keys(result.recoverySellerPairs), ["ETHUSDT"],
+  assert.deepEqual(Object.keys(result.recoverySellerPairs), recoverySellerSymbols,
     "The RS market must survive strategy pair resolution.")
   assert.deepEqual(result.executionRoutes, executionRoutes,
     "The provider's CG and RS execution routes must both be retained.")
