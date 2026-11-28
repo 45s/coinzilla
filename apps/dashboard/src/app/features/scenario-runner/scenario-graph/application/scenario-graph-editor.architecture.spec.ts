@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 describe('scenario graph core architecture', () => {
   it('keeps domain and application modules free of framework and browser dependencies', () => {
-    const sourcePath = (relativePath: string): string => decodeURIComponent(new URL(relativePath, import.meta.url).pathname)
-      .replace(/^\\/([A-Za-z]:\\/)/, '$1');
+    const sourcePath = (relativePath: string): string => {
+      const pathname = decodeURIComponent(new URL(relativePath, import.meta.url).pathname);
+      return pathname.startsWith('/') && /^[A-Za-z]:\\//.test(pathname.slice(1)) ? pathname.slice(1) : pathname;
+    };
     const sources = [
       readFileSync(sourcePath('../domain/scenario-graph.ts'), 'utf8'),
       readFileSync(sourcePath('./scenario-graph-editor.ts'), 'utf8'),
