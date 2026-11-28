@@ -34,7 +34,7 @@
       <header class="scenario-guide-heading">
         <div>
           <p class="guide-eyebrow">SCENARIO INTENT · NOT EXECUTION EVIDENCE</p>
-          <h2 id="scenario-guide-title">What this scenario does</h2>
+          <h2 id="scenario-guide-title">{{ guide.title }}</h2>
         </div>
       </header>
       <p class="guide-purpose">{{ guide.purpose }}</p>
@@ -103,9 +103,9 @@
       <h2>Recent runs</h2>
       @for (item of history(); track item.runId) {
         <button type="button" (click)="selectHistory(item.runId)">
-          <span>{{ item.strategyId }} · {{ item.scenarioId }}</span>
+          <span>{{ item.strategyId }} · {{ scenarioTitle(item.scenarioId, item.scenarioId) }}</span>
           <strong>{{ item.status }}</strong>
-          <small>{{ item.runId }}</small>
+          <small>Scenario ID: {{ item.scenarioId }} · Run: {{ item.runId }}</small>
         </button>
       }
     </section>
@@ -129,7 +129,8 @@
       <header class="story-heading">
         <div>
           <h2>Run story</h2>
-          <p>{{ view.identity.strategyId ?? 'Unknown strategy' }} · {{ view.identity.scenarioId ?? 'Unknown scenario' }}</p>
+          <p>{{ view.identity.strategyId ?? 'Unknown strategy' }} · {{ scenarioTitle(view.identity.scenarioId ?? '', view.identity.scenarioId ?? 'Unknown scenario') }}</p>
+          <p class="scenario-status">Scenario ID: <code>{{ view.identity.scenarioId ?? 'Unknown' }}</code></p>
           <p>{{ view.identity.symbol ?? 'Market unavailable' }} · {{ view.identity.venue ?? 'Venue unavailable' }}</p>
         </div>
         @if (view.identity.executionMode === 'simulation-only') {
