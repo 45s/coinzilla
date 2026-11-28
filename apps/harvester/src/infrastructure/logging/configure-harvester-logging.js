@@ -494,7 +494,7 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
     const diagnosticPrefix = `${time} ${levelLabel}[${diagnostic.diagnosticId}] stage=${diagnostic.stage}`
     const action = `action=${diagnostic.operatorAction}`
     const causePrefix = "cause="
-    const fixedLength = diagnosticPrefix.length + 1 + causePrefix.length + 1 + action.length
+    const fixedLength = diagnosticPrefix.length + 1 + causePrefix.length + 3 + action.length
     const causeBudget = Math.max(0, MAX_CONSOLE_LINE_LENGTH - fixedLength)
     const cause = String(diagnostic.cause ?? diagnostic.meaning)
       .replace(/[\\r\\n]+/g, " ")
