@@ -129,19 +129,21 @@ async function handleUnownedOrderEvent({ dependencies, event, order, symbol } = 
 }
 
 function getRegisteredOrder({ registry, order } = {}) {
-  const byClientOrderId = registry.getOrder?.({
-    clientOrderId: order.clientOrderId,
-  })
-  if (byClientOrderId) {
-    return byClientOrderId
-  }
-  if (order.brokerOrderId && typeof registry.getOrderByBrokerOrderId === "function") {
-    return registry.getOrderByBrokerOrderId({
+  const byBrokerOrderId = order.brokerOrderId &&
+    typeof registry.getOrderByBrokerOrderId === "function"
+    ? registry.getOrderByBrokerOrderId({
       brokerOrderId: order.brokerOrderId,
       marketId: order.market.id,
     })
+    : undefined
+  const byClientOrderId = registry.getOrder?.({
+    clientOrderId: order.clientOrderId,
+  })
+  if (byBrokerOrderId && byClientOrderId &&
+      byBrokerOrderId.clientOrderId !== byClientOrderId.clientOrderId) {
+    throw new Error("Order event brokerOrderId and clientOrderId identify different registered orders")
   }
-  return undefined
+  return byBrokerOrderId ?? byClientOrderId
 }
 
 function publishOrderUpdatedEvent({ eventPublisher, registry, previousOrder, order, event } = {}) {
