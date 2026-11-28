@@ -57,11 +57,11 @@ function assertManifestRuntimeCorrelation({ manifest, integrity, expectedRuntime
 function assertUniqueCompletedRuntimeSession({ manifest, expectedRuntimeId } = {}) {
   const matchingSessions = (manifest.sessionInventory ?? []).filter((session) =>
     session.runtimeSessionId === expectedRuntimeId
-      && ["complete", "active"].includes(session.completionStatus)
-      && ["complete", "active"].includes(session.loggerCompletionStatus)
+      && ["complete", "active", "stopped-unconfirmed"].includes(session.completionStatus)
+      && ["complete", "active", "stopped-unconfirmed"].includes(session.loggerCompletionStatus)
   )
   if (matchingSessions.length !== 1) {
-    throw new Error(`Debug archive runtime ownership is ambiguous or incomplete: expected exactly one completed or verified active process identity for runtime ${expectedRuntimeId}; found ${matchingSessions.length}.`)
+    throw new Error(`Debug archive runtime ownership is ambiguous or incomplete: expected exactly one completed, verified active, or stopped-unconfirmed process identity for runtime ${expectedRuntimeId}; found ${matchingSessions.length}.`)
   }
   return matchingSessions[0]
 }
@@ -236,6 +236,89 @@ async function validateActiveSessionSnapshot({ directory, manifest, session, ide
   }
 }
 
+function hasNoArchivedCompletionRecords({ manifest, session } = {}) {
+  return !manifest.files.some((entry) => entry.sourcePath === session.processCompletionPath)
+    && !manifest.files.some((entry) => entry.sourcePath === session.loggerCompletionPath)
+}
+
+function matchesStoppedSnapshotIdentity({ marker, identity, manifest, expectedRuntimeId } = {}) {
+  return marker.runtimeSessionId === expectedRuntimeId
+    && marker.processId === identity.processId
+    && marker.processId === manifest.tradingRuntime.processIdentity.processId
+    && marker.processStartedAt === identity.startedAt
+    && marker.recoveryDataCommitHash === manifest.dataCommitHash
+}
+
+function matchesStoppedSnapshotState(marker) {
+  return marker.formatVersion === 1
+    && marker.status === "stopped-unconfirmed"
+    && marker.snapshotType === "stopped-harvester-process"
+    && marker.processAliveAtCapture === false
+    && marker.activeProcessLockOwnerAtCapture === false
+    && marker.completionConfirmed === false
+    && marker.loggerFlushConfirmed === false
+}
+
+function matchesStoppedSnapshotCaptureTime({ marker, identity } = {}) {
+  const capturedAt = Date.parse(marker.capturedAt)
+  const startedAt = Date.parse(identity.startedAt)
+  return Number.isFinite(startedAt)
+    && Number.isFinite(capturedAt)
+    && capturedAt >= startedAt
+}
+
+function hasCompleteStoppedSnapshotStreams(marker) {
+  return marker.streams?.harvesterLog === true
+    && marker.streams?.traceLog === true
+}
+
+function isValidStoppedProcessSnapshotMarker({ marker, identity, manifest, expectedRuntimeId } = {}) {
+  return matchesStoppedSnapshotIdentity({
+    marker,
+    identity,
+    manifest,
+    expectedRuntimeId,
+  })
+    && matchesStoppedSnapshotState(marker)
+    && matchesStoppedSnapshotCaptureTime({
+      marker,
+      identity,
+    })
+    && hasCompleteStoppedSnapshotStreams(marker)
+    && Array.isArray(marker.limitations)
+    && marker.limitations.length >= 3
+}
+
+async function validateStoppedProcessSnapshot({
+  directory,
+  manifest,
+  session,
+  identity,
+  expectedRuntimeId,
+} = {}) {
+  const markerPath = session.stoppedSnapshotPath
+  const expectedMarkerPath = `logs/sessions/${session.sessionName}/stopped-process-snapshot.json`
+  const markerEntry = manifest.files.find((entry) => entry.path === markerPath)
+  if (markerPath !== expectedMarkerPath || !markerEntry) {
+    throw new Error(`Stopped runtime ${expectedRuntimeId} is missing its snapshot provenance marker.`)
+  }
+  if (!hasNoArchivedCompletionRecords({
+    manifest,
+    session,
+  })) {
+    throw new Error(`Stopped runtime ${expectedRuntimeId} must not claim missing completion metadata is present.`)
+  }
+  const marker = JSON.parse(await readFile(path.join(directory, markerPath), "utf8"))
+  if (!isValidStoppedProcessSnapshotMarker({
+    marker,
+    identity,
+    manifest,
+    expectedRuntimeId,
+  })) {
+    throw new Error(`Stopped-process snapshot provenance is invalid for runtime ${expectedRuntimeId}.`)
+  }
+}
+
 async function validateCompletedSessionLifecycle({ directory, manifest, session, identity, expectedRuntimeId } = {}) {
   const [completion, loggerCompletion] = await Promise.all([
     readArchivedSessionJson({
@@ -288,6 +371,16 @@ async function validateSessionLifecycleEvidence({ directory, manifest } = {}) {
   }
   if (session.completionStatus === "active") {
     await validateActiveSessionSnapshot({
+      directory,
+      manifest,
+      session,
+      identity,
+      expectedRuntimeId,
+    })
+    return
+  }
+  if (session.completionStatus === "stopped-unconfirmed") {
+    await validateStoppedProcessSnapshot({
       directory,
       manifest,
       session,

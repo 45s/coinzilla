@@ -199,7 +199,7 @@ async function assertCollectedArchive({ directory, expectedIdentityStatus, expec
   assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "Archive manifest must preserve the latest committed recovery checkpoint digest")
   assert.deepEqual(manifest.logSelection, {
     cumulative: "excluded",
-    sessions: "all-identified-Harvester-sessions-preserved-independently; exact-runtime-id-match-required; completed sessions or active-process snapshots; gzip-compressed",
+    sessions: "identified-Harvester-sessions-preserved-independently; exact-runtime-id-match-required; completed sessions, active-process snapshots, or stopped-process snapshots with unconfirmed completion; gzip-compressed",
     selectionReason: expectedIdentityStatus === "matched" ? "exact-runtime-id-match" : expectedIdentityStatus,
   }, "Debug archive manifest must preserve testnet and live sessions independently and require an exact runtime identity match.")
   assert.equal(
@@ -563,6 +563,63 @@ test("collects and marks the exact active runtime without stopping or clearing i
   assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, lockOwner.token, "Collection must not modify or remove the Journal process lock.")
   assert.equal(JSON.parse(await readFile(hostLockPath, "utf8")).token, "active-host-lock-token", "Collection must not modify or remove the host process lock.")
   assert.equal(manifest.evidenceIntegrity.validForPublication, true, "A uniquely identified active runtime snapshot is publishable.")
+})
+
+test("archives stable logs for a stopped runtime when legacy completion markers are absent", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  await prepareActiveRuntimeFixture({ fixture })
+  const legacySessionDirectory = path.join(fixture.packageDirectory, "logs/sessions/2026-11-09_legacy-without-identity")
+  await mkdir(legacySessionDirectory, { recursive: true })
+  await writeFile(path.join(legacySessionDirectory, "harvester.log"), "unrelated legacy evidence", "utf8")
+  const result = await runHarvesterDebugArchive({
+    ...archiveDependencies({ fixture }),
+    isProcessAlive: () => false,
+    onArchiveCreatedFn: undefined,
+  })
+  const manifest = await readArchiveManifest(result.localArchive)
+  const session = manifest.sessionInventory.find(({ runtimeSessionId }) => runtimeSessionId === RUNTIME_SESSION_ID)
+  assert.equal(result.matchingTradingLogsAvailable, true, "Exact runtime identity plus a confirmed stopped PID must select the preserved logs.")
+  assert.equal(session.completionStatus, "stopped-unconfirmed", "A stopped process without completion metadata must not be mislabeled as cleanly completed.")
+  assert.equal(session.loggerCompletionStatus, "stopped-unconfirmed", "Missing logger-flush metadata must remain explicit.")
+  assert.equal(session.stoppedSnapshotPath, "logs/sessions/2026-11-24_testnet/stopped-process-snapshot.json")
+  const marker = JSON.parse(await readFile(path.join(result.localArchive, session.stoppedSnapshotPath), "utf8"))
+  assert.equal(marker.runtimeSessionId, RUNTIME_SESSION_ID)
+  assert.equal(marker.processId, process.pid)
+  assert.equal(marker.processStartedAt, session.startedAt)
+  assert.equal(marker.processAliveAtCapture, false)
+  assert.equal(marker.completionConfirmed, false)
+  assert.deepEqual(marker.streams, {
+    harvesterLog: true,
+    traceLog: true,
+  })
+  assert.equal(manifest.evidenceIntegrity.validForPublication, true, "A byte-stable, runtime-matched stopped-process snapshot is publishable as explicitly unconfirmed evidence.")
+  assert.ok(manifest.evidenceIntegrity.unverifiableSessions.includes("logs/sessions/2026-11-09_legacy-without-identity"), "Unidentified historical sessions must remain independent and must not block a proven exact-runtime snapshot.")
+  assert.ok(manifest.warnings.some(({ code }) => code === "STOPPED_RUNTIME_COMPLETION_UNCONFIRMED"), "The archive must make the unconfirmed process exit and logger flush visible.")
+  assert.ok(manifest.warnings.some(({ code }) => code === "SESSION_COMPLETION_RECORD_MISSING"))
+  assert.ok(manifest.warnings.some(({ code }) => code === "SESSION_LOGGER_COMPLETION_RECORD_MISSING"))
+})
+
+test("does not classify a PID as stopped when it remains alive without its process locks", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const { lockPath, hostLockPath } = await prepareActiveRuntimeFixture({ fixture })
+  await Promise.all([rm(lockPath), rm(hostLockPath)])
+  await assert.rejects(
+    runHarvesterDebugArchive({
+      ...archiveDependencies({ fixture }),
+      isProcessAlive: () => true,
+      onArchiveCreatedFn: undefined,
+    }),
+    /incomplete|evidence integrity|COLLECTION FAILED/i,
+    "A missing lock pair must not turn a still-live PID into a stopped-process snapshot.",
+  )
 })
 
 test("leaves stale process locks untouched while collecting the TESTNET debug archive", async (t) => {

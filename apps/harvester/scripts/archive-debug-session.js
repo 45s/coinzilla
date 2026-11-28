@@ -560,40 +560,107 @@ function isMatchingActiveProcessOwner({ identity, processId, activeProcessOwner 
   })
 }
 
-function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCompletion, isHarvesterSession, processId, activeProcessOwner } = {}) {
+function hasExactStoppedRuntimeIdentity({ identity, processId, recoveryCheckpoint } = {}) {
+  const durableIdentity = recoveryCheckpoint?.processIdentity
+  return identity?.runtimeSessionId === recoveryCheckpoint?.runtimeSessionId
+    && processId === durableIdentity?.processId
+    && identity?.startedAt === durableIdentity?.startedAt
+    && Number.isSafeInteger(processId)
+    && processId > 0
+}
+
+function confirmsStoppedRuntimeProcess({ processId, activeProcessOwner, isProcessAlive } = {}) {
+  return activeProcessOwner === null
+    && typeof isProcessAlive === "function"
+    && !isProcessAlive(processId)
+}
+
+function hasBothCompletionRecordsAbsent(missingFieldWarnings) {
+  return missingFieldWarnings.includes("COMPLETION_RECORD_MISSING")
+    && missingFieldWarnings.includes("LOGGER_COMPLETION_RECORD_MISSING")
+}
+
+function isEligibleStoppedRuntimeSnapshot({
+  identity,
+  processId,
+  activeProcessOwner,
+  recoveryCheckpoint,
+  missingFieldWarnings,
+  isProcessAlive,
+} = {}) {
+  return hasExactStoppedRuntimeIdentity({
+    identity,
+    processId,
+    recoveryCheckpoint,
+  })
+    && confirmsStoppedRuntimeProcess({
+      processId,
+      activeProcessOwner,
+      isProcessAlive,
+    })
+    && hasBothCompletionRecordsAbsent(missingFieldWarnings)
+}
+function resolveArchiveSessionCompletionStatus({
+  identity,
+  completion,
+  loggerCompletion,
+  isHarvesterSession,
+  processId,
+  activeProcessOwner,
+  recoveryCheckpoint,
+  missingFieldWarnings,
+  isProcessAlive,
+} = {}) {
   if (!identity) {
     return "identity-missing"
   }
   if (!isHarvesterSession) {
     return "unsupported-environment-or-invalid"
   }
-  if (hasCompleteProcessCompletion({
+  const hasCleanCompletion = hasCompleteProcessCompletion({
     identity,
     completion,
   }) && hasCompleteLoggerCompletion({
     identity,
     loggerCompletion,
-  })) {
+  })
+  if (hasCleanCompletion) {
     return "complete"
   }
-  return isMatchingActiveProcessOwner({
+  if (isMatchingActiveProcessOwner({
     identity,
     processId,
     activeProcessOwner,
-  })
-    ? "active"
-    : "incomplete"
+  })) {
+    return "active"
+  }
+  return isEligibleStoppedRuntimeSnapshot({
+    identity,
+    processId,
+    activeProcessOwner,
+    recoveryCheckpoint,
+    missingFieldWarnings,
+    isProcessAlive,
+  }) ? "stopped-unconfirmed" : "incomplete"
 }
-
-function resolveArchiveSessionLoggerCompletionStatus({ identity, loggerCompletion, isHarvesterSession, processId, activeProcessOwner } = {}) {
+function resolveArchiveSessionLoggerCompletionStatus({
+  identity,
+  loggerCompletion,
+  isHarvesterSession,
+  processId,
+  activeProcessOwner,
+  completionStatus,
+} = {}) {
   if (hasCompleteLoggerCompletion({
     identity,
     loggerCompletion,
   }) && isHarvesterSession) {
     return "complete"
   }
-  return isHarvesterSession
-    && isMatchingActiveProcessOwner({
+  if (completionStatus === "stopped-unconfirmed") {
+    return "stopped-unconfirmed"
+  }
+  return isHarvesterSession && isMatchingActiveProcessOwner({
     identity,
     processId,
     activeProcessOwner,
@@ -685,6 +752,8 @@ function createArchiveSessionEvidenceRecord({
   missingFieldWarnings,
   isHarvesterSession,
   activeProcessOwner,
+  recoveryCheckpoint,
+  isProcessAlive,
 } = {}) {
   const completionStatus = resolveArchiveSessionCompletionStatus({
     identity,
@@ -693,6 +762,9 @@ function createArchiveSessionEvidenceRecord({
     isHarvesterSession,
     processId,
     activeProcessOwner,
+    recoveryCheckpoint,
+    missingFieldWarnings,
+    isProcessAlive,
   })
   const loggerCompletionStatus = resolveArchiveSessionLoggerCompletionStatus({
     identity,
@@ -700,11 +772,15 @@ function createArchiveSessionEvidenceRecord({
     isHarvesterSession,
     processId,
     activeProcessOwner,
+    completionStatus,
   })
   return {
     sessionName,
     activeSnapshotPath: completionStatus === "active"
       ? `logs/sessions/${sessionName}/active-process-snapshot.json`
+      : null,
+    stoppedSnapshotPath: completionStatus === "stopped-unconfirmed"
+      ? `logs/sessions/${sessionName}/stopped-process-snapshot.json`
       : null,
     ...createArchiveSessionLifecycleFields({
       sessionName,
@@ -723,7 +799,7 @@ function createArchiveSessionEvidenceRecord({
   }
 }
 
-async function readArchiveSessionEvidence({ sessionsDirectory, sessionName, recoveryCheckpoint, activeProcessOwner }) {
+async function readArchiveSessionEvidence({ sessionsDirectory, sessionName, recoveryCheckpoint, activeProcessOwner, isProcessAlive }) {
   const sessionDirectory = path.join(sessionsDirectory, sessionName)
   const [identityResult, completionResult, loggerCompletionResult] = await Promise.all([
     readOptionalSessionJson(path.join(sessionDirectory, "process-identity.json")),
@@ -758,10 +834,12 @@ async function readArchiveSessionEvidence({ sessionsDirectory, sessionName, reco
     missingFieldWarnings,
     isHarvesterSession,
     activeProcessOwner,
+    recoveryCheckpoint,
+    isProcessAlive,
   })
 }
 
-async function readArchiveSessionInventory({ sessionsDirectory, recoveryCheckpoint, activeProcessOwner } = {}) {
+async function readArchiveSessionInventory({ sessionsDirectory, recoveryCheckpoint, activeProcessOwner, isProcessAlive } = {}) {
   const sessionNames = (await readdir(sessionsDirectory)).sort()
   const sessions = []
   for (const sessionName of sessionNames) {
@@ -775,6 +853,7 @@ async function readArchiveSessionInventory({ sessionsDirectory, recoveryCheckpoi
       sessionName,
       recoveryCheckpoint,
       activeProcessOwner,
+      isProcessAlive,
     }))
   }
   return sessions
@@ -796,7 +875,7 @@ function resolveArchiveLogSelectionStatus({ sessions, matchingRuntimeSessions } 
     if (!Number.isSafeInteger(matchingSession.processId) || matchingSession.processId <= 0) {
       return "incomplete"
     }
-    if (["complete", "active"].includes(matchingSession.completionStatus)) {
+    if (["complete", "active", "stopped-unconfirmed"].includes(matchingSession.completionStatus)) {
       return "matched"
     }
     return "incomplete"
@@ -860,6 +939,14 @@ function createArchiveLogSelectionWarnings({ sessions, recoveryCheckpoint, statu
     })
   }
   for (const session of sessions) {
+    if (session.completionStatus === "stopped-unconfirmed") {
+      warnings.push({
+        code: "STOPPED_RUNTIME_COMPLETION_UNCONFIRMED",
+        sessionName: session.sessionName,
+        runtimeSessionId: session.runtimeSessionId,
+        message: "The exact runtime PID is no longer alive and both log streams were captured, but process exit and logger flush are unconfirmed because both completion records are absent.",
+      })
+    }
     for (const warningCode of session.missingFieldWarnings) {
       warnings.push({
         code: `SESSION_${warningCode}`,
@@ -872,11 +959,12 @@ function createArchiveLogSelectionWarnings({ sessions, recoveryCheckpoint, statu
   return warnings
 }
 
-async function findArchiveLogSessionSelection({ sessionsDirectory, recoveryCheckpoint, activeProcessOwner } = {}) {
+async function findArchiveLogSessionSelection({ sessionsDirectory, recoveryCheckpoint, activeProcessOwner, isProcessAlive } = {}) {
   const sessions = await readArchiveSessionInventory({
     sessionsDirectory,
     recoveryCheckpoint,
     activeProcessOwner,
+    isProcessAlive,
   })
   const matchingRuntimeSessions = findMatchingArchiveSessions({
     sessions,
@@ -1122,7 +1210,7 @@ async function copyIdentifiedSessionEvidence({ sourceDirectory, destinationDirec
   return artifactProvenance
 }
 
-async function validateLogRootAndSelectSessions({ sourceDirectory, destinationDirectory, recoveryCheckpoint, activeProcessOwner } = {}) {
+async function validateLogRootAndSelectSessions({ sourceDirectory, destinationDirectory, recoveryCheckpoint, activeProcessOwner, isProcessAlive } = {}) {
   await mkdir(destinationDirectory, {
     recursive: true,
     mode: 0o700,
@@ -1146,15 +1234,17 @@ async function validateLogRootAndSelectSessions({ sourceDirectory, destinationDi
     sessionsDirectory: path.join(sourceDirectory, "sessions"),
     recoveryCheckpoint,
     activeProcessOwner,
+    isProcessAlive,
   })
 }
 
-async function copySelectedLogs({ sourceDirectory, destinationDirectory, recoveryCheckpoint, activeProcessOwner, onFileCopied } = {}) {
+async function copySelectedLogs({ sourceDirectory, destinationDirectory, recoveryCheckpoint, activeProcessOwner, isProcessAlive, onFileCopied } = {}) {
   const selection = await validateLogRootAndSelectSessions({
     sourceDirectory,
     destinationDirectory,
     recoveryCheckpoint,
     activeProcessOwner,
+    isProcessAlive,
   })
   const artifactProvenance = await copyIdentifiedSessionEvidence({
     sourceDirectory,
@@ -1387,6 +1477,9 @@ function createArchiveSessionManifestEntry({ session } = {}) {
     activeSnapshotPath: session.completionStatus === "active"
       ? `logs/sessions/${session.sessionName}/active-process-snapshot.json`
       : null,
+    stoppedSnapshotPath: session.completionStatus === "stopped-unconfirmed"
+      ? `logs/sessions/${session.sessionName}/stopped-process-snapshot.json`
+      : null,
     completionRuntimeSessionId: session.completionRuntimeSessionId,
     loggerCompletionRuntimeSessionId: session.loggerCompletionRuntimeSessionId,
     logStreamsComplete: session.logStreamsComplete,
@@ -1448,7 +1541,7 @@ async function createArchiveManifest({
     excludedPaths: [...EXCLUDED_ARCHIVE_PATHS],
     logSelection: {
       cumulative: "excluded",
-      sessions: "all-identified-Harvester-sessions-preserved-independently; exact-runtime-id-match-required; completed sessions or active-process snapshots; gzip-compressed",
+      sessions: "identified-Harvester-sessions-preserved-independently; exact-runtime-id-match-required; completed sessions, active-process snapshots, or stopped-process snapshots with unconfirmed completion; gzip-compressed",
       selectionReason: logSelection.evidenceIntegrity.status === "matched" ? logSelection.selectionReason : logSelection.evidenceIntegrity.status,
     },
     dataCommitHash,
@@ -1908,6 +2001,72 @@ async function writeActiveProcessSnapshotMarker({ localArchive, logSelection, ac
     mode: 0o600,
   })
 }
+async function assertStoppedProcessSnapshotStillStopped({ processId, lockDirectory, isProcessAlive } = {}) {
+  const activeProcessOwner = await readActiveHarvesterProcessOwner({
+    lockDirectory,
+    isProcessAlive,
+  })
+  if (activeProcessOwner || isProcessAlive(processId)) {
+    throw new Error(
+      `Cannot publish stopped-process snapshot: PID ${processId} or another Harvester process is active during collection.`,
+    )
+  }
+}
+
+async function writeStoppedProcessSnapshotMarker({
+  localArchive,
+  session,
+  logSelection,
+  recoveryCheckpoint,
+  lockDirectory,
+  isProcessAlive,
+} = {}) {
+  await assertStoppedProcessSnapshotStillStopped({
+    processId: session.processId,
+    lockDirectory,
+    isProcessAlive,
+  })
+  const streams = logSelection.evidenceIntegrity?.streams
+  const marker = {
+    formatVersion: 1,
+    status: "stopped-unconfirmed",
+    snapshotType: "stopped-harvester-process",
+    runtimeSessionId: recoveryCheckpoint.runtimeSessionId,
+    processId: session.processId,
+    processStartedAt: session.startedAt,
+    processAliveAtCapture: false,
+    activeProcessLockOwnerAtCapture: false,
+    completionConfirmed: false,
+    loggerFlushConfirmed: false,
+    capturedAt: new Date().toISOString(),
+    recoveryDataCommitHash: recoveryCheckpoint.dataCommitHash,
+    streams: {
+      harvesterLog: streams?.harvesterLog?.status === "matched" && streams.harvesterLog.fileCount > 0,
+      traceLog: streams?.traceLog?.status === "matched" && streams.traceLog.fileCount > 0,
+    },
+    limitations: [
+      "The process completion record is missing; its exit code and termination reason are unknown.",
+      "The logger completion record is missing; a clean logger flush cannot be confirmed.",
+      "Only byte-stable files observed after the process was no longer alive are included.",
+    ],
+  }
+  if (!marker.streams.harvesterLog || !marker.streams.traceLog) {
+    throw new Error(
+      `Cannot create stopped-process snapshot marker without both runtime-matched log streams for ${recoveryCheckpoint.runtimeSessionId}.`,
+    )
+  }
+  const markerPath = path.join(localArchive, session.stoppedSnapshotPath)
+  await mkdir(path.dirname(markerPath), {
+    recursive: true,
+    mode: 0o700,
+  })
+  await writeFile(markerPath, `${JSON.stringify(marker, null, 2)}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o600,
+  })
+}
+
 function areActiveProcessLockOwnersUnchanged({ initialOwner, currentOwner } = {}) {
   if (
     currentOwner?.pid !== initialOwner?.pid
@@ -2016,6 +2175,52 @@ async function assertActiveSnapshotOwnershipStable({
   })
 }
 
+async function writeRuntimeSnapshotMarker({
+  localArchive,
+  logSelection,
+  activeProcessOwner,
+  recoveryCheckpoint,
+  lockDirectory,
+  isProcessAlive,
+} = {}) {
+  if (activeProcessOwner) {
+    await assertActiveSnapshotOwnershipStable({
+      localArchive,
+      activeProcessOwner,
+      lockDirectory,
+      isProcessAlive,
+      recoveryCheckpoint,
+    })
+    const activeSessionMatches = logSelection.sessions.some((session) =>
+      session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId
+        && session.completionStatus === "active"
+    )
+    if (activeSessionMatches) {
+      await writeActiveProcessSnapshotMarker({
+        localArchive,
+        logSelection,
+        activeProcessOwner,
+        recoveryCheckpoint,
+      })
+    }
+    return
+  }
+  const stoppedSession = logSelection.sessions.find((session) =>
+    session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId
+      && session.completionStatus === "stopped-unconfirmed"
+  )
+  if (stoppedSession) {
+    await writeStoppedProcessSnapshotMarker({
+      localArchive,
+      session: stoppedSession,
+      logSelection,
+      recoveryCheckpoint,
+      lockDirectory,
+      isProcessAlive,
+    })
+  }
+}
+
 async function copyArchiveEvidence({
   sourcePaths, packageDirectory, localArchive, activeProcessOwner,
   lockDirectory, isProcessAlive, onProgress,
@@ -2044,6 +2249,7 @@ async function copyArchiveEvidence({
     destinationDirectory: path.join(localArchive, "logs"),
     recoveryCheckpoint,
     activeProcessOwner,
+    isProcessAlive,
     onFileCopied,
   })
   if (!logSelection.matchingTradingLogsAvailable) {
@@ -2052,27 +2258,20 @@ async function copyArchiveEvidence({
       `WARNING: matchingTradingLogsAvailable=false for recovery runtime ${logSelection.unmatchedRuntimeSessionId}; unrelated sessions are retained only as independent evidence.`,
     )
   }
-  if (activeProcessOwner) {
-    await assertActiveSnapshotOwnershipStable({
-      localArchive,
-      activeProcessOwner,
-      lockDirectory,
-      isProcessAlive,
-      recoveryCheckpoint,
-    })
-    const activeSessionMatches = logSelection.sessions.some((session) =>
-      session.runtimeSessionId === recoveryCheckpoint.runtimeSessionId
-        && session.completionStatus === "active"
+  if (logSelection.sessions.some((session) => session.completionStatus === "stopped-unconfirmed")) {
+    reportProgress(
+      onProgress,
+      "WARNING: matching runtime logs are preserved, but process exit reason and logger flush are unconfirmed; the archive marks this as stopped-unconfirmed evidence.",
     )
-    if (activeSessionMatches) {
-      await writeActiveProcessSnapshotMarker({
-        localArchive,
-        logSelection,
-        activeProcessOwner,
-        recoveryCheckpoint,
-      })
-    }
   }
+  await writeRuntimeSnapshotMarker({
+    localArchive,
+    logSelection,
+    activeProcessOwner,
+    recoveryCheckpoint,
+    lockDirectory,
+    isProcessAlive,
+  })
   reportProgress(onProgress, `Evidence snapshot complete: ${retainedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
   return logSelection
 }
