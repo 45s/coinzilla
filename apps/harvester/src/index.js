@@ -1,5 +1,5 @@
 import { pathToFileURL } from "node:url"
-import { describeProcessError } from "./infrastructure/process/describe-process-error.js"
+import { describeProcessError } from "./infrastructure/logging/describe-process-error.js"
 import { resolveHarvesterErrorDiagnostic } from "./infrastructure/logging/harvester-error-catalog.js"
 import { createRuntimeShutdownHandler } from "./infrastructure/process/harvester-process-shutdown.js"
 import { createHarvesterProcessIdentity } from "./infrastructure/process/create-harvester-process-identity.js"
