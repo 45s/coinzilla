@@ -469,7 +469,9 @@ function resolveArchiveSessionCompletionStatus({ identity, completion, loggerCom
   if (processCompletionMatches && loggerCompletionMatches) {
     return "complete"
   }
-  return Number.isSafeInteger(identity.processId) && identity.processId === activeProcessOwner?.pid
+  return Number.isSafeInteger(identity.processId)
+    && identity.processId === activeProcessOwner?.pid
+    && identity.startedAt === activeProcessOwner?.startedAt
     ? "active"
     : "incomplete"
 }
@@ -814,9 +816,20 @@ function resolveRecoveryProcessIdentityStatus(selection) {
   if (!selection.recoveryProcessIdentity) {
     return "missing"
   }
-  return selection.recoveryProcessIdentity.runtimeSessionId === selection.recoveryRuntimeSessionId
-    ? "matched"
-    : "mismatched"
+  if (selection.recoveryProcessIdentity.runtimeSessionId !== selection.recoveryRuntimeSessionId) {
+    return "mismatched"
+  }
+  const matchingSessions = selection.sessions.filter((session) =>
+    session.runtimeSessionId === selection.recoveryRuntimeSessionId
+  )
+  if (
+    matchingSessions.length === 1
+    && Number.isSafeInteger(selection.recoveryProcessIdentity.processId)
+    && matchingSessions[0].processId !== selection.recoveryProcessIdentity.processId
+  ) {
+    return "mismatched"
+  }
+  return "matched"
 }
 
 function resolveOverallEvidenceStatus({ selection, recoveryProcessIdentityStatus, unverifiableSessions, streams } = {}) {
