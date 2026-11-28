@@ -404,22 +404,16 @@ function createHarvesterOperationalStateCallbacks({ operationalStateStore } = {}
   })
 }
 
-async function resolveStartupOptionsForProcessRecovery({ resolved,
-  operationalStateStore,
-  logger } = {}) {
-  const recoveryEnabled = resolved.appConfig.components?.recovery?.enabled !== false &&
-    resolved.appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
-  const operationalState = await verifyOperationalStateStore({
-    operationalStateStore,
-    recoveryEnabled,
-  })
+function resolveProcessRecoveryTradingGate({
+  resolved,
+  operationalState,
+  recoveryEnabled,
+  logger,
+} = {}) {
   const priorProcessStateRequiresObservationOnly =
     recoveryEnabled === true && operationalState.previousProcessStarted === true
   const tradingEnabled = resolved.tradingEnabled && !priorProcessStateRequiresObservationOnly
-  const startupOptions = tradingEnabled === resolved.tradingEnabled
-    ? resolved
-    : Object.freeze({ ...resolved,
-tradingEnabled })
+
   if (resolved.tradingEnabled && priorProcessStateRequiresObservationOnly) {
     logger.info?.({
       message: "Trading remains observation-only because prior process state is not restored",
@@ -437,6 +431,29 @@ tradingEnabled })
       tradingEnabled: true,
     })
   }
+
+  return tradingEnabled
+}
+
+async function resolveStartupOptionsForProcessRecovery({ resolved,
+  operationalStateStore,
+  logger } = {}) {
+  const recoveryEnabled = resolved.appConfig.components?.recovery?.enabled !== false &&
+    resolved.appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
+  const operationalState = await verifyOperationalStateStore({
+    operationalStateStore,
+    recoveryEnabled,
+  })
+  const tradingEnabled = resolveProcessRecoveryTradingGate({
+    resolved,
+    operationalState,
+    recoveryEnabled,
+    logger,
+  })
+  const startupOptions = tradingEnabled === resolved.tradingEnabled
+    ? resolved
+    : Object.freeze({ ...resolved,
+tradingEnabled })
   return {
     startupOptions,
     processContinuity: Object.freeze({
