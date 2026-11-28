@@ -124,12 +124,60 @@ function createVerticalScenarioGraphViewModel({ graph }: { readonly graph: Scena
   };
 }
 
+function createTreeScenarioGraphViewModel({ graph }: { readonly graph: ScenarioGraph }): ScenarioGraphViewModel {
+  const width = 1120;
+  const nodeWidth = 320;
+  const laneX = [24, 400, 776] as const;
+  const nodes = graph.nodes.map((node): ScenarioGraphViewNode => {
+    const labelLines = wrapGraphText(node.label, 34);
+    const descriptionLines = wrapGraphText(node.description ?? '', 42);
+    const height = Math.max(164, 88 + labelLines.length * 25 + descriptionLines.length * 19);
+    const lane = Math.max(0, Math.min(2, Math.round(node.position.x)));
+    const position = { x: laneX[lane], y: node.position.y };
+    const outputs = node.type === 'end' ? [] : node.type === 'decision'
+      ? [
+        { id: 'yes', x: position.x + 96, y: position.y + height, label: 'YES' },
+        { id: 'no', x: position.x + 224, y: position.y + height, label: 'NO' },
+      ]
+      : [{ id: 'next', x: position.x + nodeWidth / 2, y: position.y + height, label: null }];
+    return {
+      ...node, position, width: nodeWidth, height, labelLines, descriptionLines, outputs,
+      input: node.type === 'start' ? null : { x: position.x + nodeWidth / 2, y: position.y },
+    };
+  });
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const edges = graph.edges.flatMap((edge): ScenarioGraphViewEdge[] => {
+    const source = nodesById.get(edge.from.nodeId);
+    const target = nodesById.get(edge.to.nodeId);
+    if (!source || !target) {
+      return [];
+    }
+    const branchOffset = edge.from.portId === 'yes' ? 96 : edge.from.portId === 'no' ? 224 : nodeWidth / 2;
+    const start = { x: source.position.x + branchOffset, y: source.position.y + source.height };
+    const end = { x: target.position.x + target.width / 2, y: target.position.y };
+    const controlY = start.y + (end.y - start.y) / 2;
+    return [{
+      ...edge,
+      curve: { start, control1: { x: start.x, y: controlY }, control2: { x: end.x, y: controlY }, end },
+      labelPosition: { x: (start.x + end.x) / 2, y: controlY },
+    }];
+  });
+  return {
+    width,
+    height: Math.max(520, ...nodes.map((node) => node.position.y + node.height + 40)),
+    nodes,
+    edges,
+  };
+}
 export function createScenarioGraphViewModel({ graph, orientation = 'horizontal' }: {
   readonly graph: ScenarioGraph;
-  readonly orientation?: 'horizontal' | 'vertical';
+  readonly orientation?: 'horizontal' | 'vertical' | 'tree';
 }): ScenarioGraphViewModel {
   if (orientation === 'vertical') {
     return createVerticalScenarioGraphViewModel({ graph });
+  }
+  if (orientation === 'tree') {
+    return createTreeScenarioGraphViewModel({ graph });
   }
 
   const width = 190;
