@@ -604,19 +604,30 @@ function resolveArchiveSessionLoggerCompletionStatus({ identity, loggerCompletio
 
 function resolveArchiveSessionProcessId({ identity, recoveryCheckpoint } = {}) {
   if (identity?.processId !== undefined) {
-    return Number.isSafeInteger(identity.processId) && identity.processId > 0
-      ? identity.processId
-      : null
+    const processId = identity.processId
+    if (!Number.isSafeInteger(processId) || processId <= 0) {
+      return null
+    }
+    return processId
   }
   const durableIdentity = recoveryCheckpoint?.processIdentity
-  const durableIdentityMatchesSession = [
-    durableIdentity?.runtimeSessionId === recoveryCheckpoint?.runtimeSessionId,
-    identity?.runtimeSessionId === recoveryCheckpoint?.runtimeSessionId,
-    durableIdentity?.startedAt === identity?.startedAt,
-    Number.isSafeInteger(durableIdentity?.processId),
-    durableIdentity?.processId > 0,
-  ].every(Boolean)
-  return durableIdentityMatchesSession ? durableIdentity.processId : null
+  if (!durableIdentity || !identity) {
+    return null
+  }
+  if (durableIdentity.runtimeSessionId !== recoveryCheckpoint.runtimeSessionId) {
+    return null
+  }
+  if (identity.runtimeSessionId !== recoveryCheckpoint.runtimeSessionId) {
+    return null
+  }
+  if (durableIdentity.startedAt !== identity.startedAt) {
+    return null
+  }
+  const processId = durableIdentity.processId
+  if (!Number.isSafeInteger(processId) || processId <= 0) {
+    return null
+  }
+  return processId
 }
 
 function resolveArchiveSessionRuntimeSessionId(identity) {
