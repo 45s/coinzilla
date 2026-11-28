@@ -894,6 +894,19 @@ async function copyIdentifiedSessionEvidence({ sourceDirectory, destinationDirec
         await onFileCopied?.(artifact)
       },
     })
+    if (session.completionStatus === "active") {
+      const markerPath = path.join(destinationDirectory, "sessions", session.sessionName, "active-process-snapshot.json")
+      await writeFile(markerPath, `${JSON.stringify({
+        formatVersion: 1,
+        snapshotType: "active-harvester-process",
+        runtimeSessionId: session.runtimeSessionId,
+        processId: session.processId,
+        hostname: selection.activeProcessOwner.hostname,
+        lockStartedAt: selection.activeProcessOwner.startedAt,
+        capturedAt: new Date().toISOString(),
+        streams: { harvesterLog: true, traceLog: true },
+      }, null, 2)}\\n`, { encoding: "utf8", flag: "wx", mode: 0o600 })
+    }
   }
   return artifactProvenance
 }
@@ -1149,6 +1162,9 @@ function createArchiveSessionManifestEntry({ session } = {}) {
     processIdentityPath: session.processIdentityPath,
     processCompletionPath: session.processCompletionPath,
     loggerCompletionPath: session.loggerCompletionPath,
+    activeSnapshotPath: session.completionStatus === "active"
+      ? `logs/sessions/${session.sessionName}/active-process-snapshot.json`
+      : null,
     completionRuntimeSessionId: session.completionRuntimeSessionId,
     loggerCompletionRuntimeSessionId: session.loggerCompletionRuntimeSessionId,
     logStreamsComplete: session.logStreamsComplete,
