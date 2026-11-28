@@ -15,25 +15,24 @@ import { publishLifecycleEvent } from "../application/events/publish-lifecycle-e
 import { failureResult, withFailure } from "./recovery-failure.js"
 
 
-function getCurrentSessionClientOrderIdPrefix({ registry } = {}) {
-  const currentSessionOrder = registry.orders?.find((order) =>
-    isHarvesterClientOrderId(order.clientOrderId))
-  if (!currentSessionOrder) {
-    return undefined
-  }
-  return currentSessionOrder.clientOrderId.match(/^h-[^-]+-/)?.[0]
-}
-
-function hasCurrentSessionHarvesterIdentity({ registry, order, event } = {}) {
-  const prefix = getCurrentSessionClientOrderIdPrefix({ registry })
-  if (!prefix) {
-    return false
-  }
-  return [
+function hasCurrentSessionHarvesterIdentity({
+  currentProcessOrderIdNamespace,
+  order,
+  event,
+} = {}) {
+  const prefix = typeof currentProcessOrderIdNamespace === "string" &&
+    currentProcessOrderIdNamespace.trim()
+    ? `h-${currentProcessOrderIdNamespace}-`
+    : undefined
+  const clientOrderIds = [
     order.clientOrderId,
     event.clientOrderId,
     event.originalClientOrderId,
-  ].some((clientOrderId) =>
+  ]
+  if (!prefix) {
+    return clientOrderIds.some(isHarvesterClientOrderId)
+  }
+  return clientOrderIds.some((clientOrderId) =>
     typeof clientOrderId === "string" && clientOrderId.startsWith(prefix))
 }
 
@@ -125,7 +124,7 @@ async function handleUnownedOrderEvent({ dependencies, event, order, symbol } = 
     dataResult: mapExecutionUnownedOrderData({ order }),
   })
   const hasCurrentSessionIdentity = hasCurrentSessionHarvesterIdentity({
-    registry: dependencies.state.registry,
+    currentProcessOrderIdNamespace: dependencies.currentProcessOrderIdNamespace,
     order,
     event,
   })
