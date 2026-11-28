@@ -2838,6 +2838,7 @@ function createLatestTransitionEvaluatorDependencies({ context, dependencies, au
     pairs: context.pairs,
     settings: context.settings,
     logger: dependencies.logger,
+    recoverySellerLogger: dependencies.recoverySellerLogger,
     strategyPolicy: dependencies.strategyPolicy,
     evaluateRecoverySellerTransition: dependencies.evaluateRecoverySellerTransition,
     authorizeRecoverySellerAction,
@@ -3265,6 +3266,12 @@ function createConservativeTradingEngineDependencies({ options = {} } = {}) {
       ? createStrategyLogger({
         logger,
         strategyId: StrategyId.COIN_GRABBER,
+      })
+      : logger,
+    recoverySellerLogger: logger
+      ? createStrategyLogger({
+        logger,
+        strategyId: StrategyId.RECOVERY_SELLER,
       })
       : logger,
     initialState,

@@ -382,6 +382,153 @@ function createConservativeLatestTransitionEvaluator(dependencies = {}) {
   }
 }
 
+function shouldEvaluateRecoverySellerTransition({
+  dependencies,
+  options,
+} = {}) {
+  return typeof dependencies.evaluateRecoverySellerTransition === "function" &&
+    Object.hasOwn(dependencies.recoverySellerPairs ?? {}, options.symbol) &&
+    options.preflightOnly !== true &&
+    options.shutdownRecoveryOnly !== true
+}
+
+function logRecoverySellerEvaluationStarted({ logger, symbol } = {}) {
+  logger?.debug?.({
+    message: "Harvester Recovery Seller evaluation started",
+    symbol,
+  })
+}
+
+function logRecoverySellerEvaluationCompleted({ logger, symbol, result } = {}) {
+  const decision = result.data?.decision
+  logger?.debug?.({
+    message: "Harvester Recovery Seller evaluation completed",
+    symbol,
+    outcome: decision?.outcome ?? (result.data?.skipped === true ? "SKIPPED" : "COMPLETED"),
+    reasonCode: decision?.reasonCode,
+    explanation: decision?.explanation,
+  })
+}
+
+function logRecoverySellerEvaluationFailed({ logger, symbol, error } = {}) {
+  logger?.error?.({
+    message: "Harvester Recovery Seller evaluation failed",
+    symbol,
+    error,
+  })
+}
+
+function combineStrategyTransitionResults({ conservativeResult, recoverySellerResult } = {}) {
+  if (recoverySellerResult.data?.skipped === true) {
+    return conservativeResult
+  }
+  if (conservativeResult?.ok !== true || conservativeResult.data?.skipped === true) {
+    return recoverySellerResult
+  }
+  return toResult({
+    data: {
+      ...conservativeResult.data,
+      recoverySeller: recoverySellerResult.data,
+    },
+  })
+}
+
+async function runRecoverySellerTransition({
+  dependencies,
+  options,
+  logger,
+} = {}) {
+  return dependencies.evaluateRecoverySellerTransition({
+    ...options,
+    state: dependencies.state,
+    hasBlockingOpenOrdersForSymbol: dependencies.hasBlockingOpenOrdersForSymbol,
+    authorizeRecoverySellerAction: dependencies.authorizeRecoverySellerAction,
+    recoverySellerPairs: dependencies.recoverySellerPairs,
+    recoverySellerWorkflow: dependencies.recoverySellerWorkflow,
+    recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
+    submitRecoverySellerOrder: dependencies.submitRecoverySellerOrder,
+    getRecoverySellerMarketMetadata: dependencies.getRecoverySellerMarketMetadata,
+    getPortfolio: dependencies.getPortfolio,
+    getRecoveryLedger: dependencies.getRecoveryLedger,
+    getCurrentMarketMetadata: dependencies.getCurrentMarketMetadata,
+    getAccountSnapshot: dependencies.getAccountSnapshot,
+    getAdditionalTrackedBaseQuantity: dependencies.getAdditionalTrackedBaseQuantity,
+    getAdditionalTrackedQuoteCashFlow: dependencies.getAdditionalTrackedQuoteCashFlow,
+    pause: dependencies.pause,
+    eventPublisher: dependencies.eventPublisher,
+    submit: dependencies.submit,
+    canTrade: dependencies.canTrade,
+    isStopping: dependencies.isStopping,
+    isMarketPriceFresh: dependencies.isMarketPriceFresh,
+    isMarketBookFresh: dependencies.isMarketBookFresh,
+    logger,
+  })
+}
+
+function handleRecoverySellerTransitionResult({
+  conservativeResult,
+  recoverySellerResult,
+  logger,
+  symbol,
+} = {}) {
+  if (recoverySellerResult?.ok !== true) {
+    logRecoverySellerEvaluationFailed({
+      logger,
+      symbol,
+      error: recoverySellerResult?.errors?.[0],
+    })
+    return recoverySellerResult
+  }
+  logRecoverySellerEvaluationCompleted({
+    logger,
+    symbol,
+    result: recoverySellerResult,
+  })
+  return combineStrategyTransitionResults({
+    conservativeResult,
+    recoverySellerResult,
+  })
+}
+
+async function evaluateRecoverySellerTransitionForMarket({
+  dependencies,
+  options,
+  conservativeResult,
+} = {}) {
+  if (!shouldEvaluateRecoverySellerTransition({
+    dependencies,
+    options,
+  })) {
+    return conservativeResult
+  }
+  const { symbol } = options
+  const logger = dependencies.recoverySellerLogger ?? dependencies.logger
+  logRecoverySellerEvaluationStarted({
+    logger,
+    symbol,
+  })
+  try {
+    const recoverySellerResult = await runRecoverySellerTransition({
+      dependencies,
+      options,
+      logger,
+    })
+    return handleRecoverySellerTransitionResult({
+      conservativeResult,
+      recoverySellerResult,
+      logger,
+      symbol,
+    })
+  } catch (error) {
+    logRecoverySellerEvaluationFailed({
+      logger,
+      symbol,
+      error,
+    })
+    return toResult({ error })
+  }
+}
+
 export function createLatestTransitionEvaluator(dependencies = {}) {
   const evaluateConservativeLatestTransition = createConservativeLatestTransitionEvaluator({
     ...dependencies,
@@ -389,55 +536,10 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
   })
   return async function evaluateLatestTransition(options = {}) {
     const conservativeResult = await evaluateConservativeLatestTransition(options)
-    if (!conservativeResult?.ok ||
-        typeof dependencies.evaluateRecoverySellerTransition !== "function" ||
-        options.preflightOnly === true ||
-        options.shutdownRecoveryOnly === true) {
-      return conservativeResult
-    }
-    try {
-      const recoverySellerResult = await dependencies.evaluateRecoverySellerTransition({
-        ...options,
-        state: dependencies.state,
-        hasBlockingOpenOrdersForSymbol: dependencies.hasBlockingOpenOrdersForSymbol,
-        authorizeRecoverySellerAction: dependencies.authorizeRecoverySellerAction,
-        recoverySellerPairs: dependencies.recoverySellerPairs,
-        recoverySellerWorkflow: dependencies.recoverySellerWorkflow,
-        recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
-        submitRecoverySellerOrder: dependencies.submitRecoverySellerOrder,
-        getRecoverySellerMarketMetadata: dependencies.getRecoverySellerMarketMetadata,
-        getPortfolio: dependencies.getPortfolio,
-        getRecoveryLedger: dependencies.getRecoveryLedger,
-        getCurrentMarketMetadata: dependencies.getCurrentMarketMetadata,
-        getAccountSnapshot: dependencies.getAccountSnapshot,
-        getAdditionalTrackedBaseQuantity: dependencies.getAdditionalTrackedBaseQuantity,
-        getAdditionalTrackedQuoteCashFlow: dependencies.getAdditionalTrackedQuoteCashFlow,
-        pause: dependencies.pause,
-        eventPublisher: dependencies.eventPublisher,
-        submit: dependencies.submit,
-        canTrade: dependencies.canTrade,
-        isStopping: dependencies.isStopping,
-        isMarketPriceFresh: dependencies.isMarketPriceFresh,
-        isMarketBookFresh: dependencies.isMarketBookFresh,
-        logger: dependencies.logger,
-      })
-      if (recoverySellerResult?.ok !== true) {
-        return recoverySellerResult
-      }
-      if (recoverySellerResult.data?.skipped === true) {
-        return conservativeResult
-      }
-      if (conservativeResult.data?.skipped === true) {
-        return recoverySellerResult
-      }
-      return toResult({
-        data: {
-          ...conservativeResult.data,
-          recoverySeller: recoverySellerResult.data,
-        },
-      })
-    } catch (error) {
-      return toResult({ error })
-    }
+    return evaluateRecoverySellerTransitionForMarket({
+      dependencies,
+      options,
+      conservativeResult,
+    })
   }
 }

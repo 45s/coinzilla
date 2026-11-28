@@ -53,81 +53,6 @@ function validateExecutionSymbolList({ executionSymbols, routeSymbols } = {}) {
   }
 }
 
-function getConfiguredRecoveryOnlySymbols({ configuredAppConfig } = {}) {
-  const recoverySellerSymbols = Object.keys(configuredAppConfig.strategies?.RS_recoverySeller?.pairs ?? {})
-  const conservativeSymbols = new Set(Object.keys(configuredAppConfig.strategies?.CG_coinGrabber?.pairs ?? {}))
-  return new Set(recoverySellerSymbols.filter((symbol) => !conservativeSymbols.has(symbol)))
-}
-
-function getRoutedConservativeSymbols({ executionRoutes } = {}) {
-  const routedConservativeSymbols = new Set()
-  for (const route of executionRoutes) {
-    if (route?.strategyId === StrategyId.COIN_GRABBER) {
-      routedConservativeSymbols.add(route.symbol)
-    }
-  }
-  return routedConservativeSymbols
-}
-
-function addRecoveryOnlyRouteSymbols({
-  disabledRecoveryOnlySymbols,
-  executionRoutes,
-  routedConservativeSymbols,
-} = {}) {
-  for (const route of executionRoutes) {
-    if (route?.strategyId !== StrategyId.RECOVERY_SELLER) {
-      continue
-    }
-    if (!routedConservativeSymbols.has(route.symbol)) {
-      disabledRecoveryOnlySymbols.add(route.symbol)
-    }
-  }
-}
-
-function getDisabledRecoveryOnlySymbols({
-  configuredAppConfig,
-  executionRoutes,
-} = {}) {
-  const disabledRecoveryOnlySymbols = getConfiguredRecoveryOnlySymbols({ configuredAppConfig })
-  if (!Array.isArray(executionRoutes)) {
-    return disabledRecoveryOnlySymbols
-  }
-
-  const routedConservativeSymbols = getRoutedConservativeSymbols({ executionRoutes })
-  addRecoveryOnlyRouteSymbols({
-    disabledRecoveryOnlySymbols,
-    executionRoutes,
-    routedConservativeSymbols,
-  })
-  return disabledRecoveryOnlySymbols
-}
-
-function resolveEffectiveExecutionInputs({
-  configuredAppConfig,
-  executionSymbols,
-  executionRoutes,
-} = {}) {
-  if (configuredAppConfig.components?.recovery?.enabled !== false) {
-    return {
-      executionSymbols,
-      executionRoutes,
-    }
-  }
-
-  const disabledRecoveryOnlySymbols = getDisabledRecoveryOnlySymbols({
-    configuredAppConfig,
-    executionRoutes,
-  })
-  return {
-    executionRoutes: Array.isArray(executionRoutes)
-      ? executionRoutes.filter((route) => route?.strategyId !== StrategyId.RECOVERY_SELLER)
-      : executionRoutes,
-    executionSymbols: executionSymbols === undefined || !Array.isArray(executionSymbols)
-      ? executionSymbols
-      : executionSymbols.filter((symbol) => !disabledRecoveryOnlySymbols.has(symbol)),
-  }
-}
-
 function resolveExecutionRouteSymbols({ executionRoutes, executionSymbols } = {}) {
   if (executionRoutes === undefined) {
     return {
@@ -429,30 +354,16 @@ function createResolvedHarvesterRuntime({
     tradingMode: env.TRADING_MODE,
     environment: env.NODE_ENV,
   })
-  const recoveryComponentEnabled = configuredAppConfig.components?.recovery?.enabled !== false
-  const configuredRecoverySellerStrategyConfig = configuredAppConfig.strategies?.RS_recoverySeller
-  let recoverySellerStrategyConfig = configuredRecoverySellerStrategyConfig
-  if (!recoveryComponentEnabled && configuredRecoverySellerStrategyConfig) {
-    recoverySellerStrategyConfig = {
-      ...configuredRecoverySellerStrategyConfig,
-      enabled: false,
-      pairs: {},
-    }
-  }
-  if (recoveryComponentEnabled && recoverySellerStrategyConfig?.enabled === true && executionRoutes === undefined) {
+  const recoverySellerStrategyConfig = configuredAppConfig.strategies?.RS_recoverySeller
+  if (recoverySellerStrategyConfig?.enabled === true && executionRoutes === undefined) {
     throw new Error("Enabled RS markets require explicit strategy/market execution routes")
   }
-  const effectiveExecutionInputs = resolveEffectiveExecutionInputs({
-    configuredAppConfig,
-    executionSymbols,
-    executionRoutes,
-  })
   const resolvedPairs = resolveConservativeRuntimePairs({
     strategyConfig,
     recoverySellerStrategyConfig,
     tradingMode: runtime.tradingMode,
-    executionSymbols: effectiveExecutionInputs.executionSymbols,
-    executionRoutes: effectiveExecutionInputs.executionRoutes,
+    executionSymbols,
+    executionRoutes,
   })
   const appConfig = createEffectiveAppConfig({
     configuredAppConfig,

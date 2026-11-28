@@ -97,29 +97,42 @@ async function createRsOnlyOperationalStateStore() {
   }
 }
 
-function createRsOnlyStartupBroker({ calls }) {
+function createRsOnlyStartupBroker({ calls, includeBitcoin = false }) {
   const broker = createBroker(calls)
-  const { baseAsset, quoteAsset } = createMarketMetadata("LINEAUSDT").market
-  broker.getAccountSnapshot = async () => ({
-    ok: true,
-    data: {
-      sourceTime: 1,
-      balances: [baseAsset, quoteAsset].map((asset) => new Balance({
-        free: new Quantity({
-          amount: "100000",
-          asset,
-        }),
-        locked: new Quantity({
-          amount: "0",
-          asset,
-        }),
-      })),
-    },
-  })
+  const { baseAsset: lineaBaseAsset, quoteAsset } = createMarketMetadata("LINEAUSDT").market
+  const { baseAsset: bitcoinBaseAsset } = createMarketMetadata("BTCUSDT").market
+  const accountAssets = [...new Map([
+    lineaBaseAsset,
+    ...(includeBitcoin ? [bitcoinBaseAsset] : []),
+    quoteAsset,
+  ].map((asset) => [asset.id, asset])).values()]
+  let accountSnapshotSourceTime
+  broker.getAccountSnapshot = async () => {
+    accountSnapshotSourceTime ??= Date.now()
+    return {
+      ok: true,
+      data: {
+        sourceTime: accountSnapshotSourceTime,
+        balances: accountAssets.map((asset) => new Balance({
+          free: new Quantity({
+            amount: "100000",
+            asset,
+          }),
+          locked: new Quantity({
+            amount: "0",
+            asset,
+          }),
+        })),
+      },
+    }
+  }
   return broker
 }
 
-function createRsOnlyStartupConfig({ enableVolatilityProtection = false } = {}) {
+function createRsOnlyStartupConfig({
+  enableVolatilityProtection = false,
+  processRecoveryEnabled = true,
+} = {}) {
   const recoverySellerPair = {
     enabled: true,
     tradingEnvironment: "testnet",
@@ -138,8 +151,16 @@ function createRsOnlyStartupConfig({ enableVolatilityProtection = false } = {}) 
   }
   return {
     ...appConfig,
+    components: { recovery: { enabled: processRecoveryEnabled } },
     strategies: {
       ...appConfig.strategies,
+      CG_coinGrabber: {
+        ...appConfig.strategies.CG_coinGrabber,
+        settings: {
+          ...appConfig.strategies.CG_coinGrabber.settings,
+          recovery: { enabled: processRecoveryEnabled },
+        },
+      },
       RS_recoverySeller: {
         enabled: true,
         pairs: {
@@ -239,13 +260,141 @@ force: true })
 })
 
 
+test("retains CG and RS execution routes and subscriptions when process recovery is disabled", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const calls = []
+  const broker = createRsOnlyStartupBroker({
+    calls,
+    includeBitcoin: true,
+  })
+  try {
+    const combinedConfig = createRsOnlyStartupConfig({ processRecoveryEnabled: false })
+    combinedConfig.strategies.CG_coinGrabber = {
+      ...combinedConfig.strategies.CG_coinGrabber,
+      pairs: {
+        ...combinedConfig.strategies.CG_coinGrabber.pairs,
+        BTCUSDT: {
+          ...combinedConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+          enableVolatilityProtection: false,
+        },
+      },
+    }
+    const result = await startHarvesterForTest({
+      loadConfig: async () => combinedConfig,
+      env: binanceEnv,
+      operationalStateStore: store,
+      executionSymbols: ["BTCUSDT", "LINEAUSDT"],
+      executionRoutes: [
+        {
+          strategyId: StrategyId.COIN_GRABBER,
+          symbol: "BTCUSDT",
+        },
+        {
+          strategyId: StrategyId.RECOVERY_SELLER,
+          symbol: "LINEAUSDT",
+        },
+      ],
+      marketDataSymbols: ["BTCUSDT", "LINEAUSDT"],
+      brokerAdapterFactory: () => broker,
+      eventPublisher: shared.testEventPublisher,
+    })
+
+    assert.deepEqual(result.executionRoutes, [
+      {
+        strategyId: StrategyId.COIN_GRABBER,
+        symbol: "BTCUSDT",
+      },
+      {
+        strategyId: StrategyId.RECOVERY_SELLER,
+        symbol: "LINEAUSDT",
+      },
+    ], "The resolved provider runtime must retain both strategy-owned execution routes.")
+    assert.ok(calls.includes("subscribe:BTCUSDT"),
+      "The CG market-data subscription must remain active when RS is enabled.")
+    assert.ok(calls.includes("subscribe:LINEAUSDT"),
+      "The RS market-data subscription must be added without replacing the CG subscription.")
+    await result.stop()
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+test("fails RS startup explicitly when its durable Operational State Store is missing", async () => {
+  await assert.rejects(
+    () => startHarvesterForTest({
+      loadConfig: async () => createRsOnlyStartupConfig({ processRecoveryEnabled: false }),
+      env: binanceEnv,
+      executionSymbols: ["LINEAUSDT"],
+      executionRoutes: [{
+        strategyId: StrategyId.RECOVERY_SELLER,
+        symbol: "LINEAUSDT",
+      }],
+      marketDataSymbols: ["LINEAUSDT"],
+      eventPublisher: shared.testEventPublisher,
+    }),
+    (error) => {
+      assert.equal(error.code, "RECOVERY_SELLER_OPERATIONAL_STATE_STORE_REQUIRED",
+        "Missing RS STOP storage must have a stable startup error code.")
+      assert.match(error.message, /verified durable Operational State Store/,
+        "The startup error must explain the exact missing RS dependency.")
+      return true
+    },
+  )
+})
+
+test("fails RS startup explicitly when its Operational State Store is invalid", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const invalidStore = {
+    append: store.append.bind(store),
+    readAll: store.readAll.bind(store),
+    verify: async () => ({
+      ok: true,
+      data: {
+        valid: false,
+        durableWriteSupported: false,
+      },
+    }),
+  }
+  try {
+    await assert.rejects(
+      () => startHarvesterForTest({
+        loadConfig: async () => createRsOnlyStartupConfig({ processRecoveryEnabled: false }),
+        env: binanceEnv,
+        operationalStateStore: invalidStore,
+        executionSymbols: ["LINEAUSDT"],
+        executionRoutes: [{
+          strategyId: StrategyId.RECOVERY_SELLER,
+          symbol: "LINEAUSDT",
+        }],
+        marketDataSymbols: ["LINEAUSDT"],
+        eventPublisher: shared.testEventPublisher,
+      }),
+      (error) => {
+        assert.equal(error.code, "DURABLE_FACTS_VERIFICATION_FAILED",
+          "An invalid RS store must preserve the durable verification error code.")
+        assert.match(error.message, /unverified ADR-0001 Operational State Store/,
+          "An invalid RS store must fail before broker-capable startup.")
+        return true
+      },
+    )
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
 test("starts an RS-only provider account without a Conservative execution route", async () => {
   const { directory, store } = await createRsOnlyOperationalStateStore()
   const calls = []
   const broker = createRsOnlyStartupBroker({ calls })
   try {
     const result = await startHarvesterForTest({
-      loadConfig: async () => createRsOnlyStartupConfig(),
+      loadConfig: async () => createRsOnlyStartupConfig({ processRecoveryEnabled: false }),
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
       operationalStateStore: store,
@@ -290,7 +439,7 @@ test("keeps startup incomplete and the user-data gate closed until deferred mark
   let result
   try {
     result = await startHarvesterForTest({
-      loadConfig: async () => createRsOnlyStartupConfig(),
+      loadConfig: async () => createRsOnlyStartupConfig({ processRecoveryEnabled: false }),
       env: binanceEnv,
       brokerAdapterFactory: () => broker,
       operationalStateStore: store,
