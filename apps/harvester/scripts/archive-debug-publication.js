@@ -300,7 +300,10 @@ async function validateStoppedProcessSnapshot({
   if (!markerEntry || typeof markerPath !== "string") {
     throw new Error(`Stopped runtime ${expectedRuntimeId} is missing its snapshot provenance marker.`)
   }
-  if (!hasNoArchivedCompletionRecords({ manifest, session })) {
+  if (!hasNoArchivedCompletionRecords({
+    manifest,
+    session,
+  })) {
     throw new Error(`Stopped runtime ${expectedRuntimeId} must not claim missing completion metadata is present.`)
   }
   const marker = JSON.parse(await readFile(path.join(directory, markerPath), "utf8"))
