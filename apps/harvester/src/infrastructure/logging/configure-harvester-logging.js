@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import { createWriteStream } from "node:fs"
 import { once } from "node:events"
 import { finished } from "node:stream/promises"
-import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { defaultLogger } from "@coinzilla/utils"
 import { strategyLogMarkers } from "../../application/logging/strategy-log-markers.js"
@@ -346,8 +346,23 @@ async function persistHarvesterSessionIdentity({ sessionPaths, processIdentity }
       || existing.runtimeSessionId !== processIdentity.runtimeSessionId
       || existing.startedAt !== processIdentity.startedAt
       || existing.environment !== identity.environment
+      || (existing.processId && existing.processId !== identity.processId)
     ) {
       throw new Error(`Existing process identity does not match the active runtime: ${identityPath}`, { cause: error })
+    }
+    if (!existing.processId) {
+      const temporaryPath = `${identityPath}.${randomUUID()}.tmp`
+      try {
+        await writeFile(temporaryPath, `${JSON.stringify({ ...existing, processId: identity.processId, version: identity.version }, null, 2)}\n`, {
+          encoding: "utf8",
+          flag: "wx",
+          mode: 0o600,
+        })
+        await rename(temporaryPath, identityPath)
+      } catch (updateError) {
+        await rm(temporaryPath, { force: true })
+        throw updateError
+      }
     }
   }
 }
