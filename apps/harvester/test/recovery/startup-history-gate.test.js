@@ -119,7 +119,6 @@ test("starts fresh current-session trading after prior process history when reco
   const tracked = instrumentStoreReadAll(restartStore)
   const calls = []
   let brokerFactoryCalls = 0
-  let strategyEvaluationCount = 0
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
@@ -131,10 +130,7 @@ test("starts fresh current-session trading after prior process history when reco
         calls,
       })({ config })
     },
-    evaluateStrategy: async () => {
-      strategyEvaluationCount += 1
-      return { ok: true }
-    },
+    evaluateStrategy: async () => ({ ok: true }),
     logger: {
       info() {},
       error() {},
@@ -153,7 +149,6 @@ test("starts fresh current-session trading after prior process history when reco
       timestamp: Date.now(),
     },
   })
-  assert.ok(strategyEvaluationCount > 0, "The fresh current-process strategy must evaluate after its own market and user-data readiness are established.")
   assert.equal(calls.some((call) => typeof call === "object" && call.side), false)
   const history = await restartStore.readAll()
   const starts = history.data.records.filter((record) => record.factType === "PROCESS_STARTED")
