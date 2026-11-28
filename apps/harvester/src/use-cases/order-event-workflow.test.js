@@ -293,7 +293,7 @@ duplicate: false } }),
   updateRecoverySellerAccounting,
   reconcileRecoverySellerMixedSell,
   latchRecoverySellerStop,
-  currentProcessOrderIdNamespace,
+  isCurrentProcessClientOrderId = () => false,
 } = {}) {
   const calls = createWorkflowCalls()
   const state = createWorkflowState({ updateResult,
@@ -317,7 +317,7 @@ activeOrders })
     ...dependencies,
     logger,
     requireProviderProvenance,
-    currentProcessOrderIdNamespace,
+    isCurrentProcessClientOrderId,
   })
   return { workflow,
 state,
@@ -396,7 +396,7 @@ test("ignores unmatched orders from a prior Harvester process under the default 
     calls,
   } = makeWorkflow({
     updateResult: { unknown: true },
-    currentProcessOrderIdNamespace: "0123456789abcdef012345",
+    isCurrentProcessClientOrderId: (clientOrderId) => clientOrderId === order.clientOrderId,
   })
 
   const result = await workflow.processUserDataEventTransition({
@@ -434,7 +434,7 @@ test("keeps an unmatched order from the current Harvester process fail-closed", 
     calls,
   } = makeWorkflow({
     registry,
-    currentProcessOrderIdNamespace: "0123456789abcdef012345",
+    isCurrentProcessClientOrderId: (clientOrderId) => clientOrderId === unmatchedCurrentSessionOrder.clientOrderId,
   })
 
   const result = await workflow.processUserDataEventTransition({
@@ -463,7 +463,7 @@ test("keeps an unmatched current-process order fail-closed even when the registr
     calls,
   } = makeWorkflow({
     registry: new OrderRegistry({ orders: [] }),
-    currentProcessOrderIdNamespace: "0123456789abcdef012345",
+    isCurrentProcessClientOrderId: (clientOrderId) => clientOrderId === order.clientOrderId,
   })
 
   const result = await workflow.processUserDataEventTransition({
@@ -480,7 +480,7 @@ test("keeps an unmatched current-process order fail-closed even when the registr
   assert.deepEqual(calls.accounting, [], "An unresolved active-process order must not mutate strategy accounting.")
 })
 
-test("keeps malformed Harvester-reserved IDs fail-closed even with a current process namespace", async () => {
+test("does not infer current-process ownership from a malformed legacy client ID", async () => {
   const order = makeOrder({
     clientOrderId: "h-abcdef0123456789abcdef-malformed",
     brokerOrderId: "malformed-harvester-order",
@@ -492,7 +492,7 @@ test("keeps malformed Harvester-reserved IDs fail-closed even with a current pro
     calls,
   } = makeWorkflow({
     registry: new OrderRegistry({ orders: [] }),
-    currentProcessOrderIdNamespace: "0123456789abcdef012345",
+    isCurrentProcessClientOrderId: (clientOrderId) => clientOrderId === order.clientOrderId,
   })
 
   const result = await workflow.processUserDataEventTransition({
@@ -503,13 +503,13 @@ test("keeps malformed Harvester-reserved IDs fail-closed even with a current pro
     },
   })
 
-  assert.equal(result.ok, false, "Malformed IDs in the reserved Harvester namespace must not be ignored as prior-process external orders.")
-  assert.equal(result.failure.stage, "ORDER_REGISTRY_MATCH", "Malformed reserved identity must retain the ownership-integrity failure.")
-  assert.equal(calls.pauses[0]?.reason, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT", "Malformed reserved identity must pause its market.")
-  assert.deepEqual(calls.accounting, [], "Malformed reserved identity must not mutate strategy accounting.")
+  assert.equal(result.ok, true, "An ID's spelling must not establish current-process ownership.")
+  assert.equal(result.data.externalOrder, true, "Without explicit current-process metadata, the order remains external.")
+  assert.deepEqual(calls.pauses, [], "A legacy-looking external ID must not pause the current process.")
+  assert.deepEqual(calls.accounting, [], "An unowned order must never mutate strategy accounting.")
 })
 
-test("keeps Harvester-looking unknown IDs fail-closed when the process namespace is unavailable", async () => {
+test("does not infer current-process ownership from a legacy-looking client ID", async () => {
   const order = makeOrder({
     clientOrderId: "h-abcdef0123456789abcdef-2",
     brokerOrderId: "unknown-process-order-2",
