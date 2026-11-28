@@ -41,4 +41,11 @@ describe('scenario graph editor application', () => {
       node: { type: 'action', label: 'Duplicate', position: { x: 100, y: 100 }, properties: {} },
     }), 'duplicate node IDs must be rejected by the application boundary').toThrow('SCENARIO_GRAPH_NODE_ID_DUPLICATE');
   });
+
+  it('builds renderer-neutral geometry without importing a rendering framework', () => {
+    const editor = createScenarioGraphEditor({ createId: () => 'unused' });
+    const view = editor.viewModel({ graph: createGraph() });
+    expect(view.nodes[0].width, 'the view model must expose node geometry to any renderer').toBeGreaterThan(0);
+    expect(view.edges[0].path, 'the view model must expose renderer-neutral connector geometry').toContain('C');
+  });
 });
