@@ -367,7 +367,11 @@ async function writeHarvesterLogStreamsCompletion({ sessionPaths, processIdentit
   await writeFile(
     path.join(sessionPaths.sessionDirectory, "log-streams-completed.json"),
     `${JSON.stringify(completion, null, 2)}\n`,
-    { encoding: "utf8", flag: "wx", mode: 0o600 },
+    {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    },
   )
 }
 
@@ -408,9 +412,15 @@ function createHarvesterLogCloseHandler({ logger, sessionPaths, processIdentity 
     if (errors.length > 0) {
       throw new AggregateError(errors, "Failed to close Harvester log transports")
     }
-    await writeHarvesterLogStreamsCompletion({ sessionPaths, processIdentity })
+    await writeHarvesterLogStreamsCompletion({
+      sessionPaths,
+      processIdentity,
+    })
     if (process.env.COINZILLA_DEV_RUNNER !== "1") {
-      await writeHarvesterProcessCompletion({ sessionPaths, processIdentity })
+      await writeHarvesterProcessCompletion({
+        sessionPaths,
+        processIdentity,
+      })
     }
   }
 }
@@ -448,8 +458,12 @@ export async function configureHarvesterLogging({
   })
   const cumulativeDirectory = path.join(directory, "cumulative")
   await Promise.all([
-    mkdir(cumulativeDirectory, { recursive: true }),
-    mkdir(sessionPaths.sessionDirectory, { recursive: true }),
+    mkdir(cumulativeDirectory, {
+      recursive: true,
+    }),
+    mkdir(sessionPaths.sessionDirectory, {
+      recursive: true,
+    }),
   ])
   await persistHarvesterSessionIdentity({ sessionPaths, processIdentity })
   const errorBuffer = createHarvesterRuntimeErrorBuffer({ logger })
@@ -471,7 +485,11 @@ export async function configureHarvesterLogging({
     cumulativeDirectory,
     sessionPaths,
     errorBuffer,
-    close: createHarvesterLogCloseHandler({ logger, sessionPaths, processIdentity }),
+    close: createHarvesterLogCloseHandler({
+      logger,
+      sessionPaths,
+      processIdentity,
+    }),
   })
 }
 
