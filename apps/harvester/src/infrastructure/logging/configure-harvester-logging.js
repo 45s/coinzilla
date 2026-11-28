@@ -409,7 +409,7 @@ function createHarvesterLogCloseHandler({ logger, sessionPaths, processIdentity 
       throw new AggregateError(errors, "Failed to close Harvester log transports")
     }
     await writeHarvesterLogStreamsCompletion({ sessionPaths, processIdentity })
-    if (process.env.COINZILLA_RUNTIME_SESSION_ID !== processIdentity.runtimeSessionId) {
+    if (process.env.COINZILLA_DEV_RUNNER !== "1") {
       await writeHarvesterProcessCompletion({ sessionPaths, processIdentity })
     }
   }
