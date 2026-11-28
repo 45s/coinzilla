@@ -129,7 +129,7 @@ async function assertRealDirectory(directory) {
   }
 }
 
-async function sha256FileRange(filename, size) {
+async function sha256FileRange({ filename, size } = {}) {
   const hash = createHash("sha256")
   if (size > 0) {
     for await (const chunk of createReadStream(filename, {
@@ -180,7 +180,10 @@ async function copyStableFile({ sourcePath, destinationPath } = {}) {
   if (before.isSymbolicLink() || !before.isFile()) {
     throw new Error(`Refusing to snapshot a non-regular file: ${sourcePath}`)
   }
-  const sourceSha256Before = await sha256FileRange(sourcePath, before.size)
+  const sourceSha256Before = await sha256FileRange({
+      filename: sourcePath,
+      size: before.size,
+    })
   const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
   try {
     await copyFileRange({
@@ -189,7 +192,10 @@ async function copyStableFile({ sourcePath, destinationPath } = {}) {
       size: before.size,
     })
     const after = await lstat(sourcePath)
-    const sourceSha256After = await sha256FileRange(sourcePath, before.size)
+    const sourceSha256After = await sha256FileRange({
+      filename: sourcePath,
+      size: before.size,
+    })
     const copiedSha256 = await sha256File(temporaryPath)
     if (
       after.isSymbolicLink()
@@ -279,7 +285,10 @@ async function writeCompressedTemporaryFile({ sourcePath, temporaryPath, sourceA
 
 async function assertSourceFileStable({ sourcePath, sourceBefore, sourceSha256Before } = {}) {
   const sourceAfter = await lstat(sourcePath)
-  const sourceSha256After = await sha256FileRange(sourcePath, sourceBefore.size)
+  const sourceSha256After = await sha256FileRange({
+    filename: sourcePath,
+    size: sourceBefore.size,
+  })
   const sourceChanged = sourceSha256Before !== sourceSha256After
     || sourceAfter.isSymbolicLink()
     || !sourceAfter.isFile()
@@ -297,7 +306,10 @@ async function copyCompressedFile({ sourcePath, destinationPath, childRelative, 
   if (sourceBefore.isSymbolicLink() || !sourceBefore.isFile()) {
     throw new Error(`Refusing to compress a non-regular source file: ${sourcePath}`)
   }
-  const sourceSha256Before = await sha256FileRange(sourcePath, sourceBefore.size)
+  const sourceSha256Before = await sha256FileRange({
+    filename: sourcePath,
+    size: sourceBefore.size,
+  })
   const sourceAlreadyCompressed = /\.gz$/i.test(childRelative)
   const compressedRelative = sourceAlreadyCompressed ? childRelative : `${childRelative}.gz`
   const temporaryPath = `${destinationPath}.${randomUUID()}.tmp`
@@ -1693,7 +1705,7 @@ async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.ho
   const owners = []
   const lockEntries = entries
     .filter((candidate) => candidate.name.endsWith(".lock"))
-    .sort((left, right) => left.name.localeCompare(right.name))
+    .sort((...entries) => entries[0].name.localeCompare(entries[1].name))
   for (const entry of lockEntries) {
     const filename = path.join(lockDirectory, entry.name)
     const owner = await readHarvesterProcessLockOwner({
@@ -1720,7 +1732,7 @@ async function writeActiveProcessSnapshotMarker({ localArchive, logSelection, ac
   const session = logSelection.sessions.find((candidate) =>
     candidate.runtimeSessionId === recoveryCheckpoint.runtimeSessionId && candidate.completionStatus === "active"
   )
-  const streams = logSelection.evidenceIntegrity.streams
+  const { streams } = logSelection.evidenceIntegrity
   const marker = {
     formatVersion: 1,
     snapshotType: "active-harvester-process",
