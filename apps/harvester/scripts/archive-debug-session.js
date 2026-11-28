@@ -972,7 +972,7 @@ function resolveRecoveryProcessIdentityStatus(selection) {
 }
 
 function resolveOverallEvidenceStatus({ selection, recoveryProcessIdentityStatus, unverifiableSessions, streams } = {}) {
-  if (selection.status === "ambiguous" || unverifiableSessions.length > 0) {
+  if (selection.status === "ambiguous") {
     return "unverifiable"
   }
   if (selection.status === "mismatched" || recoveryProcessIdentityStatus === "mismatched") {
@@ -983,6 +983,9 @@ function resolveOverallEvidenceStatus({ selection, recoveryProcessIdentityStatus
   }
   if (selection.status === "matched") {
     return Object.values(streams).every((stream) => stream.status === "matched") ? "matched" : "incomplete"
+  }
+  if (unverifiableSessions.length > 0) {
+    return "unverifiable"
   }
   return selection.status
 }
