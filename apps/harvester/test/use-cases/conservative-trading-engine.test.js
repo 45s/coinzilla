@@ -780,7 +780,7 @@ test("keeps unmatched IDs from the current process namespace fail-closed", async
   const [registeredIntent] = fixture.submittedIntents
   assert.ok(registeredIntent, "The engine must create a real process-scoped client order ID before testing an unknown current-process event.")
   const unmatchedCurrentSessionOrder = new CanonicalOrder({
-    clientOrderId: registeredIntent.clientOrderId.replace(/-\\d+$/, "-unmatched"),
+    clientOrderId: registeredIntent.clientOrderId.replace(/-\d+$/, "-unmatched"),
     brokerOrderId: "current-session-order-unmatched",
     market: fixture.market,
     side: "SELL",
