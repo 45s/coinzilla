@@ -1,4 +1,4 @@
-export type ScenarioGuideStepKind = 'start' | 'production-flow' | 'decision' | 'condition' | 'injected-failure' | 'outcome';
+export type ScenarioGuideStepKind = \'start' | 'production-flow' | 'decision' | 'condition' | 'injected-failure' | 'outcome';
 
 export interface ScenarioGuideStep {
   readonly id: string;
@@ -38,8 +38,8 @@ function runtimeGuide({
 }): ScenarioGuide {
   const steps: ScenarioGuideStep[] = [
     {
-      id: 'seed',
-      kind: 'start',
+      id: \'seed',
+      kind: \'start',
       label: 'Set up the example',
       detail: 'Prepare a simulated market and account with an existing recovery BUY, the configured legacy position and enough information to evaluate a possible SELL. No live account or exchange is used.',
     },
@@ -71,7 +71,7 @@ function runtimeGuide({
 
 function createPreliminaryGuide(): ScenarioGuide {
   const steps: ScenarioGuideStep[] = [
-    { id: 'start', kind: 'start', label: 'Supply recovery and legacy profitability inputs', detail: 'Enter the recovery costs and proceeds, the legacy holding's average cost and quantity sold, its proceeds, and the minimum profit required.' },
+    { id: \'start', kind: \'start', label: 'Supply recovery and legacy profitability inputs', detail: 'Enter the recovery costs and proceeds, the legacy holding\'s average cost and quantity sold, its proceeds, and the minimum profit required.' },
     { id: 'calculate', kind: 'decision', label: 'Calculate the three profit results', detail: 'The production calculation checks recovery profit, legacy profit and total cycle profit separately.' },
     { id: 'outcome', kind: 'outcome', label: 'Check the calculated profit against the expected values', detail: 'The check compares the calculated recovery, legacy and combined results with the expected values.' },
   ];
@@ -79,7 +79,7 @@ function createPreliminaryGuide(): ScenarioGuide {
     title: 'Check three independent profit requirements',
     availability: 'PRELIMINARY',
     purpose: 'This example checks three separate profit requirements. It calls the production profit calculation only; it does not run a BUY, SELL or recovery cycle.',
-    startingState: 'The example gives recovery and legacy costs and proceeds separately. The minimum profit is an amount in the market's quote currency.',
+    startingState: 'The example gives recovery and legacy costs and proceeds separately. The minimum profit is an amount in the market\'s quote currency.',
     injectedCondition: 'Nothing happens in the trading lifecycle. The example sends only the supplied numbers to the profit calculation.',
     expectedOutcome: 'The calculation reports recovery profit, legacy profit and combined-cycle profit separately. The example checks that each one meets its own required minimum.',
     limitations: Object.freeze([
@@ -98,7 +98,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     expectedOutcome: 'Exactly one SELL is sent to the simulated exchange. Its acceptance is saved, and the recovery cycle is reserved for that order.',
     path: [
       { id: 'authorize', kind: 'decision', label: 'Authorize the recovery SELL', detail: 'Check recovery position, order ownership, account snapshot, STOP state and market rules.' },
-      { id: 'submit', kind: 'production-flow', label: 'Save the SELL request → exchange accepts it → save the result → reserve the cycle', detail: 'The production order submitter runs its normal intent/outcome callbacks and reserves the cycle against the acknowledged order.' },
+      { id: \'submit', kind: 'production-flow', label: 'Save the SELL request → exchange accepts it → save the result → reserve the cycle', detail: 'The production order submitter runs its normal intent/outcome callbacks and reserves the cycle against the acknowledged order.' },
     ],
   }),
   'RS-RUNTIME-SELL-INTENT-PERSISTENCE-FAILURE-001': runtimeGuide({
@@ -119,7 +119,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     expectedOutcome: 'Keep the SELL reserved and record STOP. Block new BUY spending, but continue to allow an eligible recovery SELL.',
     path: [
       { id: 'ack', kind: 'production-flow', label: 'Simulated exchange accepts the SELL', detail: 'The simulated exchange confirms that it accepted the SELL after the request was saved.' },
-      { id: 'failure', kind: 'injected-failure', label: 'SELL outcome persistence fails', detail: 'Saving the exchange's acceptance result fails.' },
+      { id: 'failure', kind: 'injected-failure', label: 'SELL outcome persistence fails', detail: 'Saving the exchange\'s acceptance result fails.' },
       { id: 'guard', kind: 'outcome', label: 'Retain reservation and latch STOP', detail: 'Do not treat the acknowledgement as fully recorded; preserve the reservation and block new BUY admission.' },
     ],
   }),
@@ -151,7 +151,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     injectedCondition: 'The step that records which SELL owns the recovery cycle returns an error.',
     expectedOutcome: 'Do not report a successful reservation. Record STOP and block new BUY spending. Inspect the run evidence to see whether the simulated exchange accepted the SELL.',
     path: [
-      { id: 'submit', kind: 'production-flow', label: 'Reach the sole-SELL reservation callback', detail: 'After submission, the system tries to reserve this SELL as the only SELL for the recovery cycle.' },
+      { id: \'submit', kind: 'production-flow', label: 'Reach the sole-SELL reservation callback', detail: 'After submission, the system tries to reserve this SELL as the only SELL for the recovery cycle.' },
       { id: 'failure', kind: 'injected-failure', label: 'The recovery SELL cannot be reserved', detail: 'The reservation step returns an error instead of confirming the reservation.' },
       { id: 'guard', kind: 'outcome', label: 'Do not claim a retained reservation', detail: 'The expected state records reservation failure, raises STOP and blocks BUY admission.' },
     ],
@@ -188,7 +188,7 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
       { id: 'ack', kind: 'production-flow', label: 'Acknowledge the planned SELL', detail: 'The simulated broker returns the open SELL order.' },
       { id: 'fill', kind: 'condition', label: 'The entire SELL completes below the profit target', detail: 'The runner creates a terminal FILLED order and canonical fill for the under-target case.' },
       { id: 'reconcile', kind: 'production-flow', label: 'Reconcile fill and profitability', detail: 'The normal order-update and accounting process records the completed sale and checks the resulting profit.' },
-      { id: 'stop', kind: 'outcome', label: 'Latch account STOP', detail: 'The under-target result is ineligible; a FILLED order alone is not a successful recovery cycle.' },
+      { id: \'stop', kind: 'outcome', label: 'Latch account STOP', detail: 'The under-target result is ineligible; a FILLED order alone is not a successful recovery cycle.' },
     ],
   }),
   'RS-RUNTIME-SELL-TERMINAL-RECONCILIATION-PERSISTENCE-FAILURE-001': runtimeGuide({
@@ -220,9 +220,9 @@ const guides: Readonly<Record<string, ScenarioGuide>> = Object.freeze({
     injectedCondition: 'The example starts with an active STOP record, then checks whether a valid recovery SELL is still allowed.',
     expectedOutcome: 'The eligible recovery SELL is allowed. New BUY spending remains blocked while STOP is active.',
     path: [
-      { id: 'stop', kind: 'condition', label: 'Start with STOP already active', detail: 'The scenario latches STOP before evaluating the market observation.' },
+      { id: \'stop', kind: 'condition', label: 'Start with STOP already active', detail: 'The scenario latches STOP before evaluating the market observation.' },
       { id: 'admission', kind: 'decision', label: 'Check whether STOP allows this action', detail: 'The normal safety check decides whether STOP allows the proposed recovery action.' },
-      { id: 'sell', kind: 'outcome', label: 'Allow eligible SELL; block BUY', detail: 'The result should allow the eligible recovery SELL but block any new BUY spending.' },
+      { id: \'sell', kind: 'outcome', label: 'Allow eligible SELL; block BUY', detail: 'The result should allow the eligible recovery SELL but block any new BUY spending.' },
     ],
   }),
   'RS-004-011': createPreliminaryGuide(),
