@@ -1621,7 +1621,7 @@ async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.ho
       throw new Error(`Cannot snapshot Harvester: lock belongs to another host (${owner.hostname}).`)
     }
     if (isProcessAlive(owner.pid)) {
-      owners.push({ pid: owner.pid, hostname: owner.hostname, startedAt: owner.startedAt })
+      owners.push({ pid: owner.pid, hostname: owner.hostname, startedAt: owner.startedAt, token: owner.token })
     }
   }
   const uniqueOwners = [...new Map(owners.map((owner) => [owner.pid, owner])).values()]
@@ -1631,7 +1631,7 @@ async function readActiveHarvesterProcessOwner({ lockDirectory, hostname = os.ho
   return uniqueOwners[0] ?? null
 }
 
-async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive, activeProcessOwner, onProgress } = {}) {
+async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive, activeProcessOwner, lockDirectory, onProgress } = {}) {
   const recoverySource = sourcePaths.find((source) => source.directoryName === "recovery-facts")
   const recoverySize = await getTreeSize(recoverySource.sourceDirectory)
   let retainedFiles = 0
@@ -1664,8 +1664,15 @@ async function copyArchiveEvidence({ sourcePaths, packageDirectory, localArchive
       `WARNING: matchingTradingLogsAvailable=false for recovery runtime ${logSelection.unmatchedRuntimeSessionId}; unrelated sessions are retained only as independent evidence.`,
     )
   }
-  if (activeProcessOwner && !isHarvesterProcessAlive(activeProcessOwner.pid)) {
-    throw new Error(`The active Harvester process ${activeProcessOwner.pid} exited during archive collection; the snapshot was retained only as incomplete local evidence.`)
+  if (activeProcessOwner) {
+    const currentOwner = await readActiveHarvesterProcessOwner({ lockDirectory })
+    const lockOwnershipUnchanged = currentOwner?.pid === activeProcessOwner.pid
+      && currentOwner.hostname === activeProcessOwner.hostname
+      && currentOwner.startedAt === activeProcessOwner.startedAt
+      && currentOwner.token === activeProcessOwner.token
+    if (!lockOwnershipUnchanged || !isHarvesterProcessAlive(activeProcessOwner.pid)) {
+      throw new Error(`The active Harvester process lock changed or the process exited during archive collection (PID ${activeProcessOwner.pid}); the snapshot is not publishable.`)
+    }
   }
   reportProgress(onProgress, `Evidence snapshot complete: ${retainedFiles} files, ${formatBytes(copiedBytes)} retained/copied.`)
   return logSelection
@@ -1741,6 +1748,7 @@ async function collectPreparedArchive({
   onProgress,
   onArchiveCreatedFn,
   activeProcessOwner,
+  lockDirectory,
 }) {
   try {
     await mkdir(localArchive, {
