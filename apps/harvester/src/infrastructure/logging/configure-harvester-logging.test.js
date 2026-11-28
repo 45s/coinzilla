@@ -1046,18 +1046,31 @@ test("renders every catalogued startup and degraded failure in one bounded conso
     })
   }
   const lines = written.trim().split("\n")
-  assert.equal(
-    lines.length,
-    Object.keys(HARVESTER_ERROR_CATALOG).length,
-    "Every catalog entry must produce exactly one operator-facing console line.",
-  )
   for (const entry of Object.values(HARVESTER_ERROR_CATALOG)) {
-    const line = lines.find((candidate) => candidate.includes(entry.errorCode))
+    const lineIndex = lines.findIndex((candidate) => candidate.includes(entry.errorCode))
+    const line = lines[lineIndex]
     assert.ok(line, `Console output must retain catalog identifier ${entry.errorCode}.`)
     assert.ok(line.length <= 200, `Console output for ${entry.errorCode} must fit the configured line budget.`)
     assert.ok(line.includes(entry.failureStage), `Console output for ${entry.errorCode} must identify its failure stage.`)
-    assert.ok(line.includes(`concrete cause for ${entry.errorCode}`), `Console output for ${entry.errorCode} must preserve its concrete cause.`)
     assert.ok(line.includes(entry.operatorAction), `Console output for ${entry.errorCode} must preserve operator remediation.`)
+    const firstCause = line.match(/cause=(.*?) \\| action=/)?.[1]
+    assert.ok(firstCause, `Console output for ${entry.errorCode} must preserve its concrete cause.`)
+    const continuationLines = []
+    for (let index = lineIndex + 1; index < lines.length && lines[index].includes("cause+"); index += 1) {
+      continuationLines.push(lines[index])
+    }
+    for (const continuationLine of continuationLines) {
+      assert.ok(continuationLine.length <= 200, "Every cause continuation must respect the console line budget.")
+    }
+    const continuationCause = continuationLines
+      .map((continuationLine) => continuationLine.slice(continuationLine.indexOf("cause+") + 6))
+      .join("")
+    const initialCause = firstCause.endsWith("...") ? firstCause.slice(0, -3) : firstCause
+    assert.equal(
+      `${initialCause}${continuationCause}`,
+      `concrete cause for ${entry.errorCode}`,
+      `Console output for ${entry.errorCode} must preserve the complete concrete cause.`,
+    )
   }
   output.destroy()
 })
