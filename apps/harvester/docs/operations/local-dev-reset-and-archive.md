@@ -85,8 +85,8 @@ flowchart TD
     A[Harvester stopped] --> B[archive:debug]
     B --> C[Copy eligible TESTNET logs and recovery-facts]
     C --> D[Write manifest and SHA-256 checksums]
-    D --> E{Local archive verifies?}
-    E -->|No| F[Keep incomplete local evidence; do not publish]
+    D --> E{Runtime identity, DEBUG, TRACE and completion valid?}
+    E -->|No| F[Keep diagnostic evidence; exit non-zero; do not publish]
     E -->|Yes| G[Completed immutable archive]
     G --> H[archive:debug:publish]
     H --> I[Validate manifest and checksums]
