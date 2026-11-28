@@ -35,9 +35,9 @@ pnpm --filter @coinzilla/dashboard test
 pnpm --filter @coinzilla/dashboard test:coverage
 ```
 
-## Scenario flow visualization
+## Scenario graph visualization
 
-The Scenario Runner displays the source-reviewed expected flow for the currently selected scenario. It does not substitute a generic RS diagram for other scenarios. Expected scenario steps are kept separate from actual run status and source trace evidence; unknown or unsupported scenarios are shown as unavailable rather than inferred. This is a read-only explanation surface, not a graph editor or execution engine.
+The Scenario Runner renders a dependency-free, native SVG graph for the currently selected scenario. Its nodes and ordered connections are projected from that scenario's source-reviewed guide; selecting another scenario rebuilds the graph from the new guide. The framework-independent graph schema, validation and geometry remain plain TypeScript, with Angular limited to the read-only SVG presentation adapter. The guide publishes ordered steps rather than branch topology, so the viewer does not invent YES/NO branches. Actual run status and source trace remain separate evidence; they are not projected onto expected nodes without an explicit verified mapping. Scenarios without a reviewed guide show an unavailable explanation rather than a generic graph. See the [Scenario Graph Schema](docs/features/gc-strategy-lab/SCENARIO_GRAPH_SCHEMA.md).
 
 ## Bots workspace
 
