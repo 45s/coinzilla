@@ -142,7 +142,7 @@ async function sha256FileRange({ filename, size } = {}) {
   return hash.digest("hex")
 }
 
-async function copyFileRange({ sourcePath, destinationPath, size, compressed = false } = {}) {
+export async function copyFileRange({ sourcePath, destinationPath, size, compressed = false } = {}) {
   if (size === 0) {
     if (compressed) {
       await pipeline(Readable.from([]), createGzip({ level: 6 }), createWriteStream(destinationPath, {
@@ -284,7 +284,7 @@ async function writeCompressedTemporaryFile({ sourcePath, temporaryPath, sourceA
   })
 }
 
-async function assertSourceFileStable({ sourcePath, sourceBefore, sourceSha256Before } = {}) {
+export async function assertSourceFileStable({ sourcePath, sourceBefore, sourceSha256Before } = {}) {
   const sourceAfter = await lstat(sourcePath)
   const sourceSha256After = await sha256FileRange({
     filename: sourcePath,

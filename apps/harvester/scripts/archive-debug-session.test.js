@@ -2,10 +2,13 @@ import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
 import { writeFileSync } from "node:fs"
 import {
+  appendFile,
+  lstat,
   mkdtemp,
   mkdir,
   readFile,
   readdir,
+  rename,
   rm,
   symlink,
   writeFile
@@ -15,6 +18,8 @@ import path from "node:path"
 import test from "node:test"
 import { gzipSync, gunzipSync } from "node:zlib"
 import {
+  assertSourceFileStable,
+  copyFileRange,
   createHarvesterArchiveDirectoryName,
   runHarvesterDebugArchive,
 } from "./archive-debug-session.js"
@@ -237,6 +242,55 @@ function archiveDependencies({ fixture, overrides = {}, expectedIdentityStatus =
     }),
   }
 }
+
+test("copies only bytes present at the snapshot boundary when an append-only log grows", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  const sourcePath = path.join(fixture.packageDirectory, "growing.log")
+  const destinationPath = path.join(fixture.packageDirectory, "snapshot.log.gz")
+  const snapshotBytes = Buffer.from("bytes present at the snapshot boundary\n")
+  await writeFile(sourcePath, snapshotBytes)
+  const sourceBefore = await lstat(sourcePath)
+  const sourceSha256Before = createHash("sha256").update(snapshotBytes).digest("hex")
+  await appendFile(sourcePath, "bytes appended after the snapshot boundary\n")
+  const sourceSha256After = await assertSourceFileStable({
+    sourcePath,
+    sourceBefore,
+    sourceSha256Before,
+  })
+  assert.equal(sourceSha256After, sourceSha256Before, "An append must not change the captured prefix hash.")
+  await copyFileRange({ sourcePath, destinationPath, size: sourceBefore.size, compressed: true })
+  assert.deepEqual(gunzipSync(await readFile(destinationPath)), snapshotBytes)
+})
+
+
+test("rejects a source file replaced after its snapshot identity was captured", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  const sourcePath = path.join(fixture.packageDirectory, "replaced.log")
+  const replacementPath = path.join(fixture.packageDirectory, "replacement.log")
+  const originalBytes = Buffer.from("original-content")
+  await writeFile(sourcePath, originalBytes)
+  const sourceBefore = await lstat(sourcePath)
+  const sourceSha256Before = createHash("sha256").update(originalBytes).digest("hex")
+  await writeFile(replacementPath, Buffer.from("replaced--content"))
+  await rm(sourcePath)
+  await rename(replacementPath, sourcePath)
+  await assert.rejects(assertSourceFileStable({ sourcePath, sourceBefore, sourceSha256Before }), /replaced, truncated, or modified/i)
+})
+
+
+test("rejects a source file truncated after its snapshot identity was captured", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, { recursive: true, force: true }))
+  const sourcePath = path.join(fixture.packageDirectory, "truncated.log")
+  const originalBytes = Buffer.from("original-log-content")
+  await writeFile(sourcePath, originalBytes)
+  const sourceBefore = await lstat(sourcePath)
+  const sourceSha256Before = createHash("sha256").update(originalBytes).digest("hex")
+  await writeFile(sourcePath, Buffer.from("short"))
+  await assert.rejects(assertSourceFileStable({ sourcePath, sourceBefore, sourceSha256Before }), /replaced, truncated, or modified/i)
+})
 
 test("adds _debug to the existing timestamp and archive-ID directory name", () => {
   assert.equal(
