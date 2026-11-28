@@ -72,7 +72,11 @@
         </ol>
       </section>
       @if (run(); as activeRun) {
-        <p class="scenario-flow-evidence" role="status">Actual execution: <strong>{{ activeRun.status }}</strong> · {{ trace().length }} trace events received. Actual events and their source evidence are shown separately in the Run story below.</p>
+        @if (activeRun.strategyId === strategyId() && activeRun.scenarioId === scenarioId()) {
+          <p class="scenario-flow-evidence" role="status">Actual execution for this scenario: <strong>{{ activeRun.status }}</strong> · {{ trace().length }} trace events received. Actual events and their source evidence are shown separately in the Run story below.</p>
+        } @else {
+          <p class="scenario-flow-evidence" role="note">The selected run belongs to {{ activeRun.strategyId }} · {{ activeRun.scenarioId }}, not the currently selected scenario. Its trace below is not evidence for the flow above.</p>
+        }
       } @else {
         <p class="scenario-flow-evidence">No run selected. The flow above describes the selected scenario's documented expected path.</p>
       }
