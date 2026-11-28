@@ -125,7 +125,10 @@ function createRsOnlyStartupBroker({ calls }) {
   return broker
 }
 
-function createRsOnlyStartupConfig({ enableVolatilityProtection = false } = {}) {
+function createRsOnlyStartupConfig({
+  enableVolatilityProtection = false,
+  processRecoveryEnabled = true,
+} = {}) {
   const recoverySellerPair = {
     enabled: true,
     tradingEnvironment: "testnet",
@@ -144,7 +147,7 @@ function createRsOnlyStartupConfig({ enableVolatilityProtection = false } = {}) 
   }
   return {
     ...appConfig,
-    components: { recovery: { enabled: false } },
+    components: { recovery: { enabled: processRecoveryEnabled } },
     strategies: {
       ...appConfig.strategies,
       RS_recoverySeller: {
