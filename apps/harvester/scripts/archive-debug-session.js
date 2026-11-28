@@ -1131,7 +1131,8 @@ async function createArchiveManifest({
         message: createEvidenceIntegrityFailureMessage(logSelection.evidenceIntegrity),
       }]),
     ],
-    duplicateArtifacts: createDuplicateArchiveArtifactGroups({ artifactProvenance }),\n    evidenceIntegrity: logSelection.evidenceIntegrity,
+    duplicateArtifacts: createDuplicateArchiveArtifactGroups({ artifactProvenance }),
+    evidenceIntegrity: logSelection.evidenceIntegrity,
     recoveryFactSequence: recoveryCheckpoint.sequence,
     files: entries,
   }
