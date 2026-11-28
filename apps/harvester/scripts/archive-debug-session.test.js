@@ -379,6 +379,41 @@ test("reclaims confirmed stale same-host locks before collecting the TESTNET deb
   }
 })
 
+
+test("collection rejects symbolic links instead of archiving their targets", async (t) => {
+  const fixture = await createFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+  const externalPath = path.join(fixture.packageDirectory, "external-terminal.log")
+  await writeFile(externalPath, "external data must not be followed", "utf8")
+  const terminalPath = path.join(
+    fixture.packageDirectory,
+    "logs/sessions/2026-11-24_testnet/terminal.log",
+  )
+  await rm(terminalPath)
+  try {
+    await symlink(externalPath, terminalPath)
+  } catch (error) {
+    if (["EPERM", "EACCES", "ENOTSUP"].includes(error.code)) {
+      t.skip("This platform does not permit creating symbolic links for the test.")
+      return
+    }
+    throw error
+  }
+  await assert.rejects(
+    runHarvesterDebugArchive(archiveDependencies({ fixture })),
+    /symbolic link/i,
+    "Collection must reject a symlink rather than following it into the archive.",
+  )
+  assert.equal(
+    await readFile(externalPath, "utf8"),
+    "external data must not be followed",
+    "The external target must remain untouched.",
+  )
+})
+
 test("rejects LIVE mode before creating an archive", async (t) => {
   const fixture = await createFixture()
   t.after(() => rm(fixture.packageDirectory, {
