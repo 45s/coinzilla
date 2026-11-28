@@ -160,7 +160,9 @@ test("evaluates RS-owned symbols through the shared transition when CG has no ro
 
 test("does not dispatch RS for a market without an RS execution route", async () => {
   const dependencies = createDependencies()
-  dependencies.recoverySellerPairs = { OTHERUSDT: { enabled: true } }
+  dependencies.recoverySellerPairs = {
+    OTHERUSDT: { enabled: true },
+  }
   let recoverySellerCalls = 0
   dependencies.evaluateRecoverySellerTransition = async () => {
     recoverySellerCalls += 1
