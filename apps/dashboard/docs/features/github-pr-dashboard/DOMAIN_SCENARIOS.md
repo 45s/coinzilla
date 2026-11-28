@@ -507,3 +507,13 @@ The implementation is in [PR #1822](https://github.com/45s/coinzilla/pull/1822).
 | `app.spec.ts` | Navigation integration | Dashboard navigation to GitHub PRs and public GitHub data loading |
 
 The test mapping is intentionally limited to behaviors asserted by those tests; remaining scenarios still require additional automated coverage before the feature can be considered fully verified. Default tests do not call GitHub or require credentials.
+
+## Scenario 26 — Compact PR workspace and merged history
+
+- Page heading and summary metadata strip are removed.
+- Refresh is anchored bottom-right inside the labels panel.
+- All label definitions render inline without dropdowns.
+- Open and merged tables display number, title, branch and last commit; open rows also show work labels.
+- Merged rows are subdued; latest five merged PRs are displayed.
+- PR number links out; title and branch clicks copy text.
+- No GitHub write operations are added.

@@ -410,3 +410,6 @@ Possible later work, requiring explicit scope approval:
 - [Implementation PR #1822](https://github.com/45s/coinzilla/pull/1822)
 
 This specification is active. The documentation standard and feature contract were delivered in [PR #1817](https://github.com/45s/coinzilla/pull/1817). Application implementation is tracked separately by [Issue #1821](https://github.com/45s/coinzilla/issues/1821) and is under review in [PR #1822](https://github.com/45s/coinzilla/pull/1822). The specification remains authoritative for required behavior; delivered and verified implementation status is recorded in the task Issue and PR.
+## Layout and interaction update — 2026-11-28
+
+The page removes the title and metadata summary. Active PRs remain the primary list, with a muted latest-five merged history table. A full-height labels panel renders label controls and its Refresh action bottom-right. PR numbers link to GitHub; title and branch click-copy affordances are provided. GitHub remains read-only; label state is local.

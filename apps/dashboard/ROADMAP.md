@@ -58,3 +58,7 @@ Issue [#2005](https://github.com/45s/coinzilla/issues/2005) / PR [#2006](https:/
 ## Recovery Seller scenario readability — 2026-11-28
 
 Issue [#1836](https://github.com/45s/coinzilla/issues/1836) / PR [#2009](https://github.com/45s/coinzilla/pull/2009) replaces technical catalogue labels in the Scenario Runner selector with concise business titles. Stable scenario IDs remain visible separately for test/issue traceability. Every currently published RS scenario has a source-reviewed title; unknown scenarios keep their original catalogue name and receive no invented guide. The selected guide continues to distinguish the documented scenario intent from actual run evidence and preserves simulation-only/readiness limitations. No Harvester trading behavior or scenario execution contract changes.
+
+## GitHub PR dashboard layout refinement — 2026-11-28
+
+Issue [#2010](https://github.com/45s/coinzilla/issues/2010) tracks the compact workspace: heading and metadata removed, active PR list prioritized, muted merged history, and a full-height labels panel with refresh anchored bottom-right. PR number links out; title/branch copy text. GitHub remains read-only and custom labels remain local.

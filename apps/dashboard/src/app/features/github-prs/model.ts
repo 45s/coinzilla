@@ -2,6 +2,8 @@ export interface GitHubPullRequest {
   readonly repository: '45s/coinzilla';
   readonly number: number;
   readonly title: string;
+  readonly headBranch: string;
+  readonly mergedAt: string | null;
   readonly htmlUrl: string;
   readonly isDraft: boolean;
   readonly headSha: string;
@@ -17,7 +19,8 @@ interface GitHubPullRequestPayload {
   readonly title?: unknown;
   readonly html_url?: unknown;
   readonly draft?: unknown;
-  readonly head?: { readonly sha?: unknown } | null;
+  readonly head?: { readonly sha?: unknown; readonly ref?: unknown } | null;
+  readonly merged_at?: unknown;
 }
 
 export function normalizePullRequest(payload: GitHubPullRequestPayload): GitHubPullRequest {
@@ -39,6 +42,8 @@ export function normalizePullRequest(payload: GitHubPullRequestPayload): GitHubP
     repository: '45s/coinzilla',
     number: payload.number as number,
     title: payload.title,
+    headBranch: typeof payload.head?.ref === 'string' ? payload.head.ref : 'Unavailable',
+    mergedAt: typeof payload.merged_at === 'string' ? payload.merged_at : null,
     htmlUrl: payload.html_url,
     isDraft: payload.draft,
     headSha,
