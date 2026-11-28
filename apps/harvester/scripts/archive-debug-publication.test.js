@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { createHash } from "node:crypto"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { lstat, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -38,7 +38,6 @@ async function createArchiveFixture(root) {
 async function snapshotDirectory(directory) {
   const files = new Map()
   async function visit({ current, relative = "" } = {}) {
-    const { readdir, lstat } = await import("node:fs/promises")
     for (const name of await readdir(current)) {
       const child = relative ? path.join(relative, name) : name
       const filename = path.join(current, name)
