@@ -211,7 +211,6 @@ async function copyCompressedFile({
   sourcePath,
   destinationPath,
   childRelative,
-  sourceDirectory,
   onFileCopied,
 } = {}) {
   const sourceBefore = await lstat(sourcePath)
@@ -288,7 +287,6 @@ async function copyCompressedTree({
         sourcePath,
         destinationPath: path.join(destinationDirectory, `${childRelative}.gz`),
         childRelative,
-        sourceDirectory,
         onFileCopied,
       })
     } else {
