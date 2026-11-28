@@ -497,7 +497,7 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
     const fixedLength = diagnosticPrefix.length + 1 + causePrefix.length + 3 + action.length
     const causeBudget = Math.max(0, MAX_CONSOLE_LINE_LENGTH - fixedLength)
     const cause = String(diagnostic.cause ?? diagnostic.meaning)
-      .replace(/[\\r\\n]+/g, " ")
+      .replace(/[\r\n]+/g, " ")
     const boundedCause = cause.length > causeBudget && causeBudget > 3
       ? `${cause.slice(0, causeBudget - 3)}...`
       : cause.slice(0, causeBudget)
@@ -507,7 +507,7 @@ function writeStandardConsoleRecord({ output, color, timestamp, level, method, s
       level,
       method,
       color,
-    })}\\n`)
+    undefined`)
     return
   }
 
