@@ -251,8 +251,19 @@ test("retains CG and RS execution routes and subscriptions when process recovery
   const calls = []
   const broker = createRsOnlyStartupBroker({ calls })
   try {
+    const combinedConfig = createRsOnlyStartupConfig()
+    combinedConfig.strategies.CG_coinGrabber = {
+      ...combinedConfig.strategies.CG_coinGrabber,
+      pairs: {
+        ...combinedConfig.strategies.CG_coinGrabber.pairs,
+        BTCUSDT: {
+          ...combinedConfig.strategies.CG_coinGrabber.pairs.BTCUSDT,
+          enableVolatilityProtection: false,
+        },
+      },
+    }
     const result = await startHarvesterForTest({
-      loadConfig: async () => createRsOnlyStartupConfig(),
+      loadConfig: async () => combinedConfig,
       env: binanceEnv,
       operationalStateStore: store,
       executionSymbols: ["BTCUSDT", "LINEAUSDT"],
