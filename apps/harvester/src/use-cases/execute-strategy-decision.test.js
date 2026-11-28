@@ -178,7 +178,7 @@ data: makeAcknowledgement(order) }) },
 })
 
 
-test("uses different client order ID namespaces for separate executor instances", async () => {
+test("generates unique client order IDs for separate executor instances", async () => {
   const createExecutor = () => {
     let submittedOrder
     const execute = makeExecuteStrategyDecision({
