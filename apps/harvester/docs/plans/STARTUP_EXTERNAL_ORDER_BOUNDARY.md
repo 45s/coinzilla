@@ -20,7 +20,7 @@ Make Harvester startup simple and predictable.
 
 When Harvester starts, it reads the account's existing open orders, records the snapshot durably, treats every order in that snapshot as external to the new process, and then starts the configured strategies. It must not try to recover or manage those old orders.
 
-The generic `h-` prefix must not change this rule. An old order with an `h-` ID is external to the new process. Later execution reports are distinguished using the process-specific namespace generated for the current process; a prior-session namespace remains external, while an unmatched ID in the current namespace remains fail-closed.
+The generic `h-` prefix must not change this rule. An old order is external to the new process regardless of its client ID. Later execution reports are classified using explicit current-process client-ID membership recorded by the submission use case; prior-process IDs remain external, while an unmatched ID recorded by the current process remains fail-closed. No ID-prefix or shape parsing establishes ownership.
 
 ## The intended workflow
 
