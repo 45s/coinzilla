@@ -1043,6 +1043,7 @@ test("renders every catalogued startup and degraded failure in bounded console o
           : "catalogued failure",
         errorCode: isPersistenceFailure ? "ERR_SQLITE_ERROR" : entry.errorCode,
         harvesterErrorCode: isPersistenceFailure ? entry.errorCode : undefined,
+        causeCode: entry.errorCode === "HARVESTER_STARTUP_FAILED" ? "ERR_PROVIDER_HANDSHAKE" : undefined,
         errorStage: entry.failureStage,
         errorMessage: `concrete cause for ${entry.errorCode}`,
       },
@@ -1071,7 +1072,9 @@ test("renders every catalogued startup and degraded failure in bounded console o
     const initialCause = firstCause.endsWith("...") ? firstCause.slice(0, -3) : firstCause
     const expectedCause = entry.errorCode === "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED"
       ? `ERR_SQLITE_ERROR: concrete cause for ${entry.errorCode}`
-      : `concrete cause for ${entry.errorCode}`
+      : entry.errorCode === "HARVESTER_STARTUP_FAILED"
+        ? `ERR_PROVIDER_HANDSHAKE: concrete cause for ${entry.errorCode}`
+        : `concrete cause for ${entry.errorCode}`
     assert.equal(
       `${initialCause}${continuationCause}`,
       expectedCause,
