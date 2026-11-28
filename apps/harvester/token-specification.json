@@ -24,6 +24,16 @@
       }
     }
   },
+  "ARB": {
+    "baseAsset": "ARB",
+    "markets": {
+      "ARBUSDT": {
+        "quoteAsset": "USDT",
+        "pricePrecision": 4,
+        "quantityPrecision": 1
+      }
+    }
+  },
   "DOGE": {
     "baseAsset": "DOGE",
     "markets": {
