@@ -149,6 +149,8 @@
       "src/infrastructure/http/bitunix-futures-market-data.test.js",
       "test/use-cases/conservative-trading-engine.test.js",
       "test/scenarios/recovery-seller-profitability.scenario.test.js",
+      "test/scenarios/recovery-seller-profitability-boundaries.scenario.test.js",
+      "test/scenarios/recovery-seller-profitability-input-boundaries.scenario.test.js",
       "test/scenarios/recovery-seller-mixed-sell-accounting.scenario.test.js",
       "test/scenarios/recovery-seller-cycle-lifecycle.scenario.test.js",
       "test/scenarios/recovery-seller-sell-planner.scenario.test.js",
