@@ -87,7 +87,11 @@ export const scenarios = [
     ],
     relatedRequirements: ["CON-SPEC-7.1"],
     relatedCriticalBehaviors: [],
-    relatedSourceFiles: ["src/use-cases/restore-harvester-operational-state.js"],
+    relatedSourceFiles: [
+      "src/use-cases/restore-harvester-operational-state.js",
+      "src/bootstrap/start-harvester.js",
+      "src/application/operator/create-harvester-readiness-report.js",
+    ],
     relatedExistingTests: [
       {
         path: "test/recovery/operational-state-crash-matrix.test.js",
@@ -150,7 +154,7 @@ export const scenarios = [
       priorProcessHistory: "when recovery is disabled, prior PROCESS_STARTED history does not restore prior state or globally disable a fresh process; trading eligibility is derived from new PREFLIGHT and current-process user-data readiness",
       recoveryDisabled: "no history sync or full process projection occurs; prior-session orders/fills remain external; a retained store may still be verified for RS STOP and unresolved ACCOUNT safety blockers",
       recoveryEnabled: "history eligibility remains strict; every prior PROCESS_STARTED must have a matching PROCESS_STOPPED, and accepted restarts remain observation-only while runtime restoration is unsupported",
-      recoverySellerStop: "a durable RS STOP remains strategy-scoped and blocks RS investment BUY admission without globally disabling unrelated current-session routes; recovery SELL admission remains allowed",
+      recoverySellerStop: "when process recovery is disabled, a durable RS STOP remains strategy-scoped and blocks RS investment BUY admission without globally disabling unrelated current-session routes; recovery SELL admission remains allowed; when recovery is enabled, the prior-process observation-only gate still applies",
       accountSafety: "unresolved ACCOUNT safety blockers remain startup blockers",
       restoration: "candidateOnly remains true and restorationEnabled remains false; Portfolio, RecoveryLedger, and OrderRegistry are not reconstructed",
     },
@@ -165,12 +169,12 @@ export const scenarios = [
       processHistorySync: false,
     },
     invariants: [
-      "Unverified or unprojectable operational-state history prevents broker connection.",
+      "Unverified operational-state store integrity prevents broker connection; when recovery is enabled, unprojectable process history also prevents broker connection.",
       "Prior-session orders and fills remain external and are never adopted, cancelled, managed, or replayed by the new process.",
       "When recovery is disabled, a prior PROCESS_STARTED fact alone does not globally disable fresh current-session trading.",
       "Fresh account PREFLIGHT and current-process user-data readiness are mandatory before the new process can trade.",
       "When recovery is enabled, every prior PROCESS_STARTED session must have a matching PROCESS_STOPPED record and pass the projected eligibility gate.",
-      "A persisted RS STOP remains strategy-scoped; it does not globally pause unrelated current-session routes.",
+      "With process recovery disabled, a persisted RS STOP remains strategy-scoped; it does not globally pause unrelated current-session routes.",
       "Unresolved ACCOUNT safety blockers and configured per-market BLOCK policy remain fail-closed.",
       "Startup eligibility never enables runtime Portfolio, RecoveryLedger, or OrderRegistry restoration.",
     ],
