@@ -600,3 +600,19 @@ Timeline steps are keyboard-operable buttons with `aria-pressed` state; the orde
 ### Regression fixture
 
 The regression fixture `core/fixtures/rs-runtime-sell-partial-cancel.debug.json` is the supplied 2026-11-28 debug report for `RS-RUNTIME-SELL-PARTIAL-CANCEL-001`. Tests assert the simulation-only mode, 55 ZRO SELL submission, 2.5 ZRO executed before CANCELED, successful terminal reconciliation, UNRESOLVED cycle, STOP recorded, market paused, BUY blocked, SELL permitted, 16/16 assertions, PARTIAL catalog and unverified replay/build provenance. No realized profit/loss is inferred because the fixture does not provide the required fill price/commission evidence.
+
+## Scenario catalogue intent diagrams — 2026-11-28
+
+The Scenario Runner presents a source-reviewed explanation for the selected catalogue entry **before** execution. The explanation contains:
+
+- The business question the scenario is designed to prove.
+- The common seeded state or helper inputs.
+- The exact condition/failure injected by that scenario.
+- An ordered intent-flow diagram with production path, decision, failure/condition and expected-outcome nodes.
+- The expected assertion outcome and explicit limitations.
+
+The current RS guide set covers all twelve executable runtime entries and the preliminary helper-only `RS-004-011` entry. The latter is labelled PRELIMINARY and explicitly says it does not run the full strategy lifecycle.
+
+These diagrams describe **scenario intent**, not observed execution. They do not create trace events, infer missing branches, or substitute for returned run evidence. After execution, the evidence-linked Run Story remains the authority for what actually happened. Unknown scenario IDs display an unavailable explanation rather than a guessed generic flow.
+
+The framework-independent guide mapping is `apps/dashboard/src/app/features/scenario-runner/core/scenario-guides.ts`; Angular renders the nodes in `page.html`. The source-reviewed scenario index and Mermaid diagrams are maintained in [DOMAIN_SCENARIOS.md](./DOMAIN_SCENARIOS.md). The scenario runtime source remains `apps/harvester/src/infrastructure/scenario-runner/rs-runtime-scenario.js`.
